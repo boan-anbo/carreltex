@@ -311,7 +311,7 @@ fn control_word_textbackslash_is_counted_as_literal_char_and_space_is_swallowed(
 fn control_word_par_is_counted_as_single_space_with_no_extra_whitespace() {
     let baseline = hello_baseline_char_count();
     let mut mount = Mount::default();
-    let main = b"\\documentclass{article}\n\\begin{document}\nHello.\\parXYZ\n\\end{document}\n";
+    let main = b"\\documentclass{article}\n\\begin{document}\nHello.\\par XYZ\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
     assert_eq!(result.status, CompileStatus::NotImplemented);

@@ -280,7 +280,7 @@ export function runTokenizerCases(ctx, helpers) {
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer control-word-par case failed');
   }
-  const parMainBytes = new TextEncoder().encode('\\documentclass{article}\n\\begin{document}\nHello.\\parXYZ\n\\end{document}\n');
+  const parMainBytes = new TextEncoder().encode('\\documentclass{article}\n\\begin{document}\nHello.\\par XYZ\n\\end{document}\n');
   if (addMountedFile('main.tex', parMainBytes, 'tokenizer_control_word_par_main') !== 0) {
     throw new Error('mount_add_file(tokenizer control-word-par main.tex) failed');
   }
