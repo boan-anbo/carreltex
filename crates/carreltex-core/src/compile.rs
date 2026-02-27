@@ -101,6 +101,100 @@ pub fn append_event_v0(out: &mut Vec<u8>, kind: u32, payload: &[u8]) -> Result<(
     Ok(())
 }
 
+pub fn build_tex_stats_json_v0(
+    token_count: u64,
+    control_seq_count: u64,
+    char_count: u64,
+    space_count: u64,
+    begin_group_count: u64,
+    end_group_count: u64,
+    max_group_depth: u64,
+) -> Result<String, Error> {
+    let out = format!(
+        "{{\"token_count\":{token_count},\"control_seq_count\":{control_seq_count},\"char_count\":{char_count},\"space_count\":{space_count},\"begin_group_count\":{begin_group_count},\"end_group_count\":{end_group_count},\"max_group_depth\":{max_group_depth}}}"
+    );
+    if out.len() > MAX_TEX_STATS_JSON_BYTES_V0 {
+        return Err(Error::InvalidInput);
+    }
+    Ok(out)
+}
+
+pub fn validate_tex_stats_json_v0(text: &str) -> Result<(), Error> {
+    if text.is_empty() || text.len() > MAX_TEX_STATS_JSON_BYTES_V0 {
+        return Err(Error::InvalidInput);
+    }
+    if text
+        .as_bytes()
+        .iter()
+        .any(|byte| matches!(byte, b' ' | b'\t' | b'\r' | b'\n'))
+    {
+        return Err(Error::InvalidInput);
+    }
+
+    let keys = [
+        "token_count",
+        "control_seq_count",
+        "char_count",
+        "space_count",
+        "begin_group_count",
+        "end_group_count",
+        "max_group_depth",
+    ];
+    let bytes = text.as_bytes();
+    let mut index = 0usize;
+    if bytes.get(index) != Some(&b'{') {
+        return Err(Error::InvalidInput);
+    }
+    index += 1;
+
+    for (position, key) in keys.iter().enumerate() {
+        if bytes.get(index) != Some(&b'"') {
+            return Err(Error::InvalidInput);
+        }
+        index += 1;
+        let key_bytes = key.as_bytes();
+        let key_end = index
+            .checked_add(key_bytes.len())
+            .ok_or(Error::InvalidInput)?;
+        if bytes.get(index..key_end) != Some(key_bytes) {
+            return Err(Error::InvalidInput);
+        }
+        index = key_end;
+        if bytes.get(index) != Some(&b'"') {
+            return Err(Error::InvalidInput);
+        }
+        index += 1;
+        if bytes.get(index) != Some(&b':') {
+            return Err(Error::InvalidInput);
+        }
+        index += 1;
+
+        let value_start = index;
+        while matches!(bytes.get(index), Some(b'0'..=b'9')) {
+            index += 1;
+        }
+        if value_start == index {
+            return Err(Error::InvalidInput);
+        }
+
+        if position + 1 < keys.len() {
+            if bytes.get(index) != Some(&b',') {
+                return Err(Error::InvalidInput);
+            }
+            index += 1;
+        }
+    }
+
+    if bytes.get(index) != Some(&b'}') {
+        return Err(Error::InvalidInput);
+    }
+    index += 1;
+    if index != bytes.len() {
+        return Err(Error::InvalidInput);
+    }
+    Ok(())
+}
+
 fn build_compile_report_json(status: CompileStatus, missing_components: &[&str]) -> String {
     let status_str = match status {
         CompileStatus::Ok => "OK",
@@ -171,8 +265,9 @@ pub fn validate_compile_report_json(report_json: &str) -> Result<(), Error> {
 mod tests {
     use super::{
         append_event_v0, artifact_bytes_within_cap_v0, build_compile_result_v0,
-        report_json_has_status_token_v0, report_json_missing_components_is_empty_v0,
-        truncate_log_bytes_v0, validate_compile_report_json, CompileRequestV0, CompileStatus,
+        build_tex_stats_json_v0, report_json_has_status_token_v0,
+        report_json_missing_components_is_empty_v0, truncate_log_bytes_v0,
+        validate_compile_report_json, validate_tex_stats_json_v0, CompileRequestV0, CompileStatus,
         DEFAULT_COMPILE_MAIN_MAX_LOG_BYTES_V0, EVENT_KIND_LOG_BYTES_V0,
         EVENT_KIND_TEX_STATS_JSON_V0, MAX_ARTIFACT_BYTES_V0, MAX_EVENTS_BYTES_V0, MAX_LOG_BYTES_V0,
         MAX_TEX_STATS_JSON_BYTES_V0,
@@ -416,5 +511,47 @@ mod tests {
             MAX_EVENTS_BYTES_V0,
             (MAX_LOG_BYTES_V0 as usize) + 8 + MAX_TEX_STATS_JSON_BYTES_V0 + 8
         );
+    }
+
+    #[test]
+    fn build_tex_stats_json_builder_emits_exact_canonical_output() {
+        let out = build_tex_stats_json_v0(22, 3, 14, 2, 3, 3, 1).expect("builder should succeed");
+        assert_eq!(
+            out,
+            "{\"token_count\":22,\"control_seq_count\":3,\"char_count\":14,\"space_count\":2,\"begin_group_count\":3,\"end_group_count\":3,\"max_group_depth\":1}"
+        );
+    }
+
+    #[test]
+    fn validate_tex_stats_json_accepts_builder_output() {
+        let out = build_tex_stats_json_v0(22, 3, 14, 2, 3, 3, 1).expect("builder should succeed");
+        assert!(validate_tex_stats_json_v0(&out).is_ok());
+    }
+
+    #[test]
+    fn validate_tex_stats_json_rejects_extra_key() {
+        let bad = "{\"token_count\":22,\"control_seq_count\":3,\"char_count\":14,\"space_count\":2,\"begin_group_count\":3,\"end_group_count\":3,\"max_group_depth\":1,\"unexpected_key\":1}";
+        assert!(validate_tex_stats_json_v0(bad).is_err());
+    }
+
+    #[test]
+    fn validate_tex_stats_json_rejects_missing_key() {
+        let bad = "{\"token_count\":22,\"control_seq_count\":3,\"char_count\":14,\"space_count\":2,\"begin_group_count\":3,\"end_group_count\":3}";
+        assert!(validate_tex_stats_json_v0(bad).is_err());
+    }
+
+    #[test]
+    fn validate_tex_stats_json_rejects_whitespace() {
+        let bad = "{\"token_count\":22,\"control_seq_count\":3,\"char_count\":14,\"space_count\":2,\"begin_group_count\":3,\"end_group_count\":3,\"max_group_depth\":1}\n";
+        assert!(validate_tex_stats_json_v0(bad).is_err());
+    }
+
+    #[test]
+    fn validate_tex_stats_json_rejects_negative_or_non_digit_or_empty() {
+        let negative = "{\"token_count\":-22,\"control_seq_count\":3,\"char_count\":14,\"space_count\":2,\"begin_group_count\":3,\"end_group_count\":3,\"max_group_depth\":1}";
+        assert!(validate_tex_stats_json_v0(negative).is_err());
+        let non_digit = "{\"token_count\":x,\"control_seq_count\":3,\"char_count\":14,\"space_count\":2,\"begin_group_count\":3,\"end_group_count\":3,\"max_group_depth\":1}";
+        assert!(validate_tex_stats_json_v0(non_digit).is_err());
+        assert!(validate_tex_stats_json_v0("").is_err());
     }
 }
