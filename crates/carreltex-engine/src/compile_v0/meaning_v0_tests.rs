@@ -218,3 +218,24 @@ fn string_sees_macro_defined_across_input_boundary() {
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline_char_count + 4);
 }
+
+#[test]
+fn expandafter_sees_macros_defined_across_input_boundary() {
+    let mut baseline_mount = Mount::default();
+    let baseline_main = b"\\documentclass{article}\n\\begin{document}\n\n\\end{document}\n";
+    assert!(baseline_mount.add_file(b"main.tex", baseline_main).is_ok());
+    let baseline_result = compile_request_v0(&mut baseline_mount, &valid_request());
+    assert_eq!(baseline_result.status, CompileStatus::NotImplemented);
+    let baseline_char_count =
+        stats_u64_field(&baseline_result.tex_stats_json, "char_count").expect("char_count");
+
+    let mut mount = Mount::default();
+    let main = b"\\documentclass{article}\n\\begin{document}\n\\input{sub.tex}\\expandafter\\bar\\foo\n\\end{document}\n";
+    let sub = b"\\def\\foo{XYZ}\\def\\bar{A}";
+    assert!(mount.add_file(b"main.tex", main).is_ok());
+    assert!(mount.add_file(b"sub.tex", sub).is_ok());
+    let result = compile_request_v0(&mut mount, &valid_request());
+    assert_eq!(result.status, CompileStatus::NotImplemented);
+    let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
+    assert_eq!(char_count, baseline_char_count + 4);
+}
