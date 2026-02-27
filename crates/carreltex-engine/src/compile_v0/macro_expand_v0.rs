@@ -14,13 +14,14 @@ struct MacroDefV0 {
 }
 
 pub(crate) fn expand_macros_v0(tokens: &[TokenV0]) -> Result<Vec<TokenV0>, InvalidInputReasonV0> {
-    let mut macros = BTreeMap::<Vec<u8>, MacroDefV0>::new();
+    let mut macro_frames = Vec::<BTreeMap<Vec<u8>, MacroDefV0>>::new();
+    macro_frames.push(BTreeMap::new());
     let mut output = Vec::<TokenV0>::new();
     let mut active_macros = Vec::<Vec<u8>>::new();
     let mut expansion_count = 0usize;
     expand_stream_v0(
         tokens,
-        &mut macros,
+        &mut macro_frames,
         &mut output,
         &mut active_macros,
         &mut expansion_count,
@@ -31,7 +32,7 @@ pub(crate) fn expand_macros_v0(tokens: &[TokenV0]) -> Result<Vec<TokenV0>, Inval
 
 fn expand_stream_v0(
     tokens: &[TokenV0],
-    macros: &mut BTreeMap<Vec<u8>, MacroDefV0>,
+    macro_frames: &mut Vec<BTreeMap<Vec<u8>, MacroDefV0>>,
     out: &mut Vec<TokenV0>,
     active_macros: &mut Vec<Vec<u8>>,
     expansion_count: &mut usize,
@@ -44,11 +45,23 @@ fn expand_stream_v0(
     let mut index = 0usize;
     while index < tokens.len() {
         match &tokens[index] {
+            TokenV0::BeginGroup => {
+                macro_frames.push(BTreeMap::new());
+                push_checked_v0(out, TokenV0::BeginGroup)?;
+                index += 1;
+            }
+            TokenV0::EndGroup => {
+                if macro_frames.len() > 1 {
+                    macro_frames.pop();
+                }
+                push_checked_v0(out, TokenV0::EndGroup)?;
+                index += 1;
+            }
             TokenV0::ControlSeq(name) if name.as_slice() == b"def" => {
-                index = parse_def_v0(tokens, index, macros)?;
+                index = parse_def_v0(tokens, index, macro_frames)?;
             }
             TokenV0::ControlSeq(name) => {
-                if let Some(macro_def) = macros.get(name).cloned() {
+                if let Some(macro_def) = lookup_macro_v0(macro_frames, name) {
                     *expansion_count = expansion_count
                         .checked_add(1)
                         .ok_or(InvalidInputReasonV0::MacroExpansionsExceeded)?;
@@ -74,7 +87,7 @@ fn expand_stream_v0(
                     active_macros.push(name.clone());
                     let result = expand_stream_v0(
                         &expanded_body,
-                        macros,
+                        macro_frames,
                         out,
                         active_macros,
                         expansion_count,
@@ -100,7 +113,7 @@ fn expand_stream_v0(
 fn parse_def_v0(
     tokens: &[TokenV0],
     def_index: usize,
-    macros: &mut BTreeMap<Vec<u8>, MacroDefV0>,
+    macro_frames: &mut Vec<BTreeMap<Vec<u8>, MacroDefV0>>,
 ) -> Result<usize, InvalidInputReasonV0> {
     let name_index = def_index + 1;
     let macro_name = match tokens.get(name_index) {
@@ -134,13 +147,17 @@ fn parse_def_v0(
 
     let (body_tokens, next_index) = parse_balanced_group_payload_v0(tokens, body_start_index)?;
     validate_macro_body_tokens_v0(&body_tokens, param_count)?;
-    if !macros.contains_key(&macro_name) && macros.len() >= MAX_MACROS_V0 {
+    let total_macro_defs = total_macro_defs_v0(macro_frames);
+    let current_frame = macro_frames
+        .last_mut()
+        .ok_or(InvalidInputReasonV0::MacroValidationFailed)?;
+    if !current_frame.contains_key(&macro_name) && total_macro_defs >= MAX_MACROS_V0 {
         return Err(InvalidInputReasonV0::MacroValidationFailed);
     }
     if param_count > 1 {
         return Err(InvalidInputReasonV0::MacroValidationFailed);
     }
-    macros.insert(
+    current_frame.insert(
         macro_name,
         MacroDefV0 {
             param_count,
@@ -148,6 +165,22 @@ fn parse_def_v0(
         },
     );
     Ok(next_index)
+}
+
+fn lookup_macro_v0(
+    macro_frames: &[BTreeMap<Vec<u8>, MacroDefV0>],
+    name: &[u8],
+) -> Option<MacroDefV0> {
+    for frame in macro_frames.iter().rev() {
+        if let Some(macro_def) = frame.get(name) {
+            return Some(macro_def.clone());
+        }
+    }
+    None
+}
+
+fn total_macro_defs_v0(macro_frames: &[BTreeMap<Vec<u8>, MacroDefV0>]) -> usize {
+    macro_frames.iter().map(|frame| frame.len()).sum()
 }
 
 fn validate_macro_body_tokens_v0(
