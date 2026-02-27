@@ -820,6 +820,35 @@ mod tests {
     }
 
     #[test]
+    fn expandafter_reorders_two_control_sequences() {
+        let mut baseline_mount = Mount::default();
+        let baseline_main = b"\\documentclass{article}\n\\begin{document}\n\n\\end{document}\n";
+        assert!(baseline_mount.add_file(b"main.tex", baseline_main).is_ok());
+        let baseline_result = compile_request_v0(&mut baseline_mount, &valid_request());
+        assert_eq!(baseline_result.status, CompileStatus::NotImplemented);
+        let baseline_char_count =
+            stats_u64_field(&baseline_result.tex_stats_json, "char_count").expect("char_count");
+
+        let mut mount = Mount::default();
+        let main = b"\\documentclass{article}\n\\begin{document}\n\\def\\foo{XYZ}\\def\\bar{A}\\expandafter\\bar\\foo\n\\end{document}\n";
+        assert!(mount.add_file(b"main.tex", main).is_ok());
+        let result = compile_request_v0(&mut mount, &valid_request());
+        assert_eq!(result.status, CompileStatus::NotImplemented);
+        let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
+        assert_eq!(char_count, baseline_char_count + 4);
+    }
+
+    #[test]
+    fn expandafter_with_unsupported_tokens_is_invalid() {
+        let mut mount = Mount::default();
+        assert!(mount.add_file(b"main.tex", b"\\expandafter{}").is_ok());
+
+        let result = compile_request_v0(&mut mount, &valid_request());
+        assert_eq!(result.status, CompileStatus::InvalidInput);
+        assert!(result.log_bytes.ends_with(b"macro_expandafter_unsupported"));
+    }
+
+    #[test]
     fn global_def_single_param_inside_group_leaks_globally() {
         let mut baseline_mount = Mount::default();
         let baseline_main =

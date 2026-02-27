@@ -73,6 +73,18 @@ fn expand_stream_v0(
             TokenV0::ControlSeq(name) if name.as_slice() == b"futurelet" => {
                 index = parse_futurelet_v0(tokens, index, macro_frames, false)?;
             }
+            TokenV0::ControlSeq(name) if name.as_slice() == b"expandafter" => {
+                let (reordered_tokens, next_index) = parse_expandafter_v0(tokens, index)?;
+                expand_stream_v0(
+                    &reordered_tokens,
+                    macro_frames,
+                    out,
+                    active_macros,
+                    expansion_count,
+                    depth + 1,
+                )?;
+                index = next_index;
+            }
             TokenV0::ControlSeq(name) if name.as_slice() == b"global" => {
                 index = parse_global_prefixed_macro_binding_v0(tokens, index, macro_frames)?;
             }
@@ -311,6 +323,28 @@ fn parse_futurelet_v0(
     }
     target_frame.insert(alias_name, MacroBindingV0::ControlSeqLiteral(target_name));
     Ok(probe_index)
+}
+
+fn parse_expandafter_v0(
+    tokens: &[TokenV0],
+    expandafter_index: usize,
+) -> Result<(Vec<TokenV0>, usize), InvalidInputReasonV0> {
+    let first_index = skip_space_tokens_v0(tokens, expandafter_index + 1);
+    let first_name = match tokens.get(first_index) {
+        Some(TokenV0::ControlSeq(name)) => name.clone(),
+        _ => return Err(InvalidInputReasonV0::MacroExpandafterUnsupported),
+    };
+
+    let second_index = skip_space_tokens_v0(tokens, first_index + 1);
+    let second_name = match tokens.get(second_index) {
+        Some(TokenV0::ControlSeq(name)) => name.clone(),
+        _ => return Err(InvalidInputReasonV0::MacroExpandafterUnsupported),
+    };
+
+    Ok((
+        vec![TokenV0::ControlSeq(second_name), TokenV0::ControlSeq(first_name)],
+        second_index + 1,
+    ))
 }
 
 fn snapshot_let_binding_v0(
