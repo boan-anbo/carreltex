@@ -101,3 +101,27 @@ fn ifx_else_without_if_is_invalid() {
     assert_eq!(result.status, CompileStatus::InvalidInput);
     assert!(result.log_bytes.ends_with(b"macro_ifx_else_without_if"));
 }
+
+#[test]
+fn ifx_let_snapshot_not_equal_after_redefine_keeps_else_branch() {
+    let baseline = baseline_char_count();
+    let mut mount = Mount::default();
+    let main = b"\\documentclass{article}\n\\begin{document}\n\\def\\foo{X}\\let\\bar=\\foo\\def\\foo{XYZ}\\ifx\\bar\\foo AAA\\else XYZ\\fi\n\\end{document}\n";
+    assert!(mount.add_file(b"main.tex", main).is_ok());
+    let result = compile_request_v0(&mut mount, &valid_request());
+    assert_eq!(result.status, CompileStatus::NotImplemented);
+    let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
+    assert_eq!(char_count, baseline + 3);
+}
+
+#[test]
+fn ifx_let_to_undefined_is_equal_to_undefined_control_sequence() {
+    let baseline = baseline_char_count();
+    let mut mount = Mount::default();
+    let main = b"\\documentclass{article}\n\\begin{document}\n\\let\\a=\\b\\ifx\\a\\b XYZ\\else AAA\\fi\n\\end{document}\n";
+    assert!(mount.add_file(b"main.tex", main).is_ok());
+    let result = compile_request_v0(&mut mount, &valid_request());
+    assert_eq!(result.status, CompileStatus::NotImplemented);
+    let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
+    assert_eq!(char_count, baseline + 3);
+}
