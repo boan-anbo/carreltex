@@ -16,6 +16,7 @@ pub(crate) enum InvalidInputReasonV0 {
     MacroExpansionsExceeded,
     MacroGlobalPrefixUnsupported,
     MacroLetUnsupported,
+    MacroFutureletUnsupported,
 }
 
 pub(crate) fn invalid_log_bytes_v0(reason: InvalidInputReasonV0) -> &'static [u8] {
@@ -42,5 +43,8 @@ pub(crate) fn invalid_log_bytes_v0(reason: InvalidInputReasonV0) -> &'static [u8
             b"INVALID_INPUT: macro_global_prefix_unsupported"
         }
         InvalidInputReasonV0::MacroLetUnsupported => b"INVALID_INPUT: macro_let_unsupported",
+        InvalidInputReasonV0::MacroFutureletUnsupported => {
+            b"INVALID_INPUT: macro_futurelet_unsupported"
+        }
     }
 }
