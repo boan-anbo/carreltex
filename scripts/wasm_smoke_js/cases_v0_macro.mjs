@@ -216,6 +216,75 @@ export function runMacroCases(ctx, helpers, baselineMainCharCount) {
   }
 
   if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before macro begingroup/no-leak case failed');
+  }
+  const macroBegingroupNoLeakMainBytes = new TextEncoder().encode('\\documentclass{article}\n\\begin{document}\nHello.\\begingroup\\def\\foo{XYZ}\\endgroup\\foo\n\\end{document}\n');
+  if (addMountedFile('main.tex', macroBegingroupNoLeakMainBytes, 'macro_begingroup_no_leak_main') !== 0) {
+    throw new Error('mount_add_file(macro begingroup/no-leak main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) {
+    throw new Error('mount_finalize for macro begingroup/no-leak case failed');
+  }
+  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(macro begingroup/no-leak)');
+  {
+    const logBytes = readCompileLogBytes();
+    const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(macro begingroup/no-leak)');
+    if (baselineMainCharCount === null) {
+      throw new Error('baselineMainCharCount not initialized');
+    }
+    if (stats.char_count !== baselineMainCharCount) {
+      throw new Error(`compile_main(macro begingroup/no-leak) char_count delta expected +0, got baseline=${baselineMainCharCount}, current=${stats.char_count}`);
+    }
+    assertMainXdvArtifactEmpty('compile_main(macro begingroup/no-leak)');
+  }
+
+  if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before macro begingroup/global-def case failed');
+  }
+  const macroBegingroupGlobalDefMainBytes = new TextEncoder().encode('\\documentclass{article}\n\\begin{document}\nHello.\\begingroup\\global\\def\\foo{XYZ}\\endgroup\\foo\n\\end{document}\n');
+  if (addMountedFile('main.tex', macroBegingroupGlobalDefMainBytes, 'macro_begingroup_global_def_main') !== 0) {
+    throw new Error('mount_add_file(macro begingroup/global-def main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) {
+    throw new Error('mount_finalize for macro begingroup/global-def case failed');
+  }
+  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(macro begingroup/global-def)');
+  {
+    const logBytes = readCompileLogBytes();
+    const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(macro begingroup/global-def)');
+    if (baselineMainCharCount === null) {
+      throw new Error('baselineMainCharCount not initialized');
+    }
+    if (stats.char_count !== baselineMainCharCount + 3) {
+      throw new Error(`compile_main(macro begingroup/global-def) char_count delta expected +3, got baseline=${baselineMainCharCount}, current=${stats.char_count}`);
+    }
+    assertMainXdvArtifactEmpty('compile_main(macro begingroup/global-def)');
+  }
+
+  if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before macro relax/no-op case failed');
+  }
+  const macroRelaxNoopMainBytes = new TextEncoder().encode('\\documentclass{article}\n\\begin{document}\nHello.\\def\\foo{XYZ}\\relax\\foo\n\\end{document}\n');
+  if (addMountedFile('main.tex', macroRelaxNoopMainBytes, 'macro_relax_noop_main') !== 0) {
+    throw new Error('mount_add_file(macro relax/no-op main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) {
+    throw new Error('mount_finalize for macro relax/no-op case failed');
+  }
+  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(macro relax/no-op)');
+  {
+    const logBytes = readCompileLogBytes();
+    const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(macro relax/no-op)');
+    if (baselineMainCharCount === null) {
+      throw new Error('baselineMainCharCount not initialized');
+    }
+    if (stats.char_count !== baselineMainCharCount + 3) {
+      throw new Error(`compile_main(macro relax/no-op) char_count delta expected +3, got baseline=${baselineMainCharCount}, current=${stats.char_count}`);
+    }
+    assertMainXdvArtifactEmpty('compile_main(macro relax/no-op)');
+  }
+
+  if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before macro gdef-global baseline case failed');
   }
   const macroGdefBaselineMainBytes = new TextEncoder().encode('{}\\foo');
