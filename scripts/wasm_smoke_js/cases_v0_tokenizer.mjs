@@ -52,6 +52,29 @@ export function runTokenizerCases(ctx, helpers) {
   }
 
   if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before tokenizer caret-in-comment case failed');
+  }
+  const commentMainBytes = new TextEncoder().encode('\\documentclass{article}\n\\begin{document}\n% ^^ZZ\nXYZ\n\\end{document}\n');
+  if (addMountedFile('main.tex', commentMainBytes, 'tokenizer_caret_in_comment_main') !== 0) {
+    throw new Error('mount_add_file(tokenizer caret-in-comment main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) {
+    throw new Error('mount_finalize for tokenizer caret-in-comment case failed');
+  }
+  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(tokenizer caret-in-comment)');
+  {
+    const logBytes = readCompileLogBytes();
+    const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(tokenizer caret-in-comment)');
+    if (baselineCharCount === null) {
+      throw new Error('baselineCharCount not initialized for tokenizer caret-in-comment case');
+    }
+    if (stats.char_count !== baselineCharCount + 3) {
+      throw new Error(`compile_main(tokenizer caret-in-comment) char_count delta expected +3, got baseline=${baselineCharCount}, current=${stats.char_count}`);
+    }
+    assertMainXdvArtifactEmpty('compile_main(tokenizer caret-in-comment)');
+  }
+
+  if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer unsupported-caret case failed');
   }
   if (addMountedFile('main.tex', new TextEncoder().encode('A^^ZZB'), 'tokenizer_caret_unsupported_main') !== 0) {
