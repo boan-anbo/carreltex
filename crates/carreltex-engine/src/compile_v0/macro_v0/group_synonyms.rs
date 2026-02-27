@@ -4,6 +4,8 @@ pub(super) fn control_seq_to_group_token_v0(name: &[u8]) -> Option<TokenV0> {
     match name {
         b"begingroup" => Some(TokenV0::BeginGroup),
         b"endgroup" => Some(TokenV0::EndGroup),
+        b"bgroup" => Some(TokenV0::BeginGroup),
+        b"egroup" => Some(TokenV0::EndGroup),
         _ => None,
     }
 }
