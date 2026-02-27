@@ -97,6 +97,13 @@ fn expand_stream_v0(
                 )?;
                 index = next_index;
             }
+            TokenV0::ControlSeq(name) if name.as_slice() == b"string" => {
+                let (string_chars, next_index) = parse_string_v0(tokens, index)?;
+                for token in string_chars {
+                    push_checked_v0(out, token)?;
+                }
+                index = next_index;
+            }
             TokenV0::ControlSeq(name) if name.as_slice() == b"global" => {
                 index = parse_global_prefixed_macro_binding_v0(tokens, index, macro_frames)?;
             }
@@ -379,6 +386,24 @@ fn parse_csname_v0(
         index += 1;
     }
     Err(InvalidInputReasonV0::MacroCsnameUnsupported)
+}
+
+fn parse_string_v0(
+    tokens: &[TokenV0],
+    string_index: usize,
+) -> Result<(Vec<TokenV0>, usize), InvalidInputReasonV0> {
+    let next_index = skip_space_tokens_v0(tokens, string_index + 1);
+    let control_name = match tokens.get(next_index) {
+        Some(TokenV0::ControlSeq(name)) => name.clone(),
+        _ => return Err(InvalidInputReasonV0::MacroStringUnsupported),
+    };
+
+    let mut out = Vec::<TokenV0>::new();
+    out.push(TokenV0::Char(b'\\'));
+    for byte in control_name {
+        out.push(TokenV0::Char(byte));
+    }
+    Ok((out, next_index + 1))
 }
 
 fn snapshot_let_binding_v0(
