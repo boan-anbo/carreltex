@@ -20,11 +20,28 @@ pub struct CompileRequestV0 {
 pub struct CompileResultV0 {
     pub status: CompileStatus,
     pub report_json: String,
+    pub log_bytes: Vec<u8>,
 }
 
-pub fn build_compile_result_v0(status: CompileStatus, missing_components: &[&str]) -> CompileResultV0 {
+pub fn build_compile_result_v0(
+    status: CompileStatus,
+    missing_components: &[&str],
+    log_bytes: Vec<u8>,
+) -> CompileResultV0 {
     let report_json = build_compile_report_json(status, missing_components);
-    CompileResultV0 { status, report_json }
+    CompileResultV0 {
+        status,
+        report_json,
+        log_bytes,
+    }
+}
+
+pub fn truncate_log_bytes_v0(log_bytes: &[u8], max_log_bytes: u32) -> Vec<u8> {
+    let max = max_log_bytes as usize;
+    if log_bytes.len() <= max {
+        return log_bytes.to_vec();
+    }
+    log_bytes[..max].to_vec()
 }
 
 fn build_compile_report_json(status: CompileStatus, missing_components: &[&str]) -> String {
@@ -85,8 +102,8 @@ pub fn validate_compile_report_json(report_json: &str) -> Result<(), Error> {
 #[cfg(test)]
 mod tests {
     use super::{
-        build_compile_result_v0, validate_compile_report_json, CompileRequestV0, CompileStatus,
-        MAX_LOG_BYTES_V0,
+        build_compile_result_v0, truncate_log_bytes_v0, validate_compile_report_json,
+        CompileRequestV0, CompileStatus, MAX_LOG_BYTES_V0,
     };
 
     #[test]
@@ -103,7 +120,11 @@ mod tests {
 
     #[test]
     fn compile_result_builder_uses_canonical_key_order() {
-        let result = build_compile_result_v0(CompileStatus::NotImplemented, &["tex-engine"]);
+        let result = build_compile_result_v0(
+            CompileStatus::NotImplemented,
+            &["tex-engine"],
+            b"NOT_IMPLEMENTED: missing tex-engine".to_vec(),
+        );
         assert_eq!(
             result.report_json,
             "{\"status\":\"NOT_IMPLEMENTED\",\"missing_components\":[\"tex-engine\"]}"
@@ -112,11 +133,16 @@ mod tests {
 
     #[test]
     fn compile_result_builder_escapes_json_string_content() {
-        let result = build_compile_result_v0(CompileStatus::NotImplemented, &["a\"b\\c"]);
+        let result = build_compile_result_v0(
+            CompileStatus::NotImplemented,
+            &["a\"b\\c"],
+            vec![0xff, b'\n', b'X'],
+        );
         assert_eq!(
             result.report_json,
             "{\"status\":\"NOT_IMPLEMENTED\",\"missing_components\":[\"a\\\"b\\\\c\"]}"
         );
+        assert_eq!(result.log_bytes, vec![0xff, b'\n', b'X']);
     }
 
     #[test]
@@ -129,5 +155,32 @@ mod tests {
     #[test]
     fn max_log_bytes_constant_is_non_zero() {
         assert!(MAX_LOG_BYTES_V0 > 0);
+    }
+
+    #[test]
+    fn truncate_log_bytes_enforces_max() {
+        let bytes = b"NOT_IMPLEMENTED: tex-engine missing".to_vec();
+        let truncated = truncate_log_bytes_v0(&bytes, 16);
+        assert_eq!(truncated.len(), 16);
+        assert_eq!(truncated, bytes[..16].to_vec());
+    }
+
+    #[test]
+    fn report_json_stays_stable_with_different_log_bytes() {
+        let a = build_compile_result_v0(
+            CompileStatus::NotImplemented,
+            &["tex-engine"],
+            b"NOT_IMPLEMENTED: A".to_vec(),
+        );
+        let b = build_compile_result_v0(
+            CompileStatus::NotImplemented,
+            &["tex-engine"],
+            b"NOT_IMPLEMENTED: B".to_vec(),
+        );
+        assert_eq!(
+            a.report_json,
+            "{\"status\":\"NOT_IMPLEMENTED\",\"missing_components\":[\"tex-engine\"]}"
+        );
+        assert_eq!(a.report_json, b.report_json);
     }
 }
