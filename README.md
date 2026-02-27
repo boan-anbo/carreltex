@@ -9,6 +9,12 @@ Browser-first WASM LaTeX/typesetting engine (WIP).
 - No silent “simplified” semantics.
 - Determinism is a first-class constraint (`SOURCE_DATE_EPOCH`, pinned toolchains).
 
+## Docs
+
+- `docs/ARCHITECTURE.md`
+- `docs/INVARIANTS.md`
+- `docs/LEDGER.md`
+
 ## Proof (WASM viability gate)
 
 ```bash
