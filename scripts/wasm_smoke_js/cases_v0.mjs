@@ -647,6 +647,54 @@ export function runCasesV0(ctx, mem, helpers) {
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before compile_request negative setter tests failed');
   }
+  const macroExpandafterMainBytes = new TextEncoder().encode('\\def\\foo{XYZ}\\def\\bar{A}\\expandafter\\bar\\foo');
+  if (addMountedFile('main.tex', macroExpandafterMainBytes, 'macro_expandafter_main') !== 0) {
+    throw new Error('mount_add_file(macro expandafter main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) {
+    throw new Error('mount_finalize for macro expandafter case failed');
+  }
+  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(macro expandafter)');
+  {
+    const report = readCompileReportJson();
+    if (report.status !== 'NOT_IMPLEMENTED') {
+      throw new Error(`compile_main(macro expandafter) report.status expected NOT_IMPLEMENTED, got ${report.status}`);
+    }
+    const logBytes = readCompileLogBytes();
+    const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(macro expandafter)');
+    if (gdefBaselineCharCount === null) {
+      throw new Error('gdefBaselineCharCount not initialized');
+    }
+    if (stats.char_count !== gdefBaselineCharCount + 4) {
+      throw new Error(`compile_main(macro expandafter) char_count delta expected +4, got baseline=${gdefBaselineCharCount}, current=${stats.char_count}`);
+    }
+    assertMainXdvArtifactEmpty('compile_main(macro expandafter)');
+  }
+
+  if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before macro expandafter unsupported case failed');
+  }
+  const macroExpandafterUnsupportedMainBytes = new TextEncoder().encode('\\expandafter{}');
+  if (addMountedFile('main.tex', macroExpandafterUnsupportedMainBytes, 'macro_expandafter_unsupported_main') !== 0) {
+    throw new Error('mount_add_file(macro expandafter unsupported main.tex) failed');
+  }
+  const macroExpandafterUnsupportedFinalizeCode = ctx.mountFinalize();
+  if (macroExpandafterUnsupportedFinalizeCode !== 0 && macroExpandafterUnsupportedFinalizeCode !== 1) {
+    throw new Error(`mount_finalize(macro expandafter unsupported) unexpected code=${macroExpandafterUnsupportedFinalizeCode}`);
+  }
+  expectInvalid(ctx.compileMain(), 'compile_main_v0(macro expandafter unsupported)');
+  {
+    const logBytes = readCompileLogBytes();
+    const logText = new TextDecoder().decode(logBytes);
+    if (!logText.startsWith('INVALID_INPUT:') || !logText.includes('macro_expandafter_unsupported')) {
+      throw new Error(`compile_main macro expandafter unsupported log mismatch: ${logText}`);
+    }
+    assertNoEvents('compile_main_v0(macro expandafter unsupported)');
+  }
+
+  if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before compile_request negative setter tests failed');
+  }
   if (addMountedFile('main.tex', mainBytes, 'compile_request_base_main') !== 0) {
     throw new Error('mount_add_file(main.tex) before compile_request negative setter tests failed');
   }
