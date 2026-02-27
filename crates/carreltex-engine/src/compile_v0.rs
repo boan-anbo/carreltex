@@ -1,4 +1,5 @@
 mod input_expand_v0;
+mod macro_expand_v0;
 mod stats_v0;
 mod trace_v0;
 
@@ -9,6 +10,7 @@ use carreltex_core::{
     CompileStatus, Mount, DEFAULT_COMPILE_MAIN_MAX_LOG_BYTES_V0, MAX_LOG_BYTES_V0,
 };
 use input_expand_v0::expand_inputs_v0;
+use macro_expand_v0::expand_macros_v0;
 use stats_v0::build_tex_stats_from_tokens_v0;
 use trace_v0::build_not_implemented_log_v0;
 
@@ -35,13 +37,14 @@ pub fn compile_main_v0(mount: &mut Mount) -> CompileResultV0 {
 }
 
 pub fn compile_request_v0(mount: &mut Mount, req: &CompileRequestV0) -> CompileResultV0 {
-    // INVALID_INPUT reason precedence SSOT (A-F):
+    // INVALID_INPUT reason precedence SSOT (A-G):
     // A) request validation
     // B) mount finalize
     // C) entrypoint read
     // D) tokenize
-    // E) stats build/group-balance
-    // F) input validation / expansion
+    // E) input validation / expansion
+    // F) macro validation / expansion
+    // G) stats build/group-balance
     if req.entrypoint != "main.tex" || req.source_date_epoch == 0 || req.max_log_bytes == 0 {
         return invalid_result_v0(req.max_log_bytes, InvalidInputReasonV0::RequestInvalid);
     }
@@ -82,7 +85,12 @@ pub fn compile_request_v0(mount: &mut Mount, req: &CompileRequestV0) -> CompileR
         );
     }
 
-    let tex_stats_json = match build_tex_stats_from_tokens_v0(&expanded_tokens) {
+    let macro_expanded_tokens = match expand_macros_v0(&expanded_tokens) {
+        Ok(tokens) => tokens,
+        Err(reason) => return invalid_result_v0(req.max_log_bytes, reason),
+    };
+
+    let tex_stats_json = match build_tex_stats_from_tokens_v0(&macro_expanded_tokens) {
         Ok(json) => json,
         Err(_) => {
             return invalid_result_v0(req.max_log_bytes, InvalidInputReasonV0::StatsBuildFailed);
@@ -110,6 +118,7 @@ pub fn compile_request_v0(mount: &mut Mount, req: &CompileRequestV0) -> CompileR
 #[cfg(test)]
 mod tests {
     use super::input_expand_v0::{MAX_INPUT_DEPTH_V0, MAX_INPUT_EXPANSIONS_V0};
+    use super::macro_expand_v0::MAX_MACRO_EXPANSIONS_V0;
     use super::{compile_main_v0, compile_request_v0};
     use carreltex_core::{
         CompileRequestV0, CompileStatus, Mount, DEFAULT_COMPILE_MAIN_MAX_LOG_BYTES_V0,
@@ -522,5 +531,59 @@ mod tests {
         let result = compile_request_v0(&mut mount, &valid_request());
         assert_eq!(result.status, CompileStatus::InvalidInput);
         assert!(result.log_bytes.ends_with(b"input_expansions_exceeded"));
+    }
+
+    #[test]
+    fn macro_expansion_positive_increases_char_count() {
+        let mut baseline_mount = Mount::default();
+        let baseline_main = b"\\documentclass{article}\n\\begin{document}\nHello.\n\\end{document}\n";
+        assert!(baseline_mount.add_file(b"main.tex", baseline_main).is_ok());
+        let baseline_result = compile_request_v0(&mut baseline_mount, &valid_request());
+        assert_eq!(baseline_result.status, CompileStatus::NotImplemented);
+        let baseline_char_count =
+            stats_u64_field(&baseline_result.tex_stats_json, "char_count").expect("char_count");
+
+        let mut macro_mount = Mount::default();
+        let macro_main = b"\\documentclass{article}\n\\begin{document}\nHello.\\def\\foo{XYZ}\\foo\n\\end{document}\n";
+        assert!(macro_mount.add_file(b"main.tex", macro_main).is_ok());
+        let macro_result = compile_request_v0(&mut macro_mount, &valid_request());
+        assert_eq!(macro_result.status, CompileStatus::NotImplemented);
+        let macro_char_count =
+            stats_u64_field(&macro_result.tex_stats_json, "char_count").expect("char_count");
+        assert_eq!(macro_char_count, baseline_char_count + 3);
+    }
+
+    #[test]
+    fn macro_cycle_is_invalid() {
+        let mut mount = Mount::default();
+        assert!(mount.add_file(b"main.tex", b"\\def\\foo{\\foo}\\foo").is_ok());
+
+        let result = compile_request_v0(&mut mount, &valid_request());
+        assert_eq!(result.status, CompileStatus::InvalidInput);
+        assert!(result.log_bytes.ends_with(b"macro_cycle_failed"));
+    }
+
+    #[test]
+    fn macro_params_unsupported_is_invalid() {
+        let mut mount = Mount::default();
+        assert!(mount.add_file(b"main.tex", b"\\def\\foo#1{A}\\foo").is_ok());
+
+        let result = compile_request_v0(&mut mount, &valid_request());
+        assert_eq!(result.status, CompileStatus::InvalidInput);
+        assert!(result.log_bytes.ends_with(b"macro_params_unsupported"));
+    }
+
+    #[test]
+    fn macro_expansions_cap_is_invalid() {
+        let mut mount = Mount::default();
+        let mut main = String::from("\\def\\foo{A}");
+        for _ in 0..=MAX_MACRO_EXPANSIONS_V0 {
+            main.push_str("\\foo");
+        }
+        assert!(mount.add_file(b"main.tex", main.as_bytes()).is_ok());
+
+        let result = compile_request_v0(&mut mount, &valid_request());
+        assert_eq!(result.status, CompileStatus::InvalidInput);
+        assert!(result.log_bytes.ends_with(b"macro_expansions_exceeded"));
     }
 }

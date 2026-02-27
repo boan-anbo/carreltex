@@ -617,6 +617,64 @@ expectNotImplemented(compileMain(), 'compile_main_v0(input expansion positive)')
   assertMainXdvArtifactEmpty('compile_main(input expansion positive)');
 }
 
+if (mountReset() !== 0) {
+  throw new Error('mount_reset before macro expansion positive case failed');
+}
+const macroExpansionMainBytes = new TextEncoder().encode('\\documentclass{article}\n\\begin{document}\nHello.\\def\\foo{XYZ}\\foo\n\\end{document}\n');
+if (addMountedFile('main.tex', macroExpansionMainBytes, 'macro_expansion_main') !== 0) {
+  throw new Error('mount_add_file(macro expansion main.tex) failed');
+}
+if (mountFinalize() !== 0) {
+  throw new Error('mount_finalize for macro expansion positive case failed');
+}
+expectNotImplemented(compileMain(), 'compile_main_v0(macro expansion positive)');
+{
+  const report = readCompileReportJson();
+  if (report.status !== 'NOT_IMPLEMENTED') {
+    throw new Error(`compile_main(macro expansion) report.status expected NOT_IMPLEMENTED, got ${report.status}`);
+  }
+  const logBytes = readCompileLogBytes();
+  const stats = assertEventsMatchLogAndStats(logBytes, expectedMainTexStatsExact, 'compile_main(macro expansion positive)');
+  if (baselineMainCharCount === null) {
+    throw new Error('baselineMainCharCount not initialized');
+  }
+  if (stats.char_count !== baselineMainCharCount + 3) {
+    throw new Error(`compile_main(macro expansion) char_count delta expected +3, got baseline=${baselineMainCharCount}, current=${stats.char_count}`);
+  }
+  assertMainXdvArtifactEmpty('compile_main(macro expansion positive)');
+}
+
+if (mountReset() !== 0) {
+  throw new Error('mount_reset before macro cycle compile check failed');
+}
+const macroCycleMainBytes = new TextEncoder().encode('\\def\\foo{\\foo}\\foo');
+if (addMountedFile('main.tex', macroCycleMainBytes, 'macro_cycle_main') !== 0) {
+  throw new Error('mount_add_file(macro cycle main.tex) failed');
+}
+const macroCycleFinalizeCode = mountFinalize();
+if (macroCycleFinalizeCode !== 0 && macroCycleFinalizeCode !== 1) {
+  throw new Error(`mount_finalize(macro cycle) unexpected code=${macroCycleFinalizeCode}`);
+}
+expectInvalid(compileMain(), 'compile_main_v0(macro cycle)');
+{
+  const logBytes = readCompileLogBytes();
+  const logText = new TextDecoder().decode(logBytes);
+  if (!logText.startsWith('INVALID_INPUT:') || !logText.includes('macro_cycle_failed')) {
+    throw new Error(`compile_main macro cycle log mismatch: ${logText}`);
+  }
+  assertNoEvents('compile_main_v0(macro cycle)');
+}
+
+if (mountReset() !== 0) {
+  throw new Error('mount_reset before compile_request negative setter tests failed');
+}
+if (addMountedFile('main.tex', mainBytes, 'compile_request_base_main') !== 0) {
+  throw new Error('mount_add_file(main.tex) before compile_request negative setter tests failed');
+}
+if (mountFinalize() !== 0) {
+  throw new Error('mount_finalize before compile_request negative setter tests failed');
+}
+
 if (compileRequestReset() !== 0) {
   throw new Error('compile_request_reset_v0 before negative setter tests failed');
 }
