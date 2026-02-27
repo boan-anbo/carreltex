@@ -285,6 +285,52 @@ export function runMacroCases(ctx, helpers, baselineMainCharCount) {
   }
 
   if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before macro bgroup/no-leak case failed');
+  }
+  const macroBgroupNoLeakMainBytes = new TextEncoder().encode('\\documentclass{article}\n\\begin{document}\nHello.\\bgroup\\def\\foo{XYZ}\\egroup\\foo\n\\end{document}\n');
+  if (addMountedFile('main.tex', macroBgroupNoLeakMainBytes, 'macro_bgroup_no_leak_main') !== 0) {
+    throw new Error('mount_add_file(macro bgroup/no-leak main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) {
+    throw new Error('mount_finalize for macro bgroup/no-leak case failed');
+  }
+  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(macro bgroup/no-leak)');
+  {
+    const logBytes = readCompileLogBytes();
+    const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(macro bgroup/no-leak)');
+    if (baselineMainCharCount === null) {
+      throw new Error('baselineMainCharCount not initialized');
+    }
+    if (stats.char_count !== baselineMainCharCount) {
+      throw new Error(`compile_main(macro bgroup/no-leak) char_count delta expected +0, got baseline=${baselineMainCharCount}, current=${stats.char_count}`);
+    }
+    assertMainXdvArtifactEmpty('compile_main(macro bgroup/no-leak)');
+  }
+
+  if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before macro bgroup/global-def case failed');
+  }
+  const macroBgroupGlobalDefMainBytes = new TextEncoder().encode('\\documentclass{article}\n\\begin{document}\nHello.\\bgroup\\global\\def\\foo{XYZ}\\egroup\\foo\n\\end{document}\n');
+  if (addMountedFile('main.tex', macroBgroupGlobalDefMainBytes, 'macro_bgroup_global_def_main') !== 0) {
+    throw new Error('mount_add_file(macro bgroup/global-def main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) {
+    throw new Error('mount_finalize for macro bgroup/global-def case failed');
+  }
+  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(macro bgroup/global-def)');
+  {
+    const logBytes = readCompileLogBytes();
+    const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(macro bgroup/global-def)');
+    if (baselineMainCharCount === null) {
+      throw new Error('baselineMainCharCount not initialized');
+    }
+    if (stats.char_count !== baselineMainCharCount + 3) {
+      throw new Error(`compile_main(macro bgroup/global-def) char_count delta expected +3, got baseline=${baselineMainCharCount}, current=${stats.char_count}`);
+    }
+    assertMainXdvArtifactEmpty('compile_main(macro bgroup/global-def)');
+  }
+
+  if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before macro gdef-global baseline case failed');
   }
   const macroGdefBaselineMainBytes = new TextEncoder().encode('{}\\foo');
