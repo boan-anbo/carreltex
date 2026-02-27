@@ -278,6 +278,90 @@ export function runCasesV0(ctx, mem, helpers) {
     assertMainXdvArtifactEmpty('compile_main(input braced default .tex)');
   }
 
+  if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before unbraced explicit .tex + control-seq case failed');
+  }
+  const unbracedExplicitTexMainBytes = new TextEncoder().encode('\\documentclass{article}\n\\begin{document}\nHello.\\input sub.tex\\foo\n\\end{document}\n');
+  const unbracedExplicitTexSubBytes = new TextEncoder().encode('\\def\\foo{XYZ}');
+  if (addMountedFile('main.tex', unbracedExplicitTexMainBytes, 'input_unbraced_explicit_tex_main') !== 0) {
+    throw new Error('mount_add_file(input unbraced explicit .tex main.tex) failed');
+  }
+  if (addMountedFile('sub.tex', unbracedExplicitTexSubBytes, 'input_unbraced_explicit_tex_sub') !== 0) {
+    throw new Error('mount_add_file(input unbraced explicit .tex sub.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) {
+    throw new Error('mount_finalize for input unbraced explicit .tex + control-seq case failed');
+  }
+  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(input unbraced explicit .tex + control-seq)');
+  {
+    const report = readCompileReportJson();
+    if (report.status !== 'NOT_IMPLEMENTED') {
+      throw new Error(`compile_main(input unbraced explicit .tex + control-seq) report.status expected NOT_IMPLEMENTED, got ${report.status}`);
+    }
+    const logBytes = readCompileLogBytes();
+    const stats = assertEventsMatchLogAndStats(logBytes, expectedMainTexStatsExact, 'compile_main(input unbraced explicit .tex + control-seq)');
+    if (baselineMainCharCount === null) {
+      throw new Error('baselineMainCharCount not initialized');
+    }
+    if (stats.char_count !== baselineMainCharCount + 3) {
+      throw new Error(`compile_main(input unbraced explicit .tex + control-seq) char_count delta expected +3, got baseline=${baselineMainCharCount}, current=${stats.char_count}`);
+    }
+    const logText = new TextDecoder().decode(logBytes);
+    const tracePrefix = 'INPUT_TRACE_V0:';
+    const tracePrefixIndex = logText.indexOf(tracePrefix);
+    if (tracePrefixIndex < 0) {
+      throw new Error(`compile_main(input unbraced explicit .tex + control-seq) missing ${tracePrefix}`);
+    }
+    const traceJsonText = logText.slice(tracePrefixIndex + tracePrefix.length);
+    const trace = JSON.parse(traceJsonText);
+    if (!Array.isArray(trace.files) || !trace.files.includes('sub.tex')) {
+      throw new Error(`compile_main(input unbraced explicit .tex + control-seq) trace.files missing resolved sub.tex: ${traceJsonText}`);
+    }
+    assertMainXdvArtifactEmpty('compile_main(input unbraced explicit .tex + control-seq)');
+  }
+
+  if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before unbraced dash filename case failed');
+  }
+  const unbracedDashMainBytes = new TextEncoder().encode('\\documentclass{article}\n\\begin{document}\nHello.\\input sub-1\\foo\n\\end{document}\n');
+  const unbracedDashSubBytes = new TextEncoder().encode('\\def\\foo{XYZ}');
+  if (addMountedFile('main.tex', unbracedDashMainBytes, 'input_unbraced_dash_main') !== 0) {
+    throw new Error('mount_add_file(input unbraced dash main.tex) failed');
+  }
+  if (addMountedFile('sub-1.tex', unbracedDashSubBytes, 'input_unbraced_dash_sub') !== 0) {
+    throw new Error('mount_add_file(input unbraced dash sub-1.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) {
+    throw new Error('mount_finalize for input unbraced dash filename case failed');
+  }
+  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(input unbraced dash filename)');
+  {
+    const report = readCompileReportJson();
+    if (report.status !== 'NOT_IMPLEMENTED') {
+      throw new Error(`compile_main(input unbraced dash filename) report.status expected NOT_IMPLEMENTED, got ${report.status}`);
+    }
+    const logBytes = readCompileLogBytes();
+    const stats = assertEventsMatchLogAndStats(logBytes, expectedMainTexStatsExact, 'compile_main(input unbraced dash filename)');
+    if (baselineMainCharCount === null) {
+      throw new Error('baselineMainCharCount not initialized');
+    }
+    if (stats.char_count !== baselineMainCharCount + 3) {
+      throw new Error(`compile_main(input unbraced dash filename) char_count delta expected +3, got baseline=${baselineMainCharCount}, current=${stats.char_count}`);
+    }
+    const logText = new TextDecoder().decode(logBytes);
+    const tracePrefix = 'INPUT_TRACE_V0:';
+    const tracePrefixIndex = logText.indexOf(tracePrefix);
+    if (tracePrefixIndex < 0) {
+      throw new Error(`compile_main(input unbraced dash filename) missing ${tracePrefix}`);
+    }
+    const traceJsonText = logText.slice(tracePrefixIndex + tracePrefix.length);
+    const trace = JSON.parse(traceJsonText);
+    if (!Array.isArray(trace.files) || !trace.files.includes('sub-1.tex')) {
+      throw new Error(`compile_main(input unbraced dash filename) trace.files missing resolved sub-1.tex: ${traceJsonText}`);
+    }
+    assertMainXdvArtifactEmpty('compile_main(input unbraced dash filename)');
+  }
+
   const { gdefBaselineCharCount } = runMacroCases(
     ctx,
     {
