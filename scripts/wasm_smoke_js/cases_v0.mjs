@@ -205,6 +205,79 @@ export function runCasesV0(ctx, mem, helpers) {
     assertMainXdvArtifactEmpty('compile_main(input expansion positive)');
   }
 
+  if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before unbraced input expansion case failed');
+  }
+  const unbracedInputMainBytes = new TextEncoder().encode('\\documentclass{article}\n\\begin{document}\nHello.\\input sub\\foo\n\\end{document}\n');
+  const unbracedInputSubBytes = new TextEncoder().encode('\\def\\foo{XYZ}');
+  if (addMountedFile('main.tex', unbracedInputMainBytes, 'input_unbraced_main') !== 0) {
+    throw new Error('mount_add_file(input unbraced main.tex) failed');
+  }
+  if (addMountedFile('sub.tex', unbracedInputSubBytes, 'input_unbraced_sub') !== 0) {
+    throw new Error('mount_add_file(input unbraced sub.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) {
+    throw new Error('mount_finalize for input unbraced case failed');
+  }
+  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(input unbraced + default .tex)');
+  {
+    const report = readCompileReportJson();
+    if (report.status !== 'NOT_IMPLEMENTED') {
+      throw new Error(`compile_main(input unbraced) report.status expected NOT_IMPLEMENTED, got ${report.status}`);
+    }
+    const logBytes = readCompileLogBytes();
+    const stats = assertEventsMatchLogAndStats(logBytes, expectedMainTexStatsExact, 'compile_main(input unbraced + default .tex)');
+    if (baselineMainCharCount === null) {
+      throw new Error('baselineMainCharCount not initialized');
+    }
+    if (stats.char_count !== baselineMainCharCount + 3) {
+      throw new Error(`compile_main(input unbraced) char_count delta expected +3, got baseline=${baselineMainCharCount}, current=${stats.char_count}`);
+    }
+    const logText = new TextDecoder().decode(logBytes);
+    const tracePrefix = 'INPUT_TRACE_V0:';
+    const tracePrefixIndex = logText.indexOf(tracePrefix);
+    if (tracePrefixIndex < 0) {
+      throw new Error(`compile_main(input unbraced) missing ${tracePrefix}`);
+    }
+    const traceJsonText = logText.slice(tracePrefixIndex + tracePrefix.length);
+    const trace = JSON.parse(traceJsonText);
+    if (!Array.isArray(trace.files) || !trace.files.includes('sub.tex')) {
+      throw new Error(`compile_main(input unbraced) trace.files missing resolved sub.tex: ${traceJsonText}`);
+    }
+    assertMainXdvArtifactEmpty('compile_main(input unbraced + default .tex)');
+  }
+
+  if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before braced input default-extension case failed');
+  }
+  const bracedNoExtMainBytes = new TextEncoder().encode('\\documentclass{article}\n\\begin{document}\nHello.\\input{sub}\\foo\n\\end{document}\n');
+  const bracedNoExtSubBytes = new TextEncoder().encode('\\def\\foo{XYZ}');
+  if (addMountedFile('main.tex', bracedNoExtMainBytes, 'input_braced_no_ext_main') !== 0) {
+    throw new Error('mount_add_file(input braced no-ext main.tex) failed');
+  }
+  if (addMountedFile('sub.tex', bracedNoExtSubBytes, 'input_braced_no_ext_sub') !== 0) {
+    throw new Error('mount_add_file(input braced no-ext sub.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) {
+    throw new Error('mount_finalize for input braced no-ext case failed');
+  }
+  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(input braced default .tex)');
+  {
+    const report = readCompileReportJson();
+    if (report.status !== 'NOT_IMPLEMENTED') {
+      throw new Error(`compile_main(input braced no-ext) report.status expected NOT_IMPLEMENTED, got ${report.status}`);
+    }
+    const logBytes = readCompileLogBytes();
+    const stats = assertEventsMatchLogAndStats(logBytes, expectedMainTexStatsExact, 'compile_main(input braced default .tex)');
+    if (baselineMainCharCount === null) {
+      throw new Error('baselineMainCharCount not initialized');
+    }
+    if (stats.char_count !== baselineMainCharCount + 3) {
+      throw new Error(`compile_main(input braced no-ext) char_count delta expected +3, got baseline=${baselineMainCharCount}, current=${stats.char_count}`);
+    }
+    assertMainXdvArtifactEmpty('compile_main(input braced default .tex)');
+  }
+
   const { gdefBaselineCharCount } = runMacroCases(
     ctx,
     {
@@ -377,6 +450,48 @@ export function runCasesV0(ctx, mem, helpers) {
       throw new Error(`compile_main missing-input log mismatch: ${logText}`);
     }
     assertNoEvents('compile_main_v0(missing input file)');
+  }
+
+  if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before missing-input-unbraced compile check failed');
+  }
+  const missingUnbracedInputMainBytes = new TextEncoder().encode('\\documentclass{article}\n\\begin{document}\n\\input missing\n\\end{document}\n');
+  if (addMountedFile('main.tex', missingUnbracedInputMainBytes, 'missing_unbraced_input_main') !== 0) {
+    throw new Error('mount_add_file(missing unbraced input main.tex) failed');
+  }
+  const missingUnbracedInputFinalizeCode = ctx.mountFinalize();
+  if (missingUnbracedInputFinalizeCode !== 0 && missingUnbracedInputFinalizeCode !== 1) {
+    throw new Error(`mount_finalize(missing unbraced input main.tex) unexpected code=${missingUnbracedInputFinalizeCode}`);
+  }
+  expectInvalid(ctx.compileMain(), 'compile_main_v0(missing unbraced input file)');
+  {
+    const logBytes = readCompileLogBytes();
+    const logText = new TextDecoder().decode(logBytes);
+    if (!logText.startsWith('INVALID_INPUT:') || !logText.includes('input_validation_failed')) {
+      throw new Error(`compile_main missing-unbraced-input log mismatch: ${logText}`);
+    }
+    assertNoEvents('compile_main_v0(missing unbraced input file)');
+  }
+
+  if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before invalid-unbraced-input syntax compile check failed');
+  }
+  const invalidUnbracedInputMainBytes = new TextEncoder().encode('\\documentclass{article}\n\\begin{document}\n\\input\\foo\n\\end{document}\n');
+  if (addMountedFile('main.tex', invalidUnbracedInputMainBytes, 'invalid_unbraced_input_main') !== 0) {
+    throw new Error('mount_add_file(invalid unbraced input syntax main.tex) failed');
+  }
+  const invalidUnbracedInputFinalizeCode = ctx.mountFinalize();
+  if (invalidUnbracedInputFinalizeCode !== 0 && invalidUnbracedInputFinalizeCode !== 1) {
+    throw new Error(`mount_finalize(invalid unbraced input syntax main.tex) unexpected code=${invalidUnbracedInputFinalizeCode}`);
+  }
+  expectInvalid(ctx.compileMain(), 'compile_main_v0(invalid unbraced input syntax)');
+  {
+    const logBytes = readCompileLogBytes();
+    const logText = new TextDecoder().decode(logBytes);
+    if (!logText.startsWith('INVALID_INPUT:') || !logText.includes('input_validation_failed')) {
+      throw new Error(`compile_main invalid-unbraced-input log mismatch: ${logText}`);
+    }
+    assertNoEvents('compile_main_v0(invalid unbraced input syntax)');
   }
 
   if (ctx.mountReset() !== 0) {
