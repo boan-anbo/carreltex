@@ -245,6 +245,41 @@ fn control_word_textbackslash_then_percent_symbol_maps_to_backslash_and_percent(
 }
 
 #[test]
+fn control_word_par_maps_to_space_and_swallows_following_whitespace() {
+    let tokens = tokenize_v0(b"A\\par B").expect("tokenize should succeed");
+    assert_eq!(
+        tokens,
+        vec![TokenV0::Char(b'A'), TokenV0::Space, TokenV0::Char(b'B')]
+    );
+}
+
+#[test]
+fn repeated_control_word_par_emits_repeated_spaces() {
+    let tokens = tokenize_v0(b"A\\par\\par B").expect("tokenize should succeed");
+    assert_eq!(
+        tokens,
+        vec![
+            TokenV0::Char(b'A'),
+            TokenV0::Space,
+            TokenV0::Space,
+            TokenV0::Char(b'B')
+        ]
+    );
+}
+
+#[test]
+fn control_word_parxyz_is_not_par_prefix() {
+    let tokens = tokenize_v0(b"\\parXYZ").expect("tokenize should succeed");
+    assert_eq!(tokens, vec![TokenV0::ControlSeq(b"parXYZ".to_vec())]);
+}
+
+#[test]
+fn control_word_partial_is_not_par_prefix() {
+    let tokens = tokenize_v0(b"\\partial").expect("tokenize should succeed");
+    assert_eq!(tokens, vec![TokenV0::ControlSeq(b"partial".to_vec())]);
+}
+
+#[test]
 fn verb_control_word_is_invalid_input() {
     assert_eq!(
         tokenize_v0(b"\\verb|x|"),

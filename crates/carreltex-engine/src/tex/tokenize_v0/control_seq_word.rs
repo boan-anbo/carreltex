@@ -37,6 +37,8 @@ pub(super) fn parse_control_word_v0(
     }
     let token = if control_word.as_slice() == b"textbackslash" {
         TokenV0::Char(b'\\')
+    } else if control_word.as_slice() == b"par" {
+        TokenV0::Space
     } else {
         TokenV0::ControlSeq(control_word)
     };
