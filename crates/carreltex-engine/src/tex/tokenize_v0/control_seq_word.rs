@@ -19,9 +19,6 @@ pub(super) fn parse_control_word_v0(
         }
         control_word.push(word_byte);
         index = following_index;
-        if control_word.as_slice() == b"par" {
-            break;
-        }
     }
     if control_word.as_slice() == b"verb" {
         return Err(TokenizeErrorV0::InvalidInput);
