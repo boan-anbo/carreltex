@@ -21,6 +21,9 @@ enum InvalidInputReasonV0 {
     TokenizeFailed,
     StatsBuildFailed,
     InputValidationFailed,
+    InputCycleFailed,
+    InputDepthExceeded,
+    InputExpansionsExceeded,
 }
 
 fn invalid_log_bytes_v0(reason: InvalidInputReasonV0) -> &'static [u8] {
@@ -31,6 +34,11 @@ fn invalid_log_bytes_v0(reason: InvalidInputReasonV0) -> &'static [u8] {
         InvalidInputReasonV0::TokenizeFailed => b"INVALID_INPUT: tokenize_failed",
         InvalidInputReasonV0::StatsBuildFailed => b"INVALID_INPUT: stats_build_failed",
         InvalidInputReasonV0::InputValidationFailed => b"INVALID_INPUT: input_validation_failed",
+        InvalidInputReasonV0::InputCycleFailed => b"INVALID_INPUT: input_cycle_failed",
+        InvalidInputReasonV0::InputDepthExceeded => b"INVALID_INPUT: input_depth_exceeded",
+        InvalidInputReasonV0::InputExpansionsExceeded => {
+            b"INVALID_INPUT: input_expansions_exceeded"
+        }
     }
 }
 
@@ -83,12 +91,7 @@ pub fn compile_request_v0(mount: &mut Mount, req: &CompileRequestV0) -> CompileR
     };
     let expanded_tokens = match expand_inputs_v0(&tokens, mount) {
         Ok(tokens) => tokens,
-        Err(_) => {
-            return invalid_result_v0(
-                req.max_log_bytes,
-                InvalidInputReasonV0::InputValidationFailed,
-            );
-        }
+        Err(reason) => return invalid_result_v0(req.max_log_bytes, reason),
     };
     if expanded_tokens.len() > MAX_TOKENS_V0 {
         return invalid_result_v0(
@@ -213,7 +216,7 @@ fn expand_inputs_inner_v0(
     expansion_count: &mut usize,
 ) -> Result<Vec<TokenV0>, InvalidInputReasonV0> {
     if depth > MAX_INPUT_DEPTH_V0 {
-        return Err(InvalidInputReasonV0::InputValidationFailed);
+        return Err(InvalidInputReasonV0::InputDepthExceeded);
     }
 
     let mut out = Vec::new();
@@ -223,14 +226,14 @@ fn expand_inputs_inner_v0(
             TokenV0::ControlSeq(name) if name.as_slice() == b"input" => {
                 *expansion_count = expansion_count
                     .checked_add(1)
-                    .ok_or(InvalidInputReasonV0::InputValidationFailed)?;
+                    .ok_or(InvalidInputReasonV0::InputExpansionsExceeded)?;
                 if *expansion_count > MAX_INPUT_EXPANSIONS_V0 {
-                    return Err(InvalidInputReasonV0::InputValidationFailed);
+                    return Err(InvalidInputReasonV0::InputExpansionsExceeded);
                 }
 
                 let (normalized_path, next_index) = parse_input_path_group_v0(tokens, index)?;
                 if active_stack.iter().any(|path| path == &normalized_path) {
-                    return Err(InvalidInputReasonV0::InputValidationFailed);
+                    return Err(InvalidInputReasonV0::InputCycleFailed);
                 }
 
                 let included_bytes = match mount.read_file_by_bytes_v0(normalized_path.as_bytes()) {
@@ -317,7 +320,7 @@ fn build_tex_stats_from_tokens_v0(tokens: &[TokenV0]) -> Result<String, ()> {
 
 #[cfg(test)]
 mod tests {
-    use super::{compile_main_v0, compile_request_v0, MAX_INPUT_DEPTH_V0};
+    use super::{compile_main_v0, compile_request_v0, MAX_INPUT_DEPTH_V0, MAX_INPUT_EXPANSIONS_V0};
     use carreltex_core::{
         CompileRequestV0, CompileStatus, Mount, DEFAULT_COMPILE_MAIN_MAX_LOG_BYTES_V0,
         MAX_LOG_BYTES_V0,
@@ -645,7 +648,7 @@ mod tests {
 
         let result = compile_request_v0(&mut mount, &valid_request());
         assert_eq!(result.status, CompileStatus::InvalidInput);
-        assert!(result.log_bytes.ends_with(b"input_validation_failed"));
+        assert!(result.log_bytes.ends_with(b"input_cycle_failed"));
     }
 
     #[test]
@@ -672,6 +675,22 @@ mod tests {
 
         let result = compile_request_v0(&mut mount, &valid_request());
         assert_eq!(result.status, CompileStatus::InvalidInput);
-        assert!(result.log_bytes.ends_with(b"input_validation_failed"));
+        assert!(result.log_bytes.ends_with(b"input_depth_exceeded"));
+    }
+
+    #[test]
+    fn input_expansions_cap_is_invalid() {
+        let mut mount = Mount::default();
+        let mut main = String::from("\\documentclass{article}\n\\begin{document}\n");
+        for _ in 0..=MAX_INPUT_EXPANSIONS_V0 {
+            main.push_str("\\input{a.tex}\n");
+        }
+        main.push_str("\\end{document}\n");
+        assert!(mount.add_file(b"a.tex", b"X").is_ok());
+        assert!(mount.add_file(b"main.tex", main.as_bytes()).is_ok());
+
+        let result = compile_request_v0(&mut mount, &valid_request());
+        assert_eq!(result.status, CompileStatus::InvalidInput);
+        assert!(result.log_bytes.ends_with(b"input_expansions_exceeded"));
     }
 }
