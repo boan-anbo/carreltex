@@ -15,6 +15,37 @@ export function runMacroCases(ctx, helpers, baselineMainCharCount) {
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before macro expansion positive case failed');
   }
+  const inputMacroMainBytes = new TextEncoder().encode('\\documentclass{article}\n\\begin{document}\nHello.\\input{sub.tex}\\foo\n\\end{document}\n');
+  const inputMacroSubBytes = new TextEncoder().encode('\\def\\foo{XYZ}');
+  if (addMountedFile('main.tex', inputMacroMainBytes, 'input_macro_main') !== 0) {
+    throw new Error('mount_add_file(input-macro main.tex) failed');
+  }
+  if (addMountedFile('sub.tex', inputMacroSubBytes, 'input_macro_sub') !== 0) {
+    throw new Error('mount_add_file(input-macro sub.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) {
+    throw new Error('mount_finalize for input-macro interplay case failed');
+  }
+  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(input->macro interplay)');
+  {
+    const report = readCompileReportJson();
+    if (report.status !== 'NOT_IMPLEMENTED') {
+      throw new Error(`compile_main(input->macro interplay) report.status expected NOT_IMPLEMENTED, got ${report.status}`);
+    }
+    const logBytes = readCompileLogBytes();
+    const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(input->macro interplay)');
+    if (baselineMainCharCount === null) {
+      throw new Error('baselineMainCharCount not initialized');
+    }
+    if (stats.char_count !== baselineMainCharCount + 3) {
+      throw new Error(`compile_main(input->macro interplay) char_count delta expected +3, got baseline=${baselineMainCharCount}, current=${stats.char_count}`);
+    }
+    assertMainXdvArtifactEmpty('compile_main(input->macro interplay)');
+  }
+
+  if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before macro expansion positive case failed');
+  }
   const macroExpansionMainBytes = new TextEncoder().encode('\\documentclass{article}\n\\begin{document}\nHello.\\def\\foo{XYZ}\\foo\n\\end{document}\n');
   if (addMountedFile('main.tex', macroExpansionMainBytes, 'macro_expansion_main') !== 0) {
     throw new Error('mount_add_file(macro expansion main.tex) failed');

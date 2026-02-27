@@ -2,6 +2,7 @@
 
 Allowed status enum: `todo | stubbed | implemented | verified | skipped`.
 `verified` means the row's proof command is currently green.
+Regression guard: proofs include an `\input{sub.tex}\foo` case that locks engine order `tokenize -> input expansion -> macro expansion -> stats`.
 
 | path | layer | component | status | proof | notes |
 | --- | --- | --- | --- | --- | --- |
