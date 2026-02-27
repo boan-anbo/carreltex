@@ -164,6 +164,15 @@ fn bgroup_global_def_leaks() {
 }
 
 #[test]
+fn endgroup_underflow_is_invalid_with_specific_reason() {
+    let mut mount = Mount::default();
+    assert!(mount.add_file(b"main.tex", b"\\endgroup").is_ok());
+    let result = compile_request_v0(&mut mount, &valid_request());
+    assert_eq!(result.status, CompileStatus::InvalidInput);
+    assert!(result.log_bytes.ends_with(b"macro_group_underflow"));
+}
+
+#[test]
 fn def_with_single_space_before_body_is_supported() {
     let baseline = baseline_char_count();
     let mut mount = Mount::default();

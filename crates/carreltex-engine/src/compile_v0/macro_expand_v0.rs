@@ -33,7 +33,7 @@ use count_the::{parse_count_assignment_v0, parse_the_v0};
 use csname_expandafter::{parse_csname_v0, parse_expandafter_v0};
 use def_xdef::{parse_def_v0, parse_xdef_v0};
 use global_prefix::parse_global_prefixed_macro_binding_v0;
-use group_synonyms::control_seq_to_group_token_v0;
+use group_synonyms::{control_seq_to_group_token_v0, is_endgroup_synonym_v0};
 use let_futurelet::{parse_futurelet_v0, parse_let_v0};
 use noexpand::parse_noexpand_v0;
 use string_meaning::{parse_meaning_v0, parse_string_v0};
@@ -177,6 +177,8 @@ fn expand_stream_v0(
                     macro_frames.push(BTreeMap::new());
                 } else if macro_frames.len() > 1 {
                     macro_frames.pop();
+                } else if is_endgroup_synonym_v0(name.as_slice()) {
+                    return Err(InvalidInputReasonV0::MacroGroupUnderflow);
                 }
                 push_checked_v0(out, group_token)?;
                 index += 1;

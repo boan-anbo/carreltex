@@ -9,3 +9,7 @@ pub(super) fn control_seq_to_group_token_v0(name: &[u8]) -> Option<TokenV0> {
         _ => None,
     }
 }
+
+pub(super) fn is_endgroup_synonym_v0(name: &[u8]) -> bool {
+    matches!(name, b"endgroup" | b"egroup")
+}

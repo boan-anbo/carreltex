@@ -398,6 +398,26 @@ export function runMacroCases(ctx, helpers, baselineMainCharCount) {
   }
 
   if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before macro endgroup-underflow case failed');
+  }
+  const macroEndgroupUnderflowMainBytes = new TextEncoder().encode('\\endgroup');
+  if (addMountedFile('main.tex', macroEndgroupUnderflowMainBytes, 'macro_endgroup_underflow_main') !== 0) {
+    throw new Error('mount_add_file(macro endgroup-underflow main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) {
+    throw new Error('mount_finalize for macro endgroup-underflow case failed');
+  }
+  expectInvalid(ctx.compileMain(), 'compile_main_v0(macro endgroup-underflow)');
+  {
+    const logBytes = readCompileLogBytes();
+    const logText = new TextDecoder().decode(logBytes);
+    if (!logText.startsWith('INVALID_INPUT:') || !logText.includes('macro_group_underflow')) {
+      throw new Error(`compile_main macro endgroup-underflow log mismatch: ${logText}`);
+    }
+    assertNoEvents('compile_main_v0(macro endgroup-underflow)');
+  }
+
+  if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before macro gdef-global baseline case failed');
   }
   const macroGdefBaselineMainBytes = new TextEncoder().encode('{}\\foo');
