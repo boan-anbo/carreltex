@@ -1,10 +1,10 @@
 use std::sync::{Mutex, OnceLock};
 
 use carreltex_core::{
-    artifact_bytes_within_cap_v0, report_json_has_status_token_v0,
+    append_event_v0, artifact_bytes_within_cap_v0, report_json_has_status_token_v0,
     report_json_missing_components_is_empty_v0, validate_compile_report_json, validate_main_tex,
     CompileRequestV0, CompileStatus, Mount, DEFAULT_COMPILE_MAIN_MAX_LOG_BYTES_V0,
-    MAIN_TEX_MAX_BYTES, MAX_LOG_BYTES_V0,
+    EVENT_KIND_LOG_BYTES_V0, MAIN_TEX_MAX_BYTES, MAX_LOG_BYTES_V0,
 };
 use carreltex_engine::{compile_main_v0, compile_request_v0};
 
@@ -29,6 +29,11 @@ fn last_log_state() -> &'static Mutex<Vec<u8>> {
 }
 
 fn last_xdv_state() -> &'static Mutex<Vec<u8>> {
+    static STATE: OnceLock<Mutex<Vec<u8>>> = OnceLock::new();
+    STATE.get_or_init(|| Mutex::new(Vec::new()))
+}
+
+fn last_events_state() -> &'static Mutex<Vec<u8>> {
     static STATE: OnceLock<Mutex<Vec<u8>>> = OnceLock::new();
     STATE.get_or_init(|| Mutex::new(Vec::new()))
 }
@@ -251,6 +256,15 @@ fn read_last_xdv_bytes() -> Option<Vec<u8>> {
     Some(last.clone())
 }
 
+fn set_last_events_bytes(events_bytes: &[u8]) {
+    let mut last = match last_events_state().lock() {
+        Ok(guard) => guard,
+        Err(_) => return,
+    };
+    last.clear();
+    last.extend_from_slice(events_bytes);
+}
+
 fn write_report_for_status(status: CompileStatus) {
     let fallback = match status {
         CompileStatus::Ok => "{\"status\":\"OK\",\"missing_components\":[]}",
@@ -262,6 +276,7 @@ fn write_report_for_status(status: CompileStatus) {
     set_last_report_bytes(fallback);
     set_last_log_bytes(&[]);
     set_last_xdv_bytes(&[]);
+    set_last_events_bytes(&[]);
 }
 
 fn store_compile_result_or_fail_closed(
@@ -323,6 +338,15 @@ fn store_compile_result_or_fail_closed(
     status as i32
 }
 
+fn store_events_for_log_or_fail_closed(log_bytes: &[u8]) -> Result<(), ()> {
+    let mut events = Vec::new();
+    if append_event_v0(&mut events, EVENT_KIND_LOG_BYTES_V0, log_bytes).is_err() {
+        return Err(());
+    }
+    set_last_events_bytes(&events);
+    Ok(())
+}
+
 #[no_mangle]
 pub extern "C" fn carreltex_wasm_compile_main_v0() -> i32 {
     let mut mount = match mount_state().lock() {
@@ -334,13 +358,21 @@ pub extern "C" fn carreltex_wasm_compile_main_v0() -> i32 {
     };
 
     let result = compile_main_v0(&mut mount);
-    store_compile_result_or_fail_closed(
+    let status = store_compile_result_or_fail_closed(
         &result.report_json,
         &result.log_bytes,
         &result.main_xdv_bytes,
         result.status,
         DEFAULT_COMPILE_MAIN_MAX_LOG_BYTES_V0 as usize,
-    )
+    );
+    if status == CompileStatus::InvalidInput as i32 {
+        return status;
+    }
+    if store_events_for_log_or_fail_closed(&result.log_bytes).is_err() {
+        write_report_for_status(CompileStatus::InvalidInput);
+        return CompileStatus::InvalidInput as i32;
+    }
+    status
 }
 
 #[no_mangle]
@@ -432,13 +464,21 @@ pub extern "C" fn carreltex_wasm_compile_run_v0() -> i32 {
     };
 
     let result = compile_request_v0(&mut mount, &request);
-    store_compile_result_or_fail_closed(
+    let status = store_compile_result_or_fail_closed(
         &result.report_json,
         &result.log_bytes,
         &result.main_xdv_bytes,
         result.status,
         request.max_log_bytes as usize,
-    )
+    );
+    if status == CompileStatus::InvalidInput as i32 {
+        return status;
+    }
+    if store_events_for_log_or_fail_closed(&result.log_bytes).is_err() {
+        write_report_for_status(CompileStatus::InvalidInput);
+        return CompileStatus::InvalidInput as i32;
+    }
+    status
 }
 
 #[no_mangle]
@@ -483,6 +523,33 @@ pub extern "C" fn carreltex_wasm_compile_log_copy_v0(out_ptr: *mut u8, out_len: 
         return 0;
     }
     let last = match last_log_state().lock() {
+        Ok(guard) => guard,
+        Err(_) => return 0,
+    };
+    if out_len < last.len() {
+        return 0;
+    }
+    unsafe {
+        core::ptr::copy_nonoverlapping(last.as_ptr(), out_ptr, last.len());
+    }
+    last.len()
+}
+
+#[no_mangle]
+pub extern "C" fn carreltex_wasm_events_len_v0() -> usize {
+    let last = match last_events_state().lock() {
+        Ok(guard) => guard,
+        Err(_) => return 0,
+    };
+    last.len()
+}
+
+#[no_mangle]
+pub extern "C" fn carreltex_wasm_events_copy_v0(out_ptr: *mut u8, out_len: usize) -> usize {
+    if out_ptr.is_null() || out_len == 0 {
+        return 0;
+    }
+    let last = match last_events_state().lock() {
         Ok(guard) => guard,
         Err(_) => return 0,
     };

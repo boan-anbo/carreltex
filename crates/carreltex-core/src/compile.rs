@@ -3,6 +3,8 @@ use crate::mount::Error;
 pub const MAX_LOG_BYTES_V0: u32 = 1024 * 1024;
 pub const DEFAULT_COMPILE_MAIN_MAX_LOG_BYTES_V0: u32 = 1024;
 pub const MAX_ARTIFACT_BYTES_V0: usize = 32 * 1024 * 1024;
+pub const EVENT_KIND_LOG_BYTES_V0: u32 = 1;
+pub const MAX_EVENTS_BYTES_V0: usize = (MAX_LOG_BYTES_V0 as usize) + 8;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CompileStatus {
@@ -70,6 +72,29 @@ pub fn report_json_missing_components_is_empty_v0(report_json: &str) -> Option<b
         return Some(false);
     }
     None
+}
+
+pub fn append_event_v0(out: &mut Vec<u8>, kind: u32, payload: &[u8]) -> Result<(), Error> {
+    let payload_len_u32: u32 = match payload.len().try_into() {
+        Ok(value) => value,
+        Err(_) => return Err(Error::InvalidInput),
+    };
+
+    let required = 8usize
+        .checked_add(payload.len())
+        .ok_or(Error::InvalidInput)?;
+    let total = out
+        .len()
+        .checked_add(required)
+        .ok_or(Error::InvalidInput)?;
+    if total > MAX_EVENTS_BYTES_V0 {
+        return Err(Error::InvalidInput);
+    }
+
+    out.extend_from_slice(&kind.to_le_bytes());
+    out.extend_from_slice(&payload_len_u32.to_le_bytes());
+    out.extend_from_slice(payload);
+    Ok(())
 }
 
 fn build_compile_report_json(status: CompileStatus, missing_components: &[&str]) -> String {
@@ -141,10 +166,11 @@ pub fn validate_compile_report_json(report_json: &str) -> Result<(), Error> {
 #[cfg(test)]
 mod tests {
     use super::{
-        artifact_bytes_within_cap_v0, build_compile_result_v0, truncate_log_bytes_v0,
-        validate_compile_report_json, CompileRequestV0, CompileStatus,
-        DEFAULT_COMPILE_MAIN_MAX_LOG_BYTES_V0, MAX_ARTIFACT_BYTES_V0, MAX_LOG_BYTES_V0,
-        report_json_has_status_token_v0, report_json_missing_components_is_empty_v0,
+        append_event_v0, artifact_bytes_within_cap_v0, build_compile_result_v0,
+        truncate_log_bytes_v0, validate_compile_report_json, CompileRequestV0, CompileStatus,
+        DEFAULT_COMPILE_MAIN_MAX_LOG_BYTES_V0, EVENT_KIND_LOG_BYTES_V0, MAX_ARTIFACT_BYTES_V0,
+        MAX_EVENTS_BYTES_V0, MAX_LOG_BYTES_V0, report_json_has_status_token_v0,
+        report_json_missing_components_is_empty_v0,
     };
 
     #[test]
@@ -332,5 +358,23 @@ mod tests {
             report_json_missing_components_is_empty_v0("{\"status\":\"OK\"}"),
             None
         );
+    }
+
+    #[test]
+    fn append_event_encodes_header_little_endian() {
+        let mut out = Vec::new();
+        assert!(append_event_v0(&mut out, EVENT_KIND_LOG_BYTES_V0, b"ab").is_ok());
+        let expected = vec![
+            1, 0, 0, 0, // kind
+            2, 0, 0, 0, // len
+            b'a', b'b',
+        ];
+        assert_eq!(out, expected);
+    }
+
+    #[test]
+    fn append_event_rejects_when_exceeds_max_events_bytes() {
+        let mut out = vec![0u8; MAX_EVENTS_BYTES_V0 - 1];
+        assert!(append_event_v0(&mut out, EVENT_KIND_LOG_BYTES_V0, b"x").is_err());
     }
 }
