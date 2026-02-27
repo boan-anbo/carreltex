@@ -4,21 +4,28 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 MAX_LOC=1000
 
-FILES=(
-  "crates/carreltex-engine/src/lib.rs"
-  "crates/carreltex-core/src/compile.rs"
-  "crates/carreltex-wasm-smoke/src/lib.rs"
-  "scripts/wasm_smoke_js_proof.mjs"
-)
-
 status=0
-for rel in "${FILES[@]}"; do
+checked=0
+
+while IFS= read -r rel; do
+  if [[ "$rel" == third_party/* || "$rel" == target/* ]]; then
+    continue
+  fi
+  if [[ "$rel" == crates/* && "$rel" == *.rs ]]; then
+    :
+  elif [[ "$rel" == scripts/* && "$rel" == *.mjs ]]; then
+    :
+  else
+    continue
+  fi
+
   path="$ROOT_DIR/$rel"
   if [[ ! -f "$path" ]]; then
     echo "FAIL: loc_guard missing file: $rel"
     status=1
     continue
   fi
+  checked=$((checked + 1))
   loc=$(wc -l < "$path")
   if (( loc > MAX_LOC )); then
     echo "FAIL: loc_guard $rel lines=$loc limit=$MAX_LOC"
@@ -26,7 +33,12 @@ for rel in "${FILES[@]}"; do
   else
     echo "PASS: loc_guard $rel lines=$loc limit=$MAX_LOC"
   fi
-done
+done < <(cd "$ROOT_DIR" && git ls-files)
+
+if (( checked == 0 )); then
+  echo "FAIL: loc_guard no tracked source files matched"
+  exit 1
+fi
 
 if (( status != 0 )); then
   echo "FAIL: loc_guard"
