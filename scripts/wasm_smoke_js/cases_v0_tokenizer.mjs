@@ -83,7 +83,7 @@ export function runTokenizerCases(ctx, helpers) {
   expectInvalid(ctx.compileMain(), 'compile_main_v0(tokenizer non-ascii control-seq)');
   {
     const logText = new TextDecoder().decode(readCompileLogBytes());
-    if (!logText.startsWith('INVALID_INPUT:') || !logText.includes('tokenize_failed')) {
+    if (!logText.startsWith('INVALID_INPUT:') || !logText.includes('tokenizer_control_seq_non_ascii')) {
       throw new Error(`compile_main tokenizer non-ascii control-seq log mismatch: ${logText}`);
     }
     assertNoEvents('compile_main_v0(tokenizer non-ascii control-seq)');
