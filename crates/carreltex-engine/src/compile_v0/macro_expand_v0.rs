@@ -42,6 +42,7 @@ use utils::{push_checked_v0, substitute_single_param_placeholders_v0};
 pub(crate) const MAX_MACROS_V0: usize = 4096;
 pub(crate) const MAX_MACRO_EXPANSIONS_V0: usize = 4096;
 pub(crate) const MAX_MACRO_DEPTH_V0: usize = 64;
+pub(crate) const MAX_GROUP_DEPTH_V0: usize = 1024;
 
 enum ConditionalKindV0 {
     Ifnum,
@@ -174,6 +175,9 @@ fn expand_stream_v0(
                 let group_token =
                     control_seq_to_group_token_v0(name.as_slice()).expect("checked is_some");
                 if matches!(group_token, TokenV0::BeginGroup) {
+                    if macro_frames.len() >= MAX_GROUP_DEPTH_V0 {
+                        return Err(InvalidInputReasonV0::MacroGroupDepthExceeded);
+                    }
                     macro_frames.push(BTreeMap::new());
                 } else if macro_frames.len() > 1 {
                     macro_frames.pop();
