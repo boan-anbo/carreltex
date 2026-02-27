@@ -4,6 +4,7 @@ use carreltex_core::{
     build_compile_result_v0, truncate_log_bytes_v0, CompileRequestV0, CompileResultV0,
     CompileStatus, Mount, DEFAULT_COMPILE_MAIN_MAX_LOG_BYTES_V0, MAX_LOG_BYTES_V0,
 };
+use crate::tex::tokenize_v0::tokenize_v0;
 
 const MISSING_COMPONENTS_V0: &[&str] = &["tex-engine"];
 const NOT_IMPLEMENTED_LOG_BYTES: &[u8] = b"NOT_IMPLEMENTED: tex-engine compile pipeline is not wired yet";
@@ -37,6 +38,26 @@ pub fn compile_request_v0(mount: &mut Mount, req: &CompileRequestV0) -> CompileR
         );
     }
     if req.max_log_bytes > MAX_LOG_BYTES_V0 {
+        return build_compile_result_v0(
+            CompileStatus::InvalidInput,
+            &[],
+            truncate_log_bytes_v0(INVALID_INPUT_LOG_BYTES, req.max_log_bytes),
+            vec![],
+        );
+    }
+
+    let entry_bytes = match mount.read_file_by_bytes_v0(req.entrypoint.as_bytes()) {
+        Ok(Some(bytes)) => bytes,
+        _ => {
+            return build_compile_result_v0(
+                CompileStatus::InvalidInput,
+                &[],
+                truncate_log_bytes_v0(INVALID_INPUT_LOG_BYTES, req.max_log_bytes),
+                vec![],
+            );
+        }
+    };
+    if tokenize_v0(entry_bytes).is_err() {
         return build_compile_result_v0(
             CompileStatus::InvalidInput,
             &[],
@@ -161,5 +182,34 @@ mod tests {
         assert_eq!(result.log_bytes.len(), 8);
         assert_eq!(result.log_bytes, b"NOT_IMPL".to_vec());
         assert!(result.main_xdv_bytes.is_empty());
+    }
+
+    #[test]
+    fn compile_request_rejects_trailing_backslash_in_main_tex() {
+        let mut mount = Mount::default();
+        let trailing_backslash_main =
+            b"\\documentclass{article}\n\\begin{document}\nHello\\";
+        assert!(mount.add_file(b"main.tex", trailing_backslash_main).is_ok());
+
+        let result = compile_request_v0(&mut mount, &valid_request());
+        assert_eq!(result.status, CompileStatus::InvalidInput);
+        assert_eq!(
+            result.report_json,
+            "{\"status\":\"INVALID_INPUT\",\"missing_components\":[]}"
+        );
+    }
+
+    #[test]
+    fn compile_request_still_not_implemented_when_tokenization_succeeds() {
+        let mut mount = Mount::default();
+        assert!(mount.add_file(b"main.tex", valid_main()).is_ok());
+
+        let result = compile_request_v0(&mut mount, &valid_request());
+        assert_eq!(result.status, CompileStatus::NotImplemented);
+        assert_eq!(
+            result.report_json,
+            "{\"status\":\"NOT_IMPLEMENTED\",\"missing_components\":[\"tex-engine\"]}"
+        );
+        assert!(result.log_bytes.starts_with(b"NOT_IMPLEMENTED:"));
     }
 }
