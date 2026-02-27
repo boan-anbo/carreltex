@@ -71,9 +71,14 @@ fn expand_stream_v0(
                 push_checked_v0(out, TokenV0::EndGroup)?;
                 index += 1;
             }
-            TokenV0::ControlSeq(name) if name.as_slice() == b"def" || name.as_slice() == b"gdef" => {
+            TokenV0::ControlSeq(name)
+                if name.as_slice() == b"def"
+                    || name.as_slice() == b"gdef"
+                    || name.as_slice() == b"edef" =>
+            {
                 let is_global = name.as_slice() == b"gdef";
-                index = parse_def_v0(tokens, index, macro_frames, is_global)?;
+                let expand_body = name.as_slice() == b"edef";
+                index = parse_def_v0(tokens, index, macro_frames, counters, is_global, expand_body)?;
             }
             TokenV0::ControlSeq(name) if name.as_slice() == b"let" => {
                 index = parse_let_v0(tokens, index, macro_frames, false)?;
@@ -132,7 +137,7 @@ fn expand_stream_v0(
                 index = next_index;
             }
             TokenV0::ControlSeq(name) if name.as_slice() == b"global" => {
-                index = parse_global_prefixed_macro_binding_v0(tokens, index, macro_frames)?;
+                index = parse_global_prefixed_macro_binding_v0(tokens, index, macro_frames, counters)?;
             }
             TokenV0::ControlSeq(name) => {
                 match lookup_macro_binding_v0(macro_frames, name) {
@@ -212,6 +217,7 @@ fn parse_global_prefixed_macro_binding_v0(
     tokens: &[TokenV0],
     global_index: usize,
     macro_frames: &mut Vec<BTreeMap<Vec<u8>, MacroBindingV0>>,
+    counters: &mut [u32; 2],
 ) -> Result<usize, InvalidInputReasonV0> {
     let mut index = global_index;
     while matches!(
@@ -223,10 +229,13 @@ fn parse_global_prefixed_macro_binding_v0(
 
     match tokens.get(index) {
         Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"def" => {
-            parse_def_v0(tokens, index, macro_frames, true)
+            parse_def_v0(tokens, index, macro_frames, counters, true, false)
         }
         Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"gdef" => {
-            parse_def_v0(tokens, index, macro_frames, true)
+            parse_def_v0(tokens, index, macro_frames, counters, true, false)
+        }
+        Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"edef" => {
+            parse_def_v0(tokens, index, macro_frames, counters, true, true)
         }
         Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"let" => {
             parse_let_v0(tokens, index, macro_frames, true)
@@ -242,7 +251,9 @@ fn parse_def_v0(
     tokens: &[TokenV0],
     def_index: usize,
     macro_frames: &mut Vec<BTreeMap<Vec<u8>, MacroBindingV0>>,
+    counters: &mut [u32; 2],
     is_global: bool,
+    expand_body: bool,
 ) -> Result<usize, InvalidInputReasonV0> {
     let name_index = def_index + 1;
     let macro_name = match tokens.get(name_index) {
@@ -255,6 +266,9 @@ fn parse_def_v0(
     match tokens.get(body_start_index) {
         Some(TokenV0::BeginGroup) => {}
         Some(TokenV0::Char(b'#')) => {
+            if expand_body {
+                return Err(InvalidInputReasonV0::MacroParamsUnsupported);
+            }
             let placeholder_digit = match tokens.get(body_start_index + 1) {
                 Some(TokenV0::Char(digit)) => *digit,
                 _ => return Err(InvalidInputReasonV0::MacroParamsUnsupported),
@@ -276,6 +290,26 @@ fn parse_def_v0(
 
     let (body_tokens, next_index) = parse_balanced_group_payload_v0(tokens, body_start_index)?;
     validate_macro_body_tokens_v0(&body_tokens, param_count)?;
+    let final_body_tokens = if expand_body {
+        if param_count != 0 {
+            return Err(InvalidInputReasonV0::MacroParamsUnsupported);
+        }
+        let mut expanded = Vec::<TokenV0>::new();
+        let mut active_macros = Vec::<Vec<u8>>::new();
+        let mut expansion_count = 0usize;
+        expand_stream_v0(
+            &body_tokens,
+            macro_frames,
+            counters,
+            &mut expanded,
+            &mut active_macros,
+            &mut expansion_count,
+            0,
+        )?;
+        expanded
+    } else {
+        body_tokens
+    };
     let target_frame_index = if is_global {
         0usize
     } else {
@@ -297,8 +331,8 @@ fn parse_def_v0(
     target_frame.insert(
         macro_name,
         MacroBindingV0::Macro(MacroDefV0 {
-            param_count,
-            body_tokens,
+            param_count: if expand_body { 0 } else { param_count },
+            body_tokens: final_body_tokens,
         }),
     );
     Ok(next_index)
