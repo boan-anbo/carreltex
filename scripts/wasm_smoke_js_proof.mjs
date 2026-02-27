@@ -714,6 +714,80 @@ expectInvalid(compileMain(), 'compile_main_v0(macro params unsupported)');
 }
 
 if (mountReset() !== 0) {
+  throw new Error('mount_reset before macro scoped-no-leak baseline case failed');
+}
+const macroScopedBaselineMainBytes = new TextEncoder().encode('\\documentclass{article}\n\\begin{document}\n{}\\foo\n\\end{document}\n');
+if (addMountedFile('main.tex', macroScopedBaselineMainBytes, 'macro_scoped_baseline_main') !== 0) {
+  throw new Error('mount_add_file(macro scoped baseline main.tex) failed');
+}
+if (mountFinalize() !== 0) {
+  throw new Error('mount_finalize for macro scoped-no-leak baseline case failed');
+}
+expectNotImplemented(compileMain(), 'compile_main_v0(macro scoped-no-leak baseline)');
+let scopedNoLeakBaselineCharCount = null;
+{
+  const baselineLogBytes = readCompileLogBytes();
+  const baselineEvents = decodeEvents(readEventsBytes(), 'compile_main(macro scoped-no-leak baseline)');
+  if (baselineEvents.length !== 2 || baselineEvents[0].kind !== 1 || baselineEvents[1].kind !== 2) {
+    throw new Error('compile_main(macro scoped-no-leak baseline): event shape mismatch');
+  }
+  if (
+    baselineEvents[0].payload.length !== baselineLogBytes.length
+    || !baselineEvents[0].payload.every((byte, index) => byte === baselineLogBytes[index])
+  ) {
+    throw new Error('compile_main(macro scoped-no-leak baseline): event[0] payload mismatch');
+  }
+  const statsText = new TextDecoder('utf-8', { fatal: true }).decode(baselineEvents[1].payload);
+  const stats = JSON.parse(statsText);
+  scopedNoLeakBaselineCharCount = stats.char_count;
+}
+
+if (mountReset() !== 0) {
+  throw new Error('mount_reset before macro scoped-no-leak case failed');
+}
+const macroScopedNoLeakMainBytes = new TextEncoder().encode('\\documentclass{article}\n\\begin{document}\n{\\def\\foo{XYZ}}\\foo\n\\end{document}\n');
+if (addMountedFile('main.tex', macroScopedNoLeakMainBytes, 'macro_scoped_no_leak_main') !== 0) {
+  throw new Error('mount_add_file(macro scoped-no-leak main.tex) failed');
+}
+if (mountFinalize() !== 0) {
+  throw new Error('mount_finalize for macro scoped-no-leak case failed');
+}
+expectNotImplemented(compileMain(), 'compile_main_v0(macro scoped-no-leak)');
+{
+  const report = readCompileReportJson();
+  if (report.status !== 'NOT_IMPLEMENTED') {
+    throw new Error(`compile_main(macro scoped-no-leak) report.status expected NOT_IMPLEMENTED, got ${report.status}`);
+  }
+  const logBytes = readCompileLogBytes();
+  const eventsBytes = readEventsBytes();
+  const events = decodeEvents(eventsBytes, 'compile_main(macro scoped-no-leak)');
+  if (events.length !== 2 || events[0].kind !== 1 || events[1].kind !== 2) {
+    throw new Error('compile_main(macro scoped-no-leak): event shape mismatch');
+  }
+  if (
+    events[0].payload.length !== logBytes.length
+    || !events[0].payload.every((byte, index) => byte === logBytes[index])
+  ) {
+    throw new Error('compile_main(macro scoped-no-leak): event[0] payload mismatch');
+  }
+  const statsText = new TextDecoder('utf-8', { fatal: true }).decode(events[1].payload);
+  if (/[ \t\r\n]/.test(statsText) || statsText.includes('"unexpected_key"')) {
+    throw new Error(`compile_main(macro scoped-no-leak): invalid stats json text: ${statsText}`);
+  }
+  const stats = JSON.parse(statsText);
+  if (typeof stats !== 'object' || stats === null || typeof stats.char_count !== 'number') {
+    throw new Error('compile_main(macro scoped-no-leak): invalid stats json object');
+  }
+  if (scopedNoLeakBaselineCharCount === null) {
+    throw new Error('scopedNoLeakBaselineCharCount not initialized');
+  }
+  if (stats.char_count !== scopedNoLeakBaselineCharCount) {
+    throw new Error(`compile_main(macro scoped-no-leak) char_count delta expected +0, got baseline=${scopedNoLeakBaselineCharCount}, current=${stats.char_count}`);
+  }
+  assertMainXdvArtifactEmpty('compile_main(macro scoped-no-leak)');
+}
+
+if (mountReset() !== 0) {
   throw new Error('mount_reset before compile_request negative setter tests failed');
 }
 if (addMountedFile('main.tex', mainBytes, 'compile_request_base_main') !== 0) {

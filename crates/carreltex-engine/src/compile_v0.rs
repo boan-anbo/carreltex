@@ -612,6 +612,48 @@ mod tests {
     }
 
     #[test]
+    fn macro_defs_inside_group_do_not_leak_outside() {
+        let mut baseline_mount = Mount::default();
+        let baseline_main =
+            b"\\documentclass{article}\n\\begin{document}\n{}\\foo\n\\end{document}\n";
+        assert!(baseline_mount.add_file(b"main.tex", baseline_main).is_ok());
+        let baseline_result = compile_request_v0(&mut baseline_mount, &valid_request());
+        assert_eq!(baseline_result.status, CompileStatus::NotImplemented);
+        let baseline_char_count =
+            stats_u64_field(&baseline_result.tex_stats_json, "char_count").expect("char_count");
+
+        let mut scoped_mount = Mount::default();
+        let scoped_main =
+            b"\\documentclass{article}\n\\begin{document}\n{\\def\\foo{XYZ}}\\foo\n\\end{document}\n";
+        assert!(scoped_mount.add_file(b"main.tex", scoped_main).is_ok());
+        let scoped_result = compile_request_v0(&mut scoped_mount, &valid_request());
+        assert_eq!(scoped_result.status, CompileStatus::NotImplemented);
+        let scoped_char_count =
+            stats_u64_field(&scoped_result.tex_stats_json, "char_count").expect("char_count");
+        assert_eq!(scoped_char_count, baseline_char_count);
+    }
+
+    #[test]
+    fn macro_defs_can_override_inside_group_without_leaking() {
+        let mut baseline_mount = Mount::default();
+        assert!(baseline_mount.add_file(b"main.tex", b"AB").is_ok());
+        let baseline_result = compile_request_v0(&mut baseline_mount, &valid_request());
+        assert_eq!(baseline_result.status, CompileStatus::NotImplemented);
+        let baseline_char_count =
+            stats_u64_field(&baseline_result.tex_stats_json, "char_count").expect("char_count");
+
+        let mut scoped_mount = Mount::default();
+        assert!(scoped_mount
+            .add_file(b"main.tex", b"\\def\\foo{A}{\\def\\foo{B}\\foo}\\foo")
+            .is_ok());
+        let scoped_result = compile_request_v0(&mut scoped_mount, &valid_request());
+        assert_eq!(scoped_result.status, CompileStatus::NotImplemented);
+        let scoped_char_count =
+            stats_u64_field(&scoped_result.tex_stats_json, "char_count").expect("char_count");
+        assert_eq!(scoped_char_count, baseline_char_count);
+    }
+
+    #[test]
     fn macro_expansions_cap_is_invalid() {
         let mut mount = Mount::default();
         let mut main = String::from("\\def\\foo{A}");
