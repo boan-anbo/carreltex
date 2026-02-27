@@ -233,6 +233,18 @@ fn control_symbol_rbrace_keeps_following_space_token() {
 }
 
 #[test]
+fn control_word_textbackslash_maps_to_backslash_and_swallows_space() {
+    let tokens = tokenize_v0(b"\\textbackslash X").expect("tokenize should succeed");
+    assert_eq!(tokens, vec![TokenV0::Char(b'\\'), TokenV0::Char(b'X')]);
+}
+
+#[test]
+fn control_word_textbackslash_then_percent_symbol_maps_to_backslash_and_percent() {
+    let tokens = tokenize_v0(b"\\textbackslash\\%").expect("tokenize should succeed");
+    assert_eq!(tokens, vec![TokenV0::Char(b'\\'), TokenV0::Char(b'%')]);
+}
+
+#[test]
 fn verb_control_word_is_invalid_input() {
     assert_eq!(
         tokenize_v0(b"\\verb|x|"),
