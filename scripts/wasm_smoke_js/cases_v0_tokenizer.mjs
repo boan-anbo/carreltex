@@ -21,11 +21,53 @@ export function runTokenizerCases(ctx, helpers) {
   }
   expectNotImplemented(ctx.compileMain(), 'compile_main_v0(tokenizer baseline)');
   let baselineCharCount = null;
+  let helloBaselineCharCount = null;
   {
     const logBytes = readCompileLogBytes();
     const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(tokenizer baseline)');
     baselineCharCount = stats.char_count;
     assertMainXdvArtifactEmpty('compile_main(tokenizer baseline)');
+  }
+
+  if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before tokenizer hello baseline case failed');
+  }
+  const helloBaselineMainBytes = new TextEncoder().encode('\\documentclass{article}\n\\begin{document}\nHello.\n\\end{document}\n');
+  if (addMountedFile('main.tex', helloBaselineMainBytes, 'tokenizer_hello_baseline_main') !== 0) {
+    throw new Error('mount_add_file(tokenizer hello baseline main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) {
+    throw new Error('mount_finalize for tokenizer hello baseline case failed');
+  }
+  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(tokenizer hello baseline)');
+  {
+    const logBytes = readCompileLogBytes();
+    const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(tokenizer hello baseline)');
+    helloBaselineCharCount = stats.char_count;
+    assertMainXdvArtifactEmpty('compile_main(tokenizer hello baseline)');
+  }
+
+  if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before tokenizer control-symbol-comma case failed');
+  }
+  const commaMainBytes = new TextEncoder().encode('\\documentclass{article}\n\\begin{document}\nHello.\\,XYZ\n\\end{document}\n');
+  if (addMountedFile('main.tex', commaMainBytes, 'tokenizer_control_symbol_comma_main') !== 0) {
+    throw new Error('mount_add_file(tokenizer control-symbol-comma main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) {
+    throw new Error('mount_finalize for tokenizer control-symbol-comma case failed');
+  }
+  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(tokenizer control-symbol-comma)');
+  {
+    const logBytes = readCompileLogBytes();
+    const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(tokenizer control-symbol-comma)');
+    if (helloBaselineCharCount === null) {
+      throw new Error('helloBaselineCharCount not initialized for tokenizer control-symbol-comma case');
+    }
+    if (stats.char_count !== helloBaselineCharCount + 4) {
+      throw new Error(`compile_main(tokenizer control-symbol-comma) char_count delta expected +4, got baseline=${helloBaselineCharCount}, current=${stats.char_count}`);
+    }
+    assertMainXdvArtifactEmpty('compile_main(tokenizer control-symbol-comma)');
   }
 
   if (ctx.mountReset() !== 0) {

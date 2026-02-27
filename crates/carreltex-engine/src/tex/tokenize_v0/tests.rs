@@ -134,6 +134,15 @@ fn control_sequence_bytes_must_be_ascii() {
 }
 
 #[test]
+fn control_symbol_comma_maps_to_space_char_without_swallowing_following_space() {
+    let tokens = tokenize_v0(b"\\, X").expect("tokenize should succeed");
+    assert_eq!(
+        tokens,
+        vec![TokenV0::Char(b' '), TokenV0::Space, TokenV0::Char(b'X')]
+    );
+}
+
+#[test]
 fn verb_control_word_is_invalid_input() {
     assert_eq!(
         tokenize_v0(b"\\verb|x|"),
