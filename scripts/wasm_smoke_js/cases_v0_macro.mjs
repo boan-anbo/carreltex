@@ -605,6 +605,37 @@ export function runMacroCases(ctx, helpers, baselineMainCharCount) {
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before compile_request negative setter tests failed');
   }
+  const macroInputCsnameMainBytes = new TextEncoder().encode('\\input{sub.tex}\\csname foo\\endcsname');
+  const macroInputCsnameSubBytes = new TextEncoder().encode('\\def\\foo{XYZ}');
+  if (addMountedFile('main.tex', macroInputCsnameMainBytes, 'macro_input_csname_main') !== 0) {
+    throw new Error('mount_add_file(macro input csname main.tex) failed');
+  }
+  if (addMountedFile('sub.tex', macroInputCsnameSubBytes, 'macro_input_csname_sub') !== 0) {
+    throw new Error('mount_add_file(macro input csname sub.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) {
+    throw new Error('mount_finalize for macro input csname case failed');
+  }
+  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(macro input csname)');
+  {
+    const report = readCompileReportJson();
+    if (report.status !== 'NOT_IMPLEMENTED') {
+      throw new Error(`compile_main(macro input csname) report.status expected NOT_IMPLEMENTED, got ${report.status}`);
+    }
+    const logBytes = readCompileLogBytes();
+    const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(macro input csname)');
+    if (gdefBaselineCharCount === null) {
+      throw new Error('gdefBaselineCharCount not initialized');
+    }
+    if (stats.char_count !== gdefBaselineCharCount + 3) {
+      throw new Error(`compile_main(macro input csname) char_count delta expected +3, got baseline=${gdefBaselineCharCount}, current=${stats.char_count}`);
+    }
+    assertMainXdvArtifactEmpty('compile_main(macro input csname)');
+  }
+
+  if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before compile_request negative setter tests failed');
+  }
   const macroCsnameMainBytes = new TextEncoder().encode('\\def\\foo{XYZ}\\csname foo\\endcsname');
   if (addMountedFile('main.tex', macroCsnameMainBytes, 'macro_csname_main') !== 0) {
     throw new Error('mount_add_file(macro csname main.tex) failed');
