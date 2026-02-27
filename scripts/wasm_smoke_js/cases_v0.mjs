@@ -1,5 +1,6 @@
 import { runMeaningCases } from './cases_v0_meaning.mjs';
 import { runCountCases } from './cases_v0_count.mjs';
+import { runEdefCases } from './cases_v0_edef.mjs';
 
 export function runCasesV0(ctx, mem, helpers) {
   const {
@@ -806,15 +807,8 @@ export function runCasesV0(ctx, mem, helpers) {
   if (gdefBaselineCharCount === null) {
     throw new Error('gdefBaselineCharCount not initialized before count cases');
   }
-  runCountCases(ctx, {
-    addMountedFile,
-    expectInvalid,
-    expectNotImplemented,
-    readCompileLogBytes,
-    assertEventsMatchLogAndStats,
-    assertMainXdvArtifactEmpty,
-    assertNoEvents,
-  });
+  runCountCases(ctx, { addMountedFile, expectInvalid, expectNotImplemented, readCompileLogBytes, assertEventsMatchLogAndStats, assertMainXdvArtifactEmpty, assertNoEvents });
+  runEdefCases(ctx, { addMountedFile, expectInvalid, expectNotImplemented, readCompileLogBytes, assertEventsMatchLogAndStats, assertMainXdvArtifactEmpty, assertNoEvents });
 
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before compile_request negative setter tests failed');

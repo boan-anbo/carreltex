@@ -5,6 +5,8 @@ mod trace_v0;
 #[cfg(test)]
 mod count_v0_tests;
 #[cfg(test)]
+mod edef_v0_tests;
+#[cfg(test)]
 mod meaning_v0_tests;
 
 use crate::reasons_v0::{invalid_log_bytes_v0, InvalidInputReasonV0};
