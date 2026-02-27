@@ -148,4 +148,24 @@ export function runXdefNoexpandCases(ctx, helpers) {
     }
     assertNoEvents('compile_main_v0(macro noexpand invalid)');
   }
+
+  if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before macro begingroup-depth-exceeded case failed');
+  }
+  const macroBegingroupDepthExceededMainBytes = new TextEncoder().encode(`${'\\begingroup'.repeat(1025)}X`);
+  if (addMountedFile('main.tex', macroBegingroupDepthExceededMainBytes, 'macro_begingroup_depth_exceeded_main') !== 0) {
+    throw new Error('mount_add_file(macro begingroup-depth-exceeded main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) {
+    throw new Error('mount_finalize for macro begingroup-depth-exceeded case failed');
+  }
+  expectInvalid(ctx.compileMain(), 'compile_main_v0(macro begingroup-depth-exceeded)');
+  {
+    const logBytes = readCompileLogBytes();
+    const logText = new TextDecoder().decode(logBytes);
+    if (!logText.startsWith('INVALID_INPUT:') || !logText.includes('macro_group_depth_exceeded')) {
+      throw new Error(`compile_main macro begingroup-depth-exceeded log mismatch: ${logText}`);
+    }
+    assertNoEvents('compile_main_v0(macro begingroup-depth-exceeded)');
+  }
 }
