@@ -6,6 +6,7 @@ use crate::tex::tokenize_v0::{TokenV0, MAX_TOKENS_V0};
 pub(crate) const MAX_MACROS_V0: usize = 4096;
 pub(crate) const MAX_MACRO_EXPANSIONS_V0: usize = 4096;
 pub(crate) const MAX_MACRO_DEPTH_V0: usize = 64;
+const MAX_COUNT_VALUE_V0: u32 = 1_000_000;
 
 #[derive(Clone)]
 struct MacroDefV0 {
@@ -26,12 +27,14 @@ enum MacroBindingV0 {
 pub(crate) fn expand_macros_v0(tokens: &[TokenV0]) -> Result<Vec<TokenV0>, InvalidInputReasonV0> {
     let mut macro_frames = Vec::<BTreeMap<Vec<u8>, MacroBindingV0>>::new();
     macro_frames.push(BTreeMap::new());
+    let mut counters = [0u32; 2];
     let mut output = Vec::<TokenV0>::new();
     let mut active_macros = Vec::<Vec<u8>>::new();
     let mut expansion_count = 0usize;
     expand_stream_v0(
         tokens,
         &mut macro_frames,
+        &mut counters,
         &mut output,
         &mut active_macros,
         &mut expansion_count,
@@ -43,6 +46,7 @@ pub(crate) fn expand_macros_v0(tokens: &[TokenV0]) -> Result<Vec<TokenV0>, Inval
 fn expand_stream_v0(
     tokens: &[TokenV0],
     macro_frames: &mut Vec<BTreeMap<Vec<u8>, MacroBindingV0>>,
+    counters: &mut [u32; 2],
     out: &mut Vec<TokenV0>,
     active_macros: &mut Vec<Vec<u8>>,
     expansion_count: &mut usize,
@@ -82,6 +86,7 @@ fn expand_stream_v0(
                 expand_stream_v0(
                     &reordered_tokens,
                     macro_frames,
+                    counters,
                     out,
                     active_macros,
                     expansion_count,
@@ -94,6 +99,7 @@ fn expand_stream_v0(
                 expand_stream_v0(
                     &[generated_token],
                     macro_frames,
+                    counters,
                     out,
                     active_macros,
                     expansion_count,
@@ -111,6 +117,16 @@ fn expand_stream_v0(
             TokenV0::ControlSeq(name) if name.as_slice() == b"meaning" => {
                 let (meaning_chars, next_index) = parse_meaning_v0(tokens, index, macro_frames)?;
                 for token in meaning_chars {
+                    push_checked_v0(out, token)?;
+                }
+                index = next_index;
+            }
+            TokenV0::ControlSeq(name) if name.as_slice() == b"count" => {
+                index = parse_count_assignment_v0(tokens, index, counters)?;
+            }
+            TokenV0::ControlSeq(name) if name.as_slice() == b"the" => {
+                let (the_chars, next_index) = parse_the_v0(tokens, index, counters)?;
+                for token in the_chars {
                     push_checked_v0(out, token)?;
                 }
                 index = next_index;
@@ -147,6 +163,7 @@ fn expand_stream_v0(
                         let result = expand_stream_v0(
                             &expanded_body,
                             macro_frames,
+                            counters,
                             out,
                             active_macros,
                             expansion_count,
@@ -168,6 +185,7 @@ fn expand_stream_v0(
                             name,
                             *resolved_binding,
                             macro_frames,
+                            counters,
                             out,
                             active_macros,
                             expansion_count,
@@ -519,6 +537,7 @@ fn expand_binding_v0(
     name: &[u8],
     binding: MacroBindingV0,
     macro_frames: &mut Vec<BTreeMap<Vec<u8>, MacroBindingV0>>,
+    counters: &mut [u32; 2],
     out: &mut Vec<TokenV0>,
     active_macros: &mut Vec<Vec<u8>>,
     expansion_count: &mut usize,
@@ -542,6 +561,7 @@ fn expand_binding_v0(
             expand_stream_v0(
                 &macro_def.body_tokens,
                 macro_frames,
+                counters,
                 out,
                 active_macros,
                 expansion_count,
@@ -552,6 +572,7 @@ fn expand_binding_v0(
             expand_stream_v0(
                 &[TokenV0::ControlSeq(target)],
                 macro_frames,
+                counters,
                 out,
                 active_macros,
                 expansion_count,
@@ -565,6 +586,7 @@ fn expand_binding_v0(
             name,
             *resolved_binding,
             macro_frames,
+            counters,
             out,
             active_macros,
             expansion_count,
@@ -680,4 +702,65 @@ fn push_ascii_bytes_v0(out: &mut Vec<TokenV0>, bytes: &[u8]) -> Result<(), Inval
         push_checked_v0(out, TokenV0::Char(*byte))?;
     }
     Ok(())
+}
+
+fn parse_count_assignment_v0(
+    tokens: &[TokenV0],
+    count_index: usize,
+    counters: &mut [u32; 2],
+) -> Result<usize, InvalidInputReasonV0> {
+    let register_index = match tokens.get(count_index + 1) {
+        Some(TokenV0::Char(b'0')) => 0usize,
+        Some(TokenV0::Char(b'1')) => 1usize,
+        _ => return Err(InvalidInputReasonV0::MacroCountAssignmentUnsupported),
+    };
+    if !matches!(tokens.get(count_index + 2), Some(TokenV0::Char(b'='))) {
+        return Err(InvalidInputReasonV0::MacroCountAssignmentUnsupported);
+    }
+
+    let mut index = count_index + 3;
+    let mut value: u32 = 0;
+    let mut saw_digit = false;
+    while let Some(TokenV0::Char(byte)) = tokens.get(index) {
+        if !byte.is_ascii_digit() {
+            break;
+        }
+        saw_digit = true;
+        value = value
+            .checked_mul(10)
+            .and_then(|current| current.checked_add((byte - b'0') as u32))
+            .ok_or(InvalidInputReasonV0::MacroCountAssignmentUnsupported)?;
+        if value > MAX_COUNT_VALUE_V0 {
+            return Err(InvalidInputReasonV0::MacroCountAssignmentUnsupported);
+        }
+        index += 1;
+    }
+    if !saw_digit {
+        return Err(InvalidInputReasonV0::MacroCountAssignmentUnsupported);
+    }
+
+    counters[register_index] = value;
+    Ok(index)
+}
+
+fn parse_the_v0(
+    tokens: &[TokenV0],
+    the_index: usize,
+    counters: &[u32; 2],
+) -> Result<(Vec<TokenV0>, usize), InvalidInputReasonV0> {
+    if !matches!(tokens.get(the_index + 1), Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"count")
+    {
+        return Err(InvalidInputReasonV0::MacroTheUnsupported);
+    }
+
+    let register_index = match tokens.get(the_index + 2) {
+        Some(TokenV0::Char(b'0')) => 0usize,
+        Some(TokenV0::Char(b'1')) => 1usize,
+        _ => return Err(InvalidInputReasonV0::MacroTheUnsupported),
+    };
+
+    let mut out = Vec::<TokenV0>::new();
+    let digits = counters[register_index].to_string();
+    push_ascii_bytes_v0(&mut out, digits.as_bytes())?;
+    Ok((out, the_index + 3))
 }
