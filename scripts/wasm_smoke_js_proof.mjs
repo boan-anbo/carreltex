@@ -593,6 +593,20 @@ expectNotImplemented(compileMain(), 'compile_main_v0(input expansion positive)')
     throw new Error(`compile_main(input expansion) report.status expected NOT_IMPLEMENTED, got ${report.status}`);
   }
   const logBytes = readCompileLogBytes();
+  const logText = new TextDecoder().decode(logBytes);
+  const tracePrefix = 'INPUT_TRACE_V0:';
+  const tracePrefixIndex = logText.indexOf(tracePrefix);
+  if (tracePrefixIndex < 0) {
+    throw new Error(`compile_main(input expansion) missing ${tracePrefix}`);
+  }
+  const traceJsonText = logText.slice(tracePrefixIndex + tracePrefix.length);
+  const trace = JSON.parse(traceJsonText);
+  if (trace.expansions !== 1) {
+    throw new Error(`compile_main(input expansion) trace.expansions expected 1, got ${trace.expansions}`);
+  }
+  if (!Array.isArray(trace.files) || !trace.files.includes('main.tex') || !trace.files.includes('sub.tex')) {
+    throw new Error(`compile_main(input expansion) trace.files missing expected paths: ${traceJsonText}`);
+  }
   const stats = assertEventsMatchLogAndStats(logBytes, expectedMainTexStatsExact, 'compile_main(input expansion positive)');
   if (baselineMainCharCount === null) {
     throw new Error('baselineMainCharCount not initialized');
