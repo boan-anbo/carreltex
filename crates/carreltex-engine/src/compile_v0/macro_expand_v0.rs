@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use super::ifnum_v0::parse_ifnum_v0;
 use super::ifx_v0::parse_ifx_v0;
 use crate::reasons_v0::InvalidInputReasonV0;
-use crate::tex::tokenize_v0::{TokenV0, TokenizeErrorV0, MAX_TOKENS_V0};
+use crate::tex::tokenize_v0::{TokenV0, MAX_TOKENS_V0};
 
 #[path = "macro_v0/bindings.rs"]
 mod bindings;
@@ -43,18 +43,6 @@ pub(crate) const MAX_MACRO_DEPTH_V0: usize = 64;
 enum ConditionalKindV0 {
     Ifnum,
     Ifx,
-}
-
-pub(crate) fn map_tokenize_error_to_reason_v0(
-    error: TokenizeErrorV0,
-) -> InvalidInputReasonV0 {
-    match error {
-        TokenizeErrorV0::CaretNotSupported => InvalidInputReasonV0::TokenizerCaretNotSupported,
-        TokenizeErrorV0::ControlSeqNonAscii => {
-            InvalidInputReasonV0::TokenizerControlSeqNonAscii
-        }
-        _ => InvalidInputReasonV0::TokenizeFailed,
-    }
 }
 
 pub(crate) fn expand_macros_v0(tokens: &[TokenV0]) -> Result<Vec<TokenV0>, InvalidInputReasonV0> {
