@@ -1,3 +1,5 @@
+import { runMeaningCases } from './cases_v0_meaning.mjs';
+
 export function runCasesV0(ctx, mem, helpers) {
   const {
     addMountedFile,
@@ -787,6 +789,18 @@ export function runCasesV0(ctx, mem, helpers) {
     }
     assertNoEvents('compile_main_v0(macro string unsupported)');
   }
+
+  runMeaningCases(ctx, {
+    addMountedFile,
+    expectInvalid,
+    expectNotImplemented,
+    readCompileReportJson,
+    readCompileLogBytes,
+    assertEventsMatchLogAndStats,
+    assertMainXdvArtifactEmpty,
+    assertNoEvents,
+    gdefBaselineCharCount,
+  });
 
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before compile_request negative setter tests failed');
