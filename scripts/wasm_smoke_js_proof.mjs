@@ -666,6 +666,54 @@ expectInvalid(compileMain(), 'compile_main_v0(macro cycle)');
 }
 
 if (mountReset() !== 0) {
+  throw new Error('mount_reset before macro single-param positive case failed');
+}
+const macroSingleParamMainBytes = new TextEncoder().encode('\\documentclass{article}\n\\begin{document}\nHello.\\def\\foo#1{#1}\\foo{XYZ}\n\\end{document}\n');
+if (addMountedFile('main.tex', macroSingleParamMainBytes, 'macro_single_param_main') !== 0) {
+  throw new Error('mount_add_file(macro single-param main.tex) failed');
+}
+if (mountFinalize() !== 0) {
+  throw new Error('mount_finalize for macro single-param positive case failed');
+}
+expectNotImplemented(compileMain(), 'compile_main_v0(macro single-param positive)');
+{
+  const report = readCompileReportJson();
+  if (report.status !== 'NOT_IMPLEMENTED') {
+    throw new Error(`compile_main(macro single-param) report.status expected NOT_IMPLEMENTED, got ${report.status}`);
+  }
+  const logBytes = readCompileLogBytes();
+  const stats = assertEventsMatchLogAndStats(logBytes, expectedMainTexStatsExact, 'compile_main(macro single-param positive)');
+  if (baselineMainCharCount === null) {
+    throw new Error('baselineMainCharCount not initialized');
+  }
+  if (stats.char_count !== baselineMainCharCount + 3) {
+    throw new Error(`compile_main(macro single-param) char_count delta expected +3, got baseline=${baselineMainCharCount}, current=${stats.char_count}`);
+  }
+  assertMainXdvArtifactEmpty('compile_main(macro single-param positive)');
+}
+
+if (mountReset() !== 0) {
+  throw new Error('mount_reset before macro params unsupported check failed');
+}
+const macroParamsUnsupportedMainBytes = new TextEncoder().encode('\\def\\foo#2{A}\\foo{X}');
+if (addMountedFile('main.tex', macroParamsUnsupportedMainBytes, 'macro_params_unsupported_main') !== 0) {
+  throw new Error('mount_add_file(macro params unsupported main.tex) failed');
+}
+const macroParamsUnsupportedFinalizeCode = mountFinalize();
+if (macroParamsUnsupportedFinalizeCode !== 0 && macroParamsUnsupportedFinalizeCode !== 1) {
+  throw new Error(`mount_finalize(macro params unsupported) unexpected code=${macroParamsUnsupportedFinalizeCode}`);
+}
+expectInvalid(compileMain(), 'compile_main_v0(macro params unsupported)');
+{
+  const logBytes = readCompileLogBytes();
+  const logText = new TextDecoder().decode(logBytes);
+  if (!logText.startsWith('INVALID_INPUT:') || !logText.includes('macro_params_unsupported')) {
+    throw new Error(`compile_main macro params unsupported log mismatch: ${logText}`);
+  }
+  assertNoEvents('compile_main_v0(macro params unsupported)');
+}
+
+if (mountReset() !== 0) {
   throw new Error('mount_reset before compile_request negative setter tests failed');
 }
 if (addMountedFile('main.tex', mainBytes, 'compile_request_base_main') !== 0) {
