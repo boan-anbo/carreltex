@@ -1,8 +1,10 @@
 use std::sync::{Mutex, OnceLock};
 
 use carreltex_core::{
-    artifact_bytes_within_cap_v0, validate_compile_report_json, validate_main_tex, CompileRequestV0,
-    CompileStatus, Mount, MAIN_TEX_MAX_BYTES, MAX_LOG_BYTES_V0,
+    artifact_bytes_within_cap_v0, report_json_has_status_token_v0,
+    report_json_missing_components_is_empty_v0, validate_compile_report_json, validate_main_tex,
+    CompileRequestV0, CompileStatus, Mount, DEFAULT_COMPILE_MAIN_MAX_LOG_BYTES_V0,
+    MAIN_TEX_MAX_BYTES, MAX_LOG_BYTES_V0,
 };
 use carreltex_engine::{compile_main_v0, compile_request_v0};
 
@@ -267,14 +269,52 @@ fn store_compile_result_or_fail_closed(
     log_bytes: &[u8],
     xdv_bytes: &[u8],
     status: CompileStatus,
+    expected_log_max_bytes: usize,
 ) -> i32 {
     if validate_compile_report_json(report_json).is_err() {
+        write_report_for_status(CompileStatus::InvalidInput);
+        return CompileStatus::InvalidInput as i32;
+    }
+    if !report_json_has_status_token_v0(status, report_json) {
+        write_report_for_status(CompileStatus::InvalidInput);
+        return CompileStatus::InvalidInput as i32;
+    }
+    let missing_components_empty = match report_json_missing_components_is_empty_v0(report_json) {
+        Some(value) => value,
+        None => {
+            write_report_for_status(CompileStatus::InvalidInput);
+            return CompileStatus::InvalidInput as i32;
+        }
+    };
+    match status {
+        CompileStatus::NotImplemented if missing_components_empty => {
+            write_report_for_status(CompileStatus::InvalidInput);
+            return CompileStatus::InvalidInput as i32;
+        }
+        CompileStatus::Ok | CompileStatus::InvalidInput if !missing_components_empty => {
+            write_report_for_status(CompileStatus::InvalidInput);
+            return CompileStatus::InvalidInput as i32;
+        }
+        _ => {}
+    }
+    if log_bytes.len() > MAX_LOG_BYTES_V0 as usize || log_bytes.len() > expected_log_max_bytes {
         write_report_for_status(CompileStatus::InvalidInput);
         return CompileStatus::InvalidInput as i32;
     }
     if !artifact_bytes_within_cap_v0(xdv_bytes) {
         write_report_for_status(CompileStatus::InvalidInput);
         return CompileStatus::InvalidInput as i32;
+    }
+    match status {
+        CompileStatus::Ok if xdv_bytes.is_empty() => {
+            write_report_for_status(CompileStatus::InvalidInput);
+            return CompileStatus::InvalidInput as i32;
+        }
+        CompileStatus::InvalidInput | CompileStatus::NotImplemented if !xdv_bytes.is_empty() => {
+            write_report_for_status(CompileStatus::InvalidInput);
+            return CompileStatus::InvalidInput as i32;
+        }
+        _ => {}
     }
 
     set_last_report_bytes(report_json);
@@ -299,6 +339,7 @@ pub extern "C" fn carreltex_wasm_compile_main_v0() -> i32 {
         &result.log_bytes,
         &result.main_xdv_bytes,
         result.status,
+        DEFAULT_COMPILE_MAIN_MAX_LOG_BYTES_V0 as usize,
     )
 }
 
@@ -396,6 +437,7 @@ pub extern "C" fn carreltex_wasm_compile_run_v0() -> i32 {
         &result.log_bytes,
         &result.main_xdv_bytes,
         result.status,
+        request.max_log_bytes as usize,
     )
 }
 

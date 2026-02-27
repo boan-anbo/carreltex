@@ -1,6 +1,7 @@
 use crate::mount::Error;
 
 pub const MAX_LOG_BYTES_V0: u32 = 1024 * 1024;
+pub const DEFAULT_COMPILE_MAIN_MAX_LOG_BYTES_V0: u32 = 1024;
 pub const MAX_ARTIFACT_BYTES_V0: usize = 32 * 1024 * 1024;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -50,6 +51,25 @@ pub fn truncate_log_bytes_v0(log_bytes: &[u8], max_log_bytes: u32) -> Vec<u8> {
 
 pub fn artifact_bytes_within_cap_v0(bytes: &[u8]) -> bool {
     bytes.len() <= MAX_ARTIFACT_BYTES_V0
+}
+
+pub fn report_json_has_status_token_v0(status: CompileStatus, report_json: &str) -> bool {
+    let token = match status {
+        CompileStatus::Ok => "\"status\":\"OK\"",
+        CompileStatus::InvalidInput => "\"status\":\"INVALID_INPUT\"",
+        CompileStatus::NotImplemented => "\"status\":\"NOT_IMPLEMENTED\"",
+    };
+    report_json.contains(token)
+}
+
+pub fn report_json_missing_components_is_empty_v0(report_json: &str) -> Option<bool> {
+    if report_json.contains("\"missing_components\":[]") {
+        return Some(true);
+    }
+    if report_json.contains("\"missing_components\":[") {
+        return Some(false);
+    }
+    None
 }
 
 fn build_compile_report_json(status: CompileStatus, missing_components: &[&str]) -> String {
@@ -122,8 +142,9 @@ pub fn validate_compile_report_json(report_json: &str) -> Result<(), Error> {
 mod tests {
     use super::{
         artifact_bytes_within_cap_v0, build_compile_result_v0, truncate_log_bytes_v0,
-        validate_compile_report_json, CompileRequestV0, CompileStatus, MAX_ARTIFACT_BYTES_V0,
-        MAX_LOG_BYTES_V0,
+        validate_compile_report_json, CompileRequestV0, CompileStatus,
+        DEFAULT_COMPILE_MAIN_MAX_LOG_BYTES_V0, MAX_ARTIFACT_BYTES_V0, MAX_LOG_BYTES_V0,
+        report_json_has_status_token_v0, report_json_missing_components_is_empty_v0,
     };
 
     #[test]
@@ -205,6 +226,11 @@ mod tests {
     }
 
     #[test]
+    fn default_compile_main_log_bytes_constant_is_1024() {
+        assert_eq!(DEFAULT_COMPILE_MAIN_MAX_LOG_BYTES_V0, 1024);
+    }
+
+    #[test]
     fn truncate_log_bytes_enforces_max() {
         let bytes = b"NOT_IMPLEMENTED: tex-engine missing".to_vec();
         let truncated = truncate_log_bytes_v0(&bytes, 16);
@@ -256,5 +282,55 @@ mod tests {
 
         let bytes = vec![0u8; MAX_ARTIFACT_BYTES_V0 + 1];
         assert!(!artifact_bytes_within_cap_v0(&bytes));
+    }
+
+    #[test]
+    fn report_json_has_status_token_checks_exact_status() {
+        let ok = "{\"status\":\"OK\",\"missing_components\":[]}";
+        assert!(report_json_has_status_token_v0(CompileStatus::Ok, ok));
+        assert!(!report_json_has_status_token_v0(CompileStatus::InvalidInput, ok));
+        assert!(!report_json_has_status_token_v0(CompileStatus::NotImplemented, ok));
+
+        let invalid = "{\"status\":\"INVALID_INPUT\",\"missing_components\":[]}";
+        assert!(report_json_has_status_token_v0(
+            CompileStatus::InvalidInput,
+            invalid
+        ));
+        assert!(!report_json_has_status_token_v0(CompileStatus::Ok, invalid));
+        assert!(!report_json_has_status_token_v0(
+            CompileStatus::NotImplemented,
+            invalid
+        ));
+
+        let not_impl = "{\"status\":\"NOT_IMPLEMENTED\",\"missing_components\":[\"tex-engine\"]}";
+        assert!(report_json_has_status_token_v0(
+            CompileStatus::NotImplemented,
+            not_impl
+        ));
+        assert!(!report_json_has_status_token_v0(CompileStatus::Ok, not_impl));
+        assert!(!report_json_has_status_token_v0(
+            CompileStatus::InvalidInput,
+            not_impl
+        ));
+    }
+
+    #[test]
+    fn report_json_missing_components_empty_detection() {
+        assert_eq!(
+            report_json_missing_components_is_empty_v0(
+                "{\"status\":\"OK\",\"missing_components\":[]}"
+            ),
+            Some(true)
+        );
+        assert_eq!(
+            report_json_missing_components_is_empty_v0(
+                "{\"status\":\"NOT_IMPLEMENTED\",\"missing_components\":[\"tex-engine\"]}"
+            ),
+            Some(false)
+        );
+        assert_eq!(
+            report_json_missing_components_is_empty_v0("{\"status\":\"OK\"}"),
+            None
+        );
     }
 }
