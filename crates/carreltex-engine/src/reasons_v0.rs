@@ -14,6 +14,7 @@ pub(crate) enum InvalidInputReasonV0 {
     MacroCycleFailed,
     MacroDepthExceeded,
     MacroExpansionsExceeded,
+    MacroGlobalPrefixUnsupported,
 }
 
 pub(crate) fn invalid_log_bytes_v0(reason: InvalidInputReasonV0) -> &'static [u8] {
@@ -35,6 +36,9 @@ pub(crate) fn invalid_log_bytes_v0(reason: InvalidInputReasonV0) -> &'static [u8
         InvalidInputReasonV0::MacroDepthExceeded => b"INVALID_INPUT: macro_depth_exceeded",
         InvalidInputReasonV0::MacroExpansionsExceeded => {
             b"INVALID_INPUT: macro_expansions_exceeded"
+        }
+        InvalidInputReasonV0::MacroGlobalPrefixUnsupported => {
+            b"INVALID_INPUT: macro_global_prefix_unsupported"
         }
     }
 }
