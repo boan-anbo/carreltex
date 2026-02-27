@@ -20,6 +20,7 @@ pub(crate) enum InvalidInputReasonV0 {
     MacroExpandafterUnsupported,
     MacroCsnameUnsupported,
     MacroStringUnsupported,
+    MacroMeaningUnsupported,
 }
 
 pub(crate) fn invalid_log_bytes_v0(reason: InvalidInputReasonV0) -> &'static [u8] {
@@ -57,6 +58,9 @@ pub(crate) fn invalid_log_bytes_v0(reason: InvalidInputReasonV0) -> &'static [u8
         }
         InvalidInputReasonV0::MacroStringUnsupported => {
             b"INVALID_INPUT: macro_string_unsupported"
+        }
+        InvalidInputReasonV0::MacroMeaningUnsupported => {
+            b"INVALID_INPUT: macro_meaning_unsupported"
         }
     }
 }
