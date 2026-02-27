@@ -26,6 +26,11 @@ fn last_log_state() -> &'static Mutex<Vec<u8>> {
     STATE.get_or_init(|| Mutex::new(Vec::new()))
 }
 
+fn last_xdv_state() -> &'static Mutex<Vec<u8>> {
+    static STATE: OnceLock<Mutex<Vec<u8>>> = OnceLock::new();
+    STATE.get_or_init(|| Mutex::new(Vec::new()))
+}
+
 #[derive(Default)]
 struct CompileRequestState {
     entrypoint: Option<String>,
@@ -168,6 +173,15 @@ fn set_last_log_bytes(log_bytes: &[u8]) {
     last.extend_from_slice(log_bytes);
 }
 
+fn set_last_xdv_bytes(xdv_bytes: &[u8]) {
+    let mut last = match last_xdv_state().lock() {
+        Ok(guard) => guard,
+        Err(_) => return,
+    };
+    last.clear();
+    last.extend_from_slice(xdv_bytes);
+}
+
 fn write_report_for_status(status: CompileStatus) {
     let fallback = match status {
         CompileStatus::Ok => "{\"status\":\"OK\",\"missing_components\":[]}",
@@ -178,6 +192,7 @@ fn write_report_for_status(status: CompileStatus) {
     };
     set_last_report_bytes(fallback);
     set_last_log_bytes(&[]);
+    set_last_xdv_bytes(&[]);
 }
 
 #[no_mangle]
@@ -200,6 +215,7 @@ pub extern "C" fn carreltex_wasm_compile_main_v0() -> i32 {
 
     set_last_report_bytes(&json);
     set_last_log_bytes(&result.log_bytes);
+    set_last_xdv_bytes(&result.main_xdv_bytes);
     result.status as i32
 }
 
@@ -299,6 +315,7 @@ pub extern "C" fn carreltex_wasm_compile_run_v0() -> i32 {
 
     set_last_report_bytes(&result.report_json);
     set_last_log_bytes(&result.log_bytes);
+    set_last_xdv_bytes(&result.main_xdv_bytes);
     result.status as i32
 }
 
@@ -344,6 +361,36 @@ pub extern "C" fn carreltex_wasm_compile_log_copy_v0(out_ptr: *mut u8, out_len: 
         return 0;
     }
     let last = match last_log_state().lock() {
+        Ok(guard) => guard,
+        Err(_) => return 0,
+    };
+    if out_len < last.len() {
+        return 0;
+    }
+    unsafe {
+        core::ptr::copy_nonoverlapping(last.as_ptr(), out_ptr, last.len());
+    }
+    last.len()
+}
+
+#[no_mangle]
+pub extern "C" fn carreltex_wasm_artifact_main_xdv_len_v0() -> usize {
+    let last = match last_xdv_state().lock() {
+        Ok(guard) => guard,
+        Err(_) => return 0,
+    };
+    last.len()
+}
+
+#[no_mangle]
+pub extern "C" fn carreltex_wasm_artifact_main_xdv_copy_v0(
+    out_ptr: *mut u8,
+    out_len: usize,
+) -> usize {
+    if out_ptr.is_null() || out_len == 0 {
+        return 0;
+    }
+    let last = match last_xdv_state().lock() {
         Ok(guard) => guard,
         Err(_) => return 0,
     };
