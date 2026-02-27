@@ -48,6 +48,8 @@ const reportLen = instance.exports.carreltex_wasm_compile_report_len_v0;
 const reportCopy = instance.exports.carreltex_wasm_compile_report_copy_v0;
 const logLen = instance.exports.carreltex_wasm_compile_log_len_v0;
 const logCopy = instance.exports.carreltex_wasm_compile_log_copy_v0;
+const eventsLen = instance.exports.carreltex_wasm_events_len_v0;
+const eventsCopy = instance.exports.carreltex_wasm_events_copy_v0;
 const artifactMainXdvLen = instance.exports.carreltex_wasm_artifact_main_xdv_len_v0;
 const artifactMainXdvCopy = instance.exports.carreltex_wasm_artifact_main_xdv_copy_v0;
 const artifactLenByName = instance.exports.carreltex_wasm_artifact_len_v0;
@@ -73,6 +75,8 @@ for (const [name, fn] of [
   ['carreltex_wasm_compile_report_copy_v0', reportCopy],
   ['carreltex_wasm_compile_log_len_v0', logLen],
   ['carreltex_wasm_compile_log_copy_v0', logCopy],
+  ['carreltex_wasm_events_len_v0', eventsLen],
+  ['carreltex_wasm_events_copy_v0', eventsCopy],
   ['carreltex_wasm_artifact_main_xdv_len_v0', artifactMainXdvLen],
   ['carreltex_wasm_artifact_main_xdv_copy_v0', artifactMainXdvCopy],
   ['carreltex_wasm_artifact_len_v0', artifactLenByName],
@@ -177,6 +181,60 @@ function readCompileLogBytes() {
     return new Uint8Array(memory.buffer, outPtr, bytesLen).slice();
   } finally {
     dealloc(outPtr, bytesLen);
+  }
+}
+
+function readEventsBytes() {
+  const bytesLen = eventsLen();
+  if (!Number.isInteger(bytesLen) || bytesLen < 0 || bytesLen > 4096) {
+    throw new Error(`events_len_v0 unexpected: ${bytesLen}`);
+  }
+  if (bytesLen === 0) {
+    return new Uint8Array();
+  }
+
+  const outPtr = alloc(bytesLen);
+  if (!Number.isInteger(outPtr) || outPtr <= 0) {
+    throw new Error(`alloc failed for events, ptr=${outPtr}`);
+  }
+
+  try {
+    const written = eventsCopy(outPtr, bytesLen);
+    if (written !== bytesLen) {
+      throw new Error(`events_copy_v0 expected ${bytesLen}, got ${written}`);
+    }
+    return new Uint8Array(memory.buffer, outPtr, bytesLen).slice();
+  } finally {
+    dealloc(outPtr, bytesLen);
+  }
+}
+
+function readU32LE(bytes, offset) {
+  return (
+    bytes[offset]
+    | (bytes[offset + 1] << 8)
+    | (bytes[offset + 2] << 16)
+    | (bytes[offset + 3] << 24)
+  ) >>> 0;
+}
+
+function assertEventsMatchLog(logBytes, label) {
+  const eventsBytes = readEventsBytes();
+  const expectedLen = 8 + logBytes.length;
+  if (eventsBytes.length !== expectedLen) {
+    throw new Error(`${label}: events length expected ${expectedLen}, got ${eventsBytes.length}`);
+  }
+  const kind = readU32LE(eventsBytes, 0);
+  const payloadLen = readU32LE(eventsBytes, 4);
+  if (kind !== 1) {
+    throw new Error(`${label}: event kind expected 1, got ${kind}`);
+  }
+  if (payloadLen !== logBytes.length) {
+    throw new Error(`${label}: event payload len expected ${logBytes.length}, got ${payloadLen}`);
+  }
+  const payload = eventsBytes.subarray(8);
+  if (payload.length !== logBytes.length || !payload.every((byte, index) => byte === logBytes[index])) {
+    throw new Error(`${label}: event payload bytes mismatch with compile log`);
   }
 }
 
@@ -386,6 +444,7 @@ expectNotImplemented(compileMain(), 'compile_main_v0');
   if (logBytes.length > 1024) {
     throw new Error(`compile_main log exceeds default max_log_bytes: ${logBytes.length}`);
   }
+  assertEventsMatchLog(logBytes, 'compile_main');
   assertMainXdvArtifactEmpty('compile_main');
 }
 
@@ -422,6 +481,7 @@ expectNotImplemented(compileRun(), 'compile_run_v0(valid request)');
   if (logBytes.length > 1024) {
     throw new Error(`compile_run log exceeds max_log_bytes: ${logBytes.length}`);
   }
+  assertEventsMatchLog(logBytes, 'compile_run(valid request)');
   assertMainXdvArtifactEmpty('compile_run(valid request)');
 }
 
