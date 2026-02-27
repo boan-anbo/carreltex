@@ -42,6 +42,7 @@ fn push_token(tokens: &mut Vec<TokenV0>, token: TokenV0) -> Result<(), TokenizeE
 ///   - If followed by ASCII letters, consume a control word and emit
 ///     `ControlSeq(name_bytes)`. A following whitespace run is swallowed
 ///     (no `Space` token emitted).
+///   - Control sequence bytes must be ASCII-only.
 ///   - Control word `\verb` is explicitly blocked in v0 (`InvalidInput`).
 ///   - Otherwise emit control symbol as `ControlSeq(vec![next_byte])`.
 ///   - A trailing terminal backslash is `InvalidInput`.
@@ -114,9 +115,15 @@ pub fn tokenize_v0(input: &[u8]) -> Result<Vec<TokenV0>, TokenizeErrorV0> {
                     if control_word.as_slice() == b"verb" {
                         return Err(TokenizeErrorV0::InvalidInput);
                     }
+                    if !control_word.iter().all(|byte| byte.is_ascii()) {
+                        return Err(TokenizeErrorV0::InvalidInput);
+                    }
                     push_token(&mut tokens, TokenV0::ControlSeq(control_word))?;
                     if index < input.len() {
                         let (space_probe, _) = decode_caret_hex_v0(input, index)?;
+                        if !is_whitespace(space_probe) && !space_probe.is_ascii() {
+                            return Err(TokenizeErrorV0::InvalidInput);
+                        }
                         if is_whitespace(space_probe) {
                             while index < input.len() {
                                 let (space_byte, following_index) = decode_caret_hex_v0(input, index)?;
@@ -128,6 +135,9 @@ pub fn tokenize_v0(input: &[u8]) -> Result<Vec<TokenV0>, TokenizeErrorV0> {
                         }
                     }
                 } else {
+                    if !next.is_ascii() {
+                        return Err(TokenizeErrorV0::InvalidInput);
+                    }
                     push_token(&mut tokens, TokenV0::ControlSeq(vec![next]))?;
                     index = after_next_index;
                 }
@@ -253,6 +263,11 @@ mod tests {
     #[test]
     fn unsupported_caret_form_is_caret_not_supported() {
         assert_eq!(tokenize_v0(b"^^ZZ"), Err(TokenizeErrorV0::CaretNotSupported));
+    }
+
+    #[test]
+    fn control_sequence_bytes_must_be_ascii() {
+        assert_eq!(tokenize_v0(b"\\foo^^ff"), Err(TokenizeErrorV0::InvalidInput));
     }
 
     #[test]
