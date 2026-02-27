@@ -54,6 +54,33 @@ export function runXdefNoexpandCases(ctx, helpers) {
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before noexpand dynamic case failed');
   }
+  const xdefInputSnapshotMainBytes = new TextEncoder().encode('\\documentclass{article}\n\\begin{document}\n\\input{sub.tex}{\\xdef\\foo{\\bar}}\\def\\bar{A}\\foo\n\\end{document}\n');
+  const xdefInputSnapshotSubBytes = new TextEncoder().encode('\\def\\bar{XYZ}');
+  if (addMountedFile('main.tex', xdefInputSnapshotMainBytes, 'macro_xdef_input_snapshot_main') !== 0) {
+    throw new Error('mount_add_file(macro xdef input snapshot main.tex) failed');
+  }
+  if (addMountedFile('sub.tex', xdefInputSnapshotSubBytes, 'macro_xdef_input_snapshot_sub') !== 0) {
+    throw new Error('mount_add_file(macro xdef input snapshot sub.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) {
+    throw new Error('mount_finalize for xdef input snapshot case failed');
+  }
+  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(macro xdef input snapshot)');
+  {
+    const logBytes = readCompileLogBytes();
+    const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(macro xdef input snapshot)');
+    if (baselineCharCount === null) {
+      throw new Error('baselineCharCount not initialized for xdef input snapshot case');
+    }
+    if (stats.char_count !== baselineCharCount + 3) {
+      throw new Error(`compile_main(macro xdef input snapshot) char_count delta expected +3, got baseline=${baselineCharCount}, current=${stats.char_count}`);
+    }
+    assertMainXdvArtifactEmpty('compile_main(macro xdef input snapshot)');
+  }
+
+  if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before noexpand dynamic case failed');
+  }
   const noexpandMainBytes = new TextEncoder().encode('\\documentclass{article}\n\\begin{document}\n\\def\\bar{X}\\edef\\foo{\\noexpand\\bar}\\def\\bar{XYZ}\\foo\n\\end{document}\n');
   if (addMountedFile('main.tex', noexpandMainBytes, 'macro_noexpand_dynamic_main') !== 0) {
     throw new Error('mount_add_file(macro noexpand dynamic main.tex) failed');
