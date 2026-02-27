@@ -52,6 +52,29 @@ export function runTokenizerCases(ctx, helpers) {
   }
 
   if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before tokenizer CRLF normalization case failed');
+  }
+  const crlfMainBytes = new TextEncoder().encode('\\documentclass{article}\n\\begin{document}\nA\r\nB\n\\end{document}\n');
+  if (addMountedFile('main.tex', crlfMainBytes, 'tokenizer_crlf_normalization_main') !== 0) {
+    throw new Error('mount_add_file(tokenizer CRLF normalization main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) {
+    throw new Error('mount_finalize for tokenizer CRLF normalization case failed');
+  }
+  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(tokenizer CRLF normalization)');
+  {
+    const logBytes = readCompileLogBytes();
+    const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(tokenizer CRLF normalization)');
+    if (baselineCharCount === null) {
+      throw new Error('baselineCharCount not initialized for tokenizer CRLF normalization case');
+    }
+    if (stats.char_count !== baselineCharCount + 2) {
+      throw new Error(`compile_main(tokenizer CRLF normalization) char_count delta expected +2, got baseline=${baselineCharCount}, current=${stats.char_count}`);
+    }
+    assertMainXdvArtifactEmpty('compile_main(tokenizer CRLF normalization)');
+  }
+
+  if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer caret-in-comment case failed');
   }
   const commentMainBytes = new TextEncoder().encode('\\documentclass{article}\n\\begin{document}\n% ^^ZZ\nXYZ\n\\end{document}\n');
