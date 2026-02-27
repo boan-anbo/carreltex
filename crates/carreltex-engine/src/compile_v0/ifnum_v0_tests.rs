@@ -1,5 +1,5 @@
 use super::compile_request_v0;
-use crate::compile_v0::macro_expand_v0::MAX_IF_DEPTH_V0;
+use crate::compile_v0::ifnum_v0::MAX_IF_DEPTH_V0;
 use carreltex_core::{CompileRequestV0, CompileStatus, Mount};
 
 fn valid_request() -> CompileRequestV0 {
@@ -49,12 +49,12 @@ fn ifnum_true_branch_keeps_tokens() {
 fn ifnum_false_branch_drops_tokens() {
     let baseline = baseline_char_count();
     let mut mount = Mount::default();
-    let main = b"\\documentclass{article}\n\\begin{document}\n\\count0=2\\count1=1\\ifnum\\count0<\\count1 XYZ\\fi\n\\end{document}\n";
+    let main = b"\\documentclass{article}\n\\begin{document}\n\\count0=2\\count1=1\\ifnum\\count0<\\count1 AAA\\else XYZ\\fi\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
     assert_eq!(result.status, CompileStatus::NotImplemented);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
-    assert_eq!(char_count, baseline);
+    assert_eq!(char_count, baseline + 3);
 }
 
 #[test]
@@ -62,12 +62,12 @@ fn ifnum_else_is_invalid() {
     let mut mount = Mount::default();
     assert!(
         mount
-            .add_file(b"main.tex", b"\\ifnum\\count0<\\count1 X\\else Y\\fi")
+            .add_file(b"main.tex", b"\\ifnum\\count0<\\count1 X\\else Y\\else Z\\fi")
             .is_ok()
     );
     let result = compile_request_v0(&mut mount, &valid_request());
     assert_eq!(result.status, CompileStatus::InvalidInput);
-    assert!(result.log_bytes.ends_with(b"macro_ifnum_unsupported"));
+    assert!(result.log_bytes.ends_with(b"macro_if_else_duplicate"));
 }
 
 #[test]
@@ -80,7 +80,16 @@ fn ifnum_missing_fi_is_invalid() {
     );
     let result = compile_request_v0(&mut mount, &valid_request());
     assert_eq!(result.status, CompileStatus::InvalidInput);
-    assert!(result.log_bytes.ends_with(b"macro_ifnum_unsupported"));
+    assert!(result.log_bytes.ends_with(b"macro_if_missing_fi"));
+}
+
+#[test]
+fn ifnum_else_without_if_is_invalid() {
+    let mut mount = Mount::default();
+    assert!(mount.add_file(b"main.tex", b"\\else").is_ok());
+    let result = compile_request_v0(&mut mount, &valid_request());
+    assert_eq!(result.status, CompileStatus::InvalidInput);
+    assert!(result.log_bytes.ends_with(b"macro_if_else_without_if"));
 }
 
 #[test]
