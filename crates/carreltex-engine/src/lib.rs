@@ -1,3 +1,5 @@
+pub mod tex;
+
 use carreltex_core::{
     build_compile_result_v0, truncate_log_bytes_v0, CompileRequestV0, CompileResultV0,
     CompileStatus, Mount, DEFAULT_COMPILE_MAIN_MAX_LOG_BYTES_V0, MAX_LOG_BYTES_V0,
