@@ -19,6 +19,12 @@ pub(super) fn parse_control_symbol_v0(
             next_index,
         });
     }
+    if byte == b'_' {
+        return Ok(ParsedControlSeqV0 {
+            token: TokenV0::Char(b'_'),
+            next_index,
+        });
+    }
     Ok(ParsedControlSeqV0 {
         token: TokenV0::ControlSeq(vec![byte]),
         next_index,
