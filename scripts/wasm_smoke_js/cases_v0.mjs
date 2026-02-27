@@ -367,6 +367,86 @@ export function runCasesV0(ctx, mem, helpers) {
   }
 
   if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before macro gdef-global baseline case failed');
+  }
+  const macroGdefBaselineMainBytes = new TextEncoder().encode('{}\\foo');
+  if (addMountedFile('main.tex', macroGdefBaselineMainBytes, 'macro_gdef_global_baseline_main') !== 0) {
+    throw new Error('mount_add_file(macro gdef-global baseline main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) {
+    throw new Error('mount_finalize for macro gdef-global baseline case failed');
+  }
+  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(macro gdef-global baseline)');
+  let gdefBaselineCharCount = null;
+  {
+    const baselineLogBytes = readCompileLogBytes();
+    const baselineEvents = decodeEvents(readEventsBytes(), 'compile_main(macro gdef-global baseline)');
+    if (baselineEvents.length !== 2 || baselineEvents[0].kind !== 1 || baselineEvents[1].kind !== 2) {
+      throw new Error('compile_main(macro gdef-global baseline): event shape mismatch');
+    }
+    if (
+      baselineEvents[0].payload.length !== baselineLogBytes.length
+      || !baselineEvents[0].payload.every((byte, index) => byte === baselineLogBytes[index])
+    ) {
+      throw new Error('compile_main(macro gdef-global baseline): event[0] payload mismatch');
+    }
+    const baselineStatsText = new TextDecoder('utf-8', { fatal: true }).decode(baselineEvents[1].payload);
+    if (/[ \t\r\n]/.test(baselineStatsText) || baselineStatsText.includes('\"unexpected_key\"')) {
+      throw new Error(`compile_main(macro gdef-global baseline): invalid stats json text: ${baselineStatsText}`);
+    }
+    const baselineStats = JSON.parse(baselineStatsText);
+    if (typeof baselineStats !== 'object' || baselineStats === null || typeof baselineStats.char_count !== 'number') {
+      throw new Error('compile_main(macro gdef-global baseline): invalid stats json object');
+    }
+    gdefBaselineCharCount = baselineStats.char_count;
+    assertMainXdvArtifactEmpty('compile_main(macro gdef-global baseline)');
+  }
+
+  if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before macro gdef-global case failed');
+  }
+  const macroGdefGlobalMainBytes = new TextEncoder().encode('{\\gdef\\foo{XYZ}}\\foo');
+  if (addMountedFile('main.tex', macroGdefGlobalMainBytes, 'macro_gdef_global_main') !== 0) {
+    throw new Error('mount_add_file(macro gdef-global main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) {
+    throw new Error('mount_finalize for macro gdef-global case failed');
+  }
+  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(macro gdef-global)');
+  {
+    const report = readCompileReportJson();
+    if (report.status !== 'NOT_IMPLEMENTED') {
+      throw new Error(`compile_main(macro gdef-global) report.status expected NOT_IMPLEMENTED, got ${report.status}`);
+    }
+    const logBytes = readCompileLogBytes();
+    const events = decodeEvents(readEventsBytes(), 'compile_main(macro gdef-global)');
+    if (events.length !== 2 || events[0].kind !== 1 || events[1].kind !== 2) {
+      throw new Error('compile_main(macro gdef-global): event shape mismatch');
+    }
+    if (
+      events[0].payload.length !== logBytes.length
+      || !events[0].payload.every((byte, index) => byte === logBytes[index])
+    ) {
+      throw new Error('compile_main(macro gdef-global): event[0] payload mismatch');
+    }
+    const statsText = new TextDecoder('utf-8', { fatal: true }).decode(events[1].payload);
+    if (/[ \t\r\n]/.test(statsText) || statsText.includes('\"unexpected_key\"')) {
+      throw new Error(`compile_main(macro gdef-global): invalid stats json text: ${statsText}`);
+    }
+    const stats = JSON.parse(statsText);
+    if (typeof stats !== 'object' || stats === null || typeof stats.char_count !== 'number') {
+      throw new Error('compile_main(macro gdef-global): invalid stats json object');
+    }
+    if (gdefBaselineCharCount === null) {
+      throw new Error('gdefBaselineCharCount not initialized');
+    }
+    if (stats.char_count !== gdefBaselineCharCount + 3) {
+      throw new Error(`compile_main(macro gdef-global) char_count delta expected +3, got baseline=${gdefBaselineCharCount}, current=${stats.char_count}`);
+    }
+    assertMainXdvArtifactEmpty('compile_main(macro gdef-global)');
+  }
+
+  if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before compile_request negative setter tests failed');
   }
   if (addMountedFile('main.tex', mainBytes, 'compile_request_base_main') !== 0) {
