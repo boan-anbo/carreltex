@@ -278,6 +278,29 @@ export function runTokenizerCases(ctx, helpers) {
   }
 
   if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before tokenizer control-word-par case failed');
+  }
+  const parMainBytes = new TextEncoder().encode('\\documentclass{article}\n\\begin{document}\nHello.\\parXYZ\n\\end{document}\n');
+  if (addMountedFile('main.tex', parMainBytes, 'tokenizer_control_word_par_main') !== 0) {
+    throw new Error('mount_add_file(tokenizer control-word-par main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) {
+    throw new Error('mount_finalize for tokenizer control-word-par case failed');
+  }
+  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(tokenizer control-word-par)');
+  {
+    const logBytes = readCompileLogBytes();
+    const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(tokenizer control-word-par)');
+    if (helloBaselineCharCount === null) {
+      throw new Error('helloBaselineCharCount not initialized for tokenizer control-word-par case');
+    }
+    if (stats.char_count !== helloBaselineCharCount + 3) {
+      throw new Error(`compile_main(tokenizer control-word-par) char_count delta expected +3, got baseline=${helloBaselineCharCount}, current=${stats.char_count}`);
+    }
+    assertMainXdvArtifactEmpty('compile_main(tokenizer control-word-par)');
+  }
+
+  if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer CRLF normalization case failed');
   }
   const crlfMainBytes = new TextEncoder().encode('\\documentclass{article}\n\\begin{document}\nA\r\nB\n\\end{document}\n');
