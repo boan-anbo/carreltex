@@ -108,3 +108,24 @@ fn ifnum_depth_cap_is_invalid() {
     assert_eq!(result.status, CompileStatus::InvalidInput);
     assert!(result.log_bytes.ends_with(b"macro_if_depth_exceeded"));
 }
+
+#[test]
+fn caret_hex_decode_in_document_body_is_counted_in_stats() {
+    let baseline = baseline_char_count();
+    let mut mount = Mount::default();
+    let main = b"\\documentclass{article}\n\\begin{document}\nA^^41B\n\\end{document}\n";
+    assert!(mount.add_file(b"main.tex", main).is_ok());
+    let result = compile_request_v0(&mut mount, &valid_request());
+    assert_eq!(result.status, CompileStatus::NotImplemented);
+    let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
+    assert_eq!(char_count, baseline + 3);
+}
+
+#[test]
+fn unsupported_caret_form_maps_to_tokenizer_caret_reason() {
+    let mut mount = Mount::default();
+    assert!(mount.add_file(b"main.tex", b"A^^ZZB").is_ok());
+    let result = compile_request_v0(&mut mount, &valid_request());
+    assert_eq!(result.status, CompileStatus::InvalidInput);
+    assert!(result.log_bytes.ends_with(b"tokenizer_caret_not_supported"));
+}
