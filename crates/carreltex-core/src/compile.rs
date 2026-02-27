@@ -21,18 +21,21 @@ pub struct CompileResultV0 {
     pub status: CompileStatus,
     pub report_json: String,
     pub log_bytes: Vec<u8>,
+    pub main_xdv_bytes: Vec<u8>,
 }
 
 pub fn build_compile_result_v0(
     status: CompileStatus,
     missing_components: &[&str],
     log_bytes: Vec<u8>,
+    main_xdv_bytes: Vec<u8>,
 ) -> CompileResultV0 {
     let report_json = build_compile_report_json(status, missing_components);
     CompileResultV0 {
         status,
         report_json,
         log_bytes,
+        main_xdv_bytes,
     }
 }
 
@@ -124,6 +127,7 @@ mod tests {
             CompileStatus::NotImplemented,
             &["tex-engine"],
             b"NOT_IMPLEMENTED: missing tex-engine".to_vec(),
+            vec![],
         );
         assert_eq!(
             result.report_json,
@@ -137,12 +141,14 @@ mod tests {
             CompileStatus::NotImplemented,
             &["a\"b\\c"],
             vec![0xff, b'\n', b'X'],
+            vec![1, 2, 3],
         );
         assert_eq!(
             result.report_json,
             "{\"status\":\"NOT_IMPLEMENTED\",\"missing_components\":[\"a\\\"b\\\\c\"]}"
         );
         assert_eq!(result.log_bytes, vec![0xff, b'\n', b'X']);
+        assert_eq!(result.main_xdv_bytes, vec![1, 2, 3]);
     }
 
     #[test]
@@ -171,16 +177,34 @@ mod tests {
             CompileStatus::NotImplemented,
             &["tex-engine"],
             b"NOT_IMPLEMENTED: A".to_vec(),
+            vec![0x01],
         );
         let b = build_compile_result_v0(
             CompileStatus::NotImplemented,
             &["tex-engine"],
             b"NOT_IMPLEMENTED: B".to_vec(),
+            vec![0x02, 0x03],
         );
         assert_eq!(
             a.report_json,
             "{\"status\":\"NOT_IMPLEMENTED\",\"missing_components\":[\"tex-engine\"]}"
         );
         assert_eq!(a.report_json, b.report_json);
+    }
+
+    #[test]
+    fn compile_result_builder_keeps_artifact_bytes_exact() {
+        let artifact = vec![0xde, 0xad, 0xbe, 0xef];
+        let result = build_compile_result_v0(
+            CompileStatus::NotImplemented,
+            &["tex-engine"],
+            b"NOT_IMPLEMENTED: log".to_vec(),
+            artifact.clone(),
+        );
+        assert_eq!(result.main_xdv_bytes, artifact);
+        assert_eq!(
+            result.report_json,
+            "{\"status\":\"NOT_IMPLEMENTED\",\"missing_components\":[\"tex-engine\"]}"
+        );
     }
 }

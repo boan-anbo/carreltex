@@ -46,6 +46,8 @@ const reportLen = instance.exports.carreltex_wasm_compile_report_len_v0;
 const reportCopy = instance.exports.carreltex_wasm_compile_report_copy_v0;
 const logLen = instance.exports.carreltex_wasm_compile_log_len_v0;
 const logCopy = instance.exports.carreltex_wasm_compile_log_copy_v0;
+const artifactMainXdvLen = instance.exports.carreltex_wasm_artifact_main_xdv_len_v0;
+const artifactMainXdvCopy = instance.exports.carreltex_wasm_artifact_main_xdv_copy_v0;
 
 for (const [name, fn] of [
   ['carreltex_wasm_alloc', alloc],
@@ -65,6 +67,8 @@ for (const [name, fn] of [
   ['carreltex_wasm_compile_report_copy_v0', reportCopy],
   ['carreltex_wasm_compile_log_len_v0', logLen],
   ['carreltex_wasm_compile_log_copy_v0', logCopy],
+  ['carreltex_wasm_artifact_main_xdv_len_v0', artifactMainXdvLen],
+  ['carreltex_wasm_artifact_main_xdv_copy_v0', artifactMainXdvCopy],
 ]) {
   if (typeof fn !== 'function') {
     throw new Error(`Missing export: ${name}`);
@@ -164,6 +168,28 @@ function readCompileLogBytes() {
   }
 }
 
+function assertMainXdvArtifactEmpty(label) {
+  const bytesLen = artifactMainXdvLen();
+  if (bytesLen !== 0) {
+    throw new Error(`${label}: expected main.xdv len=0, got ${bytesLen}`);
+  }
+  if (artifactMainXdvCopy(0, 0) !== 0) {
+    throw new Error(`${label}: expected main.xdv copy(null,0)=0`);
+  }
+
+  const outPtr = alloc(1);
+  if (!Number.isInteger(outPtr) || outPtr <= 0) {
+    throw new Error(`${label}: alloc(1) failed for artifact copy check`);
+  }
+  try {
+    if (artifactMainXdvCopy(outPtr, 1) !== 0) {
+      throw new Error(`${label}: expected main.xdv copy(out,1)=0`);
+    }
+  } finally {
+    dealloc(outPtr, 1);
+  }
+}
+
 const mainTex = '\\documentclass{article}\\n\\\\begin{document}\\nHello.\\n\\\\end{document}\\n';
 const mainBytes = new TextEncoder().encode(mainTex);
 const ok = callWithBytes(mainBytes, 'main_tex', (ptr, len) => validate(ptr, len));
@@ -216,6 +242,7 @@ expectNotImplemented(compileMain(), 'compile_main_v0');
   if (logBytes.length <= 0 || !logText.startsWith('NOT_IMPLEMENTED:')) {
     throw new Error('compile_main log expected non-empty NOT_IMPLEMENTED prefix');
   }
+  assertMainXdvArtifactEmpty('compile_main');
 }
 
 if (compileRequestReset() !== 0) {
@@ -251,6 +278,7 @@ expectNotImplemented(compileRun(), 'compile_run_v0(valid request)');
   if (logBytes.length > 1024) {
     throw new Error(`compile_run log exceeds max_log_bytes: ${logBytes.length}`);
   }
+  assertMainXdvArtifactEmpty('compile_run(valid request)');
 }
 
 if (compileRequestReset() !== 0) {
