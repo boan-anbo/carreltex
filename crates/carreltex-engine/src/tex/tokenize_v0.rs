@@ -11,6 +11,7 @@ pub enum TokenV0 {
 pub enum TokenizeErrorV0 {
     InvalidInput,
     CaretNotSupported,
+    AccentNotSupported,
     ControlSeqNonAscii,
     TooManyTokens,
 }
@@ -32,6 +33,8 @@ mod tests;
 /// - Rejects NUL (`0x00`) anywhere (`InvalidInput`).
 /// - Decodes `^^hh` where `h` is hex (`[0-9a-fA-F]`) to one byte.
 /// - Any other `^^` form is `CaretNotSupported`.
+/// - Accent control symbols `\~`, `\^`, and `\"` are explicitly blocked in v0
+///   (`AccentNotSupported`), including braced forms like `\~{x}`.
 /// - `%` starts a comment that is skipped until `\n`, `\r`, or EOF; the line
 ///   is not consumed by the comment and is processed normally. Caret decoding
 ///   is not applied while consuming comment bytes.

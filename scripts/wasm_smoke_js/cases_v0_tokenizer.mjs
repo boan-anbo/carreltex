@@ -406,4 +406,23 @@ export function runTokenizerCases(ctx, helpers) {
     }
     assertNoEvents('compile_main_v0(tokenizer non-ascii control-seq)');
   }
+
+  if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before tokenizer accent-not-supported case failed');
+  }
+  if (addMountedFile('main.tex', new TextEncoder().encode('\\~a'), 'tokenizer_accent_not_supported_main') !== 0) {
+    throw new Error('mount_add_file(tokenizer accent-not-supported main.tex) failed');
+  }
+  const accentFinalizeCode = ctx.mountFinalize();
+  if (accentFinalizeCode !== 0 && accentFinalizeCode !== 1) {
+    throw new Error(`mount_finalize(tokenizer accent-not-supported) unexpected code=${accentFinalizeCode}`);
+  }
+  expectInvalid(ctx.compileMain(), 'compile_main_v0(tokenizer accent-not-supported)');
+  {
+    const logText = new TextDecoder().decode(readCompileLogBytes());
+    if (!logText.startsWith('INVALID_INPUT:') || !logText.includes('tokenizer_accent_not_supported')) {
+      throw new Error(`compile_main tokenizer accent-not-supported log mismatch: ${logText}`);
+    }
+    assertNoEvents('compile_main_v0(tokenizer accent-not-supported)');
+  }
 }
