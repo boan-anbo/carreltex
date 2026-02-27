@@ -50,6 +50,17 @@ fn read_input_bytes<'a>(ptr: *const u8, len: usize) -> Option<&'a [u8]> {
     Some(unsafe { core::slice::from_raw_parts(ptr, len) })
 }
 
+fn resolve_mounted_file(path_ptr: *const u8, path_len: usize) -> Option<Vec<u8>> {
+    let path_bytes = read_input_bytes(path_ptr, path_len)?;
+    let path = core::str::from_utf8(path_bytes).ok()?;
+
+    let mount = mount_state().lock().ok()?;
+    if !matches!(mount.has_file(path_bytes), Ok(true)) {
+        return None;
+    }
+    mount.read_file(path).map(|bytes| bytes.to_vec())
+}
+
 #[no_mangle]
 pub extern "C" fn carreltex_wasm_alloc(size: usize) -> *mut u8 {
     if size == 0 || size > MAIN_TEX_MAX_BYTES {
@@ -153,6 +164,39 @@ pub extern "C" fn carreltex_wasm_mount_has_file(path_ptr: *const u8, path_len: u
         Ok(true) => 0,
         _ => 1,
     }
+}
+
+#[no_mangle]
+pub extern "C" fn carreltex_wasm_mount_read_file_len_v0(
+    path_ptr: *const u8,
+    path_len: usize,
+) -> usize {
+    resolve_mounted_file(path_ptr, path_len)
+        .map(|bytes| bytes.len())
+        .unwrap_or(0)
+}
+
+#[no_mangle]
+pub extern "C" fn carreltex_wasm_mount_read_file_copy_v0(
+    path_ptr: *const u8,
+    path_len: usize,
+    out_ptr: *mut u8,
+    out_len: usize,
+) -> usize {
+    if out_ptr.is_null() || out_len == 0 {
+        return 0;
+    }
+    let bytes = match resolve_mounted_file(path_ptr, path_len) {
+        Some(bytes) => bytes,
+        None => return 0,
+    };
+    if out_len < bytes.len() {
+        return 0;
+    }
+    unsafe {
+        core::ptr::copy_nonoverlapping(bytes.as_ptr(), out_ptr, bytes.len());
+    }
+    bytes.len()
 }
 
 fn set_last_report_bytes(report_json: &str) {

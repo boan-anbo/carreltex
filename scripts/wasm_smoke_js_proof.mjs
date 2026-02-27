@@ -36,6 +36,8 @@ const mountReset = instance.exports.carreltex_wasm_mount_reset;
 const mountAddFile = instance.exports.carreltex_wasm_mount_add_file;
 const mountFinalize = instance.exports.carreltex_wasm_mount_finalize;
 const mountHasFile = instance.exports.carreltex_wasm_mount_has_file;
+const mountReadFileLen = instance.exports.carreltex_wasm_mount_read_file_len_v0;
+const mountReadFileCopy = instance.exports.carreltex_wasm_mount_read_file_copy_v0;
 const compileMain = instance.exports.carreltex_wasm_compile_main_v0;
 const compileRequestReset = instance.exports.carreltex_wasm_compile_request_reset_v0;
 const compileRequestSetEntrypoint = instance.exports.carreltex_wasm_compile_request_set_entrypoint_v0;
@@ -57,6 +59,8 @@ for (const [name, fn] of [
   ['carreltex_wasm_mount_add_file', mountAddFile],
   ['carreltex_wasm_mount_finalize', mountFinalize],
   ['carreltex_wasm_mount_has_file', mountHasFile],
+  ['carreltex_wasm_mount_read_file_len_v0', mountReadFileLen],
+  ['carreltex_wasm_mount_read_file_copy_v0', mountReadFileCopy],
   ['carreltex_wasm_compile_main_v0', compileMain],
   ['carreltex_wasm_compile_request_reset_v0', compileRequestReset],
   ['carreltex_wasm_compile_request_set_entrypoint_v0', compileRequestSetEntrypoint],
@@ -105,6 +109,10 @@ function addMountedFile(pathValue, dataValue, label) {
       return mountAddFile(pathPtr, pathLen, dataPtr, dataLen);
     });
   });
+}
+
+function pathBytes(pathValue) {
+  return new TextEncoder().encode(pathValue);
 }
 
 function expectInvalid(value, label) {
@@ -168,6 +176,60 @@ function readCompileLogBytes() {
   }
 }
 
+function readMountedFileBytes(pathValue, label) {
+  const encodedPath = pathBytes(pathValue);
+  return callWithBytes(encodedPath, `${label}_path`, (pathPtr, pathLen) => {
+    const len = mountReadFileLen(pathPtr, pathLen);
+    if (!Number.isInteger(len) || len < 0 || len > 4 * 1024 * 1024) {
+      throw new Error(`${label}: unexpected mounted file len=${len}`);
+    }
+    if (len === 0) {
+      return new Uint8Array();
+    }
+    const outPtr = alloc(len);
+    if (!Number.isInteger(outPtr) || outPtr <= 0) {
+      throw new Error(`${label}: alloc failed for mounted file copy, ptr=${outPtr}`);
+    }
+    try {
+      const written = mountReadFileCopy(pathPtr, pathLen, outPtr, len);
+      if (written !== len) {
+        throw new Error(`${label}: mounted file copy expected ${len}, got ${written}`);
+      }
+      return new Uint8Array(memory.buffer, outPtr, len).slice();
+    } finally {
+      dealloc(outPtr, len);
+    }
+  });
+}
+
+function assertReadbackZero(pathValue, label) {
+  const encodedPath = pathBytes(pathValue);
+  const len = callWithBytes(encodedPath, `${label}_len_path`, (pathPtr, pathLen) => mountReadFileLen(pathPtr, pathLen));
+  if (len !== 0) {
+    throw new Error(`${label}: expected read_file_len=0, got ${len}`);
+  }
+  const copyNull = callWithBytes(encodedPath, `${label}_copy_null_path`, (pathPtr, pathLen) =>
+    mountReadFileCopy(pathPtr, pathLen, 0, 0),
+  );
+  if (copyNull !== 0) {
+    throw new Error(`${label}: expected read_file_copy(null,0)=0`);
+  }
+  const outPtr = alloc(1);
+  if (!Number.isInteger(outPtr) || outPtr <= 0) {
+    throw new Error(`${label}: alloc(1) failed`);
+  }
+  try {
+    const copyOne = callWithBytes(encodedPath, `${label}_copy_one_path`, (pathPtr, pathLen) =>
+      mountReadFileCopy(pathPtr, pathLen, outPtr, 1),
+    );
+    if (copyOne !== 0) {
+      throw new Error(`${label}: expected read_file_copy(out,1)=0, got ${copyOne}`);
+    }
+  } finally {
+    dealloc(outPtr, 1);
+  }
+}
+
 function assertMainXdvArtifactEmpty(label) {
   const bytesLen = artifactMainXdvLen();
   if (bytesLen !== 0) {
@@ -214,6 +276,39 @@ if (addMountedFile('main.tex', mainBytes, 'main') !== 0) {
 if (addMountedFile('sub.tex', subTexBytes, 'sub') !== 0) {
   throw new Error('mount_add_file(sub.tex) failed');
 }
+const subBinBytes = Uint8Array.from([0xff, 0x58]);
+if (addMountedFile('sub.bin', subBinBytes, 'sub_bin') !== 0) {
+  throw new Error('mount_add_file(sub.bin) failed');
+}
+
+{
+  const readMain = readMountedFileBytes('main.tex', 'read_main');
+  if (readMain.length <= 0) {
+    throw new Error('read_main: expected non-empty bytes');
+  }
+  if (readMain.length !== mainBytes.length || !readMain.every((byte, index) => byte === mainBytes[index])) {
+    throw new Error('read_main: bytes mismatch');
+  }
+}
+
+{
+  const readSub = readMountedFileBytes('sub.tex', 'read_sub');
+  if (readSub.length !== subTexBytes.length || !readSub.every((byte, index) => byte === subTexBytes[index])) {
+    throw new Error('read_sub: bytes mismatch');
+  }
+}
+
+{
+  const readSubBin = readMountedFileBytes('sub.bin', 'read_sub_bin');
+  if (readSubBin.length !== subBinBytes.length || !readSubBin.every((byte, index) => byte === subBinBytes[index])) {
+    throw new Error('read_sub_bin: bytes mismatch');
+  }
+}
+
+assertReadbackZero('missing.tex', 'read_missing');
+assertReadbackZero('/abs.tex', 'read_invalid_abs');
+assertReadbackZero('a\\\\b.tex', 'read_invalid_backslash');
+
 if (mountFinalize() !== 0) {
   throw new Error('mount_finalize failed');
 }
