@@ -1,52 +1,19 @@
+mod input_expand_v0;
+mod stats_v0;
+mod trace_v0;
+
 use crate::reasons_v0::{invalid_log_bytes_v0, InvalidInputReasonV0};
 use crate::tex::tokenize_v0::{tokenize_v0, TokenV0, MAX_TOKENS_V0};
 use carreltex_core::{
-    build_compile_result_v0, build_tex_stats_json_v0, normalize_path_v0, truncate_log_bytes_v0,
-    validate_input_trace_json_v0, CompileRequestV0, CompileResultV0, CompileStatus, Mount,
-    DEFAULT_COMPILE_MAIN_MAX_LOG_BYTES_V0, MAX_LOG_BYTES_V0,
+    build_compile_result_v0, truncate_log_bytes_v0, CompileRequestV0, CompileResultV0,
+    CompileStatus, Mount, DEFAULT_COMPILE_MAIN_MAX_LOG_BYTES_V0, MAX_LOG_BYTES_V0,
 };
+use input_expand_v0::expand_inputs_v0;
+use stats_v0::build_tex_stats_from_tokens_v0;
+use trace_v0::build_not_implemented_log_v0;
 
 const MISSING_COMPONENTS_V0: &[&str] = &["tex-engine"];
-const NOT_IMPLEMENTED_LOG_BYTES: &[u8] =
-    b"NOT_IMPLEMENTED: tex-engine compile pipeline is not wired yet";
 const EMPTY_TEX_STATS_JSON: &str = "";
-const MAX_INPUT_DEPTH_V0: usize = 32;
-const MAX_INPUT_EXPANSIONS_V0: usize = 1024;
-const INPUT_TRACE_MAX_FILES_V0: usize = 32;
-const INPUT_TRACE_PREFIX_BYTES: &[u8] = b"\nINPUT_TRACE_V0:";
-
-#[derive(Default)]
-struct InputTraceV0 {
-    expansions: u64,
-    max_depth: u64,
-    unique_files: u64,
-    files: Vec<String>,
-}
-
-impl InputTraceV0 {
-    fn new() -> Self {
-        let mut trace = Self::default();
-        trace.record_file("main.tex");
-        trace
-    }
-
-    fn record_file(&mut self, path: &str) {
-        if self.files.iter().any(|existing| existing == path) {
-            return;
-        }
-        self.unique_files = self.unique_files.saturating_add(1);
-        if self.files.len() < INPUT_TRACE_MAX_FILES_V0 {
-            self.files.push(path.to_owned());
-        }
-    }
-
-    fn record_depth(&mut self, depth: usize) {
-        let depth_u64 = depth as u64;
-        if depth_u64 > self.max_depth {
-            self.max_depth = depth_u64;
-        }
-    }
-}
 
 fn invalid_result_v0(max_log_bytes: u32, reason: InvalidInputReasonV0) -> CompileResultV0 {
     build_compile_result_v0(
@@ -124,22 +91,13 @@ pub fn compile_request_v0(mount: &mut Mount, req: &CompileRequestV0) -> CompileR
     if tex_stats_json.is_empty() {
         return invalid_result_v0(req.max_log_bytes, InvalidInputReasonV0::StatsBuildFailed);
     }
-    let trace_json = build_input_trace_json_v0(&input_trace);
-    if validate_input_trace_json_v0(&trace_json).is_err() {
-        return invalid_result_v0(req.max_log_bytes, InvalidInputReasonV0::StatsBuildFailed);
-    }
-    let mut not_implemented_log = NOT_IMPLEMENTED_LOG_BYTES.to_vec();
-    let mut trace_line = Vec::new();
-    trace_line.extend_from_slice(INPUT_TRACE_PREFIX_BYTES);
-    trace_line.extend_from_slice(trace_json.as_bytes());
-    let allowed = req.max_log_bytes as usize;
-    if not_implemented_log
-        .len()
-        .checked_add(trace_line.len())
-        .is_some_and(|total| total <= allowed)
-    {
-        not_implemented_log.extend_from_slice(&trace_line);
-    }
+    let not_implemented_log =
+        match build_not_implemented_log_v0(req.max_log_bytes as usize, &input_trace) {
+            Some(log) => log,
+            None => {
+                return invalid_result_v0(req.max_log_bytes, InvalidInputReasonV0::StatsBuildFailed)
+            }
+        };
     build_compile_result_v0(
         CompileStatus::NotImplemented,
         MISSING_COMPONENTS_V0,
@@ -149,256 +107,10 @@ pub fn compile_request_v0(mount: &mut Mount, req: &CompileRequestV0) -> CompileR
     )
 }
 
-fn build_input_trace_json_v0(trace: &InputTraceV0) -> String {
-    let mut out = String::new();
-    out.push_str("{\"expansions\":");
-    out.push_str(&trace.expansions.to_string());
-    out.push_str(",\"max_depth\":");
-    out.push_str(&trace.max_depth.to_string());
-    out.push_str(",\"unique_files\":");
-    out.push_str(&trace.unique_files.to_string());
-    out.push_str(",\"files\":[");
-    for (index, file) in trace.files.iter().enumerate() {
-        if index != 0 {
-            out.push(',');
-        }
-        out.push('"');
-        out.push_str(&escape_json_string_v0(file));
-        out.push('"');
-    }
-    out.push_str("]}");
-    out
-}
-
-fn escape_json_string_v0(value: &str) -> String {
-    let mut escaped = String::new();
-    for ch in value.chars() {
-        match ch {
-            '"' => escaped.push_str("\\\""),
-            '\\' => escaped.push_str("\\\\"),
-            '\u{08}' => escaped.push_str("\\b"),
-            '\u{0C}' => escaped.push_str("\\f"),
-            '\n' => escaped.push_str("\\n"),
-            '\r' => escaped.push_str("\\r"),
-            '\t' => escaped.push_str("\\t"),
-            ch if ch.is_control() => {
-                let code = ch as u32;
-                escaped.push_str(&format!("\\u{code:04x}"));
-            }
-            _ => escaped.push(ch),
-        }
-    }
-    escaped
-}
-
-fn parse_input_path_group_v0(
-    tokens: &[TokenV0],
-    input_index: usize,
-) -> Result<(String, usize), InvalidInputReasonV0> {
-    if !matches!(
-        tokens.get(input_index),
-        Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"input"
-    ) {
-        return Err(InvalidInputReasonV0::InputValidationFailed);
-    }
-
-    let mut index = input_index + 1;
-    if !matches!(tokens.get(index), Some(TokenV0::BeginGroup)) {
-        return Err(InvalidInputReasonV0::InputValidationFailed);
-    }
-    index += 1;
-
-    let mut path_bytes = Vec::new();
-    loop {
-        match tokens.get(index) {
-            Some(TokenV0::Char(byte)) => {
-                path_bytes.push(*byte);
-                index += 1;
-            }
-            Some(TokenV0::EndGroup) => {
-                index += 1;
-                break;
-            }
-            Some(TokenV0::Space)
-            | Some(TokenV0::ControlSeq(_))
-            | Some(TokenV0::BeginGroup)
-            | None => {
-                return Err(InvalidInputReasonV0::InputValidationFailed);
-            }
-        }
-    }
-
-    if path_bytes.is_empty() {
-        return Err(InvalidInputReasonV0::InputValidationFailed);
-    }
-
-    let normalized =
-        normalize_path_v0(&path_bytes).map_err(|_| InvalidInputReasonV0::InputValidationFailed)?;
-    if !normalized.ends_with(".tex") {
-        return Err(InvalidInputReasonV0::InputValidationFailed);
-    }
-    Ok((normalized, index))
-}
-
-fn push_token_checked(out: &mut Vec<TokenV0>, token: TokenV0) -> Result<(), InvalidInputReasonV0> {
-    if out.len() >= MAX_TOKENS_V0 {
-        return Err(InvalidInputReasonV0::InputValidationFailed);
-    }
-    out.push(token);
-    Ok(())
-}
-
-fn extend_tokens_checked(
-    out: &mut Vec<TokenV0>,
-    tokens: &[TokenV0],
-) -> Result<(), InvalidInputReasonV0> {
-    let total = out
-        .len()
-        .checked_add(tokens.len())
-        .ok_or(InvalidInputReasonV0::InputValidationFailed)?;
-    if total > MAX_TOKENS_V0 {
-        return Err(InvalidInputReasonV0::InputValidationFailed);
-    }
-    out.extend_from_slice(tokens);
-    Ok(())
-}
-
-fn expand_inputs_v0(
-    tokens: &[TokenV0],
-    mount: &Mount,
-) -> Result<(Vec<TokenV0>, InputTraceV0), InvalidInputReasonV0> {
-    let mut active_stack = vec!["main.tex".to_owned()];
-    let mut expansion_count = 0usize;
-    let mut trace = InputTraceV0::new();
-    let expanded = expand_inputs_inner_v0(
-        tokens,
-        mount,
-        0,
-        &mut active_stack,
-        &mut expansion_count,
-        &mut trace,
-    )?;
-    Ok((expanded, trace))
-}
-
-fn expand_inputs_inner_v0(
-    tokens: &[TokenV0],
-    mount: &Mount,
-    depth: usize,
-    active_stack: &mut Vec<String>,
-    expansion_count: &mut usize,
-    trace: &mut InputTraceV0,
-) -> Result<Vec<TokenV0>, InvalidInputReasonV0> {
-    if depth > MAX_INPUT_DEPTH_V0 {
-        return Err(InvalidInputReasonV0::InputDepthExceeded);
-    }
-
-    let mut out = Vec::new();
-    let mut index = 0usize;
-    while index < tokens.len() {
-        match &tokens[index] {
-            TokenV0::ControlSeq(name) if name.as_slice() == b"input" => {
-                *expansion_count = expansion_count
-                    .checked_add(1)
-                    .ok_or(InvalidInputReasonV0::InputExpansionsExceeded)?;
-                if *expansion_count > MAX_INPUT_EXPANSIONS_V0 {
-                    return Err(InvalidInputReasonV0::InputExpansionsExceeded);
-                }
-                trace.expansions = *expansion_count as u64;
-
-                let (normalized_path, next_index) = parse_input_path_group_v0(tokens, index)?;
-                if active_stack.iter().any(|path| path == &normalized_path) {
-                    return Err(InvalidInputReasonV0::InputCycleFailed);
-                }
-                trace.record_file(&normalized_path);
-                trace.record_depth(depth + 1);
-
-                let included_bytes = match mount.read_file_by_bytes_v0(normalized_path.as_bytes()) {
-                    Ok(Some(bytes)) => bytes,
-                    _ => return Err(InvalidInputReasonV0::InputValidationFailed),
-                };
-                let included_tokens = tokenize_v0(included_bytes)
-                    .map_err(|_| InvalidInputReasonV0::InputValidationFailed)?;
-
-                active_stack.push(normalized_path);
-                let expanded = expand_inputs_inner_v0(
-                    &included_tokens,
-                    mount,
-                    depth + 1,
-                    active_stack,
-                    expansion_count,
-                    trace,
-                )?;
-                active_stack.pop();
-
-                extend_tokens_checked(&mut out, &expanded)?;
-                index = next_index;
-            }
-            token => {
-                push_token_checked(&mut out, token.clone())?;
-                index += 1;
-            }
-        }
-    }
-
-    Ok(out)
-}
-
-fn build_tex_stats_from_tokens_v0(tokens: &[TokenV0]) -> Result<String, ()> {
-    let mut depth: u64 = 0;
-    let mut max_depth: u64 = 0;
-    let mut control_seq_count: u64 = 0;
-    let mut char_count: u64 = 0;
-    let mut space_count: u64 = 0;
-    let mut begin_group_count: u64 = 0;
-    let mut end_group_count: u64 = 0;
-
-    for token in tokens {
-        match token {
-            TokenV0::ControlSeq(_) => {
-                control_seq_count = control_seq_count.checked_add(1).ok_or(())?;
-            }
-            TokenV0::Char(_) => {
-                char_count = char_count.checked_add(1).ok_or(())?;
-            }
-            TokenV0::Space => {
-                space_count = space_count.checked_add(1).ok_or(())?;
-            }
-            TokenV0::BeginGroup => {
-                begin_group_count = begin_group_count.checked_add(1).ok_or(())?;
-                depth = depth.checked_add(1).ok_or(())?;
-                max_depth = max_depth.max(depth);
-            }
-            TokenV0::EndGroup => {
-                if depth == 0 {
-                    return Err(());
-                }
-                end_group_count = end_group_count.checked_add(1).ok_or(())?;
-                depth -= 1;
-            }
-        }
-    }
-
-    if depth != 0 {
-        return Err(());
-    }
-
-    let token_count: u64 = tokens.len().try_into().map_err(|_| ())?;
-    build_tex_stats_json_v0(
-        token_count,
-        control_seq_count,
-        char_count,
-        space_count,
-        begin_group_count,
-        end_group_count,
-        max_depth,
-    )
-    .map_err(|_| ())
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{compile_main_v0, compile_request_v0, MAX_INPUT_DEPTH_V0, MAX_INPUT_EXPANSIONS_V0};
+    use super::input_expand_v0::{MAX_INPUT_DEPTH_V0, MAX_INPUT_EXPANSIONS_V0};
+    use super::{compile_main_v0, compile_request_v0};
     use carreltex_core::{
         CompileRequestV0, CompileStatus, Mount, DEFAULT_COMPILE_MAIN_MAX_LOG_BYTES_V0,
         MAX_LOG_BYTES_V0,
