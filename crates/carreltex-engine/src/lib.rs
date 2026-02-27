@@ -1,6 +1,6 @@
 use carreltex_core::{
     build_compile_result_v0, truncate_log_bytes_v0, CompileRequestV0, CompileResultV0,
-    CompileStatus, Mount, MAX_LOG_BYTES_V0,
+    CompileStatus, Mount, DEFAULT_COMPILE_MAIN_MAX_LOG_BYTES_V0, MAX_LOG_BYTES_V0,
 };
 
 const MISSING_COMPONENTS_V0: &[&str] = &["tex-engine"];
@@ -11,7 +11,7 @@ pub fn compile_main_v0(mount: &mut Mount) -> CompileResultV0 {
     let request = CompileRequestV0 {
         entrypoint: "main.tex".to_owned(),
         source_date_epoch: 1,
-        max_log_bytes: 1024,
+        max_log_bytes: DEFAULT_COMPILE_MAIN_MAX_LOG_BYTES_V0,
     };
     compile_request_v0(mount, &request)
 }
@@ -54,7 +54,10 @@ pub fn compile_request_v0(mount: &mut Mount, req: &CompileRequestV0) -> CompileR
 #[cfg(test)]
 mod tests {
     use super::{compile_main_v0, compile_request_v0};
-    use carreltex_core::{CompileRequestV0, CompileStatus, Mount, MAX_LOG_BYTES_V0};
+    use carreltex_core::{
+        CompileRequestV0, CompileStatus, Mount, DEFAULT_COMPILE_MAIN_MAX_LOG_BYTES_V0,
+        MAX_LOG_BYTES_V0,
+    };
 
     fn valid_main() -> &'static [u8] {
         b"\\documentclass{article}\n\\begin{document}\nHi\n\\end{document}\n"
@@ -73,6 +76,16 @@ mod tests {
         let mut mount = Mount::default();
         let result = compile_main_v0(&mut mount);
         assert_eq!(result.status, CompileStatus::InvalidInput);
+    }
+
+    #[test]
+    fn compile_main_uses_default_log_cap_and_not_implemented() {
+        let mut mount = Mount::default();
+        assert!(mount.add_file(b"main.tex", valid_main()).is_ok());
+
+        let result = compile_main_v0(&mut mount);
+        assert_eq!(result.status, CompileStatus::NotImplemented);
+        assert!(result.log_bytes.len() <= DEFAULT_COMPILE_MAIN_MAX_LOG_BYTES_V0 as usize);
     }
 
     #[test]
