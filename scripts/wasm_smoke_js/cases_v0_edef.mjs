@@ -31,6 +31,33 @@ export function runEdefCases(ctx, helpers) {
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before edef positive case failed');
   }
+  const edefInputSnapshotMainBytes = new TextEncoder().encode('\\documentclass{article}\n\\begin{document}\n\\input{sub.tex}\\edef\\foo{\\bar}\\def\\bar{A}\\foo\n\\end{document}\n');
+  const edefInputSnapshotSubBytes = new TextEncoder().encode('\\def\\bar{XYZ}');
+  if (addMountedFile('main.tex', edefInputSnapshotMainBytes, 'macro_edef_input_snapshot_main') !== 0) {
+    throw new Error('mount_add_file(macro edef input snapshot main.tex) failed');
+  }
+  if (addMountedFile('sub.tex', edefInputSnapshotSubBytes, 'macro_edef_input_snapshot_sub') !== 0) {
+    throw new Error('mount_add_file(macro edef input snapshot sub.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) {
+    throw new Error('mount_finalize for edef input snapshot case failed');
+  }
+  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(macro edef input snapshot)');
+  {
+    const logBytes = readCompileLogBytes();
+    const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(macro edef input snapshot)');
+    if (baselineCharCount === null) {
+      throw new Error('baselineCharCount not initialized for edef input snapshot case');
+    }
+    if (stats.char_count !== baselineCharCount + 3) {
+      throw new Error(`compile_main(macro edef input snapshot) char_count delta expected +3, got baseline=${baselineCharCount}, current=${stats.char_count}`);
+    }
+    assertMainXdvArtifactEmpty('compile_main(macro edef input snapshot)');
+  }
+
+  if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before edef positive case failed');
+  }
   const edefPositiveMainBytes = new TextEncoder().encode('\\documentclass{article}\n\\begin{document}\n\\def\\bar{XYZ}\\edef\\foo{\\bar}\\foo\n\\end{document}\n');
   if (addMountedFile('main.tex', edefPositiveMainBytes, 'macro_edef_positive_main') !== 0) {
     throw new Error('mount_add_file(macro edef positive main.tex) failed');
