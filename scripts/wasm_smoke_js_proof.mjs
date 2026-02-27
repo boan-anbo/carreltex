@@ -307,6 +307,7 @@ function assertEventsMatchLogAndStats(logBytes, expectedStatsExact, label) {
   if (!(typeof stats.char_count === 'number' && stats.char_count > 0)) {
     throw new Error(`${label}: event[1] char_count expected >0`);
   }
+  return stats;
 }
 
 function readMountedFileBytes(pathValue, label) {
@@ -512,6 +513,7 @@ if (hasMissing !== 1) {
 }
 
 expectNotImplemented(compileMain(), 'compile_main_v0');
+let baselineMainCharCount = null;
 {
   const report = readCompileReportJson();
   if (report.status !== 'NOT_IMPLEMENTED') {
@@ -528,7 +530,8 @@ expectNotImplemented(compileMain(), 'compile_main_v0');
   if (logBytes.length > 1024) {
     throw new Error(`compile_main log exceeds default max_log_bytes: ${logBytes.length}`);
   }
-  assertEventsMatchLogAndStats(logBytes, expectedMainTexStatsExact, 'compile_main');
+  const stats = assertEventsMatchLogAndStats(logBytes, expectedMainTexStatsExact, 'compile_main');
+  baselineMainCharCount = stats.char_count;
   assertMainXdvArtifactEmpty('compile_main');
 }
 
@@ -567,6 +570,37 @@ expectNotImplemented(compileRun(), 'compile_run_v0(valid request)');
   }
   assertEventsMatchLogAndStats(logBytes, expectedMainTexStatsExact, 'compile_run(valid request)');
   assertMainXdvArtifactEmpty('compile_run(valid request)');
+}
+
+if (mountReset() !== 0) {
+  throw new Error('mount_reset before input expansion positive case failed');
+}
+const inputExpansionMainBytes = new TextEncoder().encode('\\documentclass{article}\n\\begin{document}\nHello.\\input{sub.tex}\n\\end{document}\n');
+const inputExpansionSubBytes = new TextEncoder().encode('XYZ');
+if (addMountedFile('main.tex', inputExpansionMainBytes, 'input_expansion_main') !== 0) {
+  throw new Error('mount_add_file(input expansion main.tex) failed');
+}
+if (addMountedFile('sub.tex', inputExpansionSubBytes, 'input_expansion_sub') !== 0) {
+  throw new Error('mount_add_file(input expansion sub.tex) failed');
+}
+if (mountFinalize() !== 0) {
+  throw new Error('mount_finalize for input expansion positive case failed');
+}
+expectNotImplemented(compileMain(), 'compile_main_v0(input expansion positive)');
+{
+  const report = readCompileReportJson();
+  if (report.status !== 'NOT_IMPLEMENTED') {
+    throw new Error(`compile_main(input expansion) report.status expected NOT_IMPLEMENTED, got ${report.status}`);
+  }
+  const logBytes = readCompileLogBytes();
+  const stats = assertEventsMatchLogAndStats(logBytes, expectedMainTexStatsExact, 'compile_main(input expansion positive)');
+  if (baselineMainCharCount === null) {
+    throw new Error('baselineMainCharCount not initialized');
+  }
+  if (stats.char_count !== baselineMainCharCount + 3) {
+    throw new Error(`compile_main(input expansion) char_count delta expected +3, got baseline=${baselineMainCharCount}, current=${stats.char_count}`);
+  }
+  assertMainXdvArtifactEmpty('compile_main(input expansion positive)');
 }
 
 if (compileRequestReset() !== 0) {
@@ -687,6 +721,31 @@ expectInvalid(compileMain(), 'compile_main_v0(missing input file)');
     throw new Error(`compile_main missing-input log mismatch: ${logText}`);
   }
   assertNoEvents('compile_main_v0(missing input file)');
+}
+
+if (mountReset() !== 0) {
+  throw new Error('mount_reset before input cycle compile check failed');
+}
+const cycleMainBytes = new TextEncoder().encode('\\documentclass{article}\n\\begin{document}\n\\input{a.tex}\n\\end{document}\n');
+const cycleSubBytes = new TextEncoder().encode('\\documentclass{article}\n\\begin{document}\n\\input{main.tex}\n\\end{document}\n');
+if (addMountedFile('main.tex', cycleMainBytes, 'input_cycle_main') !== 0) {
+  throw new Error('mount_add_file(input cycle main.tex) failed');
+}
+if (addMountedFile('a.tex', cycleSubBytes, 'input_cycle_sub') !== 0) {
+  throw new Error('mount_add_file(input cycle a.tex) failed');
+}
+const cycleFinalizeCode = mountFinalize();
+if (cycleFinalizeCode !== 0 && cycleFinalizeCode !== 1) {
+  throw new Error(`mount_finalize(input cycle) unexpected code=${cycleFinalizeCode}`);
+}
+expectInvalid(compileMain(), 'compile_main_v0(input cycle)');
+{
+  const logBytes = readCompileLogBytes();
+  const logText = new TextDecoder().decode(logBytes);
+  if (!logText.startsWith('INVALID_INPUT:') || !logText.includes('input_validation_failed')) {
+    throw new Error(`compile_main input cycle log mismatch: ${logText}`);
+  }
+  assertNoEvents('compile_main_v0(input cycle)');
 }
 
 if (mountReset() !== 0) {
