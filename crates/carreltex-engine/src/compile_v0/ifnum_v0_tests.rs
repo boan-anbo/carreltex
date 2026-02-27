@@ -33,6 +33,15 @@ fn baseline_char_count() -> u64 {
     stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count")
 }
 
+fn hello_baseline_char_count() -> u64 {
+    let mut mount = Mount::default();
+    let main = b"\\documentclass{article}\n\\begin{document}\nHello.\n\\end{document}\n";
+    assert!(mount.add_file(b"main.tex", main).is_ok());
+    let result = compile_request_v0(&mut mount, &valid_request());
+    assert_eq!(result.status, CompileStatus::NotImplemented);
+    stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count")
+}
+
 #[test]
 fn ifnum_true_branch_keeps_tokens() {
     let baseline = baseline_char_count();
@@ -187,4 +196,16 @@ fn lone_cr_in_body_is_normalized_as_single_whitespace_run() {
     assert_eq!(result.status, CompileStatus::NotImplemented);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline + 2);
+}
+
+#[test]
+fn control_symbol_comma_is_counted_as_space_char() {
+    let baseline = hello_baseline_char_count();
+    let mut mount = Mount::default();
+    let main = b"\\documentclass{article}\n\\begin{document}\nHello.\\,XYZ\n\\end{document}\n";
+    assert!(mount.add_file(b"main.tex", main).is_ok());
+    let result = compile_request_v0(&mut mount, &valid_request());
+    assert_eq!(result.status, CompileStatus::NotImplemented);
+    let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
+    assert_eq!(char_count, baseline + 4);
 }
