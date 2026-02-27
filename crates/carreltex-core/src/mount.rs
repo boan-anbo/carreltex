@@ -45,12 +45,12 @@ impl Mount {
             return Err(Error::FileTooLarge);
         }
 
-        let path = normalize_path(path_bytes)?;
+        let path = normalize_path_v0(path_bytes)?;
 
         if self.files.len() >= MAX_FILES {
             return Err(Error::TooManyFiles);
         }
-        if self.files.contains_key(path) {
+        if self.files.contains_key(path.as_str()) {
             return Err(Error::DuplicatePath);
         }
 
@@ -62,14 +62,14 @@ impl Mount {
             return Err(Error::TotalBytesExceeded);
         }
 
-        self.files.insert(path.to_owned(), data.to_vec());
+        self.files.insert(path, data.to_vec());
         self.total_bytes = next_total;
         Ok(())
     }
 
     pub fn has_file(&self, path_bytes: &[u8]) -> Result<bool, Error> {
-        let path = normalize_path(path_bytes)?;
-        Ok(self.files.contains_key(path))
+        let path = normalize_path_v0(path_bytes)?;
+        Ok(self.files.contains_key(path.as_str()))
     }
 
     pub fn is_finalized(&self) -> bool {
@@ -92,6 +92,11 @@ impl Mount {
     pub fn read_file(&self, path: &str) -> Option<&[u8]> {
         self.files.get(path).map(|bytes| bytes.as_slice())
     }
+
+    pub fn read_file_by_bytes_v0(&self, path_bytes: &[u8]) -> Result<Option<&[u8]>, Error> {
+        let path = normalize_path_v0(path_bytes)?;
+        Ok(self.files.get(path.as_str()).map(|bytes| bytes.as_slice()))
+    }
 }
 
 pub fn validate_main_tex(bytes: &[u8]) -> Result<(), Error> {
@@ -111,7 +116,7 @@ fn is_non_whitespace_tex_byte(byte: u8) -> bool {
     !matches!(byte, b' ' | b'\t' | b'\r' | b'\n')
 }
 
-fn normalize_path(path_bytes: &[u8]) -> Result<&str, Error> {
+pub fn normalize_path_v0(path_bytes: &[u8]) -> Result<String, Error> {
     if path_bytes.is_empty() {
         return Err(Error::InvalidInput);
     }
@@ -139,12 +144,15 @@ fn normalize_path(path_bytes: &[u8]) -> Result<&str, Error> {
         return Err(Error::InvalidPath);
     }
 
-    Ok(path)
+    Ok(path.to_owned())
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{validate_main_tex, Error, Mount, MAX_FILES, MAX_FILE_BYTES, MAX_PATH_LEN};
+    use super::{
+        normalize_path_v0, validate_main_tex, Error, Mount, MAX_FILES, MAX_FILE_BYTES,
+        MAX_PATH_LEN,
+    };
 
     fn valid_main() -> Vec<u8> {
         b"\\documentclass{article}\n\\begin{document}\nHello\n\\end{document}\n".to_vec()
@@ -168,6 +176,30 @@ mod tests {
         for path in invalid_paths {
             let result = mount.add_file(path.as_bytes(), &bytes);
             assert!(result.is_err(), "expected path to fail: {path}");
+        }
+    }
+
+    #[test]
+    fn normalize_path_v0_accepts_and_rejects_expected_inputs() {
+        assert_eq!(normalize_path_v0(b"main.tex"), Ok("main.tex".to_owned()));
+        assert_eq!(normalize_path_v0(b"dir/sub.tex"), Ok("dir/sub.tex".to_owned()));
+
+        let invalid_paths = [
+            b"/abs.tex".as_slice(),
+            b"../up.tex".as_slice(),
+            b"a/../b.tex".as_slice(),
+            b"a\\b.tex".as_slice(),
+            b"".as_slice(),
+            b"a//b.tex".as_slice(),
+            b"a/b/".as_slice(),
+            b"a/\0b.tex".as_slice(),
+        ];
+        for path in invalid_paths {
+            assert!(
+                normalize_path_v0(path).is_err(),
+                "expected invalid path: {:?}",
+                path
+            );
         }
     }
 
@@ -246,6 +278,22 @@ mod tests {
         assert_eq!(mount.has_file(b"missing.tex"), Ok(false));
         assert!(mount.finalize().is_ok());
         assert_eq!(mount.read_file("main.tex").unwrap(), main.as_slice());
+    }
+
+    #[test]
+    fn read_file_by_bytes_v0_handles_existing_missing_and_invalid() {
+        let mut mount = Mount::default();
+        let main_bytes = valid_main();
+        assert!(mount.add_file(b"main.tex", &main_bytes).is_ok());
+        assert!(mount.add_file(b"sub.tex", b"sub").is_ok());
+
+        let main = mount.read_file_by_bytes_v0(b"main.tex").unwrap();
+        assert_eq!(main, Some(main_bytes.as_slice()));
+
+        let missing = mount.read_file_by_bytes_v0(b"missing.tex").unwrap();
+        assert_eq!(missing, None);
+
+        assert!(mount.read_file_by_bytes_v0(b"/abs.tex").is_err());
     }
 
     #[test]
