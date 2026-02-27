@@ -15,6 +15,8 @@ mod csname_expandafter;
 mod def_xdef;
 #[path = "macro_v0/global_prefix.rs"]
 mod global_prefix;
+#[path = "macro_v0/group_synonyms.rs"]
+mod group_synonyms;
 #[path = "macro_v0/let_futurelet.rs"]
 mod let_futurelet;
 #[path = "macro_v0/noexpand.rs"]
@@ -31,6 +33,7 @@ use count_the::{parse_count_assignment_v0, parse_the_v0};
 use csname_expandafter::{parse_csname_v0, parse_expandafter_v0};
 use def_xdef::{parse_def_v0, parse_xdef_v0};
 use global_prefix::parse_global_prefixed_macro_binding_v0;
+use group_synonyms::control_seq_to_group_token_v0;
 use let_futurelet::{parse_futurelet_v0, parse_let_v0};
 use noexpand::parse_noexpand_v0;
 use string_meaning::{parse_meaning_v0, parse_string_v0};
@@ -164,6 +167,22 @@ fn expand_stream_v0(
             }
             TokenV0::ControlSeq(name) if name.as_slice() == b"global" => {
                 index = parse_global_prefixed_macro_binding_v0(tokens, index, macro_frames, counters)?;
+            }
+            TokenV0::ControlSeq(name)
+                if control_seq_to_group_token_v0(name.as_slice()).is_some() =>
+            {
+                let group_token =
+                    control_seq_to_group_token_v0(name.as_slice()).expect("checked is_some");
+                if matches!(group_token, TokenV0::BeginGroup) {
+                    macro_frames.push(BTreeMap::new());
+                } else if macro_frames.len() > 1 {
+                    macro_frames.pop();
+                }
+                push_checked_v0(out, group_token)?;
+                index += 1;
+            }
+            TokenV0::ControlSeq(name) if name.as_slice() == b"relax" => {
+                index += 1;
             }
             TokenV0::ControlSeq(name) if name.as_slice() == b"noexpand" => {
                 index = parse_noexpand_v0(tokens, index, out)?;
