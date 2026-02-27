@@ -57,17 +57,6 @@ fn read_input_bytes<'a>(ptr: *const u8, len: usize) -> Option<&'a [u8]> {
     Some(unsafe { core::slice::from_raw_parts(ptr, len) })
 }
 
-fn resolve_mounted_file(path_ptr: *const u8, path_len: usize) -> Option<Vec<u8>> {
-    let path_bytes = read_input_bytes(path_ptr, path_len)?;
-    let path = core::str::from_utf8(path_bytes).ok()?;
-
-    let mount = mount_state().lock().ok()?;
-    if !matches!(mount.has_file(path_bytes), Ok(true)) {
-        return None;
-    }
-    mount.read_file(path).map(|bytes| bytes.to_vec())
-}
-
 fn resolve_artifact_name<'a>(name_ptr: *const u8, name_len: usize) -> Option<&'a str> {
     let name_bytes = read_input_bytes(name_ptr, name_len)?;
     core::str::from_utf8(name_bytes).ok()
@@ -196,9 +185,18 @@ pub extern "C" fn carreltex_wasm_mount_read_file_len_v0(
     path_ptr: *const u8,
     path_len: usize,
 ) -> usize {
-    resolve_mounted_file(path_ptr, path_len)
-        .map(|bytes| bytes.len())
-        .unwrap_or(0)
+    let path_bytes = match read_input_bytes(path_ptr, path_len) {
+        Some(bytes) => bytes,
+        None => return 0,
+    };
+    let mount = match mount_state().lock() {
+        Ok(guard) => guard,
+        Err(_) => return 0,
+    };
+    match mount.read_file_by_bytes_v0(path_bytes) {
+        Ok(Some(bytes)) => bytes.len(),
+        _ => 0,
+    }
 }
 
 #[no_mangle]
@@ -211,9 +209,17 @@ pub extern "C" fn carreltex_wasm_mount_read_file_copy_v0(
     if out_ptr.is_null() || out_len == 0 {
         return 0;
     }
-    let bytes = match resolve_mounted_file(path_ptr, path_len) {
+    let path_bytes = match read_input_bytes(path_ptr, path_len) {
         Some(bytes) => bytes,
         None => return 0,
+    };
+    let mount = match mount_state().lock() {
+        Ok(guard) => guard,
+        Err(_) => return 0,
+    };
+    let bytes = match mount.read_file_by_bytes_v0(path_bytes) {
+        Ok(Some(bytes)) => bytes,
+        _ => return 0,
     };
     if out_len < bytes.len() {
         return 0;
