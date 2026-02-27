@@ -154,6 +154,15 @@ fn unsupported_caret_form_maps_to_tokenizer_caret_reason() {
 }
 
 #[test]
+fn unsupported_accent_control_symbol_maps_to_tokenizer_accent_reason() {
+    let mut mount = Mount::default();
+    assert!(mount.add_file(b"main.tex", b"\\~a").is_ok());
+    let result = compile_request_v0(&mut mount, &valid_request());
+    assert_eq!(result.status, CompileStatus::InvalidInput);
+    assert!(result.log_bytes.ends_with(b"tokenizer_accent_not_supported"));
+}
+
+#[test]
 fn non_ascii_control_sequence_byte_maps_to_specific_reason_token() {
     let mut mount = Mount::default();
     assert!(mount.add_file(b"main.tex", b"\\def\\^^ff{XYZ}").is_ok());
