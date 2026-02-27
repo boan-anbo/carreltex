@@ -669,6 +669,27 @@ expectInvalid(compileMain(), 'compile_main_v0(verb main.tex)');
 }
 
 if (mountReset() !== 0) {
+  throw new Error('mount_reset before missing-input compile check failed');
+}
+const missingInputMainBytes = new TextEncoder().encode('\\documentclass{article}\n\\begin{document}\n\\input{missing.tex}\n\\end{document}\n');
+if (addMountedFile('main.tex', missingInputMainBytes, 'missing_input_main') !== 0) {
+  throw new Error('mount_add_file(missing input main.tex) failed');
+}
+const missingInputFinalizeCode = mountFinalize();
+if (missingInputFinalizeCode !== 0 && missingInputFinalizeCode !== 1) {
+  throw new Error(`mount_finalize(missing input main.tex) unexpected code=${missingInputFinalizeCode}`);
+}
+expectInvalid(compileMain(), 'compile_main_v0(missing input file)');
+{
+  const logBytes = readCompileLogBytes();
+  const logText = new TextDecoder().decode(logBytes);
+  if (!logText.startsWith('INVALID_INPUT:') || !logText.includes('input_validation_failed')) {
+    throw new Error(`compile_main missing-input log mismatch: ${logText}`);
+  }
+  assertNoEvents('compile_main_v0(missing input file)');
+}
+
+if (mountReset() !== 0) {
   throw new Error('mount_reset for negative cases failed');
 }
 
