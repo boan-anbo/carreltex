@@ -1,4 +1,5 @@
 use super::compile_request_v0;
+use super::macro_expand_v0::MAX_GROUP_DEPTH_V0;
 use carreltex_core::{CompileRequestV0, CompileStatus, Mount};
 
 fn valid_request() -> CompileRequestV0 {
@@ -170,6 +171,24 @@ fn endgroup_underflow_is_invalid_with_specific_reason() {
     let result = compile_request_v0(&mut mount, &valid_request());
     assert_eq!(result.status, CompileStatus::InvalidInput);
     assert!(result.log_bytes.ends_with(b"macro_group_underflow"));
+}
+
+#[test]
+fn begingroup_depth_exceeded_is_invalid_with_specific_reason() {
+    let mut mount = Mount::default();
+    let mut main = Vec::new();
+    for _ in 0..=MAX_GROUP_DEPTH_V0 {
+        main.extend_from_slice(b"\\begingroup");
+    }
+    main.extend_from_slice(b"X");
+    assert!(mount.add_file(b"main.tex", &main).is_ok());
+    let result = compile_request_v0(&mut mount, &valid_request());
+    assert_eq!(result.status, CompileStatus::InvalidInput);
+    assert!(
+        result.log_bytes.ends_with(b"macro_group_depth_exceeded"),
+        "{}",
+        String::from_utf8_lossy(&result.log_bytes)
+    );
 }
 
 #[test]
