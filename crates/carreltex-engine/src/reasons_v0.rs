@@ -4,6 +4,7 @@ pub(crate) enum InvalidInputReasonV0 {
     RequestInvalid,
     EntrypointMissing,
     TokenizeFailed,
+    TokenizerCaretNotSupported,
     StatsBuildFailed,
     InputValidationFailed,
     InputCycleFailed,
@@ -43,6 +44,9 @@ pub(crate) fn invalid_log_bytes_v0(reason: InvalidInputReasonV0) -> &'static [u8
         InvalidInputReasonV0::RequestInvalid => b"INVALID_INPUT: request_invalid",
         InvalidInputReasonV0::EntrypointMissing => b"INVALID_INPUT: entrypoint_missing",
         InvalidInputReasonV0::TokenizeFailed => b"INVALID_INPUT: tokenize_failed",
+        InvalidInputReasonV0::TokenizerCaretNotSupported => {
+            b"INVALID_INPUT: tokenizer_caret_not_supported"
+        }
         InvalidInputReasonV0::StatsBuildFailed => b"INVALID_INPUT: stats_build_failed",
         InvalidInputReasonV0::InputValidationFailed => b"INVALID_INPUT: input_validation_failed",
         InvalidInputReasonV0::InputCycleFailed => b"INVALID_INPUT: input_cycle_failed",
