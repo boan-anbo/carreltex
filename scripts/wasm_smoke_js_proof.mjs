@@ -652,6 +652,11 @@ expectNotImplemented(compileRun(), 'compile_run_v0(truncation case)');
   if (logBytes.length !== 8) {
     throw new Error(`compile_run truncated log expected 8 bytes, got ${logBytes.length}`);
   }
+  const logText = new TextDecoder().decode(logBytes);
+  if (logText.includes('INPUT_TRACE_V0:')) {
+    throw new Error(`compile_run truncated log must omit INPUT_TRACE_V0 marker, got: ${logText}`);
+  }
+  assertEventsMatchLogAndStats(logBytes, expectedMainTexStatsExact, 'compile_run(truncation case)');
 }
 
 if (mountReset() !== 0) {
