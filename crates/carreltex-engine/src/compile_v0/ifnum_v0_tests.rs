@@ -131,10 +131,22 @@ fn unsupported_caret_form_maps_to_tokenizer_caret_reason() {
 }
 
 #[test]
-fn non_ascii_control_sequence_byte_maps_to_tokenize_failed() {
+fn non_ascii_control_sequence_byte_maps_to_specific_reason_token() {
     let mut mount = Mount::default();
     assert!(mount.add_file(b"main.tex", b"\\def\\^^ff{XYZ}").is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
     assert_eq!(result.status, CompileStatus::InvalidInput);
     assert!(result.log_bytes.ends_with(b"tokenizer_control_seq_non_ascii"));
+}
+
+#[test]
+fn unsupported_caret_inside_comment_does_not_fail_and_body_counts_chars() {
+    let baseline = baseline_char_count();
+    let mut mount = Mount::default();
+    let main = b"\\documentclass{article}\n\\begin{document}\n% ^^ZZ\nXYZ\n\\end{document}\n";
+    assert!(mount.add_file(b"main.tex", main).is_ok());
+    let result = compile_request_v0(&mut mount, &valid_request());
+    assert_eq!(result.status, CompileStatus::NotImplemented);
+    let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
+    assert_eq!(char_count, baseline + 3);
 }
