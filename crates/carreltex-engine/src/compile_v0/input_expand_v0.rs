@@ -37,28 +37,31 @@ fn parse_input_path_group_v0(
     }
 
     let mut index = input_index + 1;
-    if !matches!(tokens.get(index), Some(TokenV0::BeginGroup)) {
-        return Err(InvalidInputReasonV0::InputValidationFailed);
-    }
-    index += 1;
-
     let mut path_bytes = Vec::new();
-    loop {
-        match tokens.get(index) {
-            Some(TokenV0::Char(byte)) => {
-                path_bytes.push(*byte);
-                index += 1;
+    if matches!(tokens.get(index), Some(TokenV0::BeginGroup)) {
+        index += 1;
+        loop {
+            match tokens.get(index) {
+                Some(TokenV0::Char(byte)) => {
+                    path_bytes.push(*byte);
+                    index += 1;
+                }
+                Some(TokenV0::EndGroup) => {
+                    index += 1;
+                    break;
+                }
+                Some(TokenV0::Space)
+                | Some(TokenV0::ControlSeq(_))
+                | Some(TokenV0::BeginGroup)
+                | None => {
+                    return Err(InvalidInputReasonV0::InputValidationFailed);
+                }
             }
-            Some(TokenV0::EndGroup) => {
-                index += 1;
-                break;
-            }
-            Some(TokenV0::Space)
-            | Some(TokenV0::ControlSeq(_))
-            | Some(TokenV0::BeginGroup)
-            | None => {
-                return Err(InvalidInputReasonV0::InputValidationFailed);
-            }
+        }
+    } else {
+        while let Some(TokenV0::Char(byte)) = tokens.get(index) {
+            path_bytes.push(*byte);
+            index += 1;
         }
     }
 
@@ -66,10 +69,10 @@ fn parse_input_path_group_v0(
         return Err(InvalidInputReasonV0::InputValidationFailed);
     }
 
-    let normalized =
+    let mut normalized =
         normalize_path_v0(&path_bytes).map_err(|_| InvalidInputReasonV0::InputValidationFailed)?;
     if !normalized.ends_with(".tex") {
-        return Err(InvalidInputReasonV0::InputValidationFailed);
+        normalized.push_str(".tex");
     }
     Ok((normalized, index))
 }
