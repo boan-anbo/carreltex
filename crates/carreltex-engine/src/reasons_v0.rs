@@ -25,6 +25,8 @@ pub(crate) enum InvalidInputReasonV0 {
     MacroTheUnsupported,
     MacroXdefUnsupported,
     MacroNoexpandUnsupported,
+    MacroIfnumUnsupported,
+    MacroIfDepthExceeded,
 }
 
 pub(crate) fn invalid_log_bytes_v0(reason: InvalidInputReasonV0) -> &'static [u8] {
@@ -74,5 +76,7 @@ pub(crate) fn invalid_log_bytes_v0(reason: InvalidInputReasonV0) -> &'static [u8
         InvalidInputReasonV0::MacroNoexpandUnsupported => {
             b"INVALID_INPUT: macro_noexpand_unsupported"
         }
+        InvalidInputReasonV0::MacroIfnumUnsupported => b"INVALID_INPUT: macro_ifnum_unsupported",
+        InvalidInputReasonV0::MacroIfDepthExceeded => b"INVALID_INPUT: macro_if_depth_exceeded",
     }
 }
