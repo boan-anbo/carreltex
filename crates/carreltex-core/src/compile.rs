@@ -1,6 +1,7 @@
 use crate::mount::Error;
 
 pub const MAX_LOG_BYTES_V0: u32 = 1024 * 1024;
+pub const MAX_ARTIFACT_BYTES_V0: usize = 32 * 1024 * 1024;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CompileStatus {
@@ -45,6 +46,10 @@ pub fn truncate_log_bytes_v0(log_bytes: &[u8], max_log_bytes: u32) -> Vec<u8> {
         return log_bytes.to_vec();
     }
     log_bytes[..max].to_vec()
+}
+
+pub fn artifact_bytes_within_cap_v0(bytes: &[u8]) -> bool {
+    bytes.len() <= MAX_ARTIFACT_BYTES_V0
 }
 
 fn build_compile_report_json(status: CompileStatus, missing_components: &[&str]) -> String {
@@ -93,20 +98,32 @@ pub fn validate_compile_report_json(report_json: &str) -> Result<(), Error> {
     if report_json.trim().is_empty() {
         return Err(Error::InvalidInput);
     }
-    if !report_json.contains("\"status\"") {
-        return Err(Error::InvalidInput);
-    }
     if !report_json.contains("\"missing_components\"") {
         return Err(Error::InvalidInput);
     }
+
+    let status_tokens = [
+        "\"status\":\"OK\"",
+        "\"status\":\"INVALID_INPUT\"",
+        "\"status\":\"NOT_IMPLEMENTED\"",
+    ];
+    let status_match_count = status_tokens
+        .iter()
+        .filter(|token| report_json.contains(**token))
+        .count();
+    if status_match_count != 1 {
+        return Err(Error::InvalidInput);
+    }
+
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
-        build_compile_result_v0, truncate_log_bytes_v0, validate_compile_report_json,
-        CompileRequestV0, CompileStatus, MAX_LOG_BYTES_V0,
+        artifact_bytes_within_cap_v0, build_compile_result_v0, truncate_log_bytes_v0,
+        validate_compile_report_json, CompileRequestV0, CompileStatus, MAX_ARTIFACT_BYTES_V0,
+        MAX_LOG_BYTES_V0,
     };
 
     #[test]
@@ -152,10 +169,34 @@ mod tests {
     }
 
     #[test]
-    fn validate_compile_report_json_rejects_missing_keys() {
+    fn validate_compile_report_json_rejects_missing_keys_or_unknown_status() {
         assert!(validate_compile_report_json("{\"status\":\"OK\"}").is_err());
+        assert!(validate_compile_report_json("{\"missing_components\":[],\"status\":\"UNKNOWN\"}").is_err());
         assert!(validate_compile_report_json("{\"missing_components\":[]}").is_err());
         assert!(validate_compile_report_json("").is_err());
+    }
+
+    #[test]
+    fn validate_compile_report_json_rejects_multiple_status_tokens() {
+        let bad = "{\"status\":\"OK\",\"status\":\"INVALID_INPUT\",\"missing_components\":[]}";
+        assert!(validate_compile_report_json(bad).is_err());
+    }
+
+    #[test]
+    fn validate_compile_report_json_accepts_single_known_status() {
+        assert!(validate_compile_report_json("{\"status\":\"OK\",\"missing_components\":[]}").is_ok());
+        assert!(
+            validate_compile_report_json(
+                "{\"status\":\"INVALID_INPUT\",\"missing_components\":[]}"
+            )
+            .is_ok()
+        );
+        assert!(
+            validate_compile_report_json(
+                "{\"status\":\"NOT_IMPLEMENTED\",\"missing_components\":[\"tex-engine\"]}"
+            )
+            .is_ok()
+        );
     }
 
     #[test]
@@ -206,5 +247,14 @@ mod tests {
             result.report_json,
             "{\"status\":\"NOT_IMPLEMENTED\",\"missing_components\":[\"tex-engine\"]}"
         );
+    }
+
+    #[test]
+    fn artifact_bytes_within_cap_honors_limit() {
+        let bytes = vec![0u8; MAX_ARTIFACT_BYTES_V0];
+        assert!(artifact_bytes_within_cap_v0(&bytes));
+
+        let bytes = vec![0u8; MAX_ARTIFACT_BYTES_V0 + 1];
+        assert!(!artifact_bytes_within_cap_v0(&bytes));
     }
 }
