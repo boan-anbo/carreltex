@@ -1,4 +1,5 @@
 mod input_expand_v0;
+mod ifnum_v0;
 mod macro_expand_v0;
 mod stats_v0;
 mod trace_v0;
