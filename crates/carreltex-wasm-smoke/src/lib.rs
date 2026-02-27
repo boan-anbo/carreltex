@@ -390,6 +390,7 @@ fn store_compile_result_or_fail_closed(
     set_last_report_bytes(report_json);
     set_last_log_bytes(log_bytes);
     set_last_xdv_bytes(xdv_bytes);
+    set_last_events_bytes(&[]);
     status as i32
 }
 
