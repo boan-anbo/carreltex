@@ -117,6 +117,29 @@ export function runTokenizerCases(ctx, helpers) {
   }
 
   if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before tokenizer control-symbol-underscore case failed');
+  }
+  const underscoreMainBytes = new TextEncoder().encode('\\documentclass{article}\n\\begin{document}\nHello.\\_XYZ\n\\end{document}\n');
+  if (addMountedFile('main.tex', underscoreMainBytes, 'tokenizer_control_symbol_underscore_main') !== 0) {
+    throw new Error('mount_add_file(tokenizer control-symbol-underscore main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) {
+    throw new Error('mount_finalize for tokenizer control-symbol-underscore case failed');
+  }
+  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(tokenizer control-symbol-underscore)');
+  {
+    const logBytes = readCompileLogBytes();
+    const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(tokenizer control-symbol-underscore)');
+    if (helloBaselineCharCount === null) {
+      throw new Error('helloBaselineCharCount not initialized for tokenizer control-symbol-underscore case');
+    }
+    if (stats.char_count !== helloBaselineCharCount + 4) {
+      throw new Error(`compile_main(tokenizer control-symbol-underscore) char_count delta expected +4, got baseline=${helloBaselineCharCount}, current=${stats.char_count}`);
+    }
+    assertMainXdvArtifactEmpty('compile_main(tokenizer control-symbol-underscore)');
+  }
+
+  if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer CRLF normalization case failed');
   }
   const crlfMainBytes = new TextEncoder().encode('\\documentclass{article}\n\\begin{document}\nA\r\nB\n\\end{document}\n');
