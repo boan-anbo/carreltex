@@ -383,6 +383,9 @@ expectNotImplemented(compileMain(), 'compile_main_v0');
   if (logBytes.length <= 0 || !logText.startsWith('NOT_IMPLEMENTED:')) {
     throw new Error('compile_main log expected non-empty NOT_IMPLEMENTED prefix');
   }
+  if (logBytes.length > 1024) {
+    throw new Error(`compile_main log exceeds default max_log_bytes: ${logBytes.length}`);
+  }
   assertMainXdvArtifactEmpty('compile_main');
 }
 
