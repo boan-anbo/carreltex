@@ -2,8 +2,9 @@ pub mod tex;
 
 use crate::tex::tokenize_v0::{tokenize_v0, TokenV0};
 use carreltex_core::{
-    build_compile_result_v0, build_tex_stats_json_v0, truncate_log_bytes_v0, CompileRequestV0,
-    CompileResultV0, CompileStatus, Mount, DEFAULT_COMPILE_MAIN_MAX_LOG_BYTES_V0, MAX_LOG_BYTES_V0,
+    build_compile_result_v0, build_tex_stats_json_v0, normalize_path_v0, truncate_log_bytes_v0,
+    CompileRequestV0, CompileResultV0, CompileStatus, Mount, DEFAULT_COMPILE_MAIN_MAX_LOG_BYTES_V0,
+    MAX_LOG_BYTES_V0,
 };
 
 const MISSING_COMPONENTS_V0: &[&str] = &["tex-engine"];
@@ -17,6 +18,7 @@ enum InvalidInputReasonV0 {
     EntrypointMissing,
     TokenizeFailed,
     StatsBuildFailed,
+    InputValidationFailed,
 }
 
 fn invalid_log_bytes_v0(reason: InvalidInputReasonV0) -> &'static [u8] {
@@ -26,6 +28,7 @@ fn invalid_log_bytes_v0(reason: InvalidInputReasonV0) -> &'static [u8] {
         InvalidInputReasonV0::EntrypointMissing => b"INVALID_INPUT: entrypoint_missing",
         InvalidInputReasonV0::TokenizeFailed => b"INVALID_INPUT: tokenize_failed",
         InvalidInputReasonV0::StatsBuildFailed => b"INVALID_INPUT: stats_build_failed",
+        InvalidInputReasonV0::InputValidationFailed => b"INVALID_INPUT: input_validation_failed",
     }
 }
 
@@ -49,12 +52,13 @@ pub fn compile_main_v0(mount: &mut Mount) -> CompileResultV0 {
 }
 
 pub fn compile_request_v0(mount: &mut Mount, req: &CompileRequestV0) -> CompileResultV0 {
-    // INVALID_INPUT reason precedence SSOT (A-E):
+    // INVALID_INPUT reason precedence SSOT (A-F):
     // A) request validation
     // B) mount finalize
     // C) entrypoint read
     // D) tokenize
     // E) stats build/group-balance
+    // F) input validation
     if req.entrypoint != "main.tex" || req.source_date_epoch == 0 || req.max_log_bytes == 0 {
         return invalid_result_v0(req.max_log_bytes, InvalidInputReasonV0::RequestInvalid);
     }
@@ -84,6 +88,12 @@ pub fn compile_request_v0(mount: &mut Mount, req: &CompileRequestV0) -> CompileR
     if tex_stats_json.is_empty() {
         return invalid_result_v0(req.max_log_bytes, InvalidInputReasonV0::StatsBuildFailed);
     }
+    if validate_input_calls_v0(&tokens, mount).is_err() {
+        return invalid_result_v0(
+            req.max_log_bytes,
+            InvalidInputReasonV0::InputValidationFailed,
+        );
+    }
 
     build_compile_result_v0(
         CompileStatus::NotImplemented,
@@ -92,6 +102,57 @@ pub fn compile_request_v0(mount: &mut Mount, req: &CompileRequestV0) -> CompileR
         vec![],
         tex_stats_json,
     )
+}
+
+fn validate_input_calls_v0(tokens: &[TokenV0], mount: &Mount) -> Result<(), InvalidInputReasonV0> {
+    let mut index = 0usize;
+    while index < tokens.len() {
+        let token = &tokens[index];
+        index += 1;
+        if !matches!(token, TokenV0::ControlSeq(name) if name.as_slice() == b"input") {
+            continue;
+        }
+
+        if !matches!(tokens.get(index), Some(TokenV0::BeginGroup)) {
+            return Err(InvalidInputReasonV0::InputValidationFailed);
+        }
+        index += 1;
+
+        let mut path_bytes = Vec::new();
+        loop {
+            match tokens.get(index) {
+                Some(TokenV0::Char(byte)) => {
+                    path_bytes.push(*byte);
+                    index += 1;
+                }
+                Some(TokenV0::EndGroup) => {
+                    index += 1;
+                    break;
+                }
+                Some(TokenV0::Space)
+                | Some(TokenV0::ControlSeq(_))
+                | Some(TokenV0::BeginGroup)
+                | None => {
+                    return Err(InvalidInputReasonV0::InputValidationFailed);
+                }
+            }
+        }
+
+        if path_bytes.is_empty() {
+            return Err(InvalidInputReasonV0::InputValidationFailed);
+        }
+
+        let normalized = normalize_path_v0(&path_bytes)
+            .map_err(|_| InvalidInputReasonV0::InputValidationFailed)?;
+        if !normalized.ends_with(".tex") {
+            return Err(InvalidInputReasonV0::InputValidationFailed);
+        }
+        match mount.has_file(normalized.as_bytes()) {
+            Ok(true) => {}
+            _ => return Err(InvalidInputReasonV0::InputValidationFailed),
+        }
+    }
+    Ok(())
 }
 
 fn build_tex_stats_from_tokens_v0(tokens: &[TokenV0]) -> Result<String, ()> {
@@ -371,5 +432,47 @@ mod tests {
         assert!(result.tex_stats_json.contains("\"begin_group_count\":"));
         assert!(result.tex_stats_json.contains("\"end_group_count\":"));
         assert!(result.tex_stats_json.contains("\"max_group_depth\":"));
+    }
+
+    #[test]
+    fn input_valid_when_file_exists() {
+        let mut mount = Mount::default();
+        let main_with_input =
+            b"\\documentclass{article}\n\\begin{document}\n\\input{sub.tex}\n\\end{document}\n";
+        assert!(mount.add_file(b"main.tex", main_with_input).is_ok());
+        assert!(mount.add_file(b"sub.tex", b"Sub content\n").is_ok());
+
+        let result = compile_request_v0(&mut mount, &valid_request());
+        assert_eq!(result.status, CompileStatus::NotImplemented);
+        assert!(result.log_bytes.starts_with(b"NOT_IMPLEMENTED:"));
+    }
+
+    #[test]
+    fn input_missing_file_is_invalid() {
+        let mut mount = Mount::default();
+        let main_with_missing_input =
+            b"\\documentclass{article}\n\\begin{document}\n\\input{missing.tex}\n\\end{document}\n";
+        assert!(mount.add_file(b"main.tex", main_with_missing_input).is_ok());
+
+        let result = compile_request_v0(&mut mount, &valid_request());
+        assert_eq!(result.status, CompileStatus::InvalidInput);
+        assert!(result.log_bytes.starts_with(b"INVALID_INPUT:"));
+        assert!(result.log_bytes.ends_with(b"input_validation_failed"));
+    }
+
+    #[test]
+    fn input_invalid_syntax_is_invalid() {
+        let cases: [&[u8]; 3] = [
+            b"\\documentclass{article}\n\\begin{document}\n\\input sub.tex\n\\end{document}\n",
+            b"\\documentclass{article}\n\\begin{document}\n\\input{}\n\\end{document}\n",
+            b"\\documentclass{article}\n\\begin{document}\n\\input{a b.tex}\n\\end{document}\n",
+        ];
+        for main in cases {
+            let mut mount = Mount::default();
+            assert!(mount.add_file(b"main.tex", main).is_ok());
+            let result = compile_request_v0(&mut mount, &valid_request());
+            assert_eq!(result.status, CompileStatus::InvalidInput);
+            assert!(result.log_bytes.ends_with(b"input_validation_failed"));
+        }
     }
 }
