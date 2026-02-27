@@ -3,8 +3,8 @@ pub mod tex;
 use crate::tex::tokenize_v0::{tokenize_v0, TokenV0, MAX_TOKENS_V0};
 use carreltex_core::{
     build_compile_result_v0, build_tex_stats_json_v0, normalize_path_v0, truncate_log_bytes_v0,
-    CompileRequestV0, CompileResultV0, CompileStatus, Mount, DEFAULT_COMPILE_MAIN_MAX_LOG_BYTES_V0,
-    MAX_LOG_BYTES_V0,
+    validate_input_trace_json_v0, CompileRequestV0, CompileResultV0, CompileStatus, Mount,
+    DEFAULT_COMPILE_MAIN_MAX_LOG_BYTES_V0, MAX_LOG_BYTES_V0,
 };
 
 const MISSING_COMPONENTS_V0: &[&str] = &["tex-engine"];
@@ -153,10 +153,22 @@ pub fn compile_request_v0(mount: &mut Mount, req: &CompileRequestV0) -> CompileR
     if tex_stats_json.is_empty() {
         return invalid_result_v0(req.max_log_bytes, InvalidInputReasonV0::StatsBuildFailed);
     }
-    let mut not_implemented_log = Vec::new();
-    not_implemented_log.extend_from_slice(NOT_IMPLEMENTED_LOG_BYTES);
-    not_implemented_log.extend_from_slice(INPUT_TRACE_PREFIX_BYTES);
-    not_implemented_log.extend_from_slice(build_input_trace_json_v0(&input_trace).as_bytes());
+    let trace_json = build_input_trace_json_v0(&input_trace);
+    if validate_input_trace_json_v0(&trace_json).is_err() {
+        return invalid_result_v0(req.max_log_bytes, InvalidInputReasonV0::StatsBuildFailed);
+    }
+    let mut not_implemented_log = NOT_IMPLEMENTED_LOG_BYTES.to_vec();
+    let mut trace_line = Vec::new();
+    trace_line.extend_from_slice(INPUT_TRACE_PREFIX_BYTES);
+    trace_line.extend_from_slice(trace_json.as_bytes());
+    let allowed = req.max_log_bytes as usize;
+    if not_implemented_log
+        .len()
+        .checked_add(trace_line.len())
+        .is_some_and(|total| total <= allowed)
+    {
+        not_implemented_log.extend_from_slice(&trace_line);
+    }
     build_compile_result_v0(
         CompileStatus::NotImplemented,
         MISSING_COMPONENTS_V0,
@@ -562,8 +574,21 @@ mod tests {
         assert_eq!(result.status, CompileStatus::NotImplemented);
         assert_eq!(result.log_bytes.len(), 8);
         assert_eq!(result.log_bytes, b"NOT_IMPL".to_vec());
+        assert!(!String::from_utf8_lossy(&result.log_bytes).contains("INPUT_TRACE_V0:"));
         assert!(result.main_xdv_bytes.is_empty());
         assert!(!result.tex_stats_json.is_empty());
+    }
+
+    #[test]
+    fn compile_request_trace_is_emitted_when_log_budget_allows() {
+        let mut mount = Mount::default();
+        assert!(mount.add_file(b"main.tex", valid_main()).is_ok());
+
+        let result = compile_request_v0(&mut mount, &valid_request());
+        assert_eq!(result.status, CompileStatus::NotImplemented);
+        let log = String::from_utf8_lossy(&result.log_bytes);
+        assert!(log.starts_with("NOT_IMPLEMENTED:"));
+        assert!(log.contains("INPUT_TRACE_V0:"));
     }
 
     #[test]
