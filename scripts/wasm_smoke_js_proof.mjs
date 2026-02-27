@@ -627,6 +627,27 @@ expectInvalid(compileMain(), 'compile_main_v0(invalid tokenize main.tex)');
 }
 
 if (mountReset() !== 0) {
+  throw new Error('mount_reset before whitespace-only compile check failed');
+}
+const whitespaceOnlyMainBytes = new TextEncoder().encode(' \n\t');
+if (addMountedFile('main.tex', whitespaceOnlyMainBytes, 'invalid_whitespace_main') !== 0) {
+  throw new Error('mount_add_file(whitespace-only main.tex) failed');
+}
+const whitespaceFinalizeCode = mountFinalize();
+if (whitespaceFinalizeCode !== 0 && whitespaceFinalizeCode !== 1) {
+  throw new Error(`mount_finalize(whitespace-only main.tex) unexpected code=${whitespaceFinalizeCode}`);
+}
+expectInvalid(compileMain(), 'compile_main_v0(whitespace-only main.tex)');
+{
+  const logBytes = readCompileLogBytes();
+  const logText = new TextDecoder().decode(logBytes);
+  if (!logText.startsWith('INVALID_INPUT:') || !logText.includes('mount_finalize_failed')) {
+    throw new Error(`compile_main whitespace-only log mismatch: ${logText}`);
+  }
+  assertNoEvents('compile_main_v0(whitespace-only main.tex)');
+}
+
+if (mountReset() !== 0) {
   throw new Error('mount_reset for negative cases failed');
 }
 
