@@ -69,4 +69,23 @@ export function runTokenizerCases(ctx, helpers) {
     }
     assertNoEvents('compile_main_v0(tokenizer unsupported-caret)');
   }
+
+  if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before tokenizer non-ascii control-seq case failed');
+  }
+  if (addMountedFile('main.tex', new TextEncoder().encode('\\def\\^^ff{XYZ}'), 'tokenizer_non_ascii_controlseq_main') !== 0) {
+    throw new Error('mount_add_file(tokenizer non-ascii control-seq main.tex) failed');
+  }
+  const nonAsciiFinalizeCode = ctx.mountFinalize();
+  if (nonAsciiFinalizeCode !== 0 && nonAsciiFinalizeCode !== 1) {
+    throw new Error(`mount_finalize(tokenizer non-ascii control-seq) unexpected code=${nonAsciiFinalizeCode}`);
+  }
+  expectInvalid(ctx.compileMain(), 'compile_main_v0(tokenizer non-ascii control-seq)');
+  {
+    const logText = new TextDecoder().decode(readCompileLogBytes());
+    if (!logText.startsWith('INVALID_INPUT:') || !logText.includes('tokenize_failed')) {
+      throw new Error(`compile_main tokenizer non-ascii control-seq log mismatch: ${logText}`);
+    }
+    assertNoEvents('compile_main_v0(tokenizer non-ascii control-seq)');
+  }
 }
