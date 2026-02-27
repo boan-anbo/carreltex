@@ -10,6 +10,7 @@ pub enum TokenV0 {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TokenizeErrorV0 {
     InvalidInput,
+    CaretNotSupported,
     TooManyTokens,
 }
 
@@ -31,7 +32,8 @@ fn push_token(tokens: &mut Vec<TokenV0>, token: TokenV0) -> Result<(), TokenizeE
 ///
 /// v0 rules:
 /// - Rejects NUL (`0x00`) anywhere (`InvalidInput`).
-/// - Rejects `^^` byte sequence anywhere (`InvalidInput`).
+/// - Decodes `^^hh` where `h` is lowercase hex (`[0-9a-f]`) to one byte.
+/// - Any other `^^` form is `CaretNotSupported`.
 /// - `%` starts a comment that is skipped until `\n` or EOF; the newline itself
 ///   is not consumed by the comment and is processed normally.
 /// - Whitespace bytes (`' '`, `\t`, `\r`, `\n`) collapse into one `Space`.
@@ -46,20 +48,16 @@ fn push_token(tokens: &mut Vec<TokenV0>, token: TokenV0) -> Result<(), TokenizeE
 /// - All other bytes become `Char(byte)`.
 /// - Fails with `TooManyTokens` if output would exceed `MAX_TOKENS_V0`.
 pub fn tokenize_v0(input: &[u8]) -> Result<Vec<TokenV0>, TokenizeErrorV0> {
-    if input.contains(&0) {
-        return Err(TokenizeErrorV0::InvalidInput);
-    }
-    if input.windows(2).any(|pair| pair == b"^^") {
-        return Err(TokenizeErrorV0::InvalidInput);
-    }
-
     let mut tokens = Vec::new();
     let mut index = 0usize;
     while index < input.len() {
-        let byte = input[index];
+        let (byte, next_index) = decode_caret_hex_v0(input, index)?;
+        if byte == 0 {
+            return Err(TokenizeErrorV0::InvalidInput);
+        }
 
         if byte == b'%' {
-            index += 1;
+            index = next_index;
             while index < input.len() && input[index] != b'\n' {
                 index += 1;
             }
@@ -67,9 +65,13 @@ pub fn tokenize_v0(input: &[u8]) -> Result<Vec<TokenV0>, TokenizeErrorV0> {
         }
 
         if is_whitespace(byte) {
-            index += 1;
-            while index < input.len() && is_whitespace(input[index]) {
-                index += 1;
+            index = next_index;
+            while index < input.len() {
+                let (next_byte, following_index) = decode_caret_hex_v0(input, index)?;
+                if !is_whitespace(next_byte) {
+                    break;
+                }
+                index = following_index;
             }
             push_token(&mut tokens, TokenV0::Space)?;
             continue;
@@ -78,47 +80,87 @@ pub fn tokenize_v0(input: &[u8]) -> Result<Vec<TokenV0>, TokenizeErrorV0> {
         match byte {
             b'{' => {
                 push_token(&mut tokens, TokenV0::BeginGroup)?;
-                index += 1;
+                index = next_index;
             }
             b'}' => {
                 push_token(&mut tokens, TokenV0::EndGroup)?;
-                index += 1;
+                index = next_index;
             }
             b'\\' => {
-                if index + 1 >= input.len() {
+                index = next_index;
+                if index >= input.len() {
                     return Err(TokenizeErrorV0::InvalidInput);
                 }
 
-                let next = input[index + 1];
+                let (next, after_next_index) = decode_caret_hex_v0(input, index)?;
+                if next == 0 {
+                    return Err(TokenizeErrorV0::InvalidInput);
+                }
                 if next.is_ascii_alphabetic() {
-                    let mut end = index + 2;
-                    while end < input.len() && input[end].is_ascii_alphabetic() {
-                        end += 1;
+                    let mut control_word = Vec::<u8>::new();
+                    control_word.push(next);
+                    index = after_next_index;
+                    while index < input.len() {
+                        let (word_byte, following_index) = decode_caret_hex_v0(input, index)?;
+                        if word_byte == 0 {
+                            return Err(TokenizeErrorV0::InvalidInput);
+                        }
+                        if !word_byte.is_ascii_alphabetic() {
+                            break;
+                        }
+                        control_word.push(word_byte);
+                        index = following_index;
                     }
-                    let control_word = &input[index + 1..end];
-                    if control_word == b"verb" {
+                    if control_word.as_slice() == b"verb" {
                         return Err(TokenizeErrorV0::InvalidInput);
                     }
-                    push_token(&mut tokens, TokenV0::ControlSeq(control_word.to_vec()))?;
-                    index = end;
-                    if index < input.len() && is_whitespace(input[index]) {
-                        while index < input.len() && is_whitespace(input[index]) {
-                            index += 1;
+                    push_token(&mut tokens, TokenV0::ControlSeq(control_word))?;
+                    if index < input.len() {
+                        let (space_probe, _) = decode_caret_hex_v0(input, index)?;
+                        if is_whitespace(space_probe) {
+                            while index < input.len() {
+                                let (space_byte, following_index) = decode_caret_hex_v0(input, index)?;
+                                if !is_whitespace(space_byte) {
+                                    break;
+                                }
+                                index = following_index;
+                            }
                         }
                     }
                 } else {
                     push_token(&mut tokens, TokenV0::ControlSeq(vec![next]))?;
-                    index += 2;
+                    index = after_next_index;
                 }
             }
             _ => {
                 push_token(&mut tokens, TokenV0::Char(byte))?;
-                index += 1;
+                index = next_index;
             }
         }
     }
 
     Ok(tokens)
+}
+
+fn decode_caret_hex_v0(input: &[u8], index: usize) -> Result<(u8, usize), TokenizeErrorV0> {
+    let byte = input[index];
+    if byte != b'^' || index + 1 >= input.len() || input[index + 1] != b'^' {
+        return Ok((byte, index + 1));
+    }
+    if index + 3 >= input.len() {
+        return Err(TokenizeErrorV0::CaretNotSupported);
+    }
+    let high = parse_lower_hex_nibble_v0(input[index + 2])?;
+    let low = parse_lower_hex_nibble_v0(input[index + 3])?;
+    Ok((((high << 4) | low), index + 4))
+}
+
+fn parse_lower_hex_nibble_v0(byte: u8) -> Result<u8, TokenizeErrorV0> {
+    match byte {
+        b'0'..=b'9' => Ok(byte - b'0'),
+        b'a'..=b'f' => Ok(byte - b'a' + 10),
+        _ => Err(TokenizeErrorV0::CaretNotSupported),
+    }
 }
 
 #[cfg(test)]
@@ -182,8 +224,28 @@ mod tests {
     }
 
     #[test]
-    fn double_caret_sequence_is_invalid_input() {
-        assert_eq!(tokenize_v0(b"a^^b"), Err(TokenizeErrorV0::InvalidInput));
+    fn caret_hex_sequence_decodes_to_single_byte() {
+        let tokens = tokenize_v0(b"A^^41B").expect("tokenize should succeed");
+        assert_eq!(
+            tokens,
+            vec![TokenV0::Char(b'A'), TokenV0::Char(b'A'), TokenV0::Char(b'B')]
+        );
+    }
+
+    #[test]
+    fn caret_hex_ff_is_allowed() {
+        let tokens = tokenize_v0(b"^^ff").expect("tokenize should succeed");
+        assert_eq!(tokens, vec![TokenV0::Char(0xff)]);
+    }
+
+    #[test]
+    fn caret_hex_zero_decodes_to_nul_and_is_invalid() {
+        assert_eq!(tokenize_v0(b"^^00"), Err(TokenizeErrorV0::InvalidInput));
+    }
+
+    #[test]
+    fn unsupported_caret_form_is_caret_not_supported() {
+        assert_eq!(tokenize_v0(b"^^ZZ"), Err(TokenizeErrorV0::CaretNotSupported));
     }
 
     #[test]

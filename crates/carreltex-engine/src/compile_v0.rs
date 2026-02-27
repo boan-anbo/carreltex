@@ -17,7 +17,7 @@ mod ifx_v0_tests;
 #[cfg(test)]
 mod meaning_v0_tests;
 use crate::reasons_v0::{invalid_log_bytes_v0, InvalidInputReasonV0};
-use crate::tex::tokenize_v0::{tokenize_v0, TokenV0, MAX_TOKENS_V0};
+use crate::tex::tokenize_v0::{tokenize_v0, TokenV0, TokenizeErrorV0, MAX_TOKENS_V0};
 use carreltex_core::{
     build_compile_result_v0, truncate_log_bytes_v0, CompileRequestV0, CompileResultV0,
     CompileStatus, Mount, DEFAULT_COMPILE_MAIN_MAX_LOG_BYTES_V0, MAX_LOG_BYTES_V0,
@@ -73,9 +73,8 @@ pub fn compile_request_v0(mount: &mut Mount, req: &CompileRequestV0) -> CompileR
     };
     let tokens = match tokenize_v0(&entry_bytes) {
         Ok(tokens) => tokens,
-        Err(_) => {
-            return invalid_result_v0(req.max_log_bytes, InvalidInputReasonV0::TokenizeFailed)
-        }
+        Err(TokenizeErrorV0::CaretNotSupported) => return invalid_result_v0(req.max_log_bytes, InvalidInputReasonV0::TokenizerCaretNotSupported),
+        Err(_) => return invalid_result_v0(req.max_log_bytes, InvalidInputReasonV0::TokenizeFailed),
     };
     let (expanded_tokens, input_trace) = match expand_inputs_v0(&tokens, mount) {
         Ok(result) => result,
