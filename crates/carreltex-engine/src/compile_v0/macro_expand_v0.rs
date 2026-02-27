@@ -85,6 +85,18 @@ fn expand_stream_v0(
                 )?;
                 index = next_index;
             }
+            TokenV0::ControlSeq(name) if name.as_slice() == b"csname" => {
+                let (generated_token, next_index) = parse_csname_v0(tokens, index)?;
+                expand_stream_v0(
+                    &[generated_token],
+                    macro_frames,
+                    out,
+                    active_macros,
+                    expansion_count,
+                    depth + 1,
+                )?;
+                index = next_index;
+            }
             TokenV0::ControlSeq(name) if name.as_slice() == b"global" => {
                 index = parse_global_prefixed_macro_binding_v0(tokens, index, macro_frames)?;
             }
@@ -345,6 +357,28 @@ fn parse_expandafter_v0(
         vec![TokenV0::ControlSeq(second_name), TokenV0::ControlSeq(first_name)],
         second_index + 1,
     ))
+}
+
+fn parse_csname_v0(
+    tokens: &[TokenV0],
+    csname_index: usize,
+) -> Result<(TokenV0, usize), InvalidInputReasonV0> {
+    let mut name_bytes = Vec::<u8>::new();
+    let mut index = csname_index + 1;
+    while index < tokens.len() {
+        match tokens.get(index) {
+            Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"endcsname" => {
+                if name_bytes.is_empty() {
+                    return Err(InvalidInputReasonV0::MacroCsnameUnsupported);
+                }
+                return Ok((TokenV0::ControlSeq(name_bytes), index + 1));
+            }
+            Some(TokenV0::Char(byte)) => name_bytes.push(*byte),
+            _ => return Err(InvalidInputReasonV0::MacroCsnameUnsupported),
+        }
+        index += 1;
+    }
+    Err(InvalidInputReasonV0::MacroCsnameUnsupported)
 }
 
 fn snapshot_let_binding_v0(
