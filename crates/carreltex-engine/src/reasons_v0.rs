@@ -1,0 +1,28 @@
+#[derive(Clone, Copy)]
+pub(crate) enum InvalidInputReasonV0 {
+    MountFinalizeFailed,
+    RequestInvalid,
+    EntrypointMissing,
+    TokenizeFailed,
+    StatsBuildFailed,
+    InputValidationFailed,
+    InputCycleFailed,
+    InputDepthExceeded,
+    InputExpansionsExceeded,
+}
+
+pub(crate) fn invalid_log_bytes_v0(reason: InvalidInputReasonV0) -> &'static [u8] {
+    match reason {
+        InvalidInputReasonV0::MountFinalizeFailed => b"INVALID_INPUT: mount_finalize_failed",
+        InvalidInputReasonV0::RequestInvalid => b"INVALID_INPUT: request_invalid",
+        InvalidInputReasonV0::EntrypointMissing => b"INVALID_INPUT: entrypoint_missing",
+        InvalidInputReasonV0::TokenizeFailed => b"INVALID_INPUT: tokenize_failed",
+        InvalidInputReasonV0::StatsBuildFailed => b"INVALID_INPUT: stats_build_failed",
+        InvalidInputReasonV0::InputValidationFailed => b"INVALID_INPUT: input_validation_failed",
+        InvalidInputReasonV0::InputCycleFailed => b"INVALID_INPUT: input_cycle_failed",
+        InvalidInputReasonV0::InputDepthExceeded => b"INVALID_INPUT: input_depth_exceeded",
+        InvalidInputReasonV0::InputExpansionsExceeded => {
+            b"INVALID_INPUT: input_expansions_exceeded"
+        }
+    }
+}

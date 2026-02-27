@@ -30,5 +30,8 @@ jobs:
       - name: Cache Rust artifacts
         uses: Swatinem/rust-cache@v2
 
+      - name: Run LOC guard
+        run: ./scripts/loc_guard.sh
+
       - name: Run v0 proof bundle
         run: ./scripts/proof_v0.sh

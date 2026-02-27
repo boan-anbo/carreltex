@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
+"$ROOT_DIR/scripts/loc_guard.sh"
 cargo test --manifest-path "$ROOT_DIR/crates/carreltex-core/Cargo.toml"
 cargo test --manifest-path "$ROOT_DIR/crates/carreltex-engine/Cargo.toml"
 "$ROOT_DIR/scripts/proof_wasm_smoke.sh"
