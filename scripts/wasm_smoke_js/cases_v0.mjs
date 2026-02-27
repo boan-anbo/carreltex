@@ -530,6 +530,33 @@ export function runCasesV0(ctx, mem, helpers) {
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before macro global-prefix invalid case failed');
   }
+  const macroLetAliasMainBytes = new TextEncoder().encode('\\def\\foo{XYZ}\\let\\bar=\\foo\\bar');
+  if (addMountedFile('main.tex', macroLetAliasMainBytes, 'macro_let_alias_main') !== 0) {
+    throw new Error('mount_add_file(macro let-alias main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) {
+    throw new Error('mount_finalize for macro let-alias case failed');
+  }
+  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(macro let-alias)');
+  {
+    const report = readCompileReportJson();
+    if (report.status !== 'NOT_IMPLEMENTED') {
+      throw new Error(`compile_main(macro let-alias) report.status expected NOT_IMPLEMENTED, got ${report.status}`);
+    }
+    const logBytes = readCompileLogBytes();
+    const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(macro let-alias)');
+    if (gdefBaselineCharCount === null) {
+      throw new Error('gdefBaselineCharCount not initialized');
+    }
+    if (stats.char_count !== gdefBaselineCharCount + 3) {
+      throw new Error(`compile_main(macro let-alias) char_count delta expected +3, got baseline=${gdefBaselineCharCount}, current=${stats.char_count}`);
+    }
+    assertMainXdvArtifactEmpty('compile_main(macro let-alias)');
+  }
+
+  if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before macro global-prefix invalid case failed');
+  }
   const macroGlobalPrefixInvalidMainBytes = new TextEncoder().encode('\\global\\foo');
   if (addMountedFile('main.tex', macroGlobalPrefixInvalidMainBytes, 'macro_global_prefix_invalid_main') !== 0) {
     throw new Error('mount_add_file(macro global-prefix invalid main.tex) failed');
@@ -546,6 +573,27 @@ export function runCasesV0(ctx, mem, helpers) {
       throw new Error(`compile_main macro global-prefix invalid log mismatch: ${logText}`);
     }
     assertNoEvents('compile_main_v0(macro global-prefix invalid)');
+  }
+
+  if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before macro let unsupported case failed');
+  }
+  const macroLetUnsupportedMainBytes = new TextEncoder().encode('\\let\\a=Z');
+  if (addMountedFile('main.tex', macroLetUnsupportedMainBytes, 'macro_let_unsupported_main') !== 0) {
+    throw new Error('mount_add_file(macro let unsupported main.tex) failed');
+  }
+  const macroLetUnsupportedFinalizeCode = ctx.mountFinalize();
+  if (macroLetUnsupportedFinalizeCode !== 0 && macroLetUnsupportedFinalizeCode !== 1) {
+    throw new Error(`mount_finalize(macro let unsupported) unexpected code=${macroLetUnsupportedFinalizeCode}`);
+  }
+  expectInvalid(ctx.compileMain(), 'compile_main_v0(macro let unsupported)');
+  {
+    const logBytes = readCompileLogBytes();
+    const logText = new TextDecoder().decode(logBytes);
+    if (!logText.startsWith('INVALID_INPUT:') || !logText.includes('macro_let_unsupported')) {
+      throw new Error(`compile_main macro let unsupported log mismatch: ${logText}`);
+    }
+    assertNoEvents('compile_main_v0(macro let unsupported)');
   }
 
   if (ctx.mountReset() !== 0) {

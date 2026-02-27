@@ -13,8 +13,14 @@ struct MacroDefV0 {
     body_tokens: Vec<TokenV0>,
 }
 
+#[derive(Clone)]
+enum MacroBindingV0 {
+    Macro(MacroDefV0),
+    ControlSeqLiteral(Vec<u8>),
+}
+
 pub(crate) fn expand_macros_v0(tokens: &[TokenV0]) -> Result<Vec<TokenV0>, InvalidInputReasonV0> {
-    let mut macro_frames = Vec::<BTreeMap<Vec<u8>, MacroDefV0>>::new();
+    let mut macro_frames = Vec::<BTreeMap<Vec<u8>, MacroBindingV0>>::new();
     macro_frames.push(BTreeMap::new());
     let mut output = Vec::<TokenV0>::new();
     let mut active_macros = Vec::<Vec<u8>>::new();
@@ -32,7 +38,7 @@ pub(crate) fn expand_macros_v0(tokens: &[TokenV0]) -> Result<Vec<TokenV0>, Inval
 
 fn expand_stream_v0(
     tokens: &[TokenV0],
-    macro_frames: &mut Vec<BTreeMap<Vec<u8>, MacroDefV0>>,
+    macro_frames: &mut Vec<BTreeMap<Vec<u8>, MacroBindingV0>>,
     out: &mut Vec<TokenV0>,
     active_macros: &mut Vec<Vec<u8>>,
     expansion_count: &mut usize,
@@ -61,48 +67,58 @@ fn expand_stream_v0(
                 let is_global = name.as_slice() == b"gdef";
                 index = parse_def_v0(tokens, index, macro_frames, is_global)?;
             }
+            TokenV0::ControlSeq(name) if name.as_slice() == b"let" => {
+                index = parse_let_v0(tokens, index, macro_frames, false)?;
+            }
             TokenV0::ControlSeq(name) if name.as_slice() == b"global" => {
-                index = parse_global_prefixed_def_v0(tokens, index, macro_frames)?;
+                index = parse_global_prefixed_macro_binding_v0(tokens, index, macro_frames)?;
             }
             TokenV0::ControlSeq(name) => {
-                if let Some(macro_def) = lookup_macro_v0(macro_frames, name) {
-                    *expansion_count = expansion_count
-                        .checked_add(1)
-                        .ok_or(InvalidInputReasonV0::MacroExpansionsExceeded)?;
-                    if *expansion_count > MAX_MACRO_EXPANSIONS_V0 {
-                        return Err(InvalidInputReasonV0::MacroExpansionsExceeded);
-                    }
-                    if active_macros.iter().any(|active| active == name) {
-                        return Err(InvalidInputReasonV0::MacroCycleFailed);
-                    }
-                    let (expanded_body, next_index) = match macro_def.param_count {
-                        0 => (macro_def.body_tokens, index + 1),
-                        1 => {
-                            let (argument_tokens, argument_next_index) =
-                                parse_balanced_group_payload_v0(tokens, index + 1)?;
-                            let substituted_body = substitute_single_param_placeholders_v0(
-                                &macro_def.body_tokens,
-                                &argument_tokens,
-                            )?;
-                            (substituted_body, argument_next_index)
+                match lookup_macro_binding_v0(macro_frames, name) {
+                    Some(MacroBindingV0::Macro(macro_def)) => {
+                        *expansion_count = expansion_count
+                            .checked_add(1)
+                            .ok_or(InvalidInputReasonV0::MacroExpansionsExceeded)?;
+                        if *expansion_count > MAX_MACRO_EXPANSIONS_V0 {
+                            return Err(InvalidInputReasonV0::MacroExpansionsExceeded);
                         }
-                        _ => return Err(InvalidInputReasonV0::MacroValidationFailed),
-                    };
-                    active_macros.push(name.clone());
-                    let result = expand_stream_v0(
-                        &expanded_body,
-                        macro_frames,
-                        out,
-                        active_macros,
-                        expansion_count,
-                        depth + 1,
-                    );
-                    active_macros.pop();
-                    result?;
-                    index = next_index;
-                } else {
-                    push_checked_v0(out, tokens[index].clone())?;
-                    index += 1;
+                        if active_macros.iter().any(|active| active == name) {
+                            return Err(InvalidInputReasonV0::MacroCycleFailed);
+                        }
+                        let (expanded_body, next_index) = match macro_def.param_count {
+                            0 => (macro_def.body_tokens, index + 1),
+                            1 => {
+                                let (argument_tokens, argument_next_index) =
+                                    parse_balanced_group_payload_v0(tokens, index + 1)?;
+                                let substituted_body = substitute_single_param_placeholders_v0(
+                                    &macro_def.body_tokens,
+                                    &argument_tokens,
+                                )?;
+                                (substituted_body, argument_next_index)
+                            }
+                            _ => return Err(InvalidInputReasonV0::MacroValidationFailed),
+                        };
+                        active_macros.push(name.clone());
+                        let result = expand_stream_v0(
+                            &expanded_body,
+                            macro_frames,
+                            out,
+                            active_macros,
+                            expansion_count,
+                            depth + 1,
+                        );
+                        active_macros.pop();
+                        result?;
+                        index = next_index;
+                    }
+                    Some(MacroBindingV0::ControlSeqLiteral(target_name)) => {
+                        push_checked_v0(out, TokenV0::ControlSeq(target_name))?;
+                        index += 1;
+                    }
+                    None => {
+                        push_checked_v0(out, tokens[index].clone())?;
+                        index += 1;
+                    }
                 }
             }
             token => {
@@ -114,10 +130,10 @@ fn expand_stream_v0(
     Ok(())
 }
 
-fn parse_global_prefixed_def_v0(
+fn parse_global_prefixed_macro_binding_v0(
     tokens: &[TokenV0],
     global_index: usize,
-    macro_frames: &mut Vec<BTreeMap<Vec<u8>, MacroDefV0>>,
+    macro_frames: &mut Vec<BTreeMap<Vec<u8>, MacroBindingV0>>,
 ) -> Result<usize, InvalidInputReasonV0> {
     let mut index = global_index;
     while matches!(
@@ -127,18 +143,24 @@ fn parse_global_prefixed_def_v0(
         index += 1;
     }
 
-    let is_global = match tokens.get(index) {
-        Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"def" => true,
-        Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"gdef" => true,
+    match tokens.get(index) {
+        Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"def" => {
+            parse_def_v0(tokens, index, macro_frames, true)
+        }
+        Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"gdef" => {
+            parse_def_v0(tokens, index, macro_frames, true)
+        }
+        Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"let" => {
+            parse_let_v0(tokens, index, macro_frames, true)
+        }
         _ => return Err(InvalidInputReasonV0::MacroGlobalPrefixUnsupported),
-    };
-    parse_def_v0(tokens, index, macro_frames, is_global)
+    }
 }
 
 fn parse_def_v0(
     tokens: &[TokenV0],
     def_index: usize,
-    macro_frames: &mut Vec<BTreeMap<Vec<u8>, MacroDefV0>>,
+    macro_frames: &mut Vec<BTreeMap<Vec<u8>, MacroBindingV0>>,
     is_global: bool,
 ) -> Result<usize, InvalidInputReasonV0> {
     let name_index = def_index + 1;
@@ -193,28 +215,100 @@ fn parse_def_v0(
     }
     target_frame.insert(
         macro_name,
-        MacroDefV0 {
+        MacroBindingV0::Macro(MacroDefV0 {
             param_count,
             body_tokens,
-        },
+        }),
     );
     Ok(next_index)
 }
 
-fn lookup_macro_v0(
-    macro_frames: &[BTreeMap<Vec<u8>, MacroDefV0>],
+fn parse_let_v0(
+    tokens: &[TokenV0],
+    let_index: usize,
+    macro_frames: &mut Vec<BTreeMap<Vec<u8>, MacroBindingV0>>,
+    is_global: bool,
+) -> Result<usize, InvalidInputReasonV0> {
+    let alias_name = match tokens.get(let_index + 1) {
+        Some(TokenV0::ControlSeq(name)) => name.clone(),
+        _ => return Err(InvalidInputReasonV0::MacroValidationFailed),
+    };
+
+    let mut index = skip_space_tokens_v0(tokens, let_index + 2);
+    if matches!(tokens.get(index), Some(TokenV0::Char(b'='))) {
+        index = skip_space_tokens_v0(tokens, index + 1);
+    }
+
+    let target_name = match tokens.get(index) {
+        Some(TokenV0::ControlSeq(name)) => name.clone(),
+        _ => return Err(InvalidInputReasonV0::MacroLetUnsupported),
+    };
+    let resolved_binding = snapshot_let_binding_v0(&target_name, macro_frames)?;
+
+    let target_frame_index = if is_global {
+        0usize
+    } else {
+        macro_frames
+            .len()
+            .checked_sub(1)
+            .ok_or(InvalidInputReasonV0::MacroValidationFailed)?
+    };
+    let total_macro_defs = total_macro_defs_v0(macro_frames);
+    let target_frame = macro_frames
+        .get_mut(target_frame_index)
+        .ok_or(InvalidInputReasonV0::MacroValidationFailed)?;
+    if !target_frame.contains_key(&alias_name) && total_macro_defs >= MAX_MACROS_V0 {
+        return Err(InvalidInputReasonV0::MacroValidationFailed);
+    }
+    target_frame.insert(alias_name, resolved_binding);
+    Ok(index + 1)
+}
+
+fn snapshot_let_binding_v0(
+    target_name: &[u8],
+    macro_frames: &[BTreeMap<Vec<u8>, MacroBindingV0>],
+) -> Result<MacroBindingV0, InvalidInputReasonV0> {
+    let mut current = target_name.to_vec();
+    let mut seen = Vec::<Vec<u8>>::new();
+    loop {
+        if seen.iter().any(|entry| entry == &current) {
+            return Err(InvalidInputReasonV0::MacroCycleFailed);
+        }
+        let binding = lookup_macro_binding_v0(macro_frames, &current);
+        match binding {
+            Some(MacroBindingV0::Macro(definition)) => {
+                return Ok(MacroBindingV0::Macro(definition));
+            }
+            Some(MacroBindingV0::ControlSeqLiteral(target_name)) => {
+                seen.push(current);
+                current = target_name;
+            }
+            None => return Ok(MacroBindingV0::ControlSeqLiteral(current)),
+        }
+    }
+}
+
+fn lookup_macro_binding_v0(
+    macro_frames: &[BTreeMap<Vec<u8>, MacroBindingV0>],
     name: &[u8],
-) -> Option<MacroDefV0> {
+) -> Option<MacroBindingV0> {
     for frame in macro_frames.iter().rev() {
-        if let Some(macro_def) = frame.get(name) {
-            return Some(macro_def.clone());
+        if let Some(binding) = frame.get(name) {
+            return Some(binding.clone());
         }
     }
     None
 }
 
-fn total_macro_defs_v0(macro_frames: &[BTreeMap<Vec<u8>, MacroDefV0>]) -> usize {
+fn total_macro_defs_v0(macro_frames: &[BTreeMap<Vec<u8>, MacroBindingV0>]) -> usize {
     macro_frames.iter().map(|frame| frame.len()).sum()
+}
+
+fn skip_space_tokens_v0(tokens: &[TokenV0], mut index: usize) -> usize {
+    while matches!(tokens.get(index), Some(TokenV0::Space)) {
+        index += 1;
+    }
+    index
 }
 
 fn validate_macro_body_tokens_v0(
