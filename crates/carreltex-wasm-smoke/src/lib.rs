@@ -2,10 +2,11 @@ use std::sync::{Mutex, OnceLock};
 
 use carreltex_core::{
     append_event_v0, artifact_bytes_within_cap_v0, report_json_has_status_token_v0,
-    report_json_missing_components_is_empty_v0, validate_compile_report_json, validate_main_tex,
-    validate_tex_stats_json_v0, CompileRequestV0, CompileStatus, Mount,
-    DEFAULT_COMPILE_MAIN_MAX_LOG_BYTES_V0, EVENT_KIND_LOG_BYTES_V0, EVENT_KIND_TEX_STATS_JSON_V0,
-    MAX_LOG_BYTES_V0, MAX_TEX_STATS_JSON_BYTES_V0, MAX_WASM_ALLOC_BYTES_V0,
+    report_json_missing_components_is_empty_v0, validate_compile_report_json,
+    validate_input_trace_json_v0, validate_main_tex, validate_tex_stats_json_v0, CompileRequestV0,
+    CompileStatus, Mount, DEFAULT_COMPILE_MAIN_MAX_LOG_BYTES_V0, EVENT_KIND_LOG_BYTES_V0,
+    EVENT_KIND_TEX_STATS_JSON_V0, MAX_LOG_BYTES_V0, MAX_TEX_STATS_JSON_BYTES_V0,
+    MAX_WASM_ALLOC_BYTES_V0,
 };
 use carreltex_engine::{compile_main_v0, compile_request_v0};
 
@@ -312,6 +313,14 @@ fn write_report_for_status(status: CompileStatus) {
     set_last_events_bytes(&[]);
 }
 
+const TRACE_MARKER_V0: &[u8] = b"\nINPUT_TRACE_V0:";
+
+fn find_trace_marker_offset_v0(haystack: &[u8]) -> Option<usize> {
+    haystack
+        .windows(TRACE_MARKER_V0.len())
+        .position(|window| window == TRACE_MARKER_V0)
+}
+
 fn store_compile_result_or_fail_closed(
     report_json: &str,
     log_bytes: &[u8],
@@ -364,6 +373,23 @@ fn store_compile_result_or_fail_closed(
         CompileStatus::NotImplemented if validate_tex_stats_json_v0(tex_stats_json).is_err() => {
             write_report_for_status(CompileStatus::InvalidInput);
             return CompileStatus::InvalidInput as i32;
+        }
+        CompileStatus::NotImplemented => {
+            if let Some(marker_offset) = find_trace_marker_offset_v0(log_bytes) {
+                let trace_start = marker_offset + TRACE_MARKER_V0.len();
+                let trace_bytes = &log_bytes[trace_start..];
+                let trace_text = match core::str::from_utf8(trace_bytes) {
+                    Ok(value) => value,
+                    Err(_) => {
+                        write_report_for_status(CompileStatus::InvalidInput);
+                        return CompileStatus::InvalidInput as i32;
+                    }
+                };
+                if validate_input_trace_json_v0(trace_text).is_err() {
+                    write_report_for_status(CompileStatus::InvalidInput);
+                    return CompileStatus::InvalidInput as i32;
+                }
+            }
         }
         CompileStatus::Ok => {
             write_report_for_status(CompileStatus::InvalidInput);
