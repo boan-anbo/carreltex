@@ -555,6 +555,33 @@ export function runCasesV0(ctx, mem, helpers) {
   }
 
   if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before macro futurelet case failed');
+  }
+  const macroFutureletMainBytes = new TextEncoder().encode('\\def\\foo{XYZ}\\futurelet\\bar\\noop\\foo\\bar');
+  if (addMountedFile('main.tex', macroFutureletMainBytes, 'macro_futurelet_main') !== 0) {
+    throw new Error('mount_add_file(macro futurelet main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) {
+    throw new Error('mount_finalize for macro futurelet case failed');
+  }
+  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(macro futurelet)');
+  {
+    const report = readCompileReportJson();
+    if (report.status !== 'NOT_IMPLEMENTED') {
+      throw new Error(`compile_main(macro futurelet) report.status expected NOT_IMPLEMENTED, got ${report.status}`);
+    }
+    const logBytes = readCompileLogBytes();
+    const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(macro futurelet)');
+    if (gdefBaselineCharCount === null) {
+      throw new Error('gdefBaselineCharCount not initialized');
+    }
+    if (stats.char_count !== gdefBaselineCharCount + 3) {
+      throw new Error(`compile_main(macro futurelet) char_count delta expected +3, got baseline=${gdefBaselineCharCount}, current=${stats.char_count}`);
+    }
+    assertMainXdvArtifactEmpty('compile_main(macro futurelet)');
+  }
+
+  if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before macro global-prefix invalid case failed');
   }
   const macroGlobalPrefixInvalidMainBytes = new TextEncoder().encode('\\global\\foo');
@@ -594,6 +621,27 @@ export function runCasesV0(ctx, mem, helpers) {
       throw new Error(`compile_main macro let unsupported log mismatch: ${logText}`);
     }
     assertNoEvents('compile_main_v0(macro let unsupported)');
+  }
+
+  if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before macro futurelet unsupported case failed');
+  }
+  const macroFutureletUnsupportedMainBytes = new TextEncoder().encode('\\futurelet\\a Z \\b');
+  if (addMountedFile('main.tex', macroFutureletUnsupportedMainBytes, 'macro_futurelet_unsupported_main') !== 0) {
+    throw new Error('mount_add_file(macro futurelet unsupported main.tex) failed');
+  }
+  const macroFutureletUnsupportedFinalizeCode = ctx.mountFinalize();
+  if (macroFutureletUnsupportedFinalizeCode !== 0 && macroFutureletUnsupportedFinalizeCode !== 1) {
+    throw new Error(`mount_finalize(macro futurelet unsupported) unexpected code=${macroFutureletUnsupportedFinalizeCode}`);
+  }
+  expectInvalid(ctx.compileMain(), 'compile_main_v0(macro futurelet unsupported)');
+  {
+    const logBytes = readCompileLogBytes();
+    const logText = new TextDecoder().decode(logBytes);
+    if (!logText.startsWith('INVALID_INPUT:') || !logText.includes('macro_futurelet_unsupported')) {
+      throw new Error(`compile_main macro futurelet unsupported log mismatch: ${logText}`);
+    }
+    assertNoEvents('compile_main_v0(macro futurelet unsupported)');
   }
 
   if (ctx.mountReset() !== 0) {
