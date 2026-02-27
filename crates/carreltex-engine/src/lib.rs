@@ -13,6 +13,8 @@ const NOT_IMPLEMENTED_LOG_BYTES: &[u8] =
 const EMPTY_TEX_STATS_JSON: &str = "";
 const MAX_INPUT_DEPTH_V0: usize = 32;
 const MAX_INPUT_EXPANSIONS_V0: usize = 1024;
+const INPUT_TRACE_MAX_FILES_V0: usize = 32;
+const INPUT_TRACE_PREFIX_BYTES: &[u8] = b"\nINPUT_TRACE_V0:";
 
 enum InvalidInputReasonV0 {
     MountFinalizeFailed,
@@ -24,6 +26,39 @@ enum InvalidInputReasonV0 {
     InputCycleFailed,
     InputDepthExceeded,
     InputExpansionsExceeded,
+}
+
+#[derive(Default)]
+struct InputTraceV0 {
+    expansions: u64,
+    max_depth: u64,
+    unique_files: u64,
+    files: Vec<String>,
+}
+
+impl InputTraceV0 {
+    fn new() -> Self {
+        let mut trace = Self::default();
+        trace.record_file("main.tex");
+        trace
+    }
+
+    fn record_file(&mut self, path: &str) {
+        if self.files.iter().any(|existing| existing == path) {
+            return;
+        }
+        self.unique_files = self.unique_files.saturating_add(1);
+        if self.files.len() < INPUT_TRACE_MAX_FILES_V0 {
+            self.files.push(path.to_owned());
+        }
+    }
+
+    fn record_depth(&mut self, depth: usize) {
+        let depth_u64 = depth as u64;
+        if depth_u64 > self.max_depth {
+            self.max_depth = depth_u64;
+        }
+    }
 }
 
 fn invalid_log_bytes_v0(reason: InvalidInputReasonV0) -> &'static [u8] {
@@ -89,8 +124,8 @@ pub fn compile_request_v0(mount: &mut Mount, req: &CompileRequestV0) -> CompileR
             return invalid_result_v0(req.max_log_bytes, InvalidInputReasonV0::TokenizeFailed)
         }
     };
-    let expanded_tokens = match expand_inputs_v0(&tokens, mount) {
-        Ok(tokens) => tokens,
+    let (expanded_tokens, input_trace) = match expand_inputs_v0(&tokens, mount) {
+        Ok(result) => result,
         Err(reason) => return invalid_result_v0(req.max_log_bytes, reason),
     };
     if expanded_tokens.len() > MAX_TOKENS_V0 {
@@ -118,13 +153,59 @@ pub fn compile_request_v0(mount: &mut Mount, req: &CompileRequestV0) -> CompileR
     if tex_stats_json.is_empty() {
         return invalid_result_v0(req.max_log_bytes, InvalidInputReasonV0::StatsBuildFailed);
     }
+    let mut not_implemented_log = Vec::new();
+    not_implemented_log.extend_from_slice(NOT_IMPLEMENTED_LOG_BYTES);
+    not_implemented_log.extend_from_slice(INPUT_TRACE_PREFIX_BYTES);
+    not_implemented_log.extend_from_slice(build_input_trace_json_v0(&input_trace).as_bytes());
     build_compile_result_v0(
         CompileStatus::NotImplemented,
         MISSING_COMPONENTS_V0,
-        truncate_log_bytes_v0(NOT_IMPLEMENTED_LOG_BYTES, req.max_log_bytes),
+        truncate_log_bytes_v0(&not_implemented_log, req.max_log_bytes),
         vec![],
         tex_stats_json,
     )
+}
+
+fn build_input_trace_json_v0(trace: &InputTraceV0) -> String {
+    let mut out = String::new();
+    out.push_str("{\"expansions\":");
+    out.push_str(&trace.expansions.to_string());
+    out.push_str(",\"max_depth\":");
+    out.push_str(&trace.max_depth.to_string());
+    out.push_str(",\"unique_files\":");
+    out.push_str(&trace.unique_files.to_string());
+    out.push_str(",\"files\":[");
+    for (index, file) in trace.files.iter().enumerate() {
+        if index != 0 {
+            out.push(',');
+        }
+        out.push('"');
+        out.push_str(&escape_json_string_v0(file));
+        out.push('"');
+    }
+    out.push_str("]}");
+    out
+}
+
+fn escape_json_string_v0(value: &str) -> String {
+    let mut escaped = String::new();
+    for ch in value.chars() {
+        match ch {
+            '"' => escaped.push_str("\\\""),
+            '\\' => escaped.push_str("\\\\"),
+            '\u{08}' => escaped.push_str("\\b"),
+            '\u{0C}' => escaped.push_str("\\f"),
+            '\n' => escaped.push_str("\\n"),
+            '\r' => escaped.push_str("\\r"),
+            '\t' => escaped.push_str("\\t"),
+            ch if ch.is_control() => {
+                let code = ch as u32;
+                escaped.push_str(&format!("\\u{code:04x}"));
+            }
+            _ => escaped.push(ch),
+        }
+    }
+    escaped
 }
 
 fn parse_input_path_group_v0(
@@ -202,10 +283,19 @@ fn extend_tokens_checked(
 fn expand_inputs_v0(
     tokens: &[TokenV0],
     mount: &Mount,
-) -> Result<Vec<TokenV0>, InvalidInputReasonV0> {
+) -> Result<(Vec<TokenV0>, InputTraceV0), InvalidInputReasonV0> {
     let mut active_stack = vec!["main.tex".to_owned()];
     let mut expansion_count = 0usize;
-    expand_inputs_inner_v0(tokens, mount, 0, &mut active_stack, &mut expansion_count)
+    let mut trace = InputTraceV0::new();
+    let expanded = expand_inputs_inner_v0(
+        tokens,
+        mount,
+        0,
+        &mut active_stack,
+        &mut expansion_count,
+        &mut trace,
+    )?;
+    Ok((expanded, trace))
 }
 
 fn expand_inputs_inner_v0(
@@ -214,6 +304,7 @@ fn expand_inputs_inner_v0(
     depth: usize,
     active_stack: &mut Vec<String>,
     expansion_count: &mut usize,
+    trace: &mut InputTraceV0,
 ) -> Result<Vec<TokenV0>, InvalidInputReasonV0> {
     if depth > MAX_INPUT_DEPTH_V0 {
         return Err(InvalidInputReasonV0::InputDepthExceeded);
@@ -230,11 +321,14 @@ fn expand_inputs_inner_v0(
                 if *expansion_count > MAX_INPUT_EXPANSIONS_V0 {
                     return Err(InvalidInputReasonV0::InputExpansionsExceeded);
                 }
+                trace.expansions = *expansion_count as u64;
 
                 let (normalized_path, next_index) = parse_input_path_group_v0(tokens, index)?;
                 if active_stack.iter().any(|path| path == &normalized_path) {
                     return Err(InvalidInputReasonV0::InputCycleFailed);
                 }
+                trace.record_file(&normalized_path);
+                trace.record_depth(depth + 1);
 
                 let included_bytes = match mount.read_file_by_bytes_v0(normalized_path.as_bytes()) {
                     Ok(Some(bytes)) => bytes,
@@ -250,6 +344,7 @@ fn expand_inputs_inner_v0(
                     depth + 1,
                     active_stack,
                     expansion_count,
+                    trace,
                 )?;
                 active_stack.pop();
 
@@ -342,6 +437,22 @@ mod tests {
         let marker = format!("\"{field}\":");
         let start = stats_json.find(&marker)? + marker.len();
         let rest = &stats_json[start..];
+        let digits_len = rest
+            .bytes()
+            .take_while(|byte| byte.is_ascii_digit())
+            .count();
+        if digits_len == 0 {
+            return None;
+        }
+        rest[..digits_len].parse::<u64>().ok()
+    }
+
+    fn trace_u64_field(log_text: &str, field: &str) -> Option<u64> {
+        let trace_start = log_text.find("INPUT_TRACE_V0:")?;
+        let trace_json = &log_text[(trace_start + "INPUT_TRACE_V0:".len())..];
+        let marker = format!("\"{field}\":");
+        let start = trace_json.find(&marker)? + marker.len();
+        let rest = &trace_json[start..];
         let digits_len = rest
             .bytes()
             .take_while(|byte| byte.is_ascii_digit())
@@ -595,6 +706,16 @@ mod tests {
         assert!(mount_with_input.add_file(b"sub.tex", b"ABC").is_ok());
         let result_with_input = compile_request_v0(&mut mount_with_input, &valid_request());
         assert_eq!(result_with_input.status, CompileStatus::NotImplemented);
+        let log_with_input = String::from_utf8_lossy(&result_with_input.log_bytes);
+        assert!(
+            log_with_input.contains("INPUT_TRACE_V0:"),
+            "missing trace in log: {log_with_input}"
+        );
+        assert_eq!(
+            trace_u64_field(&log_with_input, "expansions"),
+            Some(1),
+            "trace log: {log_with_input}"
+        );
         let char_count_with_input =
             stats_u64_field(&result_with_input.tex_stats_json, "char_count")
                 .expect("char_count should exist");
@@ -649,6 +770,7 @@ mod tests {
         let result = compile_request_v0(&mut mount, &valid_request());
         assert_eq!(result.status, CompileStatus::InvalidInput);
         assert!(result.log_bytes.ends_with(b"input_cycle_failed"));
+        assert!(!String::from_utf8_lossy(&result.log_bytes).contains("INPUT_TRACE_V0:"));
     }
 
     #[test]
