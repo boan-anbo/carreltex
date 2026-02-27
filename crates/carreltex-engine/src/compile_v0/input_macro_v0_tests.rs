@@ -46,3 +46,55 @@ fn input_then_macro_expansion_order_is_stable() {
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline + 3);
 }
+
+#[test]
+fn input_unbraced_without_extension_loads_tex_file() {
+    let baseline = baseline_char_count();
+    let mut mount = Mount::default();
+    let main =
+        b"\\documentclass{article}\n\\begin{document}\nHello.\\input sub\\foo\n\\end{document}\n";
+    let sub = b"\\def\\foo{XYZ}";
+    assert!(mount.add_file(b"main.tex", main).is_ok());
+    assert!(mount.add_file(b"sub.tex", sub).is_ok());
+    let result = compile_request_v0(&mut mount, &valid_request());
+    assert_eq!(result.status, CompileStatus::NotImplemented);
+    let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
+    assert_eq!(char_count, baseline + 3);
+}
+
+#[test]
+fn input_braced_without_extension_loads_tex_file() {
+    let baseline = baseline_char_count();
+    let mut mount = Mount::default();
+    let main =
+        b"\\documentclass{article}\n\\begin{document}\nHello.\\input{sub}\\foo\n\\end{document}\n";
+    let sub = b"\\def\\foo{XYZ}";
+    assert!(mount.add_file(b"main.tex", main).is_ok());
+    assert!(mount.add_file(b"sub.tex", sub).is_ok());
+    let result = compile_request_v0(&mut mount, &valid_request());
+    assert_eq!(result.status, CompileStatus::NotImplemented);
+    let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
+    assert_eq!(char_count, baseline + 3);
+}
+
+#[test]
+fn input_unbraced_missing_tex_file_is_invalid() {
+    let mut mount = Mount::default();
+    let main = b"\\documentclass{article}\n\\begin{document}\n\\input sub\n\\end{document}\n";
+    assert!(mount.add_file(b"main.tex", main).is_ok());
+    let result = compile_request_v0(&mut mount, &valid_request());
+    assert_eq!(result.status, CompileStatus::InvalidInput);
+    assert!(result.log_bytes.starts_with(b"INVALID_INPUT:"));
+    assert!(result.log_bytes.ends_with(b"input_validation_failed"));
+}
+
+#[test]
+fn input_unbraced_requires_char_only_filename_tokens() {
+    let mut mount = Mount::default();
+    let main = b"\\documentclass{article}\n\\begin{document}\n\\input\\foo\n\\end{document}\n";
+    assert!(mount.add_file(b"main.tex", main).is_ok());
+    let result = compile_request_v0(&mut mount, &valid_request());
+    assert_eq!(result.status, CompileStatus::InvalidInput);
+    assert!(result.log_bytes.starts_with(b"INVALID_INPUT:"));
+    assert!(result.log_bytes.ends_with(b"input_validation_failed"));
+}
