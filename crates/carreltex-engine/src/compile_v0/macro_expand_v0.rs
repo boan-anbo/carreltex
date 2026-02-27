@@ -57,8 +57,9 @@ fn expand_stream_v0(
                 push_checked_v0(out, TokenV0::EndGroup)?;
                 index += 1;
             }
-            TokenV0::ControlSeq(name) if name.as_slice() == b"def" => {
-                index = parse_def_v0(tokens, index, macro_frames)?;
+            TokenV0::ControlSeq(name) if name.as_slice() == b"def" || name.as_slice() == b"gdef" => {
+                let is_global = name.as_slice() == b"gdef";
+                index = parse_def_v0(tokens, index, macro_frames, is_global)?;
             }
             TokenV0::ControlSeq(name) => {
                 if let Some(macro_def) = lookup_macro_v0(macro_frames, name) {
@@ -114,6 +115,7 @@ fn parse_def_v0(
     tokens: &[TokenV0],
     def_index: usize,
     macro_frames: &mut Vec<BTreeMap<Vec<u8>, MacroDefV0>>,
+    is_global: bool,
 ) -> Result<usize, InvalidInputReasonV0> {
     let name_index = def_index + 1;
     let macro_name = match tokens.get(name_index) {
@@ -147,17 +149,25 @@ fn parse_def_v0(
 
     let (body_tokens, next_index) = parse_balanced_group_payload_v0(tokens, body_start_index)?;
     validate_macro_body_tokens_v0(&body_tokens, param_count)?;
+    let target_frame_index = if is_global {
+        0usize
+    } else {
+        macro_frames
+            .len()
+            .checked_sub(1)
+            .ok_or(InvalidInputReasonV0::MacroValidationFailed)?
+    };
     let total_macro_defs = total_macro_defs_v0(macro_frames);
-    let current_frame = macro_frames
-        .last_mut()
+    let target_frame = macro_frames
+        .get_mut(target_frame_index)
         .ok_or(InvalidInputReasonV0::MacroValidationFailed)?;
-    if !current_frame.contains_key(&macro_name) && total_macro_defs >= MAX_MACROS_V0 {
+    if !target_frame.contains_key(&macro_name) && total_macro_defs >= MAX_MACROS_V0 {
         return Err(InvalidInputReasonV0::MacroValidationFailed);
     }
     if param_count > 1 {
         return Err(InvalidInputReasonV0::MacroValidationFailed);
     }
-    current_frame.insert(
+    target_frame.insert(
         macro_name,
         MacroDefV0 {
             param_count,
