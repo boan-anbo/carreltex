@@ -44,6 +44,8 @@ const compileRequestSetMaxLogBytes = instance.exports.carreltex_wasm_compile_req
 const compileRun = instance.exports.carreltex_wasm_compile_run_v0;
 const reportLen = instance.exports.carreltex_wasm_compile_report_len_v0;
 const reportCopy = instance.exports.carreltex_wasm_compile_report_copy_v0;
+const logLen = instance.exports.carreltex_wasm_compile_log_len_v0;
+const logCopy = instance.exports.carreltex_wasm_compile_log_copy_v0;
 
 for (const [name, fn] of [
   ['carreltex_wasm_alloc', alloc],
@@ -61,6 +63,8 @@ for (const [name, fn] of [
   ['carreltex_wasm_compile_run_v0', compileRun],
   ['carreltex_wasm_compile_report_len_v0', reportLen],
   ['carreltex_wasm_compile_report_copy_v0', reportCopy],
+  ['carreltex_wasm_compile_log_len_v0', logLen],
+  ['carreltex_wasm_compile_log_copy_v0', logCopy],
 ]) {
   if (typeof fn !== 'function') {
     throw new Error(`Missing export: ${name}`);
@@ -135,6 +139,31 @@ function readCompileReportJson() {
   }
 }
 
+function readCompileLogBytes() {
+  const bytesLen = logLen();
+  if (!Number.isInteger(bytesLen) || bytesLen < 0 || bytesLen > 4096) {
+    throw new Error(`compile_log_len_v0 unexpected: ${bytesLen}`);
+  }
+  if (bytesLen === 0) {
+    return new Uint8Array();
+  }
+
+  const outPtr = alloc(bytesLen);
+  if (!Number.isInteger(outPtr) || outPtr <= 0) {
+    throw new Error(`alloc failed for compile log, ptr=${outPtr}`);
+  }
+
+  try {
+    const written = logCopy(outPtr, bytesLen);
+    if (written !== bytesLen) {
+      throw new Error(`compile_log_copy_v0 expected ${bytesLen}, got ${written}`);
+    }
+    return new Uint8Array(memory.buffer, outPtr, bytesLen).slice();
+  } finally {
+    dealloc(outPtr, bytesLen);
+  }
+}
+
 const mainTex = '\\documentclass{article}\\n\\\\begin{document}\\nHello.\\n\\\\end{document}\\n';
 const mainBytes = new TextEncoder().encode(mainTex);
 const ok = callWithBytes(mainBytes, 'main_tex', (ptr, len) => validate(ptr, len));
@@ -182,6 +211,11 @@ expectNotImplemented(compileMain(), 'compile_main_v0');
   if (!Array.isArray(report.missing_components) || report.missing_components.length === 0) {
     throw new Error('compile_main report.missing_components expected non-empty array');
   }
+  const logBytes = readCompileLogBytes();
+  const logText = new TextDecoder().decode(logBytes);
+  if (logBytes.length <= 0 || !logText.startsWith('NOT_IMPLEMENTED:')) {
+    throw new Error('compile_main log expected non-empty NOT_IMPLEMENTED prefix');
+  }
 }
 
 if (compileRequestReset() !== 0) {
@@ -209,6 +243,14 @@ expectNotImplemented(compileRun(), 'compile_run_v0(valid request)');
   if (!Array.isArray(report.missing_components) || report.missing_components.length === 0) {
     throw new Error('compile_run report.missing_components expected non-empty array');
   }
+  const logBytes = readCompileLogBytes();
+  const logText = new TextDecoder().decode(logBytes);
+  if (logBytes.length <= 0 || !logText.startsWith('NOT_IMPLEMENTED:')) {
+    throw new Error('compile_run log expected non-empty NOT_IMPLEMENTED prefix');
+  }
+  if (logBytes.length > 1024) {
+    throw new Error(`compile_run log exceeds max_log_bytes: ${logBytes.length}`);
+  }
 }
 
 if (compileRequestReset() !== 0) {
@@ -222,6 +264,31 @@ expectInvalid(
 );
 expectInvalid(compileRequestSetEpoch(0n), 'compile_request_set_source_date_epoch_v0(0)');
 expectInvalid(compileRequestSetMaxLogBytes(0), 'compile_request_set_max_log_bytes_v0(0)');
+
+if (compileRequestReset() !== 0) {
+  throw new Error('compile_request_reset_v0 before truncation check failed');
+}
+const setEntrypointForTruncation = callWithBytes(
+  new TextEncoder().encode('main.tex'),
+  'compile_request_entrypoint_truncation',
+  (ptr, len) => compileRequestSetEntrypoint(ptr, len),
+);
+if (setEntrypointForTruncation !== 0) {
+  throw new Error('compile_request_set_entrypoint_v0(main.tex) for truncation failed');
+}
+if (compileRequestSetEpoch(1700000000n) !== 0) {
+  throw new Error('compile_request_set_source_date_epoch_v0 for truncation failed');
+}
+if (compileRequestSetMaxLogBytes(8) !== 0) {
+  throw new Error('compile_request_set_max_log_bytes_v0(8) failed');
+}
+expectNotImplemented(compileRun(), 'compile_run_v0(truncation case)');
+{
+  const logBytes = readCompileLogBytes();
+  if (logBytes.length !== 8) {
+    throw new Error(`compile_run truncated log expected 8 bytes, got ${logBytes.length}`);
+  }
+}
 
 if (mountReset() !== 0) {
   throw new Error('mount_reset for negative cases failed');

@@ -1,9 +1,11 @@
 use carreltex_core::{
-    build_compile_result_v0, CompileRequestV0, CompileResultV0, CompileStatus, Mount,
-    MAX_LOG_BYTES_V0,
+    build_compile_result_v0, truncate_log_bytes_v0, CompileRequestV0, CompileResultV0,
+    CompileStatus, Mount, MAX_LOG_BYTES_V0,
 };
 
 const MISSING_COMPONENTS_V0: &[&str] = &["tex-engine"];
+const NOT_IMPLEMENTED_LOG_BYTES: &[u8] = b"NOT_IMPLEMENTED: tex-engine compile pipeline is not wired yet";
+const INVALID_INPUT_LOG_BYTES: &[u8] = b"";
 
 pub fn compile_main_v0(mount: &mut Mount) -> CompileResultV0 {
     let request = CompileRequestV0 {
@@ -16,17 +18,33 @@ pub fn compile_main_v0(mount: &mut Mount) -> CompileResultV0 {
 
 pub fn compile_request_v0(mount: &mut Mount, req: &CompileRequestV0) -> CompileResultV0 {
     if mount.finalize().is_err() {
-        return build_compile_result_v0(CompileStatus::InvalidInput, &[]);
+        return build_compile_result_v0(
+            CompileStatus::InvalidInput,
+            &[],
+            truncate_log_bytes_v0(INVALID_INPUT_LOG_BYTES, req.max_log_bytes),
+        );
     }
 
     if req.entrypoint != "main.tex" || req.source_date_epoch == 0 || req.max_log_bytes == 0 {
-        return build_compile_result_v0(CompileStatus::InvalidInput, &[]);
+        return build_compile_result_v0(
+            CompileStatus::InvalidInput,
+            &[],
+            truncate_log_bytes_v0(INVALID_INPUT_LOG_BYTES, req.max_log_bytes),
+        );
     }
     if req.max_log_bytes > MAX_LOG_BYTES_V0 {
-        return build_compile_result_v0(CompileStatus::InvalidInput, &[]);
+        return build_compile_result_v0(
+            CompileStatus::InvalidInput,
+            &[],
+            truncate_log_bytes_v0(INVALID_INPUT_LOG_BYTES, req.max_log_bytes),
+        );
     }
 
-    build_compile_result_v0(CompileStatus::NotImplemented, MISSING_COMPONENTS_V0)
+    build_compile_result_v0(
+        CompileStatus::NotImplemented,
+        MISSING_COMPONENTS_V0,
+        truncate_log_bytes_v0(NOT_IMPLEMENTED_LOG_BYTES, req.max_log_bytes),
+    )
 }
 
 #[cfg(test)]
@@ -64,6 +82,9 @@ mod tests {
             result.report_json,
             "{\"status\":\"NOT_IMPLEMENTED\",\"missing_components\":[\"tex-engine\"]}"
         );
+        assert!(!result.log_bytes.is_empty());
+        assert!(result.log_bytes.starts_with(b"NOT_IMPLEMENTED:"));
+        assert!(result.log_bytes.len() <= valid_request().max_log_bytes as usize);
     }
 
     #[test]
@@ -102,5 +123,18 @@ mod tests {
         request.max_log_bytes = MAX_LOG_BYTES_V0 + 1;
         let result = compile_request_v0(&mut mount, &request);
         assert_eq!(result.status, CompileStatus::InvalidInput);
+    }
+
+    #[test]
+    fn compile_request_log_is_truncated_by_max_log_bytes() {
+        let mut mount = Mount::default();
+        assert!(mount.add_file(b"main.tex", valid_main()).is_ok());
+
+        let mut request = valid_request();
+        request.max_log_bytes = 8;
+        let result = compile_request_v0(&mut mount, &request);
+        assert_eq!(result.status, CompileStatus::NotImplemented);
+        assert_eq!(result.log_bytes.len(), 8);
+        assert_eq!(result.log_bytes, b"NOT_IMPL".to_vec());
     }
 }
