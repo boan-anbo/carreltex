@@ -2,7 +2,7 @@
 
 Allowed status enum: `todo | stubbed | implemented | verified | skipped`.
 `verified` means the row's proof command is currently green.
-Regression guard: proofs include `\input{sub.tex}\foo`, `\input{sub.tex}\meaning\foo`, `\input{sub.tex}\edef\foo{\bar}\def\bar{A}\foo`, `\input{sub.tex}\edef\foo{\noexpand\bar}\def\bar{A}\foo`, and `\input{sub.tex}{\xdef\foo{\bar}}\def\bar{A}\foo` cases that lock engine order and `\edef`/`\xdef` snapshot semantics across input boundaries.
+Regression guard: proofs include `\input{sub.tex}\foo`, `\input{sub.tex}\meaning\foo`, `\input{sub.tex}\edef\foo{\bar}\def\bar{A}\foo`, `\input{sub.tex}\edef\foo{\noexpand\bar}\def\bar{A}\foo`, `\input{sub.tex}{\xdef\foo{\bar}}\def\bar{A}\foo`, and `\input{sub.tex}\let\bar=\foo\def\foo{A}\bar` cases that lock engine order and `\edef`/`\xdef`/`\let` snapshot semantics across input boundaries.
 
 | path | layer | component | status | proof | notes |
 | --- | --- | --- | --- | --- | --- |

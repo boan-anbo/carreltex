@@ -405,6 +405,37 @@ export function runMacroCases(ctx, helpers, baselineMainCharCount) {
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before macro futurelet case failed');
   }
+  const macroInputLetSnapshotMainBytes = new TextEncoder().encode('\\input{sub.tex}\\let\\bar=\\foo\\def\\foo{A}\\bar');
+  const macroInputLetSnapshotSubBytes = new TextEncoder().encode('\\def\\foo{XYZ}');
+  if (addMountedFile('main.tex', macroInputLetSnapshotMainBytes, 'macro_input_let_snapshot_main') !== 0) {
+    throw new Error('mount_add_file(macro input let-snapshot main.tex) failed');
+  }
+  if (addMountedFile('sub.tex', macroInputLetSnapshotSubBytes, 'macro_input_let_snapshot_sub') !== 0) {
+    throw new Error('mount_add_file(macro input let-snapshot sub.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) {
+    throw new Error('mount_finalize for macro input let-snapshot case failed');
+  }
+  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(macro input let-snapshot)');
+  {
+    const report = readCompileReportJson();
+    if (report.status !== 'NOT_IMPLEMENTED') {
+      throw new Error(`compile_main(macro input let-snapshot) report.status expected NOT_IMPLEMENTED, got ${report.status}`);
+    }
+    const logBytes = readCompileLogBytes();
+    const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(macro input let-snapshot)');
+    if (gdefBaselineCharCount === null) {
+      throw new Error('gdefBaselineCharCount not initialized');
+    }
+    if (stats.char_count !== gdefBaselineCharCount + 3) {
+      throw new Error(`compile_main(macro input let-snapshot) char_count delta expected +3, got baseline=${gdefBaselineCharCount}, current=${stats.char_count}`);
+    }
+    assertMainXdvArtifactEmpty('compile_main(macro input let-snapshot)');
+  }
+
+  if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before macro futurelet case failed');
+  }
   const macroFutureletMainBytes = new TextEncoder().encode('\\def\\foo{XYZ}\\futurelet\\bar\\noop\\foo\\bar');
   if (addMountedFile('main.tex', macroFutureletMainBytes, 'macro_futurelet_main') !== 0) {
     throw new Error('mount_add_file(macro futurelet main.tex) failed');
