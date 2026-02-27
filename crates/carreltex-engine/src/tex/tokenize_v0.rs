@@ -36,7 +36,8 @@ fn push_token(tokens: &mut Vec<TokenV0>, token: TokenV0) -> Result<(), TokenizeE
 /// - Decodes `^^hh` where `h` is hex (`[0-9a-fA-F]`) to one byte.
 /// - Any other `^^` form is `CaretNotSupported`.
 /// - `%` starts a comment that is skipped until `\n` or EOF; the newline itself
-///   is not consumed by the comment and is processed normally.
+///   is not consumed by the comment and is processed normally. Caret decoding
+///   is not applied while consuming comment bytes.
 /// - Whitespace bytes (`' '`, `\t`, `\r`, `\n`) collapse into one `Space`.
 /// - `{` and `}` become `BeginGroup` / `EndGroup`.
 /// - `\` starts a control sequence:
@@ -54,17 +55,17 @@ pub fn tokenize_v0(input: &[u8]) -> Result<Vec<TokenV0>, TokenizeErrorV0> {
     let mut tokens = Vec::new();
     let mut index = 0usize;
     while index < input.len() {
-        let (byte, next_index) = decode_caret_hex_v0(input, index)?;
-        if byte == 0 {
-            return Err(TokenizeErrorV0::InvalidInput);
-        }
-
-        if byte == b'%' {
-            index = next_index;
+        if input[index] == b'%' {
+            index += 1;
             while index < input.len() && input[index] != b'\n' {
                 index += 1;
             }
             continue;
+        }
+
+        let (byte, next_index) = decode_caret_hex_v0(input, index)?;
+        if byte == 0 {
+            return Err(TokenizeErrorV0::InvalidInput);
         }
 
         if is_whitespace(byte) {
@@ -265,6 +266,16 @@ mod tests {
     #[test]
     fn unsupported_caret_form_is_caret_not_supported() {
         assert_eq!(tokenize_v0(b"^^ZZ"), Err(TokenizeErrorV0::CaretNotSupported));
+    }
+
+    #[test]
+    fn caret_sequence_inside_comment_is_ignored_as_raw_text() {
+        let tokens = tokenize_v0(b"% ^^ZZ\nX").expect("tokenize should succeed");
+        assert!(
+            tokens
+                .iter()
+                .any(|token| matches!(token, TokenV0::Char(byte) if *byte == b'X'))
+        );
     }
 
     #[test]
