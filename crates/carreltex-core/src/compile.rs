@@ -3,6 +3,7 @@ use crate::mount::Error;
 pub const MAX_LOG_BYTES_V0: u32 = 1024 * 1024;
 pub const DEFAULT_COMPILE_MAIN_MAX_LOG_BYTES_V0: u32 = 1024;
 pub const MAX_ARTIFACT_BYTES_V0: usize = 32 * 1024 * 1024;
+pub const MAX_WASM_ALLOC_BYTES_V0: usize = MAX_ARTIFACT_BYTES_V0;
 pub const EVENT_KIND_LOG_BYTES_V0: u32 = 1;
 pub const MAX_EVENTS_BYTES_V0: usize = (MAX_LOG_BYTES_V0 as usize) + 8;
 
