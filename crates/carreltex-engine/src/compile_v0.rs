@@ -17,13 +17,13 @@ mod ifx_v0_tests;
 #[cfg(test)]
 mod meaning_v0_tests;
 use crate::reasons_v0::{invalid_log_bytes_v0, InvalidInputReasonV0};
-use crate::tex::tokenize_v0::{tokenize_v0, TokenV0, TokenizeErrorV0, MAX_TOKENS_V0};
+use crate::tex::tokenize_v0::{tokenize_v0, TokenV0, MAX_TOKENS_V0};
 use carreltex_core::{
     build_compile_result_v0, truncate_log_bytes_v0, CompileRequestV0, CompileResultV0,
     CompileStatus, Mount, DEFAULT_COMPILE_MAIN_MAX_LOG_BYTES_V0, MAX_LOG_BYTES_V0,
 };
 use input_expand_v0::expand_inputs_v0;
-use macro_expand_v0::expand_macros_v0;
+use macro_expand_v0::{expand_macros_v0, map_tokenize_error_to_reason_v0};
 use stats_v0::build_tex_stats_from_tokens_v0;
 use trace_v0::build_not_implemented_log_v0;
 const MISSING_COMPONENTS_V0: &[&str] = &["tex-engine"];
@@ -73,9 +73,9 @@ pub fn compile_request_v0(mount: &mut Mount, req: &CompileRequestV0) -> CompileR
     };
     let tokens = match tokenize_v0(&entry_bytes) {
         Ok(tokens) => tokens,
-        Err(TokenizeErrorV0::CaretNotSupported) => return invalid_result_v0(req.max_log_bytes, InvalidInputReasonV0::TokenizerCaretNotSupported),
-        Err(TokenizeErrorV0::ControlSeqNonAscii) => return invalid_result_v0(req.max_log_bytes, InvalidInputReasonV0::TokenizerControlSeqNonAscii),
-        Err(_) => return invalid_result_v0(req.max_log_bytes, InvalidInputReasonV0::TokenizeFailed),
+        Err(error) => {
+            return invalid_result_v0(req.max_log_bytes, map_tokenize_error_to_reason_v0(error))
+        }
     };
     let (expanded_tokens, input_trace) = match expand_inputs_v0(&tokens, mount) {
         Ok(result) => result,
