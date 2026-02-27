@@ -267,6 +267,12 @@ function assertEventsMatchLogAndStats(logBytes, expectedStatsExact, label) {
   } catch {
     throw new Error(`${label}: event[1] payload is not valid utf-8`);
   }
+  if (/[ \t\r\n]/.test(statsText)) {
+    throw new Error(`${label}: event[1] payload must not contain whitespace`);
+  }
+  if (statsText.includes('"unexpected_key"')) {
+    throw new Error(`${label}: event[1] payload must not contain unexpected_key`);
+  }
 
   let stats;
   try {
