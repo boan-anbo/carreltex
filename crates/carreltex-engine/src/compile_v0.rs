@@ -17,8 +17,8 @@ mod ifnum_v0_tests;
 mod ifx_v0_tests;
 #[cfg(test)]
 mod input_macro_v0_tests;
-#[cfg(test)]
-mod meaning_v0_tests;
+#[cfg(test)] mod meaning_v0_tests_base;
+#[cfg(test)] mod meaning_v0_tests_input_guards;
 use crate::reasons_v0::{invalid_log_bytes_v0, InvalidInputReasonV0};
 use crate::tex::tokenize_v0::{tokenize_v0, TokenV0, MAX_TOKENS_V0};
 use carreltex_core::{
