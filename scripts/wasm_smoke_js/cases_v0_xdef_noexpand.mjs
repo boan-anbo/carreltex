@@ -1,0 +1,97 @@
+export function runXdefNoexpandCases(ctx, helpers) {
+  const {
+    addMountedFile,
+    expectInvalid,
+    expectNotImplemented,
+    readCompileLogBytes,
+    assertEventsMatchLogAndStats,
+    assertMainXdvArtifactEmpty,
+    assertNoEvents,
+  } = helpers;
+
+  if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before xdef/noexpand baseline case failed');
+  }
+  const baselineMainBytes = new TextEncoder().encode('\\documentclass{article}\n\\begin{document}\n\n\\end{document}\n');
+  if (addMountedFile('main.tex', baselineMainBytes, 'macro_xdef_noexpand_baseline_main') !== 0) {
+    throw new Error('mount_add_file(macro xdef/noexpand baseline main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) {
+    throw new Error('mount_finalize for xdef/noexpand baseline case failed');
+  }
+  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(macro xdef/noexpand baseline)');
+  let baselineCharCount = null;
+  {
+    const logBytes = readCompileLogBytes();
+    const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(macro xdef/noexpand baseline)');
+    baselineCharCount = stats.char_count;
+    assertMainXdvArtifactEmpty('compile_main(macro xdef/noexpand baseline)');
+  }
+
+  if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before xdef positive case failed');
+  }
+  const xdefMainBytes = new TextEncoder().encode('\\documentclass{article}\n\\begin{document}\n{\\def\\bar{XYZ}\\xdef\\foo{\\bar}}\\foo\n\\end{document}\n');
+  if (addMountedFile('main.tex', xdefMainBytes, 'macro_xdef_positive_main') !== 0) {
+    throw new Error('mount_add_file(macro xdef positive main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) {
+    throw new Error('mount_finalize for xdef positive case failed');
+  }
+  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(macro xdef positive)');
+  {
+    const logBytes = readCompileLogBytes();
+    const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(macro xdef positive)');
+    if (baselineCharCount === null) {
+      throw new Error('baselineCharCount not initialized for xdef positive case');
+    }
+    if (stats.char_count !== baselineCharCount + 3) {
+      throw new Error(`compile_main(macro xdef positive) char_count delta expected +3, got baseline=${baselineCharCount}, current=${stats.char_count}`);
+    }
+    assertMainXdvArtifactEmpty('compile_main(macro xdef positive)');
+  }
+
+  if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before noexpand dynamic case failed');
+  }
+  const noexpandMainBytes = new TextEncoder().encode('\\documentclass{article}\n\\begin{document}\n\\def\\bar{X}\\edef\\foo{\\noexpand\\bar}\\def\\bar{XYZ}\\foo\n\\end{document}\n');
+  if (addMountedFile('main.tex', noexpandMainBytes, 'macro_noexpand_dynamic_main') !== 0) {
+    throw new Error('mount_add_file(macro noexpand dynamic main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) {
+    throw new Error('mount_finalize for noexpand dynamic case failed');
+  }
+  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(macro noexpand dynamic)');
+  {
+    const logBytes = readCompileLogBytes();
+    const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(macro noexpand dynamic)');
+    if (baselineCharCount === null) {
+      throw new Error('baselineCharCount not initialized for noexpand dynamic case');
+    }
+    if (stats.char_count !== baselineCharCount + 3) {
+      throw new Error(`compile_main(macro noexpand dynamic) char_count delta expected +3, got baseline=${baselineCharCount}, current=${stats.char_count}`);
+    }
+    assertMainXdvArtifactEmpty('compile_main(macro noexpand dynamic)');
+  }
+
+  if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before noexpand invalid case failed');
+  }
+  const noexpandInvalidMainBytes = new TextEncoder().encode('\\edef\\foo{\\noexpand}');
+  if (addMountedFile('main.tex', noexpandInvalidMainBytes, 'macro_noexpand_invalid_main') !== 0) {
+    throw new Error('mount_add_file(macro noexpand invalid main.tex) failed');
+  }
+  const invalidFinalizeCode = ctx.mountFinalize();
+  if (invalidFinalizeCode !== 0 && invalidFinalizeCode !== 1) {
+    throw new Error(`mount_finalize(macro noexpand invalid) unexpected code=${invalidFinalizeCode}`);
+  }
+  expectInvalid(ctx.compileMain(), 'compile_main_v0(macro noexpand invalid)');
+  {
+    const logBytes = readCompileLogBytes();
+    const logText = new TextDecoder().decode(logBytes);
+    if (!logText.startsWith('INVALID_INPUT:') || !logText.includes('macro_noexpand_unsupported')) {
+      throw new Error(`compile_main macro noexpand invalid log mismatch: ${logText}`);
+    }
+    assertNoEvents('compile_main_v0(macro noexpand invalid)');
+  }
+}
