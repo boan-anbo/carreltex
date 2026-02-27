@@ -49,6 +49,12 @@ pub fn compile_main_v0(mount: &mut Mount) -> CompileResultV0 {
 }
 
 pub fn compile_request_v0(mount: &mut Mount, req: &CompileRequestV0) -> CompileResultV0 {
+    // INVALID_INPUT reason precedence SSOT (A-E):
+    // A) request validation
+    // B) mount finalize
+    // C) entrypoint read
+    // D) tokenize
+    // E) stats build/group-balance
     if req.entrypoint != "main.tex" || req.source_date_epoch == 0 || req.max_log_bytes == 0 {
         return invalid_result_v0(req.max_log_bytes, InvalidInputReasonV0::RequestInvalid);
     }
@@ -56,13 +62,13 @@ pub fn compile_request_v0(mount: &mut Mount, req: &CompileRequestV0) -> CompileR
         return invalid_result_v0(req.max_log_bytes, InvalidInputReasonV0::RequestInvalid);
     }
 
+    if mount.finalize().is_err() {
+        return invalid_result_v0(req.max_log_bytes, InvalidInputReasonV0::MountFinalizeFailed);
+    }
     let entry_bytes = match mount.read_file_by_bytes_v0(req.entrypoint.as_bytes()) {
         Ok(Some(bytes)) => bytes.to_vec(),
         _ => return invalid_result_v0(req.max_log_bytes, InvalidInputReasonV0::EntrypointMissing),
     };
-    if mount.finalize().is_err() {
-        return invalid_result_v0(req.max_log_bytes, InvalidInputReasonV0::MountFinalizeFailed);
-    }
     let tokens = match tokenize_v0(&entry_bytes) {
         Ok(tokens) => tokens,
         Err(_) => {
@@ -166,7 +172,7 @@ mod tests {
         let result = compile_main_v0(&mut mount);
         assert_eq!(result.status, CompileStatus::InvalidInput);
         assert!(result.log_bytes.starts_with(b"INVALID_INPUT:"));
-        assert!(result.log_bytes.ends_with(b"entrypoint_missing"));
+        assert!(result.log_bytes.ends_with(b"mount_finalize_failed"));
     }
 
     #[test]
@@ -314,7 +320,7 @@ mod tests {
         let result = compile_request_v0(&mut mount, &valid_request());
         assert_eq!(result.status, CompileStatus::InvalidInput);
         assert!(result.log_bytes.starts_with(b"INVALID_INPUT:"));
-        assert!(result.log_bytes.ends_with(b"entrypoint_missing"));
+        assert!(result.log_bytes.ends_with(b"mount_finalize_failed"));
     }
 
     #[test]
@@ -331,6 +337,18 @@ mod tests {
     fn compile_request_missing_entrypoint_reports_request_invalid_reason() {
         let mut mount = Mount::default();
         assert!(mount.add_file(b"main.tex", valid_main()).is_ok());
+        let mut request = valid_request();
+        request.entrypoint = "missing.tex".to_owned();
+        let result = compile_request_v0(&mut mount, &request);
+        assert_eq!(result.status, CompileStatus::InvalidInput);
+        assert!(result.log_bytes.starts_with(b"INVALID_INPUT:"));
+        assert!(result.log_bytes.ends_with(b"request_invalid"));
+    }
+
+    #[test]
+    fn compile_request_precedence_request_invalid_over_mount_finalize_failed() {
+        let mut mount = Mount::default();
+        assert!(mount.add_file(b"main.tex", b" \n\t").is_ok());
         let mut request = valid_request();
         request.entrypoint = "missing.tex".to_owned();
         let result = compile_request_v0(&mut mount, &request);
