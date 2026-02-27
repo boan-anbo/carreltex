@@ -61,6 +61,15 @@ fn expand_stream_v0(
                 let is_global = name.as_slice() == b"gdef";
                 index = parse_def_v0(tokens, index, macro_frames, is_global)?;
             }
+            TokenV0::ControlSeq(name) if name.as_slice() == b"global" => {
+                let next_index = index + 1;
+                let is_global = match tokens.get(next_index) {
+                    Some(TokenV0::ControlSeq(next_name)) if next_name.as_slice() == b"def" => true,
+                    Some(TokenV0::ControlSeq(next_name)) if next_name.as_slice() == b"gdef" => true,
+                    _ => return Err(InvalidInputReasonV0::MacroGlobalPrefixUnsupported),
+                };
+                index = parse_def_v0(tokens, next_index, macro_frames, is_global)?;
+            }
             TokenV0::ControlSeq(name) => {
                 if let Some(macro_def) = lookup_macro_v0(macro_frames, name) {
                     *expansion_count = expansion_count
