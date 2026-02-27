@@ -9,6 +9,6 @@ pub use compile::{
     MAX_ARTIFACT_BYTES_V0, MAX_EVENTS_BYTES_V0, MAX_LOG_BYTES_V0,
 };
 pub use mount::{
-    validate_main_tex, Error, Mount, MAIN_TEX_MAX_BYTES, MAX_FILES, MAX_FILE_BYTES, MAX_PATH_LEN,
-    MAX_TOTAL_BYTES,
+    normalize_path_v0, validate_main_tex, Error, Mount, MAIN_TEX_MAX_BYTES, MAX_FILES,
+    MAX_FILE_BYTES, MAX_PATH_LEN, MAX_TOTAL_BYTES,
 };
