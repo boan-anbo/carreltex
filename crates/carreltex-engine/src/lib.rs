@@ -22,6 +22,7 @@ pub fn compile_request_v0(mount: &mut Mount, req: &CompileRequestV0) -> CompileR
             CompileStatus::InvalidInput,
             &[],
             truncate_log_bytes_v0(INVALID_INPUT_LOG_BYTES, req.max_log_bytes),
+            vec![],
         );
     }
 
@@ -30,6 +31,7 @@ pub fn compile_request_v0(mount: &mut Mount, req: &CompileRequestV0) -> CompileR
             CompileStatus::InvalidInput,
             &[],
             truncate_log_bytes_v0(INVALID_INPUT_LOG_BYTES, req.max_log_bytes),
+            vec![],
         );
     }
     if req.max_log_bytes > MAX_LOG_BYTES_V0 {
@@ -37,6 +39,7 @@ pub fn compile_request_v0(mount: &mut Mount, req: &CompileRequestV0) -> CompileR
             CompileStatus::InvalidInput,
             &[],
             truncate_log_bytes_v0(INVALID_INPUT_LOG_BYTES, req.max_log_bytes),
+            vec![],
         );
     }
 
@@ -44,6 +47,7 @@ pub fn compile_request_v0(mount: &mut Mount, req: &CompileRequestV0) -> CompileR
         CompileStatus::NotImplemented,
         MISSING_COMPONENTS_V0,
         truncate_log_bytes_v0(NOT_IMPLEMENTED_LOG_BYTES, req.max_log_bytes),
+        vec![],
     )
 }
 
@@ -85,6 +89,7 @@ mod tests {
         assert!(!result.log_bytes.is_empty());
         assert!(result.log_bytes.starts_with(b"NOT_IMPLEMENTED:"));
         assert!(result.log_bytes.len() <= valid_request().max_log_bytes as usize);
+        assert!(result.main_xdv_bytes.is_empty());
     }
 
     #[test]
@@ -96,6 +101,7 @@ mod tests {
         request.entrypoint = "other.tex".to_owned();
         let result = compile_request_v0(&mut mount, &request);
         assert_eq!(result.status, CompileStatus::InvalidInput);
+        assert!(result.main_xdv_bytes.is_empty());
     }
 
     #[test]
@@ -107,11 +113,13 @@ mod tests {
         request.source_date_epoch = 0;
         let result = compile_request_v0(&mut mount, &request);
         assert_eq!(result.status, CompileStatus::InvalidInput);
+        assert!(result.main_xdv_bytes.is_empty());
 
         request = valid_request();
         request.max_log_bytes = 0;
         let result = compile_request_v0(&mut mount, &request);
         assert_eq!(result.status, CompileStatus::InvalidInput);
+        assert!(result.main_xdv_bytes.is_empty());
     }
 
     #[test]
@@ -123,6 +131,7 @@ mod tests {
         request.max_log_bytes = MAX_LOG_BYTES_V0 + 1;
         let result = compile_request_v0(&mut mount, &request);
         assert_eq!(result.status, CompileStatus::InvalidInput);
+        assert!(result.main_xdv_bytes.is_empty());
     }
 
     #[test]
@@ -136,5 +145,6 @@ mod tests {
         assert_eq!(result.status, CompileStatus::NotImplemented);
         assert_eq!(result.log_bytes.len(), 8);
         assert_eq!(result.log_bytes, b"NOT_IMPL".to_vec());
+        assert!(result.main_xdv_bytes.is_empty());
     }
 }
