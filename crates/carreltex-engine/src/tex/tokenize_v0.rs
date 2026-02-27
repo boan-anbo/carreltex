@@ -226,6 +226,25 @@ mod tests {
     }
 
     #[test]
+    fn lone_cr_collapses_to_single_space_token() {
+        let tokens = tokenize_v0(b"A\rB").expect("tokenize should succeed");
+        assert_eq!(
+            tokens,
+            vec![TokenV0::Char(b'A'), TokenV0::Space, TokenV0::Char(b'B')]
+        );
+    }
+
+    #[test]
+    fn percent_comment_terminated_by_cr_does_not_emit_double_space() {
+        let input = b"a%comment\rb";
+        let tokens = tokenize_v0(input).expect("tokenize should succeed");
+        assert_eq!(
+            tokens,
+            vec![TokenV0::Char(b'a'), TokenV0::Space, TokenV0::Char(b'b')]
+        );
+    }
+
+    #[test]
     fn space_after_control_word_is_ignored() {
         let input = b"\\foo bar";
         let tokens = tokenize_v0(input).expect("tokenize should succeed");
