@@ -1,9 +1,10 @@
 use std::sync::{Mutex, OnceLock};
 
 use carreltex_core::{
-    compile_main_v0, compile_request_v0, validate_compile_report_json, validate_main_tex,
-    CompileRequestV0, CompileStatus, Mount, MAIN_TEX_MAX_BYTES, MAX_LOG_BYTES_V0,
+    validate_compile_report_json, validate_main_tex, CompileRequestV0, CompileStatus, Mount,
+    MAIN_TEX_MAX_BYTES, MAX_LOG_BYTES_V0,
 };
+use carreltex_engine::{compile_main_v0, compile_request_v0};
 
 #[no_mangle]
 pub extern "C" fn carreltex_wasm_smoke_add(left: i32, right: i32) -> i32 {

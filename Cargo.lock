@@ -7,8 +7,16 @@ name = "carreltex-core"
 version = "0.1.0"
 
 [[package]]
+name = "carreltex-engine"
+version = "0.1.0"
+dependencies = [
+ "carreltex-core",
+]
+
+[[package]]
 name = "carreltex-wasm-smoke"
 version = "0.1.0"
 dependencies = [
  "carreltex-core",
+ "carreltex-engine",
 ]
