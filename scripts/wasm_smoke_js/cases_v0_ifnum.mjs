@@ -75,6 +75,33 @@ export function runIfnumCases(ctx, helpers) {
   }
 
   if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before ifnum input-counts case failed');
+  }
+  const inputCountsMainBytes = new TextEncoder().encode('\\documentclass{article}\n\\begin{document}\n\\input{sub.tex}\\ifnum\\count0<\\count1 XYZ\\else AAA\\fi\n\\end{document}\n');
+  const inputCountsSubBytes = new TextEncoder().encode('\\count0=1\\count1=2');
+  if (addMountedFile('main.tex', inputCountsMainBytes, 'macro_ifnum_input_counts_main') !== 0) {
+    throw new Error('mount_add_file(macro ifnum input-counts main.tex) failed');
+  }
+  if (addMountedFile('sub.tex', inputCountsSubBytes, 'macro_ifnum_input_counts_sub') !== 0) {
+    throw new Error('mount_add_file(macro ifnum input-counts sub.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) {
+    throw new Error('mount_finalize for ifnum input-counts case failed');
+  }
+  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(macro ifnum input-counts)');
+  {
+    const logBytes = readCompileLogBytes();
+    const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(macro ifnum input-counts)');
+    if (baselineCharCount === null) {
+      throw new Error('baselineCharCount not initialized for ifnum input-counts case');
+    }
+    if (stats.char_count !== baselineCharCount + 3) {
+      throw new Error(`compile_main(macro ifnum input-counts) char_count delta expected +3, got baseline=${baselineCharCount}, current=${stats.char_count}`);
+    }
+    assertMainXdvArtifactEmpty('compile_main(macro ifnum input-counts)');
+  }
+
+  if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before ifnum else invalid case failed');
   }
   const invalidMainBytes = new TextEncoder().encode('\\ifnum\\count0<\\count1 X\\else Y\\else Z\\fi');
