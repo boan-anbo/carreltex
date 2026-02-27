@@ -648,6 +648,27 @@ expectInvalid(compileMain(), 'compile_main_v0(whitespace-only main.tex)');
 }
 
 if (mountReset() !== 0) {
+  throw new Error('mount_reset before verb compile check failed');
+}
+const verbMainBytes = new TextEncoder().encode('\\verb|x|\n');
+if (addMountedFile('main.tex', verbMainBytes, 'invalid_verb_main') !== 0) {
+  throw new Error('mount_add_file(verb main.tex) failed');
+}
+const verbFinalizeCode = mountFinalize();
+if (verbFinalizeCode !== 0 && verbFinalizeCode !== 1) {
+  throw new Error(`mount_finalize(verb main.tex) unexpected code=${verbFinalizeCode}`);
+}
+expectInvalid(compileMain(), 'compile_main_v0(verb main.tex)');
+{
+  const logBytes = readCompileLogBytes();
+  const logText = new TextDecoder().decode(logBytes);
+  if (!logText.startsWith('INVALID_INPUT:') || !logText.includes('tokenize_failed')) {
+    throw new Error(`compile_main verb log mismatch: ${logText}`);
+  }
+  assertNoEvents('compile_main_v0(verb main.tex)');
+}
+
+if (mountReset() !== 0) {
   throw new Error('mount_reset for negative cases failed');
 }
 

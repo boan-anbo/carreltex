@@ -31,6 +31,7 @@ fn push_token(tokens: &mut Vec<TokenV0>, token: TokenV0) -> Result<(), TokenizeE
 ///
 /// v0 rules:
 /// - Rejects NUL (`0x00`) anywhere (`InvalidInput`).
+/// - Rejects `^^` byte sequence anywhere (`InvalidInput`).
 /// - `%` starts a comment that is skipped until `\n` or EOF; the newline itself
 ///   is not consumed by the comment and is processed normally.
 /// - Whitespace bytes (`' '`, `\t`, `\r`, `\n`) collapse into one `Space`.
@@ -39,12 +40,16 @@ fn push_token(tokens: &mut Vec<TokenV0>, token: TokenV0) -> Result<(), TokenizeE
 ///   - If followed by ASCII letters, consume a control word and emit
 ///     `ControlSeq(name_bytes)`. A following whitespace run is swallowed
 ///     (no `Space` token emitted).
+///   - Control word `\verb` is explicitly blocked in v0 (`InvalidInput`).
 ///   - Otherwise emit control symbol as `ControlSeq(vec![next_byte])`.
 ///   - A trailing terminal backslash is `InvalidInput`.
 /// - All other bytes become `Char(byte)`.
 /// - Fails with `TooManyTokens` if output would exceed `MAX_TOKENS_V0`.
 pub fn tokenize_v0(input: &[u8]) -> Result<Vec<TokenV0>, TokenizeErrorV0> {
     if input.contains(&0) {
+        return Err(TokenizeErrorV0::InvalidInput);
+    }
+    if input.windows(2).any(|pair| pair == b"^^") {
         return Err(TokenizeErrorV0::InvalidInput);
     }
 
@@ -90,7 +95,11 @@ pub fn tokenize_v0(input: &[u8]) -> Result<Vec<TokenV0>, TokenizeErrorV0> {
                     while end < input.len() && input[end].is_ascii_alphabetic() {
                         end += 1;
                     }
-                    push_token(&mut tokens, TokenV0::ControlSeq(input[index + 1..end].to_vec()))?;
+                    let control_word = &input[index + 1..end];
+                    if control_word == b"verb" {
+                        return Err(TokenizeErrorV0::InvalidInput);
+                    }
+                    push_token(&mut tokens, TokenV0::ControlSeq(control_word.to_vec()))?;
                     index = end;
                     if index < input.len() && is_whitespace(input[index]) {
                         while index < input.len() && is_whitespace(input[index]) {
@@ -170,6 +179,19 @@ mod tests {
     fn nul_byte_is_invalid_input() {
         let input = b"abc\0def";
         assert_eq!(tokenize_v0(input), Err(TokenizeErrorV0::InvalidInput));
+    }
+
+    #[test]
+    fn double_caret_sequence_is_invalid_input() {
+        assert_eq!(tokenize_v0(b"a^^b"), Err(TokenizeErrorV0::InvalidInput));
+    }
+
+    #[test]
+    fn verb_control_word_is_invalid_input() {
+        assert_eq!(
+            tokenize_v0(b"\\verb|x|"),
+            Err(TokenizeErrorV0::InvalidInput)
+        );
     }
 
     #[test]
