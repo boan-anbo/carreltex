@@ -2,12 +2,20 @@
 
 Browser-first WASM LaTeX/typesetting engine (WIP).
 
-## Hard invariants (v0)
+## SSOT
 
-- Always buildable for `wasm32-unknown-unknown` (WASM viability gate).
-- Fail-closed by default.
-- No silent “simplified” semantics.
-- Determinism is a first-class constraint (`SOURCE_DATE_EPOCH`, pinned toolchains).
+- GitHub-canonical SSOT issue: `#22`  
+  https://github.com/boan-anbo/carreltex/issues/22
+
+## Hard invariants (v0, short list)
+
+- No silent simplified semantics; out-of-scope returns explicit fail-closed status.
+- Always buildable for `wasm32-unknown-unknown` (WASM-from-day-1).
+- Determinism first (`SOURCE_DATE_EPOCH` and explicit controls).
+- Resource caps are mandatory and enforced in core logic.
+- Core-first semantics: Rust unit tests are authoritative for semantic behavior.
+- Proof pipeline must stay green on every change.
+- Canonical gate command: `./scripts/proof_v0.sh`.
 
 ## Docs
 

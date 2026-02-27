@@ -1,6 +1,7 @@
 # CarrelTeX Progress Ledger
 
 Allowed status enum: `todo | stubbed | implemented | verified | skipped`.
+`verified` means the row's proof command is currently green.
 
 | path | layer | component | status | proof | notes |
 | --- | --- | --- | --- | --- | --- |
