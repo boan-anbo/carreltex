@@ -695,6 +695,54 @@ export function runCasesV0(ctx, mem, helpers) {
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before compile_request negative setter tests failed');
   }
+  const macroCsnameMainBytes = new TextEncoder().encode('\\def\\foo{XYZ}\\csname foo\\endcsname');
+  if (addMountedFile('main.tex', macroCsnameMainBytes, 'macro_csname_main') !== 0) {
+    throw new Error('mount_add_file(macro csname main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) {
+    throw new Error('mount_finalize for macro csname case failed');
+  }
+  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(macro csname)');
+  {
+    const report = readCompileReportJson();
+    if (report.status !== 'NOT_IMPLEMENTED') {
+      throw new Error(`compile_main(macro csname) report.status expected NOT_IMPLEMENTED, got ${report.status}`);
+    }
+    const logBytes = readCompileLogBytes();
+    const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(macro csname)');
+    if (gdefBaselineCharCount === null) {
+      throw new Error('gdefBaselineCharCount not initialized');
+    }
+    if (stats.char_count !== gdefBaselineCharCount + 3) {
+      throw new Error(`compile_main(macro csname) char_count delta expected +3, got baseline=${gdefBaselineCharCount}, current=${stats.char_count}`);
+    }
+    assertMainXdvArtifactEmpty('compile_main(macro csname)');
+  }
+
+  if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before macro csname unsupported case failed');
+  }
+  const macroCsnameUnsupportedMainBytes = new TextEncoder().encode('\\csname\\foo\\endcsname');
+  if (addMountedFile('main.tex', macroCsnameUnsupportedMainBytes, 'macro_csname_unsupported_main') !== 0) {
+    throw new Error('mount_add_file(macro csname unsupported main.tex) failed');
+  }
+  const macroCsnameUnsupportedFinalizeCode = ctx.mountFinalize();
+  if (macroCsnameUnsupportedFinalizeCode !== 0 && macroCsnameUnsupportedFinalizeCode !== 1) {
+    throw new Error(`mount_finalize(macro csname unsupported) unexpected code=${macroCsnameUnsupportedFinalizeCode}`);
+  }
+  expectInvalid(ctx.compileMain(), 'compile_main_v0(macro csname unsupported)');
+  {
+    const logBytes = readCompileLogBytes();
+    const logText = new TextDecoder().decode(logBytes);
+    if (!logText.startsWith('INVALID_INPUT:') || !logText.includes('macro_csname_unsupported')) {
+      throw new Error(`compile_main macro csname unsupported log mismatch: ${logText}`);
+    }
+    assertNoEvents('compile_main_v0(macro csname unsupported)');
+  }
+
+  if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before compile_request negative setter tests failed');
+  }
   if (addMountedFile('main.tex', mainBytes, 'compile_request_base_main') !== 0) {
     throw new Error('mount_add_file(main.tex) before compile_request negative setter tests failed');
   }
