@@ -634,6 +634,28 @@ mod tests {
     }
 
     #[test]
+    fn gdef_inside_group_leaks_globally() {
+        let mut baseline_mount = Mount::default();
+        let baseline_main =
+            b"\\documentclass{article}\n\\begin{document}\n{}\\foo\n\\end{document}\n";
+        assert!(baseline_mount.add_file(b"main.tex", baseline_main).is_ok());
+        let baseline_result = compile_request_v0(&mut baseline_mount, &valid_request());
+        assert_eq!(baseline_result.status, CompileStatus::NotImplemented);
+        let baseline_char_count =
+            stats_u64_field(&baseline_result.tex_stats_json, "char_count").expect("char_count");
+
+        let mut gdef_mount = Mount::default();
+        let gdef_main =
+            b"\\documentclass{article}\n\\begin{document}\n{\\gdef\\foo{XYZ}}\\foo\n\\end{document}\n";
+        assert!(gdef_mount.add_file(b"main.tex", gdef_main).is_ok());
+        let gdef_result = compile_request_v0(&mut gdef_mount, &valid_request());
+        assert_eq!(gdef_result.status, CompileStatus::NotImplemented);
+        let gdef_char_count =
+            stats_u64_field(&gdef_result.tex_stats_json, "char_count").expect("char_count");
+        assert_eq!(gdef_char_count, baseline_char_count + 3);
+    }
+
+    #[test]
     fn macro_defs_can_override_inside_group_without_leaking() {
         let mut baseline_mount = Mount::default();
         assert!(baseline_mount.add_file(b"main.tex", b"AB").is_ok());
