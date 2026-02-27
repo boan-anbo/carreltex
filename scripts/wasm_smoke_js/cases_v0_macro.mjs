@@ -436,6 +436,37 @@ export function runMacroCases(ctx, helpers, baselineMainCharCount) {
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before macro futurelet case failed');
   }
+  const macroInputFutureletMainBytes = new TextEncoder().encode('\\input{sub.tex}\\futurelet\\bar\\noop\\foo\\bar');
+  const macroInputFutureletSubBytes = new TextEncoder().encode('\\def\\foo{XYZ}');
+  if (addMountedFile('main.tex', macroInputFutureletMainBytes, 'macro_input_futurelet_main') !== 0) {
+    throw new Error('mount_add_file(macro input futurelet main.tex) failed');
+  }
+  if (addMountedFile('sub.tex', macroInputFutureletSubBytes, 'macro_input_futurelet_sub') !== 0) {
+    throw new Error('mount_add_file(macro input futurelet sub.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) {
+    throw new Error('mount_finalize for macro input futurelet case failed');
+  }
+  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(macro input futurelet)');
+  {
+    const report = readCompileReportJson();
+    if (report.status !== 'NOT_IMPLEMENTED') {
+      throw new Error(`compile_main(macro input futurelet) report.status expected NOT_IMPLEMENTED, got ${report.status}`);
+    }
+    const logBytes = readCompileLogBytes();
+    const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(macro input futurelet)');
+    if (gdefBaselineCharCount === null) {
+      throw new Error('gdefBaselineCharCount not initialized');
+    }
+    if (stats.char_count !== gdefBaselineCharCount + 3) {
+      throw new Error(`compile_main(macro input futurelet) char_count delta expected +3, got baseline=${gdefBaselineCharCount}, current=${stats.char_count}`);
+    }
+    assertMainXdvArtifactEmpty('compile_main(macro input futurelet)');
+  }
+
+  if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before macro futurelet case failed');
+  }
   const macroFutureletMainBytes = new TextEncoder().encode('\\def\\foo{XYZ}\\futurelet\\bar\\noop\\foo\\bar');
   if (addMountedFile('main.tex', macroFutureletMainBytes, 'macro_futurelet_main') !== 0) {
     throw new Error('mount_add_file(macro futurelet main.tex) failed');
