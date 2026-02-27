@@ -18,6 +18,9 @@ pub(super) fn parse_def_v0(
 
     let mut param_count = 0u8;
     let mut body_start_index = name_index + 1;
+    if matches!(tokens.get(body_start_index), Some(TokenV0::Space)) {
+        body_start_index += 1;
+    }
     match tokens.get(body_start_index) {
         Some(TokenV0::BeginGroup) => {}
         Some(TokenV0::Char(b'#')) => {
@@ -33,6 +36,9 @@ pub(super) fn parse_def_v0(
             }
             param_count = 1;
             body_start_index += 2;
+            if matches!(tokens.get(body_start_index), Some(TokenV0::Space)) {
+                body_start_index += 1;
+            }
             if matches!(tokens.get(body_start_index), Some(TokenV0::Char(b'#'))) {
                 return Err(InvalidInputReasonV0::MacroParamsUnsupported);
             }

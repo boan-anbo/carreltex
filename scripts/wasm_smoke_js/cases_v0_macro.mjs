@@ -121,6 +121,73 @@ export function runMacroCases(ctx, helpers, baselineMainCharCount) {
   }
 
   if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before macro def-space positive case failed');
+  }
+  const macroDefSpaceMainBytes = new TextEncoder().encode('\\documentclass{article}\n\\begin{document}\nHello.\\def\\foo {XYZ}\\foo\n\\end{document}\n');
+  if (addMountedFile('main.tex', macroDefSpaceMainBytes, 'macro_def_space_main') !== 0) {
+    throw new Error('mount_add_file(macro def-space main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) {
+    throw new Error('mount_finalize for macro def-space positive case failed');
+  }
+  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(macro def-space positive)');
+  {
+    const logBytes = readCompileLogBytes();
+    const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(macro def-space positive)');
+    if (baselineMainCharCount === null) {
+      throw new Error('baselineMainCharCount not initialized');
+    }
+    if (stats.char_count !== baselineMainCharCount + 3) {
+      throw new Error(`compile_main(macro def-space) char_count delta expected +3, got baseline=${baselineMainCharCount}, current=${stats.char_count}`);
+    }
+    assertMainXdvArtifactEmpty('compile_main(macro def-space positive)');
+  }
+
+  if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before macro single-param def-space positive case failed');
+  }
+  const macroSingleParamDefSpaceMainBytes = new TextEncoder().encode('\\documentclass{article}\n\\begin{document}\nHello.\\def\\foo#1 {#1}\\foo{XYZ}\n\\end{document}\n');
+  if (addMountedFile('main.tex', macroSingleParamDefSpaceMainBytes, 'macro_single_param_def_space_main') !== 0) {
+    throw new Error('mount_add_file(macro single-param def-space main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) {
+    throw new Error('mount_finalize for macro single-param def-space positive case failed');
+  }
+  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(macro single-param def-space positive)');
+  {
+    const logBytes = readCompileLogBytes();
+    const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(macro single-param def-space positive)');
+    if (baselineMainCharCount === null) {
+      throw new Error('baselineMainCharCount not initialized');
+    }
+    if (stats.char_count !== baselineMainCharCount + 3) {
+      throw new Error(`compile_main(macro single-param def-space) char_count delta expected +3, got baseline=${baselineMainCharCount}, current=${stats.char_count}`);
+    }
+    assertMainXdvArtifactEmpty('compile_main(macro single-param def-space positive)');
+  }
+
+  if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before macro def-non-space invalid case failed');
+  }
+  const macroDefNonSpaceInvalidMainBytes = new TextEncoder().encode('\\def\\foo\\relax{XYZ}');
+  if (addMountedFile('main.tex', macroDefNonSpaceInvalidMainBytes, 'macro_def_non_space_invalid_main') !== 0) {
+    throw new Error('mount_add_file(macro def-non-space invalid main.tex) failed');
+  }
+  const macroDefNonSpaceInvalidFinalizeCode = ctx.mountFinalize();
+  if (macroDefNonSpaceInvalidFinalizeCode !== 0 && macroDefNonSpaceInvalidFinalizeCode !== 1) {
+    throw new Error(`mount_finalize(macro def-non-space invalid) unexpected code=${macroDefNonSpaceInvalidFinalizeCode}`);
+  }
+  expectInvalid(ctx.compileMain(), 'compile_main_v0(macro def-non-space invalid)');
+  {
+    const logBytes = readCompileLogBytes();
+    const logText = new TextDecoder().decode(logBytes);
+    if (!logText.startsWith('INVALID_INPUT:') || !logText.includes('macro_validation_failed')) {
+      throw new Error(`compile_main macro def-non-space invalid log mismatch: ${logText}`);
+    }
+    assertNoEvents('compile_main_v0(macro def-non-space invalid)');
+  }
+
+  if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before macro params unsupported check failed');
   }
   const macroParamsUnsupportedMainBytes = new TextEncoder().encode('\\def\\foo#2{A}\\foo{X}');
