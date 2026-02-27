@@ -218,23 +218,88 @@ function readU32LE(bytes, offset) {
   ) >>> 0;
 }
 
-function assertEventsMatchLog(logBytes, label) {
+function decodeEvents(bytes, label) {
+  const events = [];
+  let offset = 0;
+  while (offset < bytes.length) {
+    if (offset + 8 > bytes.length) {
+      throw new Error(`${label}: truncated event header at offset=${offset}`);
+    }
+    const kind = readU32LE(bytes, offset);
+    const payloadLen = readU32LE(bytes, offset + 4);
+    offset += 8;
+    if (offset + payloadLen > bytes.length) {
+      throw new Error(`${label}: truncated event payload at offset=${offset}, len=${payloadLen}`);
+    }
+    events.push({
+      kind,
+      payload: bytes.subarray(offset, offset + payloadLen),
+    });
+    offset += payloadLen;
+  }
+  return events;
+}
+
+function assertEventsMatchLogAndStats(logBytes, expectedStatsExact, label) {
   const eventsBytes = readEventsBytes();
-  const expectedLen = 8 + logBytes.length;
-  if (eventsBytes.length !== expectedLen) {
-    throw new Error(`${label}: events length expected ${expectedLen}, got ${eventsBytes.length}`);
+  const events = decodeEvents(eventsBytes, label);
+  if (events.length !== 2) {
+    throw new Error(`${label}: expected 2 events, got ${events.length}`);
   }
-  const kind = readU32LE(eventsBytes, 0);
-  const payloadLen = readU32LE(eventsBytes, 4);
-  if (kind !== 1) {
-    throw new Error(`${label}: event kind expected 1, got ${kind}`);
+  const logEvent = events[0];
+  if (logEvent.kind !== 1) {
+    throw new Error(`${label}: event[0] kind expected 1, got ${logEvent.kind}`);
   }
-  if (payloadLen !== logBytes.length) {
-    throw new Error(`${label}: event payload len expected ${logBytes.length}, got ${payloadLen}`);
+  if (
+    logEvent.payload.length !== logBytes.length
+    || !logEvent.payload.every((byte, index) => byte === logBytes[index])
+  ) {
+    throw new Error(`${label}: event[0] payload bytes mismatch with compile log`);
   }
-  const payload = eventsBytes.subarray(8);
-  if (payload.length !== logBytes.length || !payload.every((byte, index) => byte === logBytes[index])) {
-    throw new Error(`${label}: event payload bytes mismatch with compile log`);
+
+  const statsEvent = events[1];
+  if (statsEvent.kind !== 2) {
+    throw new Error(`${label}: event[1] kind expected 2, got ${statsEvent.kind}`);
+  }
+  let statsText;
+  try {
+    statsText = new TextDecoder('utf-8', { fatal: true }).decode(statsEvent.payload);
+  } catch {
+    throw new Error(`${label}: event[1] payload is not valid utf-8`);
+  }
+
+  let stats;
+  try {
+    stats = JSON.parse(statsText);
+  } catch {
+    throw new Error(`${label}: event[1] payload is not valid JSON`);
+  }
+  if (typeof stats !== 'object' || stats === null) {
+    throw new Error(`${label}: event[1] JSON payload must be object`);
+  }
+  const statsKeys = Object.keys(stats);
+  const expectedKeys = [
+    'token_count',
+    'control_seq_count',
+    'char_count',
+    'space_count',
+    'begin_group_count',
+    'end_group_count',
+    'max_group_depth',
+  ];
+  if (statsKeys.length !== expectedKeys.length || !expectedKeys.every((key) => statsKeys.includes(key))) {
+    throw new Error(`${label}: event[1] JSON keys mismatch`);
+  }
+  for (const [key, value] of Object.entries(expectedStatsExact)) {
+    if (stats[key] !== value) {
+      throw new Error(`${label}: event[1] ${key} expected ${value}, got ${stats[key]}`);
+    }
+  }
+  if (!(typeof stats.token_count === 'number' && stats.token_count > 0)) {
+    throw new Error(`${label}: event[1] token_count expected >0`);
+  }
+  if (!(typeof stats.char_count === 'number' && stats.char_count > 0)) {
+    throw new Error(`${label}: event[1] char_count expected >0`);
   }
 }
 
@@ -356,8 +421,14 @@ function assertMainXdvArtifactEmpty(label) {
   }
 }
 
-const mainTex = '\\documentclass{article}\\n\\\\begin{document}\\nHello.\\n\\\\end{document}\\n';
+const mainTex = '\\documentclass{article}\n\\begin{document}\nHello.\n\\end{document}\n';
 const mainBytes = new TextEncoder().encode(mainTex);
+const expectedMainTexStatsExact = {
+  control_seq_count: 3,
+  begin_group_count: 3,
+  end_group_count: 3,
+  max_group_depth: 1,
+};
 const ok = callWithBytes(mainBytes, 'main_tex', (ptr, len) => validate(ptr, len));
 if (ok !== 0) {
   throw new Error(`validate failed, code=${ok}`);
@@ -444,7 +515,7 @@ expectNotImplemented(compileMain(), 'compile_main_v0');
   if (logBytes.length > 1024) {
     throw new Error(`compile_main log exceeds default max_log_bytes: ${logBytes.length}`);
   }
-  assertEventsMatchLog(logBytes, 'compile_main');
+  assertEventsMatchLogAndStats(logBytes, expectedMainTexStatsExact, 'compile_main');
   assertMainXdvArtifactEmpty('compile_main');
 }
 
@@ -481,7 +552,7 @@ expectNotImplemented(compileRun(), 'compile_run_v0(valid request)');
   if (logBytes.length > 1024) {
     throw new Error(`compile_run log exceeds max_log_bytes: ${logBytes.length}`);
   }
-  assertEventsMatchLog(logBytes, 'compile_run(valid request)');
+  assertEventsMatchLogAndStats(logBytes, expectedMainTexStatsExact, 'compile_run(valid request)');
   assertMainXdvArtifactEmpty('compile_run(valid request)');
 }
 

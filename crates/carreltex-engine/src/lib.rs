@@ -1,14 +1,17 @@
 pub mod tex;
 
+use crate::tex::tokenize_v0::{tokenize_v0, TokenV0};
 use carreltex_core::{
     build_compile_result_v0, truncate_log_bytes_v0, CompileRequestV0, CompileResultV0,
     CompileStatus, Mount, DEFAULT_COMPILE_MAIN_MAX_LOG_BYTES_V0, MAX_LOG_BYTES_V0,
+    MAX_TEX_STATS_JSON_BYTES_V0,
 };
-use crate::tex::tokenize_v0::tokenize_v0;
 
 const MISSING_COMPONENTS_V0: &[&str] = &["tex-engine"];
-const NOT_IMPLEMENTED_LOG_BYTES: &[u8] = b"NOT_IMPLEMENTED: tex-engine compile pipeline is not wired yet";
+const NOT_IMPLEMENTED_LOG_BYTES: &[u8] =
+    b"NOT_IMPLEMENTED: tex-engine compile pipeline is not wired yet";
 const INVALID_INPUT_LOG_BYTES: &[u8] = b"";
+const EMPTY_TEX_STATS_JSON: &str = "";
 
 pub fn compile_main_v0(mount: &mut Mount) -> CompileResultV0 {
     let request = CompileRequestV0 {
@@ -26,6 +29,7 @@ pub fn compile_request_v0(mount: &mut Mount, req: &CompileRequestV0) -> CompileR
             &[],
             truncate_log_bytes_v0(INVALID_INPUT_LOG_BYTES, req.max_log_bytes),
             vec![],
+            EMPTY_TEX_STATS_JSON.to_owned(),
         );
     }
 
@@ -35,6 +39,7 @@ pub fn compile_request_v0(mount: &mut Mount, req: &CompileRequestV0) -> CompileR
             &[],
             truncate_log_bytes_v0(INVALID_INPUT_LOG_BYTES, req.max_log_bytes),
             vec![],
+            EMPTY_TEX_STATS_JSON.to_owned(),
         );
     }
     if req.max_log_bytes > MAX_LOG_BYTES_V0 {
@@ -43,6 +48,7 @@ pub fn compile_request_v0(mount: &mut Mount, req: &CompileRequestV0) -> CompileR
             &[],
             truncate_log_bytes_v0(INVALID_INPUT_LOG_BYTES, req.max_log_bytes),
             vec![],
+            EMPTY_TEX_STATS_JSON.to_owned(),
         );
     }
 
@@ -54,15 +60,41 @@ pub fn compile_request_v0(mount: &mut Mount, req: &CompileRequestV0) -> CompileR
                 &[],
                 truncate_log_bytes_v0(INVALID_INPUT_LOG_BYTES, req.max_log_bytes),
                 vec![],
+                EMPTY_TEX_STATS_JSON.to_owned(),
             );
         }
     };
-    if tokenize_v0(entry_bytes).is_err() {
+    let tokens = match tokenize_v0(entry_bytes) {
+        Ok(tokens) => tokens,
+        Err(_) => {
+            return build_compile_result_v0(
+                CompileStatus::InvalidInput,
+                &[],
+                truncate_log_bytes_v0(INVALID_INPUT_LOG_BYTES, req.max_log_bytes),
+                vec![],
+                EMPTY_TEX_STATS_JSON.to_owned(),
+            );
+        }
+    };
+    let tex_stats_json = match build_tex_stats_json_v0(&tokens) {
+        Ok(json) => json,
+        Err(_) => {
+            return build_compile_result_v0(
+                CompileStatus::InvalidInput,
+                &[],
+                truncate_log_bytes_v0(INVALID_INPUT_LOG_BYTES, req.max_log_bytes),
+                vec![],
+                EMPTY_TEX_STATS_JSON.to_owned(),
+            );
+        }
+    };
+    if tex_stats_json.is_empty() || tex_stats_json.len() > MAX_TEX_STATS_JSON_BYTES_V0 {
         return build_compile_result_v0(
             CompileStatus::InvalidInput,
             &[],
             truncate_log_bytes_v0(INVALID_INPUT_LOG_BYTES, req.max_log_bytes),
             vec![],
+            EMPTY_TEX_STATS_JSON.to_owned(),
         );
     }
 
@@ -71,7 +103,57 @@ pub fn compile_request_v0(mount: &mut Mount, req: &CompileRequestV0) -> CompileR
         MISSING_COMPONENTS_V0,
         truncate_log_bytes_v0(NOT_IMPLEMENTED_LOG_BYTES, req.max_log_bytes),
         vec![],
+        tex_stats_json,
     )
+}
+
+fn build_tex_stats_json_v0(tokens: &[TokenV0]) -> Result<String, ()> {
+    let mut depth: u64 = 0;
+    let mut max_depth: u64 = 0;
+    let mut control_seq_count: u64 = 0;
+    let mut char_count: u64 = 0;
+    let mut space_count: u64 = 0;
+    let mut begin_group_count: u64 = 0;
+    let mut end_group_count: u64 = 0;
+
+    for token in tokens {
+        match token {
+            TokenV0::ControlSeq(_) => {
+                control_seq_count = control_seq_count.checked_add(1).ok_or(())?;
+            }
+            TokenV0::Char(_) => {
+                char_count = char_count.checked_add(1).ok_or(())?;
+            }
+            TokenV0::Space => {
+                space_count = space_count.checked_add(1).ok_or(())?;
+            }
+            TokenV0::BeginGroup => {
+                begin_group_count = begin_group_count.checked_add(1).ok_or(())?;
+                depth = depth.checked_add(1).ok_or(())?;
+                max_depth = max_depth.max(depth);
+            }
+            TokenV0::EndGroup => {
+                if depth == 0 {
+                    return Err(());
+                }
+                end_group_count = end_group_count.checked_add(1).ok_or(())?;
+                depth -= 1;
+            }
+        }
+    }
+
+    if depth != 0 {
+        return Err(());
+    }
+
+    let token_count: u64 = tokens.len().try_into().map_err(|_| ())?;
+    let out = format!(
+        "{{\"token_count\":{token_count},\"control_seq_count\":{control_seq_count},\"char_count\":{char_count},\"space_count\":{space_count},\"begin_group_count\":{begin_group_count},\"end_group_count\":{end_group_count},\"max_group_depth\":{max_depth}}}"
+    );
+    if out.len() > MAX_TEX_STATS_JSON_BYTES_V0 {
+        return Err(());
+    }
+    Ok(out)
 }
 
 #[cfg(test)]
@@ -126,6 +208,7 @@ mod tests {
         assert!(result.log_bytes.starts_with(b"NOT_IMPLEMENTED:"));
         assert!(result.log_bytes.len() <= valid_request().max_log_bytes as usize);
         assert!(result.main_xdv_bytes.is_empty());
+        assert!(!result.tex_stats_json.is_empty());
     }
 
     #[test]
@@ -138,6 +221,7 @@ mod tests {
         let result = compile_request_v0(&mut mount, &request);
         assert_eq!(result.status, CompileStatus::InvalidInput);
         assert!(result.main_xdv_bytes.is_empty());
+        assert!(result.tex_stats_json.is_empty());
     }
 
     #[test]
@@ -150,12 +234,14 @@ mod tests {
         let result = compile_request_v0(&mut mount, &request);
         assert_eq!(result.status, CompileStatus::InvalidInput);
         assert!(result.main_xdv_bytes.is_empty());
+        assert!(result.tex_stats_json.is_empty());
 
         request = valid_request();
         request.max_log_bytes = 0;
         let result = compile_request_v0(&mut mount, &request);
         assert_eq!(result.status, CompileStatus::InvalidInput);
         assert!(result.main_xdv_bytes.is_empty());
+        assert!(result.tex_stats_json.is_empty());
     }
 
     #[test]
@@ -168,6 +254,7 @@ mod tests {
         let result = compile_request_v0(&mut mount, &request);
         assert_eq!(result.status, CompileStatus::InvalidInput);
         assert!(result.main_xdv_bytes.is_empty());
+        assert!(result.tex_stats_json.is_empty());
     }
 
     #[test]
@@ -182,13 +269,13 @@ mod tests {
         assert_eq!(result.log_bytes.len(), 8);
         assert_eq!(result.log_bytes, b"NOT_IMPL".to_vec());
         assert!(result.main_xdv_bytes.is_empty());
+        assert!(!result.tex_stats_json.is_empty());
     }
 
     #[test]
     fn compile_request_rejects_trailing_backslash_in_main_tex() {
         let mut mount = Mount::default();
-        let trailing_backslash_main =
-            b"\\documentclass{article}\n\\begin{document}\nHello\\";
+        let trailing_backslash_main = b"\\documentclass{article}\n\\begin{document}\nHello\\";
         assert!(mount.add_file(b"main.tex", trailing_backslash_main).is_ok());
 
         let result = compile_request_v0(&mut mount, &valid_request());
@@ -197,6 +284,7 @@ mod tests {
             result.report_json,
             "{\"status\":\"INVALID_INPUT\",\"missing_components\":[]}"
         );
+        assert!(result.tex_stats_json.is_empty());
     }
 
     #[test]
@@ -211,5 +299,33 @@ mod tests {
             "{\"status\":\"NOT_IMPLEMENTED\",\"missing_components\":[\"tex-engine\"]}"
         );
         assert!(result.log_bytes.starts_with(b"NOT_IMPLEMENTED:"));
+        assert!(!result.tex_stats_json.is_empty());
+    }
+
+    #[test]
+    fn compile_request_rejects_unbalanced_groups() {
+        let mut mount = Mount::default();
+        let unbalanced = b"\\documentclass{article}\n\\begin{document}\n{Hello\n\\end{document}\n";
+        assert!(mount.add_file(b"main.tex", unbalanced).is_ok());
+
+        let result = compile_request_v0(&mut mount, &valid_request());
+        assert_eq!(result.status, CompileStatus::InvalidInput);
+        assert!(result.tex_stats_json.is_empty());
+    }
+
+    #[test]
+    fn compile_request_stats_json_contains_expected_fields() {
+        let mut mount = Mount::default();
+        assert!(mount.add_file(b"main.tex", valid_main()).is_ok());
+
+        let result = compile_request_v0(&mut mount, &valid_request());
+        assert_eq!(result.status, CompileStatus::NotImplemented);
+        assert!(result.tex_stats_json.contains("\"token_count\":"));
+        assert!(result.tex_stats_json.contains("\"control_seq_count\":"));
+        assert!(result.tex_stats_json.contains("\"char_count\":"));
+        assert!(result.tex_stats_json.contains("\"space_count\":"));
+        assert!(result.tex_stats_json.contains("\"begin_group_count\":"));
+        assert!(result.tex_stats_json.contains("\"end_group_count\":"));
+        assert!(result.tex_stats_json.contains("\"max_group_depth\":"));
     }
 }
