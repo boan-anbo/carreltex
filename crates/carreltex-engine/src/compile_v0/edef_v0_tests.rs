@@ -46,6 +46,20 @@ fn edef_expands_body_once_at_definition_time() {
 }
 
 #[test]
+fn edef_snapshot_is_stable_across_input_boundary() {
+    let baseline = baseline_char_count();
+    let mut mount = Mount::default();
+    let main = b"\\documentclass{article}\n\\begin{document}\n\\input{sub.tex}\\edef\\foo{\\bar}\\def\\bar{A}\\foo\n\\end{document}\n";
+    let sub = b"\\def\\bar{XYZ}";
+    assert!(mount.add_file(b"main.tex", main).is_ok());
+    assert!(mount.add_file(b"sub.tex", sub).is_ok());
+    let result = compile_request_v0(&mut mount, &valid_request());
+    assert_eq!(result.status, CompileStatus::NotImplemented);
+    let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
+    assert_eq!(char_count, baseline + 3);
+}
+
+#[test]
 fn edef_is_snapshot_not_dynamic_after_redefinition() {
     let baseline = baseline_char_count();
     let mut mount = Mount::default();
