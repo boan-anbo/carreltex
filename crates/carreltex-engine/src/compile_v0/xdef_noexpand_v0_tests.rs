@@ -102,3 +102,39 @@ fn xdef_params_unsupported() {
     assert_eq!(result.status, CompileStatus::InvalidInput);
     assert!(result.log_bytes.ends_with(b"macro_xdef_unsupported"));
 }
+
+#[test]
+fn begingroup_def_does_not_leak() {
+    let baseline = baseline_char_count();
+    let mut mount = Mount::default();
+    let main = b"\\documentclass{article}\n\\begin{document}\n\\begingroup\\def\\foo{XYZ}\\endgroup\\foo\n\\end{document}\n";
+    assert!(mount.add_file(b"main.tex", main).is_ok());
+    let result = compile_request_v0(&mut mount, &valid_request());
+    assert_eq!(result.status, CompileStatus::NotImplemented);
+    let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
+    assert_eq!(char_count, baseline);
+}
+
+#[test]
+fn begingroup_global_def_leaks() {
+    let baseline = baseline_char_count();
+    let mut mount = Mount::default();
+    let main = b"\\documentclass{article}\n\\begin{document}\n\\begingroup\\global\\def\\foo{XYZ}\\endgroup\\foo\n\\end{document}\n";
+    assert!(mount.add_file(b"main.tex", main).is_ok());
+    let result = compile_request_v0(&mut mount, &valid_request());
+    assert_eq!(result.status, CompileStatus::NotImplemented);
+    let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
+    assert_eq!(char_count, baseline + 3);
+}
+
+#[test]
+fn relax_is_noop() {
+    let baseline = baseline_char_count();
+    let mut mount = Mount::default();
+    let main = b"\\documentclass{article}\n\\begin{document}\n\\def\\foo{XYZ}\\relax\\foo\n\\end{document}\n";
+    assert!(mount.add_file(b"main.tex", main).is_ok());
+    let result = compile_request_v0(&mut mount, &valid_request());
+    assert_eq!(result.status, CompileStatus::NotImplemented);
+    let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
+    assert_eq!(char_count, baseline + 3);
+}
