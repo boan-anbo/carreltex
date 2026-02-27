@@ -447,6 +447,54 @@ export function runCasesV0(ctx, mem, helpers) {
   }
 
   if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before macro global-def case failed');
+  }
+  const macroGlobalDefMainBytes = new TextEncoder().encode('{\\global\\def\\foo{XYZ}}\\foo');
+  if (addMountedFile('main.tex', macroGlobalDefMainBytes, 'macro_global_def_main') !== 0) {
+    throw new Error('mount_add_file(macro global-def main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) {
+    throw new Error('mount_finalize for macro global-def case failed');
+  }
+  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(macro global-def)');
+  {
+    const report = readCompileReportJson();
+    if (report.status !== 'NOT_IMPLEMENTED') {
+      throw new Error(`compile_main(macro global-def) report.status expected NOT_IMPLEMENTED, got ${report.status}`);
+    }
+    const logBytes = readCompileLogBytes();
+    const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(macro global-def)');
+    if (gdefBaselineCharCount === null) {
+      throw new Error('gdefBaselineCharCount not initialized');
+    }
+    if (stats.char_count !== gdefBaselineCharCount + 3) {
+      throw new Error(`compile_main(macro global-def) char_count delta expected +3, got baseline=${gdefBaselineCharCount}, current=${stats.char_count}`);
+    }
+    assertMainXdvArtifactEmpty('compile_main(macro global-def)');
+  }
+
+  if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before macro global-prefix invalid case failed');
+  }
+  const macroGlobalPrefixInvalidMainBytes = new TextEncoder().encode('\\global\\foo');
+  if (addMountedFile('main.tex', macroGlobalPrefixInvalidMainBytes, 'macro_global_prefix_invalid_main') !== 0) {
+    throw new Error('mount_add_file(macro global-prefix invalid main.tex) failed');
+  }
+  const macroGlobalPrefixInvalidFinalizeCode = ctx.mountFinalize();
+  if (macroGlobalPrefixInvalidFinalizeCode !== 0 && macroGlobalPrefixInvalidFinalizeCode !== 1) {
+    throw new Error(`mount_finalize(macro global-prefix invalid) unexpected code=${macroGlobalPrefixInvalidFinalizeCode}`);
+  }
+  expectInvalid(ctx.compileMain(), 'compile_main_v0(macro global-prefix invalid)');
+  {
+    const logBytes = readCompileLogBytes();
+    const logText = new TextDecoder().decode(logBytes);
+    if (!logText.startsWith('INVALID_INPUT:') || !logText.includes('macro_global_prefix_unsupported')) {
+      throw new Error(`compile_main macro global-prefix invalid log mismatch: ${logText}`);
+    }
+    assertNoEvents('compile_main_v0(macro global-prefix invalid)');
+  }
+
+  if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before compile_request negative setter tests failed');
   }
   if (addMountedFile('main.tex', mainBytes, 'compile_request_base_main') !== 0) {
