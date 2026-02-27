@@ -1,6 +1,7 @@
 import { runMeaningCases } from './cases_v0_meaning.mjs';
 import { runCountCases } from './cases_v0_count.mjs';
 import { runEdefCases } from './cases_v0_edef.mjs';
+import { runXdefNoexpandCases } from './cases_v0_xdef_noexpand.mjs';
 
 export function runCasesV0(ctx, mem, helpers) {
   const {
@@ -809,6 +810,7 @@ export function runCasesV0(ctx, mem, helpers) {
   }
   runCountCases(ctx, { addMountedFile, expectInvalid, expectNotImplemented, readCompileLogBytes, assertEventsMatchLogAndStats, assertMainXdvArtifactEmpty, assertNoEvents });
   runEdefCases(ctx, { addMountedFile, expectInvalid, expectNotImplemented, readCompileLogBytes, assertEventsMatchLogAndStats, assertMainXdvArtifactEmpty, assertNoEvents });
+  runXdefNoexpandCases(ctx, { addMountedFile, expectInvalid, expectNotImplemented, readCompileLogBytes, assertEventsMatchLogAndStats, assertMainXdvArtifactEmpty, assertNoEvents });
 
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before compile_request negative setter tests failed');
