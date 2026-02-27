@@ -37,6 +37,11 @@ const mountAddFile = instance.exports.carreltex_wasm_mount_add_file;
 const mountFinalize = instance.exports.carreltex_wasm_mount_finalize;
 const mountHasFile = instance.exports.carreltex_wasm_mount_has_file;
 const compileMain = instance.exports.carreltex_wasm_compile_main_v0;
+const compileRequestReset = instance.exports.carreltex_wasm_compile_request_reset_v0;
+const compileRequestSetEntrypoint = instance.exports.carreltex_wasm_compile_request_set_entrypoint_v0;
+const compileRequestSetEpoch = instance.exports.carreltex_wasm_compile_request_set_source_date_epoch_v0;
+const compileRequestSetMaxLogBytes = instance.exports.carreltex_wasm_compile_request_set_max_log_bytes_v0;
+const compileRun = instance.exports.carreltex_wasm_compile_run_v0;
 const reportLen = instance.exports.carreltex_wasm_compile_report_len_v0;
 const reportCopy = instance.exports.carreltex_wasm_compile_report_copy_v0;
 
@@ -49,6 +54,11 @@ for (const [name, fn] of [
   ['carreltex_wasm_mount_finalize', mountFinalize],
   ['carreltex_wasm_mount_has_file', mountHasFile],
   ['carreltex_wasm_compile_main_v0', compileMain],
+  ['carreltex_wasm_compile_request_reset_v0', compileRequestReset],
+  ['carreltex_wasm_compile_request_set_entrypoint_v0', compileRequestSetEntrypoint],
+  ['carreltex_wasm_compile_request_set_source_date_epoch_v0', compileRequestSetEpoch],
+  ['carreltex_wasm_compile_request_set_max_log_bytes_v0', compileRequestSetMaxLogBytes],
+  ['carreltex_wasm_compile_run_v0', compileRun],
   ['carreltex_wasm_compile_report_len_v0', reportLen],
   ['carreltex_wasm_compile_report_copy_v0', reportCopy],
 ]) {
@@ -95,6 +105,36 @@ function expectInvalid(value, label) {
   }
 }
 
+function expectNotImplemented(value, label) {
+  if (value !== 2) {
+    throw new Error(`${label} expected NOT_IMPLEMENTED(2), got ${value}`);
+  }
+}
+
+function readCompileReportJson() {
+  const jsonLen = reportLen();
+  if (!Number.isInteger(jsonLen) || jsonLen <= 0 || jsonLen > 4096) {
+    throw new Error(`report_len_v0 unexpected: ${jsonLen}`);
+  }
+
+  const outPtr = alloc(jsonLen);
+  if (!Number.isInteger(outPtr) || outPtr <= 0) {
+    throw new Error(`alloc failed for report, ptr=${outPtr}`);
+  }
+
+  try {
+    const written = reportCopy(outPtr, jsonLen);
+    if (written !== jsonLen) {
+      throw new Error(`report_copy_v0 expected ${jsonLen}, got ${written}`);
+    }
+    const outBytes = new Uint8Array(memory.buffer, outPtr, jsonLen);
+    const text = new TextDecoder().decode(outBytes);
+    return JSON.parse(text);
+  } finally {
+    dealloc(outPtr, jsonLen);
+  }
+}
+
 const mainTex = '\\documentclass{article}\\n\\\\begin{document}\\nHello.\\n\\\\end{document}\\n';
 const mainBytes = new TextEncoder().encode(mainTex);
 const ok = callWithBytes(mainBytes, 'main_tex', (ptr, len) => validate(ptr, len));
@@ -127,37 +167,55 @@ if (hasMissing !== 1) {
   throw new Error(`mount_has_file(missing.tex) expected 1, got ${hasMissing}`);
 }
 
-const compileCode = compileMain();
-if (compileCode !== 2) {
-  throw new Error(`compile_main_v0 expected NOT_IMPLEMENTED(2), got ${compileCode}`);
-}
-
-const jsonLen = reportLen();
-if (!Number.isInteger(jsonLen) || jsonLen <= 0 || jsonLen > 4096) {
-  throw new Error(`report_len_v0 unexpected: ${jsonLen}`);
-}
-
-const outPtr = alloc(jsonLen);
-if (!Number.isInteger(outPtr) || outPtr <= 0) {
-  throw new Error(`alloc failed for report, ptr=${outPtr}`);
-}
-try {
-  const written = reportCopy(outPtr, jsonLen);
-  if (written !== jsonLen) {
-    throw new Error(`report_copy_v0 expected ${jsonLen}, got ${written}`);
-  }
-  const outBytes = new Uint8Array(memory.buffer, outPtr, jsonLen);
-  const text = new TextDecoder().decode(outBytes);
-  const report = JSON.parse(text);
+expectNotImplemented(compileMain(), 'compile_main_v0');
+{
+  const report = readCompileReportJson();
   if (report.status !== 'NOT_IMPLEMENTED') {
-    throw new Error(`report.status expected NOT_IMPLEMENTED, got ${report.status}`);
+    throw new Error(`compile_main report.status expected NOT_IMPLEMENTED, got ${report.status}`);
   }
   if (!Array.isArray(report.missing_components) || report.missing_components.length === 0) {
-    throw new Error('report.missing_components expected non-empty array');
+    throw new Error('compile_main report.missing_components expected non-empty array');
   }
-} finally {
-  dealloc(outPtr, jsonLen);
 }
+
+if (compileRequestReset() !== 0) {
+  throw new Error('compile_request_reset_v0 failed');
+}
+const requestEntrypoint = new TextEncoder().encode('main.tex');
+const setEntrypointCode = callWithBytes(requestEntrypoint, 'compile_request_entrypoint', (ptr, len) =>
+  compileRequestSetEntrypoint(ptr, len),
+);
+if (setEntrypointCode !== 0) {
+  throw new Error(`compile_request_set_entrypoint_v0(main.tex) failed, code=${setEntrypointCode}`);
+}
+if (compileRequestSetEpoch(1700000000n) !== 0) {
+  throw new Error('compile_request_set_source_date_epoch_v0 failed');
+}
+if (compileRequestSetMaxLogBytes(1024) !== 0) {
+  throw new Error('compile_request_set_max_log_bytes_v0 failed');
+}
+expectNotImplemented(compileRun(), 'compile_run_v0(valid request)');
+{
+  const report = readCompileReportJson();
+  if (report.status !== 'NOT_IMPLEMENTED') {
+    throw new Error(`compile_run report.status expected NOT_IMPLEMENTED, got ${report.status}`);
+  }
+  if (!Array.isArray(report.missing_components) || report.missing_components.length === 0) {
+    throw new Error('compile_run report.missing_components expected non-empty array');
+  }
+}
+
+if (compileRequestReset() !== 0) {
+  throw new Error('compile_request_reset_v0 before negative setter tests failed');
+}
+expectInvalid(
+  callWithBytes(new TextEncoder().encode('other.tex'), 'compile_request_bad_entrypoint', (ptr, len) =>
+    compileRequestSetEntrypoint(ptr, len),
+  ),
+  'compile_request_set_entrypoint_v0(other.tex)',
+);
+expectInvalid(compileRequestSetEpoch(0n), 'compile_request_set_source_date_epoch_v0(0)');
+expectInvalid(compileRequestSetMaxLogBytes(0), 'compile_request_set_max_log_bytes_v0(0)');
 
 if (mountReset() !== 0) {
   throw new Error('mount_reset for negative cases failed');
