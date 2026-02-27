@@ -110,10 +110,10 @@ fn ifnum_depth_cap_is_invalid() {
 }
 
 #[test]
-fn caret_hex_decode_in_document_body_is_counted_in_stats() {
+fn caret_hex_uppercase_decode_in_document_body_is_counted_in_stats() {
     let baseline = baseline_char_count();
     let mut mount = Mount::default();
-    let main = b"\\documentclass{article}\n\\begin{document}\nA^^41B\n\\end{document}\n";
+    let main = b"\\documentclass{article}\n\\begin{document}\nA^^4AB\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
     assert_eq!(result.status, CompileStatus::NotImplemented);

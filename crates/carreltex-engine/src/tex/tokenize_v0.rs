@@ -32,7 +32,7 @@ fn push_token(tokens: &mut Vec<TokenV0>, token: TokenV0) -> Result<(), TokenizeE
 ///
 /// v0 rules:
 /// - Rejects NUL (`0x00`) anywhere (`InvalidInput`).
-/// - Decodes `^^hh` where `h` is lowercase hex (`[0-9a-f]`) to one byte.
+/// - Decodes `^^hh` where `h` is hex (`[0-9a-fA-F]`) to one byte.
 /// - Any other `^^` form is `CaretNotSupported`.
 /// - `%` starts a comment that is skipped until `\n` or EOF; the newline itself
 ///   is not consumed by the comment and is processed normally.
@@ -150,15 +150,16 @@ fn decode_caret_hex_v0(input: &[u8], index: usize) -> Result<(u8, usize), Tokeni
     if index + 3 >= input.len() {
         return Err(TokenizeErrorV0::CaretNotSupported);
     }
-    let high = parse_lower_hex_nibble_v0(input[index + 2])?;
-    let low = parse_lower_hex_nibble_v0(input[index + 3])?;
+    let high = parse_hex_nibble_v0(input[index + 2])?;
+    let low = parse_hex_nibble_v0(input[index + 3])?;
     Ok((((high << 4) | low), index + 4))
 }
 
-fn parse_lower_hex_nibble_v0(byte: u8) -> Result<u8, TokenizeErrorV0> {
+fn parse_hex_nibble_v0(byte: u8) -> Result<u8, TokenizeErrorV0> {
     match byte {
         b'0'..=b'9' => Ok(byte - b'0'),
         b'a'..=b'f' => Ok(byte - b'a' + 10),
+        b'A'..=b'F' => Ok(byte - b'A' + 10),
         _ => Err(TokenizeErrorV0::CaretNotSupported),
     }
 }
@@ -236,6 +237,12 @@ mod tests {
     fn caret_hex_ff_is_allowed() {
         let tokens = tokenize_v0(b"^^ff").expect("tokenize should succeed");
         assert_eq!(tokens, vec![TokenV0::Char(0xff)]);
+    }
+
+    #[test]
+    fn caret_hex_uppercase_is_allowed() {
+        let tokens = tokenize_v0(b"^^4A").expect("tokenize should succeed");
+        assert_eq!(tokens, vec![TokenV0::Char(0x4a)]);
     }
 
     #[test]
