@@ -32,3 +32,5 @@ scripts/proof_wasm_smoke.sh
 ```bash
 scripts/proof_v0.sh
 ```
+
+CI runs the same `scripts/proof_v0.sh` gate on every PR and on pushes to `main`.

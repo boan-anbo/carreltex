@@ -1,0 +1,34 @@
+name: proof-v0
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: proof-v0-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  proof-v0:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache Rust artifacts
+        uses: Swatinem/rust-cache@v2
+
+      - name: Run v0 proof bundle
+        run: ./scripts/proof_v0.sh
