@@ -1,10 +1,10 @@
 [workspace]
 members = [
   "crates/carreltex-wasm-smoke",
+  "crates/carreltex-core",
 ]
 resolver = "2"
 
 [workspace.package]
 edition = "2021"
 license = "MIT"
-

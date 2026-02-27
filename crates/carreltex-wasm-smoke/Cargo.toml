@@ -8,4 +8,4 @@ license.workspace = true
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-
+carreltex-core = { path = "../carreltex-core" }
