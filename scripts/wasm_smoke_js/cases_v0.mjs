@@ -474,6 +474,60 @@ export function runCasesV0(ctx, mem, helpers) {
   }
 
   if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before macro global-gdef case failed');
+  }
+  const macroGlobalGdefMainBytes = new TextEncoder().encode('{\\global\\gdef\\foo{XYZ}}\\foo');
+  if (addMountedFile('main.tex', macroGlobalGdefMainBytes, 'macro_global_gdef_main') !== 0) {
+    throw new Error('mount_add_file(macro global-gdef main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) {
+    throw new Error('mount_finalize for macro global-gdef case failed');
+  }
+  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(macro global-gdef)');
+  {
+    const report = readCompileReportJson();
+    if (report.status !== 'NOT_IMPLEMENTED') {
+      throw new Error(`compile_main(macro global-gdef) report.status expected NOT_IMPLEMENTED, got ${report.status}`);
+    }
+    const logBytes = readCompileLogBytes();
+    const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(macro global-gdef)');
+    if (gdefBaselineCharCount === null) {
+      throw new Error('gdefBaselineCharCount not initialized');
+    }
+    if (stats.char_count !== gdefBaselineCharCount + 3) {
+      throw new Error(`compile_main(macro global-gdef) char_count delta expected +3, got baseline=${gdefBaselineCharCount}, current=${stats.char_count}`);
+    }
+    assertMainXdvArtifactEmpty('compile_main(macro global-gdef)');
+  }
+
+  if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before macro stacked global-def case failed');
+  }
+  const macroGlobalStackedDefMainBytes = new TextEncoder().encode('{\\global\\global\\def\\foo{XYZ}}\\foo');
+  if (addMountedFile('main.tex', macroGlobalStackedDefMainBytes, 'macro_global_stacked_def_main') !== 0) {
+    throw new Error('mount_add_file(macro stacked global-def main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) {
+    throw new Error('mount_finalize for macro stacked global-def case failed');
+  }
+  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(macro stacked global-def)');
+  {
+    const report = readCompileReportJson();
+    if (report.status !== 'NOT_IMPLEMENTED') {
+      throw new Error(`compile_main(macro stacked global-def) report.status expected NOT_IMPLEMENTED, got ${report.status}`);
+    }
+    const logBytes = readCompileLogBytes();
+    const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(macro stacked global-def)');
+    if (gdefBaselineCharCount === null) {
+      throw new Error('gdefBaselineCharCount not initialized');
+    }
+    if (stats.char_count !== gdefBaselineCharCount + 3) {
+      throw new Error(`compile_main(macro stacked global-def) char_count delta expected +3, got baseline=${gdefBaselineCharCount}, current=${stats.char_count}`);
+    }
+    assertMainXdvArtifactEmpty('compile_main(macro stacked global-def)');
+  }
+
+  if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before macro global-prefix invalid case failed');
   }
   const macroGlobalPrefixInvalidMainBytes = new TextEncoder().encode('\\global\\foo');
