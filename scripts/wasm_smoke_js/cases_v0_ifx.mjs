@@ -77,6 +77,33 @@ export function runIfxCases(ctx, helpers) {
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before ifx duplicate else invalid case failed');
   }
+  const inputAliasEqualMainBytes = new TextEncoder().encode('\\documentclass{article}\n\\begin{document}\n\\input{sub.tex}\\let\\bar=\\foo\\ifx\\bar\\foo SAME\\else DIFF\\fi\n\\end{document}\n');
+  const inputAliasEqualSubBytes = new TextEncoder().encode('\\def\\foo{XYZ}');
+  if (addMountedFile('main.tex', inputAliasEqualMainBytes, 'macro_ifx_input_alias_equal_main') !== 0) {
+    throw new Error('mount_add_file(macro ifx input alias==source main.tex) failed');
+  }
+  if (addMountedFile('sub.tex', inputAliasEqualSubBytes, 'macro_ifx_input_alias_equal_sub') !== 0) {
+    throw new Error('mount_add_file(macro ifx input alias==source sub.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) {
+    throw new Error('mount_finalize for ifx input alias==source case failed');
+  }
+  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(macro ifx input alias==source)');
+  {
+    const logBytes = readCompileLogBytes();
+    const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(macro ifx input alias==source)');
+    if (baselineCharCount === null) {
+      throw new Error('baselineCharCount not initialized for ifx input alias==source case');
+    }
+    if (stats.char_count !== baselineCharCount + 4) {
+      throw new Error(`compile_main(macro ifx input alias==source) char_count delta expected +4, got baseline=${baselineCharCount}, current=${stats.char_count}`);
+    }
+    assertMainXdvArtifactEmpty('compile_main(macro ifx input alias==source)');
+  }
+
+  if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before ifx duplicate else invalid case failed');
+  }
   const invalidMainBytes = new TextEncoder().encode('\\ifx\\foo\\bar X\\else Y\\else Z\\fi');
   if (addMountedFile('main.tex', invalidMainBytes, 'macro_ifx_else_invalid_main') !== 0) {
     throw new Error('mount_add_file(macro ifx duplicate else invalid main.tex) failed');

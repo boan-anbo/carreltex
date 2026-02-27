@@ -125,3 +125,17 @@ fn ifx_let_to_undefined_is_equal_to_undefined_control_sequence() {
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline + 3);
 }
+
+#[test]
+fn ifx_alias_equality_works_across_input_boundary() {
+    let baseline = baseline_char_count();
+    let mut mount = Mount::default();
+    let main = b"\\documentclass{article}\n\\begin{document}\n\\input{sub.tex}\\let\\bar=\\foo\\ifx\\bar\\foo SAME\\else DIFF\\fi\n\\end{document}\n";
+    let sub = b"\\def\\foo{XYZ}";
+    assert!(mount.add_file(b"main.tex", main).is_ok());
+    assert!(mount.add_file(b"sub.tex", sub).is_ok());
+    let result = compile_request_v0(&mut mount, &valid_request());
+    assert_eq!(result.status, CompileStatus::NotImplemented);
+    let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
+    assert_eq!(char_count, baseline + 4);
+}
