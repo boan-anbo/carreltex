@@ -35,7 +35,7 @@ fn push_token(tokens: &mut Vec<TokenV0>, token: TokenV0) -> Result<(), TokenizeE
 /// - Rejects NUL (`0x00`) anywhere (`InvalidInput`).
 /// - Decodes `^^hh` where `h` is hex (`[0-9a-fA-F]`) to one byte.
 /// - Any other `^^` form is `CaretNotSupported`.
-/// - `%` starts a comment that is skipped until `\n` or EOF; the newline itself
+/// - `%` starts a comment that is skipped until `\n`, `\r`, or EOF; the line
 ///   is not consumed by the comment and is processed normally. Caret decoding
 ///   is not applied while consuming comment bytes.
 /// - Whitespace bytes (`' '`, `\t`, `\r`, `\n`) collapse into one `Space`.
@@ -57,7 +57,7 @@ pub fn tokenize_v0(input: &[u8]) -> Result<Vec<TokenV0>, TokenizeErrorV0> {
     while index < input.len() {
         if input[index] == b'%' {
             index += 1;
-            while index < input.len() && input[index] != b'\n' {
+            while index < input.len() && input[index] != b'\n' && input[index] != b'\r' {
                 index += 1;
             }
             continue;
@@ -213,6 +213,15 @@ mod tests {
         assert_eq!(
             tokens,
             vec![TokenV0::Char(b'a'), TokenV0::Space, TokenV0::Char(b'b')]
+        );
+    }
+
+    #[test]
+    fn crlf_collapses_to_single_space_token() {
+        let tokens = tokenize_v0(b"A\r\nB").expect("tokenize should succeed");
+        assert_eq!(
+            tokens,
+            vec![TokenV0::Char(b'A'), TokenV0::Space, TokenV0::Char(b'B')]
         );
     }
 
