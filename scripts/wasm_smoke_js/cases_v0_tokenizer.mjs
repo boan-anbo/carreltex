@@ -31,7 +31,7 @@ export function runTokenizerCases(ctx, helpers) {
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer caret-hex decode case failed');
   }
-  const decodeMainBytes = new TextEncoder().encode('\\documentclass{article}\n\\begin{document}\nA^^41B\n\\end{document}\n');
+  const decodeMainBytes = new TextEncoder().encode('\\documentclass{article}\n\\begin{document}\nA^^4AB\n\\end{document}\n');
   if (addMountedFile('main.tex', decodeMainBytes, 'tokenizer_caret_hex_main') !== 0) {
     throw new Error('mount_add_file(tokenizer caret-hex decode main.tex) failed');
   }
