@@ -54,7 +54,7 @@ export function runIfnumCases(ctx, helpers) {
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before ifnum false case failed');
   }
-  const falseMainBytes = new TextEncoder().encode('\\documentclass{article}\n\\begin{document}\n\\count0=2\\count1=1\\ifnum\\count0<\\count1 XYZ\\fi\n\\end{document}\n');
+  const falseMainBytes = new TextEncoder().encode('\\documentclass{article}\n\\begin{document}\n\\count0=2\\count1=1\\ifnum\\count0<\\count1 AAA\\else XYZ\\fi\n\\end{document}\n');
   if (addMountedFile('main.tex', falseMainBytes, 'macro_ifnum_false_main') !== 0) {
     throw new Error('mount_add_file(macro ifnum false main.tex) failed');
   }
@@ -68,8 +68,8 @@ export function runIfnumCases(ctx, helpers) {
     if (baselineCharCount === null) {
       throw new Error('baselineCharCount not initialized for ifnum false case');
     }
-    if (stats.char_count !== baselineCharCount) {
-      throw new Error(`compile_main(macro ifnum false) char_count delta expected +0, got baseline=${baselineCharCount}, current=${stats.char_count}`);
+    if (stats.char_count !== baselineCharCount + 3) {
+      throw new Error(`compile_main(macro ifnum false) char_count delta expected +3, got baseline=${baselineCharCount}, current=${stats.char_count}`);
     }
     assertMainXdvArtifactEmpty('compile_main(macro ifnum false)');
   }
@@ -77,7 +77,7 @@ export function runIfnumCases(ctx, helpers) {
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before ifnum else invalid case failed');
   }
-  const invalidMainBytes = new TextEncoder().encode('\\ifnum\\count0<\\count1 X\\else Y\\fi');
+  const invalidMainBytes = new TextEncoder().encode('\\ifnum\\count0<\\count1 X\\else Y\\else Z\\fi');
   if (addMountedFile('main.tex', invalidMainBytes, 'macro_ifnum_else_invalid_main') !== 0) {
     throw new Error('mount_add_file(macro ifnum else invalid main.tex) failed');
   }
@@ -89,7 +89,7 @@ export function runIfnumCases(ctx, helpers) {
   {
     const logBytes = readCompileLogBytes();
     const logText = new TextDecoder().decode(logBytes);
-    if (!logText.startsWith('INVALID_INPUT:') || !logText.includes('macro_ifnum_unsupported')) {
+    if (!logText.startsWith('INVALID_INPUT:') || !logText.includes('macro_if_else_duplicate')) {
       throw new Error(`compile_main macro ifnum else invalid log mismatch: ${logText}`);
     }
     assertNoEvents('compile_main_v0(macro ifnum else invalid)');
