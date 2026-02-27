@@ -536,7 +536,8 @@ mod tests {
     #[test]
     fn macro_expansion_positive_increases_char_count() {
         let mut baseline_mount = Mount::default();
-        let baseline_main = b"\\documentclass{article}\n\\begin{document}\nHello.\n\\end{document}\n";
+        let baseline_main =
+            b"\\documentclass{article}\n\\begin{document}\nHello.\n\\end{document}\n";
         assert!(baseline_mount.add_file(b"main.tex", baseline_main).is_ok());
         let baseline_result = compile_request_v0(&mut baseline_mount, &valid_request());
         assert_eq!(baseline_result.status, CompileStatus::NotImplemented);
@@ -554,9 +555,32 @@ mod tests {
     }
 
     #[test]
+    fn macro_single_param_positive_increases_char_count() {
+        let mut baseline_mount = Mount::default();
+        let baseline_main =
+            b"\\documentclass{article}\n\\begin{document}\nHello.\n\\end{document}\n";
+        assert!(baseline_mount.add_file(b"main.tex", baseline_main).is_ok());
+        let baseline_result = compile_request_v0(&mut baseline_mount, &valid_request());
+        assert_eq!(baseline_result.status, CompileStatus::NotImplemented);
+        let baseline_char_count =
+            stats_u64_field(&baseline_result.tex_stats_json, "char_count").expect("char_count");
+
+        let mut macro_mount = Mount::default();
+        let macro_main = b"\\documentclass{article}\n\\begin{document}\nHello.\\def\\foo#1{#1}\\foo{XYZ}\n\\end{document}\n";
+        assert!(macro_mount.add_file(b"main.tex", macro_main).is_ok());
+        let macro_result = compile_request_v0(&mut macro_mount, &valid_request());
+        assert_eq!(macro_result.status, CompileStatus::NotImplemented);
+        let macro_char_count =
+            stats_u64_field(&macro_result.tex_stats_json, "char_count").expect("char_count");
+        assert_eq!(macro_char_count, baseline_char_count + 3);
+    }
+
+    #[test]
     fn macro_cycle_is_invalid() {
         let mut mount = Mount::default();
-        assert!(mount.add_file(b"main.tex", b"\\def\\foo{\\foo}\\foo").is_ok());
+        assert!(mount
+            .add_file(b"main.tex", b"\\def\\foo{\\foo}\\foo")
+            .is_ok());
 
         let result = compile_request_v0(&mut mount, &valid_request());
         assert_eq!(result.status, CompileStatus::InvalidInput);
@@ -566,11 +590,25 @@ mod tests {
     #[test]
     fn macro_params_unsupported_is_invalid() {
         let mut mount = Mount::default();
-        assert!(mount.add_file(b"main.tex", b"\\def\\foo#1{A}\\foo").is_ok());
+        assert!(mount
+            .add_file(b"main.tex", b"\\def\\foo#2{A}\\foo{X}")
+            .is_ok());
 
         let result = compile_request_v0(&mut mount, &valid_request());
         assert_eq!(result.status, CompileStatus::InvalidInput);
         assert!(result.log_bytes.ends_with(b"macro_params_unsupported"));
+    }
+
+    #[test]
+    fn macro_single_param_missing_arg_is_invalid() {
+        let mut mount = Mount::default();
+        assert!(mount
+            .add_file(b"main.tex", b"\\def\\foo#1{#1}\\foo")
+            .is_ok());
+
+        let result = compile_request_v0(&mut mount, &valid_request());
+        assert_eq!(result.status, CompileStatus::InvalidInput);
+        assert!(result.log_bytes.ends_with(b"macro_validation_failed"));
     }
 
     #[test]
