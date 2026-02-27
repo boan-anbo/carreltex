@@ -12,6 +12,37 @@ export function runMeaningCases(ctx, helpers) {
   } = helpers;
 
   if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before input+meaning guard case failed');
+  }
+  const inputMeaningMainBytes = new TextEncoder().encode('\\input{sub.tex}\\meaning\\foo');
+  const inputMeaningSubBytes = new TextEncoder().encode('\\def\\foo{XYZ}');
+  if (addMountedFile('main.tex', inputMeaningMainBytes, 'input_meaning_main') !== 0) {
+    throw new Error('mount_add_file(input+meaning main.tex) failed');
+  }
+  if (addMountedFile('sub.tex', inputMeaningSubBytes, 'input_meaning_sub') !== 0) {
+    throw new Error('mount_add_file(input+meaning sub.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) {
+    throw new Error('mount_finalize for input+meaning guard case failed');
+  }
+  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(input+meaning guard)');
+  {
+    const report = readCompileReportJson();
+    if (report.status !== 'NOT_IMPLEMENTED') {
+      throw new Error(`compile_main(input+meaning guard) report.status expected NOT_IMPLEMENTED, got ${report.status}`);
+    }
+    const logBytes = readCompileLogBytes();
+    const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(input+meaning guard)');
+    if (gdefBaselineCharCount === null) {
+      throw new Error('gdefBaselineCharCount not initialized');
+    }
+    if (stats.char_count !== gdefBaselineCharCount + 9) {
+      throw new Error(`compile_main(input+meaning guard) char_count delta expected +9, got baseline=${gdefBaselineCharCount}, current=${stats.char_count}`);
+    }
+    assertMainXdvArtifactEmpty('compile_main(input+meaning guard)');
+  }
+
+  if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before macro meaning case failed');
   }
   const macroMeaningMainBytes = new TextEncoder().encode('\\def\\foo{XYZ}\\meaning\\foo');
