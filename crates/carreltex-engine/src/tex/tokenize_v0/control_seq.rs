@@ -1,6 +1,11 @@
 use super::caret::decode_caret_hex_v0;
-use super::whitespace::{consume_whitespace_run_v0, is_whitespace_v0};
 use super::{TokenV0, TokenizeErrorV0};
+#[path = "control_seq_symbol.rs"]
+mod control_seq_symbol;
+#[path = "control_seq_word.rs"]
+mod control_seq_word;
+use control_seq_symbol::parse_control_symbol_v0;
+use control_seq_word::parse_control_word_v0;
 
 pub(super) struct ParsedControlSeqV0 {
     pub(super) token: TokenV0,
@@ -23,51 +28,6 @@ pub(super) fn parse_control_seq_v0(
     if next.is_ascii_alphabetic() {
         parse_control_word_v0(input, next, after_next_index)
     } else {
-        if !next.is_ascii() {
-            return Err(TokenizeErrorV0::ControlSeqNonAscii);
-        }
-        Ok(ParsedControlSeqV0 {
-            token: TokenV0::ControlSeq(vec![next]),
-            next_index: after_next_index,
-        })
+        parse_control_symbol_v0(next, after_next_index)
     }
-}
-
-fn parse_control_word_v0(
-    input: &[u8],
-    first_byte: u8,
-    mut index: usize,
-) -> Result<ParsedControlSeqV0, TokenizeErrorV0> {
-    let mut control_word = Vec::<u8>::new();
-    control_word.push(first_byte);
-    while index < input.len() {
-        let (word_byte, following_index) = decode_caret_hex_v0(input, index)?;
-        if word_byte == 0 {
-            return Err(TokenizeErrorV0::InvalidInput);
-        }
-        if !word_byte.is_ascii_alphabetic() {
-            break;
-        }
-        control_word.push(word_byte);
-        index = following_index;
-    }
-    if control_word.as_slice() == b"verb" {
-        return Err(TokenizeErrorV0::InvalidInput);
-    }
-    if !control_word.iter().all(|byte| byte.is_ascii()) {
-        return Err(TokenizeErrorV0::ControlSeqNonAscii);
-    }
-    if index < input.len() {
-        let (space_probe, _) = decode_caret_hex_v0(input, index)?;
-        if !is_whitespace_v0(space_probe) && !space_probe.is_ascii() {
-            return Err(TokenizeErrorV0::ControlSeqNonAscii);
-        }
-        if is_whitespace_v0(space_probe) {
-            index = consume_whitespace_run_v0(input, index)?;
-        }
-    }
-    Ok(ParsedControlSeqV0 {
-        token: TokenV0::ControlSeq(control_word),
-        next_index: index,
-    })
 }
