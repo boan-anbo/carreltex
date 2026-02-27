@@ -91,3 +91,23 @@ fn meaning_with_unsupported_tokens_is_invalid() {
     assert_eq!(result.status, CompileStatus::InvalidInput);
     assert!(result.log_bytes.ends_with(b"macro_meaning_unsupported"));
 }
+
+#[test]
+fn let_uses_snapshot_semantics_not_dynamic_alias() {
+    let mut baseline_mount = Mount::default();
+    let baseline_main = b"\\documentclass{article}\n\\begin{document}\n\n\\end{document}\n";
+    assert!(baseline_mount.add_file(b"main.tex", baseline_main).is_ok());
+    let baseline_result = compile_request_v0(&mut baseline_mount, &valid_request());
+    assert_eq!(baseline_result.status, CompileStatus::NotImplemented);
+    let baseline_char_count =
+        stats_u64_field(&baseline_result.tex_stats_json, "char_count").expect("char_count");
+
+    let mut mount = Mount::default();
+    let main =
+        b"\\documentclass{article}\n\\begin{document}\n\\def\\foo{X}\\let\\bar=\\foo\\def\\foo{XYZ}\\bar\n\\end{document}\n";
+    assert!(mount.add_file(b"main.tex", main).is_ok());
+    let result = compile_request_v0(&mut mount, &valid_request());
+    assert_eq!(result.status, CompileStatus::NotImplemented);
+    let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
+    assert_eq!(char_count, baseline_char_count + 1);
+}
