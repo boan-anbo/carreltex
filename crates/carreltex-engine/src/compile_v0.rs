@@ -2,6 +2,8 @@ mod input_expand_v0;
 mod macro_expand_v0;
 mod stats_v0;
 mod trace_v0;
+#[cfg(test)]
+mod meaning_v0_tests;
 
 use crate::reasons_v0::{invalid_log_bytes_v0, InvalidInputReasonV0};
 use crate::tex::tokenize_v0::{tokenize_v0, TokenV0, MAX_TOKENS_V0};

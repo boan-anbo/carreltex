@@ -17,6 +17,10 @@ struct MacroDefV0 {
 enum MacroBindingV0 {
     Macro(MacroDefV0),
     ControlSeqLiteral(Vec<u8>),
+    LetAlias {
+        target_name: Vec<u8>,
+        resolved_binding: Box<MacroBindingV0>,
+    },
 }
 
 pub(crate) fn expand_macros_v0(tokens: &[TokenV0]) -> Result<Vec<TokenV0>, InvalidInputReasonV0> {
@@ -104,6 +108,13 @@ fn expand_stream_v0(
                 }
                 index = next_index;
             }
+            TokenV0::ControlSeq(name) if name.as_slice() == b"meaning" => {
+                let (meaning_chars, next_index) = parse_meaning_v0(tokens, index, macro_frames)?;
+                for token in meaning_chars {
+                    push_checked_v0(out, token)?;
+                }
+                index = next_index;
+            }
             TokenV0::ControlSeq(name) if name.as_slice() == b"global" => {
                 index = parse_global_prefixed_macro_binding_v0(tokens, index, macro_frames)?;
             }
@@ -147,6 +158,21 @@ fn expand_stream_v0(
                     }
                     Some(MacroBindingV0::ControlSeqLiteral(target_name)) => {
                         push_checked_v0(out, TokenV0::ControlSeq(target_name))?;
+                        index += 1;
+                    }
+                    Some(MacroBindingV0::LetAlias {
+                        target_name: _,
+                        resolved_binding,
+                    }) => {
+                        expand_binding_v0(
+                            name,
+                            *resolved_binding,
+                            macro_frames,
+                            out,
+                            active_macros,
+                            expansion_count,
+                            depth,
+                        )?;
                         index += 1;
                     }
                     None => {
@@ -281,7 +307,6 @@ fn parse_let_v0(
         _ => return Err(InvalidInputReasonV0::MacroLetUnsupported),
     };
     let resolved_binding = snapshot_let_binding_v0(&target_name, macro_frames)?;
-
     let target_frame_index = if is_global {
         0usize
     } else {
@@ -297,7 +322,13 @@ fn parse_let_v0(
     if !target_frame.contains_key(&alias_name) && total_macro_defs >= MAX_MACROS_V0 {
         return Err(InvalidInputReasonV0::MacroValidationFailed);
     }
-    target_frame.insert(alias_name, resolved_binding);
+    target_frame.insert(
+        alias_name,
+        MacroBindingV0::LetAlias {
+            target_name,
+            resolved_binding: Box::new(resolved_binding),
+        },
+    );
     Ok(index + 1)
 }
 
@@ -406,28 +437,44 @@ fn parse_string_v0(
     Ok((out, next_index + 1))
 }
 
-fn snapshot_let_binding_v0(
-    target_name: &[u8],
+fn parse_meaning_v0(
+    tokens: &[TokenV0],
+    meaning_index: usize,
     macro_frames: &[BTreeMap<Vec<u8>, MacroBindingV0>],
-) -> Result<MacroBindingV0, InvalidInputReasonV0> {
-    let mut current = target_name.to_vec();
-    let mut seen = Vec::<Vec<u8>>::new();
-    loop {
-        if seen.iter().any(|entry| entry == &current) {
-            return Err(InvalidInputReasonV0::MacroCycleFailed);
+) -> Result<(Vec<TokenV0>, usize), InvalidInputReasonV0> {
+    let next_index = skip_space_tokens_v0(tokens, meaning_index + 1);
+    let query_name = match tokens.get(next_index) {
+        Some(TokenV0::ControlSeq(name)) => name.clone(),
+        _ => return Err(InvalidInputReasonV0::MacroMeaningUnsupported),
+    };
+
+    let mut out = Vec::<TokenV0>::new();
+    match lookup_macro_binding_v0(macro_frames, &query_name) {
+        Some(MacroBindingV0::Macro(_)) => {
+            push_ascii_bytes_v0(&mut out, b"macro:")?;
+            push_ascii_bytes_v0(&mut out, &query_name)?;
         }
-        let binding = lookup_macro_binding_v0(macro_frames, &current);
-        match binding {
-            Some(MacroBindingV0::Macro(definition)) => {
-                return Ok(MacroBindingV0::Macro(definition));
-            }
-            Some(MacroBindingV0::ControlSeqLiteral(target_name)) => {
-                seen.push(current);
-                current = target_name;
-            }
-            None => return Ok(MacroBindingV0::ControlSeqLiteral(current)),
+        Some(MacroBindingV0::ControlSeqLiteral(target_name)) => {
+            push_ascii_bytes_v0(&mut out, b"alias:")?;
+            push_ascii_bytes_v0(&mut out, &query_name)?;
+            push_ascii_bytes_v0(&mut out, b"->")?;
+            push_ascii_bytes_v0(&mut out, &target_name)?;
+        }
+        Some(MacroBindingV0::LetAlias {
+            target_name,
+            resolved_binding: _,
+        }) => {
+            push_ascii_bytes_v0(&mut out, b"alias:")?;
+            push_ascii_bytes_v0(&mut out, &query_name)?;
+            push_ascii_bytes_v0(&mut out, b"->")?;
+            push_ascii_bytes_v0(&mut out, &target_name)?;
+        }
+        None => {
+            push_ascii_bytes_v0(&mut out, b"undefined:")?;
+            push_ascii_bytes_v0(&mut out, &query_name)?;
         }
     }
+    Ok((out, next_index + 1))
 }
 
 fn lookup_macro_binding_v0(
@@ -440,6 +487,92 @@ fn lookup_macro_binding_v0(
         }
     }
     None
+}
+
+fn snapshot_let_binding_v0(
+    target_name: &[u8],
+    macro_frames: &[BTreeMap<Vec<u8>, MacroBindingV0>],
+) -> Result<MacroBindingV0, InvalidInputReasonV0> {
+    let mut current = target_name.to_vec();
+    let mut seen = Vec::<Vec<u8>>::new();
+    loop {
+        if seen.iter().any(|entry| entry == &current) {
+            return Err(InvalidInputReasonV0::MacroCycleFailed);
+        }
+        let binding = lookup_macro_binding_v0(macro_frames, &current);
+        match binding {
+            Some(MacroBindingV0::Macro(definition)) => return Ok(MacroBindingV0::Macro(definition)),
+            Some(MacroBindingV0::ControlSeqLiteral(target)) => {
+                seen.push(current);
+                current = target;
+            }
+            Some(MacroBindingV0::LetAlias {
+                target_name: _,
+                resolved_binding,
+            }) => return Ok(*resolved_binding),
+            None => return Ok(MacroBindingV0::ControlSeqLiteral(current)),
+        }
+    }
+}
+
+fn expand_binding_v0(
+    name: &[u8],
+    binding: MacroBindingV0,
+    macro_frames: &mut Vec<BTreeMap<Vec<u8>, MacroBindingV0>>,
+    out: &mut Vec<TokenV0>,
+    active_macros: &mut Vec<Vec<u8>>,
+    expansion_count: &mut usize,
+    depth: usize,
+) -> Result<(), InvalidInputReasonV0> {
+    *expansion_count = expansion_count
+        .checked_add(1)
+        .ok_or(InvalidInputReasonV0::MacroExpansionsExceeded)?;
+    if *expansion_count > MAX_MACRO_EXPANSIONS_V0 {
+        return Err(InvalidInputReasonV0::MacroExpansionsExceeded);
+    }
+    if active_macros.iter().any(|active| active == name) {
+        return Err(InvalidInputReasonV0::MacroCycleFailed);
+    }
+    active_macros.push(name.to_vec());
+    let result = match binding {
+        MacroBindingV0::Macro(macro_def) => {
+            if macro_def.param_count != 0 {
+                return Err(InvalidInputReasonV0::MacroValidationFailed);
+            }
+            expand_stream_v0(
+                &macro_def.body_tokens,
+                macro_frames,
+                out,
+                active_macros,
+                expansion_count,
+                depth + 1,
+            )
+        }
+        MacroBindingV0::ControlSeqLiteral(target) => {
+            expand_stream_v0(
+                &[TokenV0::ControlSeq(target)],
+                macro_frames,
+                out,
+                active_macros,
+                expansion_count,
+                depth + 1,
+            )
+        }
+        MacroBindingV0::LetAlias {
+            target_name: _,
+            resolved_binding,
+        } => expand_binding_v0(
+            name,
+            *resolved_binding,
+            macro_frames,
+            out,
+            active_macros,
+            expansion_count,
+            depth + 1,
+        ),
+    };
+    active_macros.pop();
+    result
 }
 
 fn total_macro_defs_v0(macro_frames: &[BTreeMap<Vec<u8>, MacroBindingV0>]) -> usize {
@@ -539,5 +672,12 @@ fn push_checked_v0(out: &mut Vec<TokenV0>, token: TokenV0) -> Result<(), Invalid
         return Err(InvalidInputReasonV0::MacroValidationFailed);
     }
     out.push(token);
+    Ok(())
+}
+
+fn push_ascii_bytes_v0(out: &mut Vec<TokenV0>, bytes: &[u8]) -> Result<(), InvalidInputReasonV0> {
+    for byte in bytes {
+        push_checked_v0(out, TokenV0::Char(*byte))?;
+    }
     Ok(())
 }
