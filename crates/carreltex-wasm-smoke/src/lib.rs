@@ -4,7 +4,7 @@ use carreltex_core::{
     append_event_v0, artifact_bytes_within_cap_v0, report_json_has_status_token_v0,
     report_json_missing_components_is_empty_v0, validate_compile_report_json, validate_main_tex,
     CompileRequestV0, CompileStatus, Mount, DEFAULT_COMPILE_MAIN_MAX_LOG_BYTES_V0,
-    EVENT_KIND_LOG_BYTES_V0, MAIN_TEX_MAX_BYTES, MAX_LOG_BYTES_V0,
+    EVENT_KIND_LOG_BYTES_V0, MAX_LOG_BYTES_V0, MAX_WASM_ALLOC_BYTES_V0,
 };
 use carreltex_engine::{compile_main_v0, compile_request_v0};
 
@@ -77,7 +77,7 @@ fn copy_bytes_to_out(bytes: &[u8], out_ptr: *mut u8, out_len: usize) -> usize {
 
 #[no_mangle]
 pub extern "C" fn carreltex_wasm_alloc(size: usize) -> *mut u8 {
-    if size == 0 || size > MAIN_TEX_MAX_BYTES {
+    if size == 0 || size > MAX_WASM_ALLOC_BYTES_V0 {
         return core::ptr::null_mut();
     }
 
@@ -89,12 +89,38 @@ pub extern "C" fn carreltex_wasm_alloc(size: usize) -> *mut u8 {
 
 #[no_mangle]
 pub extern "C" fn carreltex_wasm_dealloc(ptr: *mut u8, size: usize) {
-    if ptr.is_null() || size == 0 || size > MAIN_TEX_MAX_BYTES {
+    if ptr.is_null() || size == 0 || size > MAX_WASM_ALLOC_BYTES_V0 {
         return;
     }
 
     unsafe {
         drop(Vec::<u8>::from_raw_parts(ptr, 0, size));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{carreltex_wasm_alloc, carreltex_wasm_dealloc};
+    use carreltex_core::MAX_WASM_ALLOC_BYTES_V0;
+
+    #[test]
+    fn wasm_alloc_accepts_small_size() {
+        let ptr = carreltex_wasm_alloc(1);
+        assert!(!ptr.is_null());
+        carreltex_wasm_dealloc(ptr, 1);
+    }
+
+    #[test]
+    fn wasm_alloc_accepts_max_size() {
+        let ptr = carreltex_wasm_alloc(MAX_WASM_ALLOC_BYTES_V0);
+        assert!(!ptr.is_null());
+        carreltex_wasm_dealloc(ptr, MAX_WASM_ALLOC_BYTES_V0);
+    }
+
+    #[test]
+    fn wasm_alloc_rejects_size_above_max() {
+        let ptr = carreltex_wasm_alloc(MAX_WASM_ALLOC_BYTES_V0 + 1);
+        assert!(ptr.is_null());
     }
 }
 
