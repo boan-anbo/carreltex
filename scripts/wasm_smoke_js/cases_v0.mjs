@@ -1,4 +1,5 @@
 import { runMeaningCases } from './cases_v0_meaning.mjs';
+import { runCountCases } from './cases_v0_count.mjs';
 
 export function runCasesV0(ctx, mem, helpers) {
   const {
@@ -800,6 +801,19 @@ export function runCasesV0(ctx, mem, helpers) {
     assertMainXdvArtifactEmpty,
     assertNoEvents,
     gdefBaselineCharCount,
+  });
+
+  if (gdefBaselineCharCount === null) {
+    throw new Error('gdefBaselineCharCount not initialized before count cases');
+  }
+  runCountCases(ctx, {
+    addMountedFile,
+    expectInvalid,
+    expectNotImplemented,
+    readCompileLogBytes,
+    assertEventsMatchLogAndStats,
+    assertMainXdvArtifactEmpty,
+    assertNoEvents,
   });
 
   if (ctx.mountReset() !== 0) {
