@@ -218,6 +218,21 @@ fn control_symbol_ampersand_keeps_following_space_token() {
 }
 
 #[test]
+fn control_symbol_lbrace_maps_to_lbrace_char() {
+    let tokens = tokenize_v0(b"\\{X").expect("tokenize should succeed");
+    assert_eq!(tokens, vec![TokenV0::Char(b'{'), TokenV0::Char(b'X')]);
+}
+
+#[test]
+fn control_symbol_rbrace_keeps_following_space_token() {
+    let tokens = tokenize_v0(b"\\} X").expect("tokenize should succeed");
+    assert_eq!(
+        tokens,
+        vec![TokenV0::Char(b'}'), TokenV0::Space, TokenV0::Char(b'X')]
+    );
+}
+
+#[test]
 fn verb_control_word_is_invalid_input() {
     assert_eq!(
         tokenize_v0(b"\\verb|x|"),
