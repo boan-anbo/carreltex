@@ -101,11 +101,14 @@ pub fn validate_main_tex(bytes: &[u8]) -> Result<(), Error> {
     if bytes.iter().any(|byte| *byte == 0) {
         return Err(Error::InvalidInput);
     }
-    let text = core::str::from_utf8(bytes).map_err(|_| Error::InvalidUtf8)?;
-    if text.trim().is_empty() {
+    if !bytes.iter().copied().any(is_non_whitespace_tex_byte) {
         return Err(Error::InvalidInput);
     }
     Ok(())
+}
+
+fn is_non_whitespace_tex_byte(byte: u8) -> bool {
+    !matches!(byte, b' ' | b'\t' | b'\r' | b'\n')
 }
 
 fn normalize_path(path_bytes: &[u8]) -> Result<&str, Error> {
@@ -246,10 +249,11 @@ mod tests {
     }
 
     #[test]
-    fn validate_main_tex_checks_utf8_and_nul() {
+    fn validate_main_tex_checks_nul_and_non_whitespace_bytes() {
         assert!(validate_main_tex(&valid_main()).is_ok());
+        assert!(validate_main_tex(&[0xff, b'\n', b'X']).is_ok());
+        assert!(validate_main_tex(&[0xff]).is_ok());
         assert_eq!(validate_main_tex(&[0]), Err(Error::InvalidInput));
-        assert_eq!(validate_main_tex(&[0xff]), Err(Error::InvalidUtf8));
+        assert_eq!(validate_main_tex(b" \t\r\n"), Err(Error::InvalidInput));
     }
 }
-
