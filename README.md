@@ -6,6 +6,7 @@ Browser-first WASM LaTeX/typesetting engine (WIP).
 
 - Always buildable for `wasm32-unknown-unknown` (WASM viability gate).
 - Fail-closed by default.
+- No silent “simplified” semantics.
 - Determinism is a first-class constraint (`SOURCE_DATE_EPOCH`, pinned toolchains).
 
 ## Proof (WASM viability gate)
@@ -18,4 +19,10 @@ scripts/wasm_smoke_build.sh
 
 ```bash
 scripts/proof_wasm_smoke.sh
+```
+
+## Proof (v0 bundle)
+
+```bash
+scripts/proof_v0.sh
 ```
