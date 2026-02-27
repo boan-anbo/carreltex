@@ -14,3 +14,8 @@ Browser-first WASM LaTeX/typesetting engine (WIP).
 scripts/wasm_smoke_build.sh
 ```
 
+## Proof (JS loads WASM)
+
+```bash
+scripts/proof_wasm_smoke.sh
+```
