@@ -3,6 +3,7 @@ mod ifnum_v0;
 mod ifx_v0;
 mod macro_expand_v0;
 mod stats_v0;
+mod tokenize_reason_v0;
 mod trace_v0;
 #[cfg(test)]
 mod count_v0_tests;
@@ -23,7 +24,7 @@ use carreltex_core::{
     CompileStatus, Mount, DEFAULT_COMPILE_MAIN_MAX_LOG_BYTES_V0, MAX_LOG_BYTES_V0,
 };
 use input_expand_v0::expand_inputs_v0;
-use macro_expand_v0::{expand_macros_v0, map_tokenize_error_to_reason_v0};
+use macro_expand_v0::expand_macros_v0;
 use stats_v0::build_tex_stats_from_tokens_v0;
 use trace_v0::build_not_implemented_log_v0;
 const MISSING_COMPONENTS_V0: &[&str] = &["tex-engine"];
@@ -49,14 +50,7 @@ pub fn compile_main_v0(mount: &mut Mount) -> CompileResultV0 {
 }
 
 pub fn compile_request_v0(mount: &mut Mount, req: &CompileRequestV0) -> CompileResultV0 {
-    // INVALID_INPUT reason precedence SSOT (A-G):
-    // A) request validation
-    // B) mount finalize
-    // C) entrypoint read
-    // D) tokenize
-    // E) input validation / expansion
-    // F) macro validation / expansion
-    // G) stats build/group-balance
+    // INVALID_INPUT reason precedence SSOT: request -> finalize -> read -> tokenize -> input -> macro -> stats.
     if req.entrypoint != "main.tex" || req.source_date_epoch == 0 || req.max_log_bytes == 0 {
         return invalid_result_v0(req.max_log_bytes, InvalidInputReasonV0::RequestInvalid);
     }
@@ -74,7 +68,10 @@ pub fn compile_request_v0(mount: &mut Mount, req: &CompileRequestV0) -> CompileR
     let tokens = match tokenize_v0(&entry_bytes) {
         Ok(tokens) => tokens,
         Err(error) => {
-            return invalid_result_v0(req.max_log_bytes, map_tokenize_error_to_reason_v0(error))
+            return invalid_result_v0(
+                req.max_log_bytes,
+                tokenize_reason_v0::map_tokenize_error_to_reason_v0(error),
+            )
         }
     };
     let (expanded_tokens, input_trace) = match expand_inputs_v0(&tokens, mount) {
