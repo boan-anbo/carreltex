@@ -427,6 +427,13 @@ function assertMainXdvArtifactEmpty(label) {
   }
 }
 
+function assertNoEvents(label) {
+  const bytes = readEventsBytes();
+  if (bytes.length !== 0) {
+    throw new Error(`${label}: expected zero events for INVALID_INPUT, got ${bytes.length} bytes`);
+  }
+}
+
 const mainTex = '\\documentclass{article}\n\\begin{document}\nHello.\n\\end{document}\n';
 const mainBytes = new TextEncoder().encode(mainTex);
 const expectedMainTexStatsExact = {
@@ -597,6 +604,26 @@ expectNotImplemented(compileRun(), 'compile_run_v0(truncation case)');
   if (logBytes.length !== 8) {
     throw new Error(`compile_run truncated log expected 8 bytes, got ${logBytes.length}`);
   }
+}
+
+if (mountReset() !== 0) {
+  throw new Error('mount_reset before invalid tokenize compile check failed');
+}
+const invalidTokenMainBytes = new TextEncoder().encode('\\documentclass{article}\n\\begin{document}\nHello\\');
+if (addMountedFile('main.tex', invalidTokenMainBytes, 'invalid_token_main') !== 0) {
+  throw new Error('mount_add_file(invalid tokenize main.tex) failed');
+}
+if (mountFinalize() !== 0) {
+  throw new Error('mount_finalize for invalid tokenize main.tex failed');
+}
+expectInvalid(compileMain(), 'compile_main_v0(invalid tokenize main.tex)');
+{
+  const logBytes = readCompileLogBytes();
+  const logText = new TextDecoder().decode(logBytes);
+  if (!logText.startsWith('INVALID_INPUT:') || !logText.includes('tokenize_failed')) {
+    throw new Error(`compile_main invalid tokenize log mismatch: ${logText}`);
+  }
+  assertNoEvents('compile_main_v0(invalid tokenize main.tex)');
 }
 
 if (mountReset() !== 0) {
