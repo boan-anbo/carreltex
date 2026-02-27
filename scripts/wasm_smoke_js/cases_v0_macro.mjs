@@ -582,6 +582,37 @@ export function runMacroCases(ctx, helpers, baselineMainCharCount) {
   }
 
   if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before macro input expandafter case failed');
+  }
+  const macroInputExpandafterMainBytes = new TextEncoder().encode('\\input{sub.tex}\\expandafter\\bar\\foo');
+  const macroInputExpandafterSubBytes = new TextEncoder().encode('\\def\\foo{XYZ}\\def\\bar{A}');
+  if (addMountedFile('main.tex', macroInputExpandafterMainBytes, 'macro_input_expandafter_main') !== 0) {
+    throw new Error('mount_add_file(macro input expandafter main.tex) failed');
+  }
+  if (addMountedFile('sub.tex', macroInputExpandafterSubBytes, 'macro_input_expandafter_sub') !== 0) {
+    throw new Error('mount_add_file(macro input expandafter sub.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) {
+    throw new Error('mount_finalize for macro input expandafter case failed');
+  }
+  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(macro input expandafter)');
+  {
+    const report = readCompileReportJson();
+    if (report.status !== 'NOT_IMPLEMENTED') {
+      throw new Error(`compile_main(macro input expandafter) report.status expected NOT_IMPLEMENTED, got ${report.status}`);
+    }
+    const logBytes = readCompileLogBytes();
+    const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(macro input expandafter)');
+    if (gdefBaselineCharCount === null) {
+      throw new Error('gdefBaselineCharCount not initialized');
+    }
+    if (stats.char_count !== gdefBaselineCharCount + 4) {
+      throw new Error(`compile_main(macro input expandafter) char_count delta expected +4, got baseline=${gdefBaselineCharCount}, current=${stats.char_count}`);
+    }
+    assertMainXdvArtifactEmpty('compile_main(macro input expandafter)');
+  }
+
+  if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before macro expandafter unsupported case failed');
   }
   const macroExpandafterUnsupportedMainBytes = new TextEncoder().encode('\\expandafter{}');
