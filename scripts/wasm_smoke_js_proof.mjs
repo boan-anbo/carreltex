@@ -142,6 +142,12 @@ if (ok !== 0) {
   throw new Error(`validate failed, code=${ok}`);
 }
 
+const rawNonUtf8Main = Uint8Array.from([0xff, 0x0a, 0x58]);
+const rawNonUtf8Ok = callWithBytes(rawNonUtf8Main, 'main_tex_raw_non_utf8', (ptr, len) => validate(ptr, len));
+if (rawNonUtf8Ok !== 0) {
+  throw new Error(`validate(raw non-utf8 main.tex bytes) failed, code=${rawNonUtf8Ok}`);
+}
+
 if (mountReset() !== 0) {
   throw new Error('mount_reset failed');
 }
