@@ -129,3 +129,12 @@ fn unsupported_caret_form_maps_to_tokenizer_caret_reason() {
     assert_eq!(result.status, CompileStatus::InvalidInput);
     assert!(result.log_bytes.ends_with(b"tokenizer_caret_not_supported"));
 }
+
+#[test]
+fn non_ascii_control_sequence_byte_maps_to_tokenize_failed() {
+    let mut mount = Mount::default();
+    assert!(mount.add_file(b"main.tex", b"\\def\\^^ff{XYZ}").is_ok());
+    let result = compile_request_v0(&mut mount, &valid_request());
+    assert_eq!(result.status, CompileStatus::InvalidInput);
+    assert!(result.log_bytes.ends_with(b"tokenize_failed"));
+}
