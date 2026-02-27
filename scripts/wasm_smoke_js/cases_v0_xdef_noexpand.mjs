@@ -102,6 +102,33 @@ export function runXdefNoexpandCases(ctx, helpers) {
   }
 
   if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before noexpand input snapshot case failed');
+  }
+  const noexpandInputSnapshotMainBytes = new TextEncoder().encode('\\documentclass{article}\n\\begin{document}\n\\input{sub.tex}\\edef\\foo{\\noexpand\\bar}\\def\\bar{A}\\foo\n\\end{document}\n');
+  const noexpandInputSnapshotSubBytes = new TextEncoder().encode('\\def\\bar{XYZ}');
+  if (addMountedFile('main.tex', noexpandInputSnapshotMainBytes, 'macro_noexpand_input_snapshot_main') !== 0) {
+    throw new Error('mount_add_file(macro noexpand input snapshot main.tex) failed');
+  }
+  if (addMountedFile('sub.tex', noexpandInputSnapshotSubBytes, 'macro_noexpand_input_snapshot_sub') !== 0) {
+    throw new Error('mount_add_file(macro noexpand input snapshot sub.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) {
+    throw new Error('mount_finalize for noexpand input snapshot case failed');
+  }
+  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(macro noexpand input snapshot)');
+  {
+    const logBytes = readCompileLogBytes();
+    const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(macro noexpand input snapshot)');
+    if (baselineCharCount === null) {
+      throw new Error('baselineCharCount not initialized for noexpand input snapshot case');
+    }
+    if (stats.char_count !== baselineCharCount + 1) {
+      throw new Error(`compile_main(macro noexpand input snapshot) char_count delta expected +1, got baseline=${baselineCharCount}, current=${stats.char_count}`);
+    }
+    assertMainXdvArtifactEmpty('compile_main(macro noexpand input snapshot)');
+  }
+
+  if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before noexpand invalid case failed');
   }
   const noexpandInvalidMainBytes = new TextEncoder().encode('\\edef\\foo{\\noexpand}');
