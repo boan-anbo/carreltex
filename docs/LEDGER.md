@@ -2,7 +2,21 @@
 
 Allowed status enum: `todo | stubbed | implemented | verified | skipped`.
 `verified` means the row's proof command is currently green.
-Regression guard: proofs include `\input{sub.tex}\foo`, `\input{sub.tex}\meaning\foo`, `\input{sub.tex}\edef\foo{\bar}\def\bar{A}\foo`, `\input{sub.tex}\edef\foo{\noexpand\bar}\def\bar{A}\foo`, `\input{sub.tex}{\xdef\foo{\bar}}\def\bar{A}\foo`, `\input{sub.tex}\let\bar=\foo\def\foo{A}\bar`, `\input{sub.tex}\futurelet\bar\noop\foo\bar`, `\input{sub.tex}\csname foo\endcsname`, `\input{sub.tex}\string\foo`, `\input{sub.tex}\expandafter\bar\foo`, and `\input{sub.tex}\ifnum\count0<\count1 XYZ\else AAA\fi` cases that lock engine order and `\edef`/`\xdef`/`\let` snapshot semantics plus `\futurelet`/`\csname`/`\string`/`\expandafter` visibility and `\ifnum` count-state behavior across input boundaries.
+
+Regression guards (proof scenarios):
+- `\input{sub.tex}\foo`
+- `\input{sub.tex}\meaning\foo`
+- `\input{sub.tex}\edef\foo{\bar}\def\bar{A}\foo`
+- `\input{sub.tex}\edef\foo{\noexpand\bar}\def\bar{A}\foo`
+- `\input{sub.tex}{\xdef\foo{\bar}}\def\bar{A}\foo`
+- `\input{sub.tex}\let\bar=\foo\def\foo{A}\bar`
+- `\input{sub.tex}\futurelet\bar\noop\foo\bar`
+- `\input{sub.tex}\csname foo\endcsname`
+- `\input{sub.tex}\string\foo`
+- `\input{sub.tex}\expandafter\bar\foo`
+- `\input{sub.tex}\ifnum\count0<\count1 XYZ\else AAA\fi`
+
+These lock engine order and `\edef`/`\xdef`/`\let` snapshot semantics, plus `\futurelet`/`\csname`/`\string`/`\expandafter` visibility and `\ifnum` count-state behavior across input boundaries.
 
 | path | layer | component | status | proof | notes |
 | --- | --- | --- | --- | --- | --- |
