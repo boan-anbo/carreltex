@@ -35,8 +35,13 @@ pub(super) fn parse_control_word_v0(
             index = consume_whitespace_run_v0(input, index)?;
         }
     }
+    let token = if control_word.as_slice() == b"textbackslash" {
+        TokenV0::Char(b'\\')
+    } else {
+        TokenV0::ControlSeq(control_word)
+    };
     Ok(ParsedControlSeqV0 {
-        token: TokenV0::ControlSeq(control_word),
+        token,
         next_index: index,
     })
 }
