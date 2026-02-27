@@ -684,6 +684,37 @@ export function runMacroCases(ctx, helpers, baselineMainCharCount) {
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before compile_request negative setter tests failed');
   }
+  const macroInputStringMainBytes = new TextEncoder().encode('\\input{sub.tex}\\string\\foo');
+  const macroInputStringSubBytes = new TextEncoder().encode('\\def\\foo{XYZ}');
+  if (addMountedFile('main.tex', macroInputStringMainBytes, 'macro_input_string_main') !== 0) {
+    throw new Error('mount_add_file(macro input string main.tex) failed');
+  }
+  if (addMountedFile('sub.tex', macroInputStringSubBytes, 'macro_input_string_sub') !== 0) {
+    throw new Error('mount_add_file(macro input string sub.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) {
+    throw new Error('mount_finalize for macro input string case failed');
+  }
+  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(macro input string)');
+  {
+    const report = readCompileReportJson();
+    if (report.status !== 'NOT_IMPLEMENTED') {
+      throw new Error(`compile_main(macro input string) report.status expected NOT_IMPLEMENTED, got ${report.status}`);
+    }
+    const logBytes = readCompileLogBytes();
+    const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(macro input string)');
+    if (gdefBaselineCharCount === null) {
+      throw new Error('gdefBaselineCharCount not initialized');
+    }
+    if (stats.char_count !== gdefBaselineCharCount + 4) {
+      throw new Error(`compile_main(macro input string) char_count delta expected +4, got baseline=${gdefBaselineCharCount}, current=${stats.char_count}`);
+    }
+    assertMainXdvArtifactEmpty('compile_main(macro input string)');
+  }
+
+  if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before compile_request negative setter tests failed');
+  }
   const macroStringMainBytes = new TextEncoder().encode('\\def\\foo{XYZ}\\string\\foo');
   if (addMountedFile('main.tex', macroStringMainBytes, 'macro_string_main') !== 0) {
     throw new Error('mount_add_file(macro string main.tex) failed');
