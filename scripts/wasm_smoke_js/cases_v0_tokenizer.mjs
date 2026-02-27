@@ -75,6 +75,29 @@ export function runTokenizerCases(ctx, helpers) {
   }
 
   if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before tokenizer lone-CR normalization case failed');
+  }
+  const loneCrMainBytes = new TextEncoder().encode('\\documentclass{article}\n\\begin{document}\nA\rB\n\\end{document}\n');
+  if (addMountedFile('main.tex', loneCrMainBytes, 'tokenizer_lone_cr_normalization_main') !== 0) {
+    throw new Error('mount_add_file(tokenizer lone-CR normalization main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) {
+    throw new Error('mount_finalize for tokenizer lone-CR normalization case failed');
+  }
+  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(tokenizer lone-CR normalization)');
+  {
+    const logBytes = readCompileLogBytes();
+    const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(tokenizer lone-CR normalization)');
+    if (baselineCharCount === null) {
+      throw new Error('baselineCharCount not initialized for tokenizer lone-CR normalization case');
+    }
+    if (stats.char_count !== baselineCharCount + 2) {
+      throw new Error(`compile_main(tokenizer lone-CR normalization) char_count delta expected +2, got baseline=${baselineCharCount}, current=${stats.char_count}`);
+    }
+    assertMainXdvArtifactEmpty('compile_main(tokenizer lone-CR normalization)');
+  }
+
+  if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer caret-in-comment case failed');
   }
   const commentMainBytes = new TextEncoder().encode('\\documentclass{article}\n\\begin{document}\n% ^^ZZ\nXYZ\n\\end{document}\n');
