@@ -94,4 +94,50 @@ export function runIfxCases(ctx, helpers) {
     }
     assertNoEvents('compile_main_v0(macro ifx duplicate else invalid)');
   }
+
+  if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before ifx let snapshot!=current case failed');
+  }
+  const letSnapshotMainBytes = new TextEncoder().encode('\\documentclass{article}\n\\begin{document}\n\\def\\foo{X}\\let\\bar=\\foo\\def\\foo{XYZ}\\ifx\\bar\\foo AAA\\else XYZ\\fi\n\\end{document}\n');
+  if (addMountedFile('main.tex', letSnapshotMainBytes, 'macro_ifx_let_snapshot_main') !== 0) {
+    throw new Error('mount_add_file(macro ifx let snapshot!=current main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) {
+    throw new Error('mount_finalize for ifx let snapshot!=current case failed');
+  }
+  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(macro ifx let snapshot!=current)');
+  {
+    const logBytes = readCompileLogBytes();
+    const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(macro ifx let snapshot!=current)');
+    if (baselineCharCount === null) {
+      throw new Error('baselineCharCount not initialized for ifx let snapshot!=current case');
+    }
+    if (stats.char_count !== baselineCharCount + 3) {
+      throw new Error(`compile_main(macro ifx let snapshot!=current) char_count delta expected +3, got baseline=${baselineCharCount}, current=${stats.char_count}`);
+    }
+    assertMainXdvArtifactEmpty('compile_main(macro ifx let snapshot!=current)');
+  }
+
+  if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before ifx let undefined==undefined case failed');
+  }
+  const letUndefinedMainBytes = new TextEncoder().encode('\\documentclass{article}\n\\begin{document}\n\\let\\a=\\b\\ifx\\a\\b XYZ\\else AAA\\fi\n\\end{document}\n');
+  if (addMountedFile('main.tex', letUndefinedMainBytes, 'macro_ifx_let_undefined_main') !== 0) {
+    throw new Error('mount_add_file(macro ifx let undefined==undefined main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) {
+    throw new Error('mount_finalize for ifx let undefined==undefined case failed');
+  }
+  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(macro ifx let undefined==undefined)');
+  {
+    const logBytes = readCompileLogBytes();
+    const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(macro ifx let undefined==undefined)');
+    if (baselineCharCount === null) {
+      throw new Error('baselineCharCount not initialized for ifx let undefined==undefined case');
+    }
+    if (stats.char_count !== baselineCharCount + 3) {
+      throw new Error(`compile_main(macro ifx let undefined==undefined) char_count delta expected +3, got baseline=${baselineCharCount}, current=${stats.char_count}`);
+    }
+    assertMainXdvArtifactEmpty('compile_main(macro ifx let undefined==undefined)');
+  }
 }

@@ -679,14 +679,12 @@ fn compare_ifx_control_sequences_v0(
     left: &[u8],
     right: &[u8],
 ) -> bool {
-    let left_binding = classify_ifx_binding_v0(macro_frames, left);
-    let right_binding = classify_ifx_binding_v0(macro_frames, right);
-    match (left_binding, right_binding) {
+    match (
+        classify_ifx_binding_v0(macro_frames, left),
+        classify_ifx_binding_v0(macro_frames, right),
+    ) {
         (IfxComparableBindingV0::Undefined, IfxComparableBindingV0::Undefined) => true,
-        (
-            IfxComparableBindingV0::AliasTarget(left_target),
-            IfxComparableBindingV0::AliasTarget(right_target),
-        ) => left_target == right_target,
+        (IfxComparableBindingV0::AliasTarget(left_target), IfxComparableBindingV0::AliasTarget(right_target)) => left_target == right_target,
         (IfxComparableBindingV0::Macro(left_macro), IfxComparableBindingV0::Macro(right_macro)) => {
             left_macro.param_count == right_macro.param_count
                 && left_macro.body_tokens == right_macro.body_tokens
@@ -702,19 +700,16 @@ fn classify_ifx_binding_v0(
     match lookup_macro_binding_v0(macro_frames, name) {
         None => IfxComparableBindingV0::Undefined,
         Some(MacroBindingV0::Macro(definition)) => IfxComparableBindingV0::Macro(definition),
-        Some(MacroBindingV0::ControlSeqLiteral(target_name)) => {
-            IfxComparableBindingV0::AliasTarget(resolve_alias_target_name_v0(
-                macro_frames,
-                target_name,
-            ))
-        }
-        Some(MacroBindingV0::LetAlias {
-            target_name,
-            resolved_binding: _,
-        }) => IfxComparableBindingV0::AliasTarget(resolve_alias_target_name_v0(
-            macro_frames,
-            target_name,
-        )),
+        Some(MacroBindingV0::ControlSeqLiteral(target_name)) => IfxComparableBindingV0::AliasTarget(resolve_alias_target_name_v0(macro_frames, target_name)),
+        Some(MacroBindingV0::LetAlias { target_name: _, resolved_binding }) => classify_ifx_from_resolved_binding_v0(*resolved_binding),
+    }
+}
+
+fn classify_ifx_from_resolved_binding_v0(binding: MacroBindingV0) -> IfxComparableBindingV0 {
+    match binding {
+        MacroBindingV0::Macro(definition) => IfxComparableBindingV0::Macro(definition),
+        MacroBindingV0::ControlSeqLiteral(_name) => IfxComparableBindingV0::Undefined,
+        MacroBindingV0::LetAlias { target_name: _, resolved_binding } => classify_ifx_from_resolved_binding_v0(*resolved_binding),
     }
 }
 
