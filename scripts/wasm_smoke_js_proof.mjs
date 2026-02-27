@@ -50,6 +50,8 @@ const logLen = instance.exports.carreltex_wasm_compile_log_len_v0;
 const logCopy = instance.exports.carreltex_wasm_compile_log_copy_v0;
 const artifactMainXdvLen = instance.exports.carreltex_wasm_artifact_main_xdv_len_v0;
 const artifactMainXdvCopy = instance.exports.carreltex_wasm_artifact_main_xdv_copy_v0;
+const artifactLenByName = instance.exports.carreltex_wasm_artifact_len_v0;
+const artifactCopyByName = instance.exports.carreltex_wasm_artifact_copy_v0;
 
 for (const [name, fn] of [
   ['carreltex_wasm_alloc', alloc],
@@ -73,6 +75,8 @@ for (const [name, fn] of [
   ['carreltex_wasm_compile_log_copy_v0', logCopy],
   ['carreltex_wasm_artifact_main_xdv_len_v0', artifactMainXdvLen],
   ['carreltex_wasm_artifact_main_xdv_copy_v0', artifactMainXdvCopy],
+  ['carreltex_wasm_artifact_len_v0', artifactLenByName],
+  ['carreltex_wasm_artifact_copy_v0', artifactCopyByName],
 ]) {
   if (typeof fn !== 'function') {
     throw new Error(`Missing export: ${name}`);
@@ -249,6 +253,48 @@ function assertMainXdvArtifactEmpty(label) {
     }
   } finally {
     dealloc(outPtr, 1);
+  }
+
+  const mainName = new TextEncoder().encode('main.xdv');
+  const genericLen = callWithBytes(mainName, `${label}_generic_main_len`, (namePtr, nameLen) =>
+    artifactLenByName(namePtr, nameLen),
+  );
+  if (genericLen !== 0) {
+    throw new Error(`${label}: expected generic artifact_len(main.xdv)=0, got ${genericLen}`);
+  }
+  const genericCopyNull = callWithBytes(mainName, `${label}_generic_main_copy_null`, (namePtr, nameLen) =>
+    artifactCopyByName(namePtr, nameLen, 0, 0),
+  );
+  if (genericCopyNull !== 0) {
+    throw new Error(`${label}: expected generic artifact_copy(main.xdv,null,0)=0`);
+  }
+  const genericOutPtr = alloc(1);
+  if (!Number.isInteger(genericOutPtr) || genericOutPtr <= 0) {
+    throw new Error(`${label}: alloc(1) failed for generic artifact copy check`);
+  }
+  try {
+    const genericCopyOne = callWithBytes(mainName, `${label}_generic_main_copy_one`, (namePtr, nameLen) =>
+      artifactCopyByName(namePtr, nameLen, genericOutPtr, 1),
+    );
+    if (genericCopyOne !== 0) {
+      throw new Error(`${label}: expected generic artifact_copy(main.xdv,out,1)=0, got ${genericCopyOne}`);
+    }
+  } finally {
+    dealloc(genericOutPtr, 1);
+  }
+
+  const unknownName = new TextEncoder().encode('unknown.bin');
+  const unknownLen = callWithBytes(unknownName, `${label}_generic_unknown_len`, (namePtr, nameLen) =>
+    artifactLenByName(namePtr, nameLen),
+  );
+  if (unknownLen !== 0) {
+    throw new Error(`${label}: expected generic artifact_len(unknown.bin)=0, got ${unknownLen}`);
+  }
+  const unknownCopy = callWithBytes(unknownName, `${label}_generic_unknown_copy`, (namePtr, nameLen) =>
+    artifactCopyByName(namePtr, nameLen, 0, 0),
+  );
+  if (unknownCopy !== 0) {
+    throw new Error(`${label}: expected generic artifact_copy(unknown.bin,null,0)=0`);
   }
 }
 
