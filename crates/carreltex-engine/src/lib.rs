@@ -2,9 +2,8 @@ pub mod tex;
 
 use crate::tex::tokenize_v0::{tokenize_v0, TokenV0};
 use carreltex_core::{
-    build_compile_result_v0, truncate_log_bytes_v0, CompileRequestV0, CompileResultV0,
-    CompileStatus, Mount, DEFAULT_COMPILE_MAIN_MAX_LOG_BYTES_V0, MAX_LOG_BYTES_V0,
-    MAX_TEX_STATS_JSON_BYTES_V0,
+    build_compile_result_v0, build_tex_stats_json_v0, truncate_log_bytes_v0, CompileRequestV0,
+    CompileResultV0, CompileStatus, Mount, DEFAULT_COMPILE_MAIN_MAX_LOG_BYTES_V0, MAX_LOG_BYTES_V0,
 };
 
 const MISSING_COMPONENTS_V0: &[&str] = &["tex-engine"];
@@ -76,7 +75,7 @@ pub fn compile_request_v0(mount: &mut Mount, req: &CompileRequestV0) -> CompileR
             );
         }
     };
-    let tex_stats_json = match build_tex_stats_json_v0(&tokens) {
+    let tex_stats_json = match build_tex_stats_from_tokens_v0(&tokens) {
         Ok(json) => json,
         Err(_) => {
             return build_compile_result_v0(
@@ -88,7 +87,7 @@ pub fn compile_request_v0(mount: &mut Mount, req: &CompileRequestV0) -> CompileR
             );
         }
     };
-    if tex_stats_json.is_empty() || tex_stats_json.len() > MAX_TEX_STATS_JSON_BYTES_V0 {
+    if tex_stats_json.is_empty() {
         return build_compile_result_v0(
             CompileStatus::InvalidInput,
             &[],
@@ -107,7 +106,7 @@ pub fn compile_request_v0(mount: &mut Mount, req: &CompileRequestV0) -> CompileR
     )
 }
 
-fn build_tex_stats_json_v0(tokens: &[TokenV0]) -> Result<String, ()> {
+fn build_tex_stats_from_tokens_v0(tokens: &[TokenV0]) -> Result<String, ()> {
     let mut depth: u64 = 0;
     let mut max_depth: u64 = 0;
     let mut control_seq_count: u64 = 0;
@@ -147,13 +146,16 @@ fn build_tex_stats_json_v0(tokens: &[TokenV0]) -> Result<String, ()> {
     }
 
     let token_count: u64 = tokens.len().try_into().map_err(|_| ())?;
-    let out = format!(
-        "{{\"token_count\":{token_count},\"control_seq_count\":{control_seq_count},\"char_count\":{char_count},\"space_count\":{space_count},\"begin_group_count\":{begin_group_count},\"end_group_count\":{end_group_count},\"max_group_depth\":{max_depth}}}"
-    );
-    if out.len() > MAX_TEX_STATS_JSON_BYTES_V0 {
-        return Err(());
-    }
-    Ok(out)
+    build_tex_stats_json_v0(
+        token_count,
+        control_seq_count,
+        char_count,
+        space_count,
+        begin_group_count,
+        end_group_count,
+        max_depth,
+    )
+    .map_err(|_| ())
 }
 
 #[cfg(test)]

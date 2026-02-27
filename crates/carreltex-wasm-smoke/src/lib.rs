@@ -3,9 +3,9 @@ use std::sync::{Mutex, OnceLock};
 use carreltex_core::{
     append_event_v0, artifact_bytes_within_cap_v0, report_json_has_status_token_v0,
     report_json_missing_components_is_empty_v0, validate_compile_report_json, validate_main_tex,
-    CompileRequestV0, CompileStatus, Mount, DEFAULT_COMPILE_MAIN_MAX_LOG_BYTES_V0,
-    EVENT_KIND_LOG_BYTES_V0, EVENT_KIND_TEX_STATS_JSON_V0, MAX_LOG_BYTES_V0,
-    MAX_TEX_STATS_JSON_BYTES_V0, MAX_WASM_ALLOC_BYTES_V0,
+    validate_tex_stats_json_v0, CompileRequestV0, CompileStatus, Mount,
+    DEFAULT_COMPILE_MAIN_MAX_LOG_BYTES_V0, EVENT_KIND_LOG_BYTES_V0, EVENT_KIND_TEX_STATS_JSON_V0,
+    MAX_LOG_BYTES_V0, MAX_TEX_STATS_JSON_BYTES_V0, MAX_WASM_ALLOC_BYTES_V0,
 };
 use carreltex_engine::{compile_main_v0, compile_request_v0};
 
@@ -358,6 +358,10 @@ fn store_compile_result_or_fail_closed(
         CompileStatus::NotImplemented
             if tex_stats_json.is_empty() || tex_stats_json.len() > MAX_TEX_STATS_JSON_BYTES_V0 =>
         {
+            write_report_for_status(CompileStatus::InvalidInput);
+            return CompileStatus::InvalidInput as i32;
+        }
+        CompileStatus::NotImplemented if validate_tex_stats_json_v0(tex_stats_json).is_err() => {
             write_report_for_status(CompileStatus::InvalidInput);
             return CompileStatus::InvalidInput as i32;
         }
