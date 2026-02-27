@@ -62,13 +62,7 @@ fn expand_stream_v0(
                 index = parse_def_v0(tokens, index, macro_frames, is_global)?;
             }
             TokenV0::ControlSeq(name) if name.as_slice() == b"global" => {
-                let next_index = index + 1;
-                let is_global = match tokens.get(next_index) {
-                    Some(TokenV0::ControlSeq(next_name)) if next_name.as_slice() == b"def" => true,
-                    Some(TokenV0::ControlSeq(next_name)) if next_name.as_slice() == b"gdef" => true,
-                    _ => return Err(InvalidInputReasonV0::MacroGlobalPrefixUnsupported),
-                };
-                index = parse_def_v0(tokens, next_index, macro_frames, is_global)?;
+                index = parse_global_prefixed_def_v0(tokens, index, macro_frames)?;
             }
             TokenV0::ControlSeq(name) => {
                 if let Some(macro_def) = lookup_macro_v0(macro_frames, name) {
@@ -118,6 +112,27 @@ fn expand_stream_v0(
         }
     }
     Ok(())
+}
+
+fn parse_global_prefixed_def_v0(
+    tokens: &[TokenV0],
+    global_index: usize,
+    macro_frames: &mut Vec<BTreeMap<Vec<u8>, MacroDefV0>>,
+) -> Result<usize, InvalidInputReasonV0> {
+    let mut index = global_index;
+    while matches!(
+        tokens.get(index),
+        Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"global"
+    ) {
+        index += 1;
+    }
+
+    let is_global = match tokens.get(index) {
+        Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"def" => true,
+        Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"gdef" => true,
+        _ => return Err(InvalidInputReasonV0::MacroGlobalPrefixUnsupported),
+    };
+    parse_def_v0(tokens, index, macro_frames, is_global)
 }
 
 fn parse_def_v0(
