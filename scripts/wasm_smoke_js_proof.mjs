@@ -742,7 +742,7 @@ expectInvalid(compileMain(), 'compile_main_v0(input cycle)');
 {
   const logBytes = readCompileLogBytes();
   const logText = new TextDecoder().decode(logBytes);
-  if (!logText.startsWith('INVALID_INPUT:') || !logText.includes('input_validation_failed')) {
+  if (!logText.startsWith('INVALID_INPUT:') || !logText.includes('input_cycle_failed')) {
     throw new Error(`compile_main input cycle log mismatch: ${logText}`);
   }
   assertNoEvents('compile_main_v0(input cycle)');
