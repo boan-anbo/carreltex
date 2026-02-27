@@ -1,5 +1,6 @@
 mod input_expand_v0;
 mod ifnum_v0;
+mod ifx_v0;
 mod macro_expand_v0;
 mod stats_v0;
 mod trace_v0;
@@ -12,8 +13,9 @@ mod xdef_noexpand_v0_tests;
 #[cfg(test)]
 mod ifnum_v0_tests;
 #[cfg(test)]
+mod ifx_v0_tests;
+#[cfg(test)]
 mod meaning_v0_tests;
-
 use crate::reasons_v0::{invalid_log_bytes_v0, InvalidInputReasonV0};
 use crate::tex::tokenize_v0::{tokenize_v0, TokenV0, MAX_TOKENS_V0};
 use carreltex_core::{
@@ -24,7 +26,6 @@ use input_expand_v0::expand_inputs_v0;
 use macro_expand_v0::expand_macros_v0;
 use stats_v0::build_tex_stats_from_tokens_v0;
 use trace_v0::build_not_implemented_log_v0;
-
 const MISSING_COMPONENTS_V0: &[&str] = &["tex-engine"];
 const EMPTY_TEX_STATS_JSON: &str = "";
 

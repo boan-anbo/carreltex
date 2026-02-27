@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 
 use super::ifnum_v0::parse_ifnum_v0;
+use super::ifx_v0::parse_ifx_v0;
 use crate::reasons_v0::InvalidInputReasonV0;
 use crate::tex::tokenize_v0::{TokenV0, MAX_TOKENS_V0};
 
@@ -23,6 +24,11 @@ enum MacroBindingV0 {
         target_name: Vec<u8>,
         resolved_binding: Box<MacroBindingV0>,
     },
+}
+
+enum ConditionalKindV0 {
+    Ifnum,
+    Ifx,
 }
 
 pub(crate) fn expand_macros_v0(tokens: &[TokenV0]) -> Result<Vec<TokenV0>, InvalidInputReasonV0> {
@@ -57,6 +63,7 @@ fn expand_stream_v0(
         return Err(InvalidInputReasonV0::MacroDepthExceeded);
     }
 
+    let mut last_conditional_kind = None::<ConditionalKindV0>;
     let mut index = 0usize;
     while index < tokens.len() {
         match &tokens[index] {
@@ -158,9 +165,30 @@ fn expand_stream_v0(
                     depth + 1,
                 )?;
                 index = next_index;
+                last_conditional_kind = Some(ConditionalKindV0::Ifnum);
+            }
+            TokenV0::ControlSeq(name) if name.as_slice() == b"ifx" => {
+                let mut compare = |left: &[u8], right: &[u8]| {
+                    compare_ifx_control_sequences_v0(macro_frames, left, right)
+                };
+                let (selected_tokens, next_index) = parse_ifx_v0(tokens, index, counters, 0, &mut compare)?;
+                expand_stream_v0(
+                    &selected_tokens,
+                    macro_frames,
+                    counters,
+                    out,
+                    active_macros,
+                    expansion_count,
+                    depth + 1,
+                )?;
+                index = next_index;
+                last_conditional_kind = Some(ConditionalKindV0::Ifx);
             }
             TokenV0::ControlSeq(name) if name.as_slice() == b"else" => {
-                return Err(InvalidInputReasonV0::MacroIfElseWithoutIf);
+                return Err(match last_conditional_kind {
+                    Some(ConditionalKindV0::Ifx) => InvalidInputReasonV0::MacroIfxElseWithoutIf,
+                    _ => InvalidInputReasonV0::MacroIfElseWithoutIf,
+                });
             }
             TokenV0::ControlSeq(name) => {
                 match lookup_macro_binding_v0(macro_frames, name) {
@@ -638,6 +666,78 @@ fn lookup_macro_binding_v0(
         }
     }
     None
+}
+
+enum IfxComparableBindingV0 {
+    Undefined,
+    AliasTarget(Vec<u8>),
+    Macro(MacroDefV0),
+}
+
+fn compare_ifx_control_sequences_v0(
+    macro_frames: &[BTreeMap<Vec<u8>, MacroBindingV0>],
+    left: &[u8],
+    right: &[u8],
+) -> bool {
+    let left_binding = classify_ifx_binding_v0(macro_frames, left);
+    let right_binding = classify_ifx_binding_v0(macro_frames, right);
+    match (left_binding, right_binding) {
+        (IfxComparableBindingV0::Undefined, IfxComparableBindingV0::Undefined) => true,
+        (
+            IfxComparableBindingV0::AliasTarget(left_target),
+            IfxComparableBindingV0::AliasTarget(right_target),
+        ) => left_target == right_target,
+        (IfxComparableBindingV0::Macro(left_macro), IfxComparableBindingV0::Macro(right_macro)) => {
+            left_macro.param_count == right_macro.param_count
+                && left_macro.body_tokens == right_macro.body_tokens
+        }
+        _ => false,
+    }
+}
+
+fn classify_ifx_binding_v0(
+    macro_frames: &[BTreeMap<Vec<u8>, MacroBindingV0>],
+    name: &[u8],
+) -> IfxComparableBindingV0 {
+    match lookup_macro_binding_v0(macro_frames, name) {
+        None => IfxComparableBindingV0::Undefined,
+        Some(MacroBindingV0::Macro(definition)) => IfxComparableBindingV0::Macro(definition),
+        Some(MacroBindingV0::ControlSeqLiteral(target_name)) => {
+            IfxComparableBindingV0::AliasTarget(resolve_alias_target_name_v0(
+                macro_frames,
+                target_name,
+            ))
+        }
+        Some(MacroBindingV0::LetAlias {
+            target_name,
+            resolved_binding: _,
+        }) => IfxComparableBindingV0::AliasTarget(resolve_alias_target_name_v0(
+            macro_frames,
+            target_name,
+        )),
+    }
+}
+
+fn resolve_alias_target_name_v0(
+    macro_frames: &[BTreeMap<Vec<u8>, MacroBindingV0>],
+    start: Vec<u8>,
+) -> Vec<u8> {
+    let mut current = start;
+    let mut seen = Vec::<Vec<u8>>::new();
+    loop {
+        if seen.iter().any(|entry| entry == &current) {
+            return current;
+        }
+        seen.push(current.clone());
+        match lookup_macro_binding_v0(macro_frames, &current) {
+            Some(MacroBindingV0::ControlSeqLiteral(next)) => current = next,
+            Some(MacroBindingV0::LetAlias {
+                target_name,
+                resolved_binding: _,
+            }) => current = target_name,
+            _ => return current,
+        }
+    }
 }
 
 fn snapshot_let_binding_v0(
