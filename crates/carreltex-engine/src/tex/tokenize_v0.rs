@@ -11,6 +11,7 @@ pub enum TokenV0 {
 pub enum TokenizeErrorV0 {
     InvalidInput,
     CaretNotSupported,
+    ControlSeqNonAscii,
     TooManyTokens,
 }
 
@@ -42,7 +43,8 @@ fn push_token(tokens: &mut Vec<TokenV0>, token: TokenV0) -> Result<(), TokenizeE
 ///   - If followed by ASCII letters, consume a control word and emit
 ///     `ControlSeq(name_bytes)`. A following whitespace run is swallowed
 ///     (no `Space` token emitted).
-///   - Control sequence bytes must be ASCII-only.
+///   - Control sequence bytes must be ASCII-only (`ControlSeqNonAscii` on
+///     violations).
 ///   - Control word `\verb` is explicitly blocked in v0 (`InvalidInput`).
 ///   - Otherwise emit control symbol as `ControlSeq(vec![next_byte])`.
 ///   - A trailing terminal backslash is `InvalidInput`.
@@ -116,13 +118,13 @@ pub fn tokenize_v0(input: &[u8]) -> Result<Vec<TokenV0>, TokenizeErrorV0> {
                         return Err(TokenizeErrorV0::InvalidInput);
                     }
                     if !control_word.iter().all(|byte| byte.is_ascii()) {
-                        return Err(TokenizeErrorV0::InvalidInput);
+                        return Err(TokenizeErrorV0::ControlSeqNonAscii);
                     }
                     push_token(&mut tokens, TokenV0::ControlSeq(control_word))?;
                     if index < input.len() {
                         let (space_probe, _) = decode_caret_hex_v0(input, index)?;
                         if !is_whitespace(space_probe) && !space_probe.is_ascii() {
-                            return Err(TokenizeErrorV0::InvalidInput);
+                            return Err(TokenizeErrorV0::ControlSeqNonAscii);
                         }
                         if is_whitespace(space_probe) {
                             while index < input.len() {
@@ -136,7 +138,7 @@ pub fn tokenize_v0(input: &[u8]) -> Result<Vec<TokenV0>, TokenizeErrorV0> {
                     }
                 } else {
                     if !next.is_ascii() {
-                        return Err(TokenizeErrorV0::InvalidInput);
+                        return Err(TokenizeErrorV0::ControlSeqNonAscii);
                     }
                     push_token(&mut tokens, TokenV0::ControlSeq(vec![next]))?;
                     index = after_next_index;
@@ -267,7 +269,10 @@ mod tests {
 
     #[test]
     fn control_sequence_bytes_must_be_ascii() {
-        assert_eq!(tokenize_v0(b"\\foo^^ff"), Err(TokenizeErrorV0::InvalidInput));
+        assert_eq!(
+            tokenize_v0(b"\\foo^^ff"),
+            Err(TokenizeErrorV0::ControlSeqNonAscii)
+        );
     }
 
     #[test]

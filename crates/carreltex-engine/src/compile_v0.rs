@@ -74,6 +74,7 @@ pub fn compile_request_v0(mount: &mut Mount, req: &CompileRequestV0) -> CompileR
     let tokens = match tokenize_v0(&entry_bytes) {
         Ok(tokens) => tokens,
         Err(TokenizeErrorV0::CaretNotSupported) => return invalid_result_v0(req.max_log_bytes, InvalidInputReasonV0::TokenizerCaretNotSupported),
+        Err(TokenizeErrorV0::ControlSeqNonAscii) => return invalid_result_v0(req.max_log_bytes, InvalidInputReasonV0::TokenizerControlSeqNonAscii),
         Err(_) => return invalid_result_v0(req.max_log_bytes, InvalidInputReasonV0::TokenizeFailed),
     };
     let (expanded_tokens, input_trace) = match expand_inputs_v0(&tokens, mount) {
