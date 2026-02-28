@@ -128,3 +128,15 @@ fn input_unbraced_requires_char_only_filename_tokens() {
     assert!(result.log_bytes.starts_with(b"INVALID_INPUT:"));
     assert!(result.log_bytes.ends_with(b"input_validation_failed"));
 }
+
+#[test]
+fn input_unbraced_rejects_brace_boundary_after_filename() {
+    let mut mount = Mount::default();
+    let main = b"\\documentclass{article}\n\\begin{document}\n\\input sub{}\n\\end{document}\n";
+    assert!(mount.add_file(b"main.tex", main).is_ok());
+    assert!(mount.add_file(b"sub.tex", b"\\def\\foo{XYZ}").is_ok());
+    let result = compile_request_v0(&mut mount, &valid_request());
+    assert_eq!(result.status, CompileStatus::InvalidInput);
+    assert!(result.log_bytes.starts_with(b"INVALID_INPUT:"));
+    assert!(result.log_bytes.ends_with(b"input_validation_failed"));
+}
