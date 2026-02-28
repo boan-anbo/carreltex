@@ -514,6 +514,24 @@ fn control_word_textsterling_maps_to_l_and_swallows_space() {
 }
 
 #[test]
+fn control_word_textasteriskcentered_maps_to_asterisk_and_swallows_space() {
+    let tokens = tokenize_v0(b"\\textasteriskcentered X").expect("tokenize should succeed");
+    assert_eq!(tokens, vec![TokenV0::Char(b'*'), TokenV0::Char(b'X')]);
+}
+
+#[test]
+fn control_word_textperiodcentered_maps_to_dot_and_swallows_space() {
+    let tokens = tokenize_v0(b"\\textperiodcentered X").expect("tokenize should succeed");
+    assert_eq!(tokens, vec![TokenV0::Char(b'.'), TokenV0::Char(b'X')]);
+}
+
+#[test]
+fn control_word_texttrademark_maps_to_t_and_swallows_space() {
+    let tokens = tokenize_v0(b"\\texttrademark X").expect("tokenize should succeed");
+    assert_eq!(tokens, vec![TokenV0::Char(b'T'), TokenV0::Char(b'X')]);
+}
+
+#[test]
 fn control_word_par_maps_to_space_and_swallows_following_whitespace() {
     let tokens = tokenize_v0(b"A\\par B").expect("tokenize should succeed");
     assert_eq!(
