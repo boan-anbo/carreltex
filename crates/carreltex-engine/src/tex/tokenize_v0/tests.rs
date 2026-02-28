@@ -634,6 +634,66 @@ fn control_word_textparenright_maps_to_right_paren_and_swallows_space() {
 }
 
 #[test]
+fn control_word_textasciimacron_maps_to_dash_and_swallows_space() {
+    let tokens = tokenize_v0(b"\\textasciimacron X").expect("tokenize should succeed");
+    assert_eq!(tokens, vec![TokenV0::Char(b'-'), TokenV0::Char(b'X')]);
+}
+
+#[test]
+fn control_word_textasciibreve_maps_to_u_and_swallows_space() {
+    let tokens = tokenize_v0(b"\\textasciibreve X").expect("tokenize should succeed");
+    assert_eq!(tokens, vec![TokenV0::Char(b'u'), TokenV0::Char(b'X')]);
+}
+
+#[test]
+fn control_word_textasciidieresis_maps_to_double_quote_and_swallows_space() {
+    let tokens = tokenize_v0(b"\\textasciidieresis X").expect("tokenize should succeed");
+    assert_eq!(tokens, vec![TokenV0::Char(b'"'), TokenV0::Char(b'X')]);
+}
+
+#[test]
+fn control_word_textasciicaron_maps_to_v_and_swallows_space() {
+    let tokens = tokenize_v0(b"\\textasciicaron X").expect("tokenize should succeed");
+    assert_eq!(tokens, vec![TokenV0::Char(b'v'), TokenV0::Char(b'X')]);
+}
+
+#[test]
+fn control_word_textnumero_maps_to_n_and_swallows_space() {
+    let tokens = tokenize_v0(b"\\textnumero X").expect("tokenize should succeed");
+    assert_eq!(tokens, vec![TokenV0::Char(b'N'), TokenV0::Char(b'X')]);
+}
+
+#[test]
+fn control_word_textordmhyphen_maps_to_dash_and_swallows_space() {
+    let tokens = tokenize_v0(b"\\textordmhyphen X").expect("tokenize should succeed");
+    assert_eq!(tokens, vec![TokenV0::Char(b'-'), TokenV0::Char(b'X')]);
+}
+
+#[test]
+fn control_word_textopenbullet_maps_to_o_and_swallows_space() {
+    let tokens = tokenize_v0(b"\\textopenbullet X").expect("tokenize should succeed");
+    assert_eq!(tokens, vec![TokenV0::Char(b'o'), TokenV0::Char(b'X')]);
+}
+
+#[test]
+fn control_word_textleaf_maps_to_l_and_swallows_space() {
+    let tokens = tokenize_v0(b"\\textleaf X").expect("tokenize should succeed");
+    assert_eq!(tokens, vec![TokenV0::Char(b'L'), TokenV0::Char(b'X')]);
+}
+
+#[test]
+fn control_word_textmusicalnote_maps_to_n_and_swallows_space() {
+    let tokens = tokenize_v0(b"\\textmusicalnote X").expect("tokenize should succeed");
+    assert_eq!(tokens, vec![TokenV0::Char(b'n'), TokenV0::Char(b'X')]);
+}
+
+#[test]
+fn control_word_textreferencemark_maps_to_asterisk_and_swallows_space() {
+    let tokens = tokenize_v0(b"\\textreferencemark X").expect("tokenize should succeed");
+    assert_eq!(tokens, vec![TokenV0::Char(b'*'), TokenV0::Char(b'X')]);
+}
+
+#[test]
 fn control_word_textasteriskcentered_maps_to_asterisk_and_swallows_space() {
     let tokens = tokenize_v0(b"\\textasteriskcentered X").expect("tokenize should succeed");
     assert_eq!(tokens, vec![TokenV0::Char(b'*'), TokenV0::Char(b'X')]);
