@@ -199,6 +199,22 @@ fn ok_multichar_newline_control_word_uses_reset_sequence() {
 }
 
 #[test]
+fn ok_long_text_without_newline_wraps_automatically() {
+    let mut mount = Mount::default();
+    let long_body = "A".repeat(81);
+    let main = format!(
+        "\\documentclass{{article}}\\begin{{document}}{long_body}\\end{{document}}"
+    );
+    assert!(mount.add_file(b"main.tex", main.as_bytes()).is_ok());
+    let result = compile_request_v0(&mut mount, &valid_request());
+    assert_eq!(result.status, CompileStatus::Ok);
+    assert!(validate_dvi_v2_text_page_v0(&result.main_xdv_bytes));
+    assert_eq!(count_dvi_v2_text_pages_v0(&result.main_xdv_bytes), Some(1));
+    let movement = count_dvi_v2_text_movements_v0(&result.main_xdv_bytes).expect("movement summary");
+    assert!(movement.3 >= 1);
+}
+
+#[test]
 fn unsupported_char_backslash_in_body_falls_back_to_not_implemented() {
     let mut mount = Mount::default();
     let main = b"\\documentclass{article}\n\\begin{document}\nA\\textbackslash B\n\\end{document}\n";
