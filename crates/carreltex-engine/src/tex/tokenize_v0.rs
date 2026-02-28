@@ -32,6 +32,8 @@ mod tests_textword_144;
 mod tests_textword_145;
 #[cfg(test)]
 mod tests_textword_147;
+#[cfg(test)]
+mod tests_textword_148;
 
 /// Tokenize TeX input bytes with strict v0 assumptions.
 ///
