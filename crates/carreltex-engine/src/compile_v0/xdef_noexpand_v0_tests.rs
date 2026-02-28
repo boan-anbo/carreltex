@@ -7,6 +7,7 @@ fn valid_request() -> CompileRequestV0 {
         entrypoint: "main.tex".to_owned(),
         source_date_epoch: 1,
         max_log_bytes: 4096,
+        ok_max_line_glyphs_v0: None,
     }
 }
 
@@ -89,7 +90,9 @@ fn noexpand_makes_edef_dynamic_across_input_boundary() {
 #[test]
 fn noexpand_without_next_token_invalid() {
     let mut mount = Mount::default();
-    assert!(mount.add_file(b"main.tex", b"\\edef\\foo{\\noexpand}").is_ok());
+    assert!(mount
+        .add_file(b"main.tex", b"\\edef\\foo{\\noexpand}")
+        .is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
     assert_eq!(result.status, CompileStatus::InvalidInput);
     assert!(result.log_bytes.ends_with(b"macro_noexpand_unsupported"));
@@ -195,7 +198,8 @@ fn begingroup_depth_exceeded_is_invalid_with_specific_reason() {
 fn def_with_single_space_before_body_is_supported() {
     let baseline = baseline_char_count();
     let mut mount = Mount::default();
-    let main = b"\\documentclass{article}\n\\begin{document}\n\\def\\foo {XYZ}\\foo\n\\end{document}\n";
+    let main =
+        b"\\documentclass{article}\n\\begin{document}\n\\def\\foo {XYZ}\\foo\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
     assert_eq!(result.status, CompileStatus::NotImplemented);
@@ -218,7 +222,9 @@ fn def_single_param_with_single_space_before_body_is_supported() {
 #[test]
 fn def_with_non_space_token_before_body_is_invalid() {
     let mut mount = Mount::default();
-    assert!(mount.add_file(b"main.tex", b"\\def\\foo\\relax{XYZ}").is_ok());
+    assert!(mount
+        .add_file(b"main.tex", b"\\def\\foo\\relax{XYZ}")
+        .is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
     assert_eq!(result.status, CompileStatus::InvalidInput);
     assert!(result.log_bytes.ends_with(b"macro_validation_failed"));

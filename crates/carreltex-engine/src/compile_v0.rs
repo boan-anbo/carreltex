@@ -32,7 +32,10 @@ use carreltex_core::{
     build_compile_result_v0, truncate_log_bytes_v0, CompileRequestV0, CompileResultV0,
     CompileStatus, Mount, DEFAULT_COMPILE_MAIN_MAX_LOG_BYTES_V0, MAX_LOG_BYTES_V0,
 };
-use carreltex_xdv::{validate_dvi_v2_text_page_v0, write_dvi_v2_text_page_with_layout_v0};
+use carreltex_xdv::{
+    validate_dvi_v2_text_page_v0, write_dvi_v2_text_page_with_layout_and_wrap_v0,
+    DEFAULT_MAX_LINE_GLYPHS_V0,
+};
 use input_expand_v0::expand_inputs_v0;
 use macro_expand_v0::expand_macros_v0;
 use ok_v0::{
@@ -57,6 +60,7 @@ pub fn compile_main_v0(mount: &mut Mount) -> CompileResultV0 {
         entrypoint: "main.tex".to_owned(),
         source_date_epoch: 1,
         max_log_bytes: DEFAULT_COMPILE_MAIN_MAX_LOG_BYTES_V0,
+        ok_max_line_glyphs_v0: None,
     };
     compile_request_v0(mount, &request)
 }
@@ -68,6 +72,11 @@ pub fn compile_request_v0(mount: &mut Mount, req: &CompileRequestV0) -> CompileR
     }
     if req.max_log_bytes > MAX_LOG_BYTES_V0 {
         return invalid_result_v0(req.max_log_bytes, InvalidInputReasonV0::RequestInvalid);
+    }
+    if let Some(value) = req.ok_max_line_glyphs_v0 {
+        if !(1..=256).contains(&value) {
+            return invalid_result_v0(req.max_log_bytes, InvalidInputReasonV0::RequestInvalid);
+        }
     }
 
     if mount.finalize().is_err() {
@@ -130,10 +139,13 @@ pub fn compile_request_v0(mount: &mut Mount, req: &CompileRequestV0) -> CompileR
 
     if let Some(ok_text_bytes) = ok_text_bytes {
         if ok_text_bytes.len() <= MAX_OK_TEXT_BYTES_V0 {
-            let xdv_bytes = match write_dvi_v2_text_page_with_layout_v0(
+            let max_line_glyphs = req.ok_max_line_glyphs_v0
+                .unwrap_or(DEFAULT_MAX_LINE_GLYPHS_V0 as u32) as usize;
+            let xdv_bytes = match write_dvi_v2_text_page_with_layout_and_wrap_v0(
                 &ok_text_bytes,
                 OK_GLYPH_ADVANCE_SP_V0,
                 OK_LINE_ADVANCE_SP_V0,
+                max_line_glyphs,
             ) {
                 Some(bytes) => bytes,
                 None => {
@@ -191,6 +203,7 @@ mod tests {
             entrypoint: "main.tex".to_owned(),
             source_date_epoch: 1_700_000_000,
             max_log_bytes: 1024,
+            ok_max_line_glyphs_v0: None,
         }
     }
 

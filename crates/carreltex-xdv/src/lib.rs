@@ -84,10 +84,11 @@ fn is_supported_text_byte_v0(byte: u8) -> bool {
 }
 
 fn split_pages_v0(text: &[u8]) -> Option<Vec<&[u8]>> {
-    if text
-        .iter()
-        .any(|byte| !is_supported_text_byte_v0(*byte) && *byte != PAGEBREAK_MARKER_V0 && *byte != NEWLINE_MARKER_V0)
-    {
+    if text.iter().any(|byte| {
+        !is_supported_text_byte_v0(*byte)
+            && *byte != PAGEBREAK_MARKER_V0
+            && *byte != NEWLINE_MARKER_V0
+    }) {
         return None;
     }
     let mut pages = Vec::<&[u8]>::new();
@@ -270,7 +271,21 @@ pub fn write_dvi_v2_text_page_with_layout_v0(
     glyph_advance_sp: i32,
     line_advance_sp: i32,
 ) -> Option<Vec<u8>> {
-    if glyph_advance_sp <= 0 || line_advance_sp <= 0 {
+    write_dvi_v2_text_page_with_layout_and_wrap_v0(
+        text,
+        glyph_advance_sp,
+        line_advance_sp,
+        DEFAULT_MAX_LINE_GLYPHS_V0,
+    )
+}
+
+pub fn write_dvi_v2_text_page_with_layout_and_wrap_v0(
+    text: &[u8],
+    glyph_advance_sp: i32,
+    line_advance_sp: i32,
+    max_line_glyphs: usize,
+) -> Option<Vec<u8>> {
+    if glyph_advance_sp <= 0 || line_advance_sp <= 0 || max_line_glyphs == 0 {
         return None;
     }
     let pages = split_pages_v0(text)?;
@@ -307,14 +322,17 @@ pub fn write_dvi_v2_text_page_with_layout_v0(
         let logical_lines = split_lines_v0(page);
         let mut physical_lines = Vec::<Vec<u8>>::new();
         for line in logical_lines {
-            let wrapped = wrap_logical_line_v0(line, DEFAULT_MAX_LINE_GLYPHS_V0)?;
+            let wrapped = wrap_logical_line_v0(line, max_line_glyphs)?;
             physical_lines.extend(wrapped);
         }
         let mut page_h = 0u32;
         let mut page_v = 0u32;
         let mut previous_line_h = emit_line_glyphs_v0(
             &mut out,
-            physical_lines.first().map(|line| line.as_slice()).unwrap_or(&[]),
+            physical_lines
+                .first()
+                .map(|line| line.as_slice())
+                .unwrap_or(&[]),
             glyph_advance_sp,
         )?;
         page_h = page_h.max(previous_line_h);
@@ -354,7 +372,10 @@ pub fn write_dvi_v2_text_page_with_layout_v0(
     Some(out)
 }
 
-pub fn write_dvi_v2_text_page_with_advance_v0(text: &[u8], glyph_advance_sp: i32) -> Option<Vec<u8>> {
+pub fn write_dvi_v2_text_page_with_advance_v0(
+    text: &[u8],
+    glyph_advance_sp: i32,
+) -> Option<Vec<u8>> {
     write_dvi_v2_text_page_with_layout_v0(text, glyph_advance_sp, DEFAULT_LINE_ADVANCE_SP_V0)
 }
 
@@ -460,9 +481,8 @@ pub fn count_dvi_v2_text_pages_with_layout_v0(
     glyph_advance_sp: i32,
     line_advance_sp: i32,
 ) -> Option<u16> {
-    count_dvi_v2_text_movements_with_layout_v0(bytes, glyph_advance_sp, line_advance_sp).map(
-        |(_, _, _, _, page_count)| page_count,
-    )
+    count_dvi_v2_text_movements_with_layout_v0(bytes, glyph_advance_sp, line_advance_sp)
+        .map(|(_, _, _, _, page_count)| page_count)
 }
 
 pub fn count_dvi_v2_text_movements_with_layout_v0(
@@ -701,22 +721,14 @@ pub fn count_dvi_v2_text_movements_with_layout_v0(
 }
 
 pub fn count_dvi_v2_text_pages_with_advance_v0(bytes: &[u8], glyph_advance_sp: i32) -> Option<u16> {
-    count_dvi_v2_text_pages_with_layout_v0(
-        bytes,
-        glyph_advance_sp,
-        DEFAULT_LINE_ADVANCE_SP_V0,
-    )
+    count_dvi_v2_text_pages_with_layout_v0(bytes, glyph_advance_sp, DEFAULT_LINE_ADVANCE_SP_V0)
 }
 
 pub fn count_dvi_v2_text_movements_with_advance_v0(
     bytes: &[u8],
     glyph_advance_sp: i32,
 ) -> Option<(u32, u32, u32, u32, u16)> {
-    count_dvi_v2_text_movements_with_layout_v0(
-        bytes,
-        glyph_advance_sp,
-        DEFAULT_LINE_ADVANCE_SP_V0,
-    )
+    count_dvi_v2_text_movements_with_layout_v0(bytes, glyph_advance_sp, DEFAULT_LINE_ADVANCE_SP_V0)
 }
 
 pub fn count_dvi_v2_text_movements_v0(bytes: &[u8]) -> Option<(u32, u32, u32, u32, u16)> {
@@ -734,11 +746,12 @@ pub fn validate_dvi_v2_text_page_v0(bytes: &[u8]) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        count_dvi_v2_text_pages_v0, count_dvi_v2_text_pages_with_advance_v0,
-        count_dvi_v2_text_movements_v0, write_dvi_v2_text_page_with_layout_v0,
-        validate_dvi_v2_empty_page_v0, validate_dvi_v2_text_page_v0, write_dvi_v2_empty_page_v0,
-        write_dvi_v2_text_page_v0, write_dvi_v2_text_page_with_advance_v0, DVI_EOP, DVI_FNT_DEF1,
-        DVI_DOWN3, DVI_PRE, DVI_RIGHT3, DVI_TRAILER_BYTE, DVI_W0, DVI_W3,
+        count_dvi_v2_text_movements_v0, count_dvi_v2_text_pages_v0,
+        count_dvi_v2_text_pages_with_advance_v0, validate_dvi_v2_empty_page_v0,
+        validate_dvi_v2_text_page_v0, write_dvi_v2_empty_page_v0, write_dvi_v2_text_page_v0,
+        write_dvi_v2_text_page_with_advance_v0, write_dvi_v2_text_page_with_layout_and_wrap_v0,
+        write_dvi_v2_text_page_with_layout_v0, DVI_DOWN3, DVI_EOP, DVI_FNT_DEF1, DVI_PRE,
+        DVI_RIGHT3, DVI_TRAILER_BYTE, DVI_W0, DVI_W3,
     };
 
     #[test]
@@ -785,7 +798,8 @@ mod tests {
     fn text_writer_emits_right_and_w_movement_ops() {
         let bytes = write_dvi_v2_text_page_v0(b"ABCDE").expect("writer should accept text");
         assert!(validate_dvi_v2_text_page_v0(&bytes));
-        let movement = count_dvi_v2_text_movements_v0(&bytes).expect("movement summary should parse");
+        let movement =
+            count_dvi_v2_text_movements_v0(&bytes).expect("movement summary should parse");
         assert_eq!(movement, (2, 1, 1, 0, 1));
     }
 
@@ -793,7 +807,8 @@ mod tests {
     fn text_writer_newline_emits_down3_and_keeps_single_page() {
         let bytes = write_dvi_v2_text_page_v0(b"A\nB").expect("writer should accept newline");
         assert!(validate_dvi_v2_text_page_v0(&bytes));
-        let movement = count_dvi_v2_text_movements_v0(&bytes).expect("movement summary should parse");
+        let movement =
+            count_dvi_v2_text_movements_v0(&bytes).expect("movement summary should parse");
         assert_eq!(movement, (0, 0, 0, 1, 1));
         assert!(bytes.contains(&DVI_DOWN3));
     }
@@ -802,7 +817,8 @@ mod tests {
     fn text_writer_multichar_newline_reset_validates() {
         let bytes = write_dvi_v2_text_page_v0(b"AB\nC").expect("writer should accept newline");
         assert!(validate_dvi_v2_text_page_v0(&bytes));
-        let movement = count_dvi_v2_text_movements_v0(&bytes).expect("movement summary should parse");
+        let movement =
+            count_dvi_v2_text_movements_v0(&bytes).expect("movement summary should parse");
         assert_eq!(movement, (2, 0, 0, 1, 1));
     }
 
@@ -814,7 +830,8 @@ mod tests {
         }
         let bytes = write_dvi_v2_text_page_v0(&line).expect("writer should accept wrapped line");
         assert!(validate_dvi_v2_text_page_v0(&bytes));
-        let movement = count_dvi_v2_text_movements_v0(&bytes).expect("movement summary should parse");
+        let movement =
+            count_dvi_v2_text_movements_v0(&bytes).expect("movement summary should parse");
         assert_eq!(movement.4, 1);
         assert!(movement.3 >= 1);
     }
@@ -825,6 +842,7 @@ mod tests {
         assert!(write_dvi_v2_text_page_with_advance_v0(b"ABC", -1).is_none());
         assert!(write_dvi_v2_text_page_with_layout_v0(b"ABC", 1024, 0).is_none());
         assert!(write_dvi_v2_text_page_with_layout_v0(b"ABC", 1024, -1).is_none());
+        assert!(write_dvi_v2_text_page_with_layout_and_wrap_v0(b"ABC", 1024, 2048, 0).is_none());
     }
 
     #[test]
@@ -919,7 +937,8 @@ mod tests {
         for _ in 0..50 {
             line.extend_from_slice(b"A ");
         }
-        let mut bytes = write_dvi_v2_text_page_v0(&line).expect("writer should accept wrapped line");
+        let mut bytes =
+            write_dvi_v2_text_page_v0(&line).expect("writer should accept wrapped line");
         let down3_index = bytes
             .iter()
             .position(|byte| *byte == DVI_DOWN3)
@@ -937,8 +956,41 @@ mod tests {
 
     #[test]
     fn count_rejects_mismatched_advance_parameter() {
-        let bytes = write_dvi_v2_text_page_with_advance_v0(b"ABC", 1024).expect("writer should accept");
-        assert_eq!(count_dvi_v2_text_pages_with_advance_v0(&bytes, 1024), Some(1));
+        let bytes =
+            write_dvi_v2_text_page_with_advance_v0(b"ABC", 1024).expect("writer should accept");
+        assert_eq!(
+            count_dvi_v2_text_pages_with_advance_v0(&bytes, 1024),
+            Some(1)
+        );
         assert_eq!(count_dvi_v2_text_pages_with_advance_v0(&bytes, 2048), None);
+    }
+
+    #[test]
+    fn write_with_small_wrap_cap_increases_down3_count() {
+        let text = b"word word word word word word word word word word";
+        let wide = write_dvi_v2_text_page_with_layout_and_wrap_v0(text, 65_536, 786_432, 80)
+            .expect("writer should accept wide cap");
+        let narrow = write_dvi_v2_text_page_with_layout_and_wrap_v0(text, 65_536, 786_432, 10)
+            .expect("writer should accept narrow cap");
+        assert!(validate_dvi_v2_text_page_v0(&wide));
+        assert!(validate_dvi_v2_text_page_v0(&narrow));
+        let wide_down3 = count_dvi_v2_text_movements_v0(&wide)
+            .expect("wide movement summary should parse")
+            .3;
+        let narrow_down3 = count_dvi_v2_text_movements_v0(&narrow)
+            .expect("narrow movement summary should parse")
+            .3;
+        assert!(narrow_down3 > wide_down3);
+    }
+
+    #[test]
+    fn write_with_wrap_cap_one_hard_breaks_each_glyph() {
+        let bytes = write_dvi_v2_text_page_with_layout_and_wrap_v0(b"AB", 65_536, 786_432, 1)
+            .expect("writer should accept wrap cap 1");
+        assert!(validate_dvi_v2_text_page_v0(&bytes));
+        let down3_count = count_dvi_v2_text_movements_v0(&bytes)
+            .expect("movement summary should parse")
+            .3;
+        assert_eq!(down3_count, 1);
     }
 }

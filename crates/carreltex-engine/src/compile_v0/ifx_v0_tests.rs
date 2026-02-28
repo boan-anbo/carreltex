@@ -6,6 +6,7 @@ fn valid_request() -> CompileRequestV0 {
         entrypoint: "main.tex".to_owned(),
         source_date_epoch: 1,
         max_log_bytes: 4096,
+        ok_max_line_glyphs_v0: None,
     }
 }
 
@@ -83,11 +84,9 @@ fn ifx_macro_not_equal_macro_keeps_else_branch() {
 #[test]
 fn ifx_duplicate_else_is_invalid() {
     let mut mount = Mount::default();
-    assert!(
-        mount
-            .add_file(b"main.tex", b"\\ifx\\foo\\bar X\\else Y\\else Z\\fi")
-            .is_ok()
-    );
+    assert!(mount
+        .add_file(b"main.tex", b"\\ifx\\foo\\bar X\\else Y\\else Z\\fi")
+        .is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
     assert_eq!(result.status, CompileStatus::InvalidInput);
     assert!(result.log_bytes.ends_with(b"macro_ifx_else_duplicate"));
@@ -96,7 +95,9 @@ fn ifx_duplicate_else_is_invalid() {
 #[test]
 fn ifx_else_without_if_is_invalid() {
     let mut mount = Mount::default();
-    assert!(mount.add_file(b"main.tex", b"\\ifx\\foo\\bar X\\fi\\else").is_ok());
+    assert!(mount
+        .add_file(b"main.tex", b"\\ifx\\foo\\bar X\\fi\\else")
+        .is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
     assert_eq!(result.status, CompileStatus::InvalidInput);
     assert!(result.log_bytes.ends_with(b"macro_ifx_else_without_if"));
