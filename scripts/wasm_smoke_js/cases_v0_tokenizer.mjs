@@ -500,6 +500,29 @@ export function runTokenizerCases(ctx, helpers) {
   }
 
   if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before tokenizer braced-accent control-symbol payload case failed');
+  }
+  const bracedAccentControlSymbolMainBytes = new TextEncoder().encode('\\documentclass{article}\n\\begin{document}\nHello.\\~{\\%}XYZ\n\\end{document}\n');
+  if (addMountedFile('main.tex', bracedAccentControlSymbolMainBytes, 'tokenizer_braced_accent_control_symbol_main') !== 0) {
+    throw new Error('mount_add_file(tokenizer braced-accent control-symbol payload main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) {
+    throw new Error('mount_finalize for tokenizer braced-accent control-symbol payload case failed');
+  }
+  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(tokenizer braced-accent control-symbol payload)');
+  {
+    const logBytes = readCompileLogBytes();
+    const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(tokenizer braced-accent control-symbol payload)');
+    if (helloBaselineCharCount === null) {
+      throw new Error('helloBaselineCharCount not initialized for tokenizer braced-accent control-symbol payload case');
+    }
+    if (stats.char_count !== helloBaselineCharCount + 4) {
+      throw new Error(`compile_main(tokenizer braced-accent control-symbol payload) char_count delta expected +4, got baseline=${helloBaselineCharCount}, current=${stats.char_count}`);
+    }
+    assertMainXdvArtifactEmpty('compile_main(tokenizer braced-accent control-symbol payload)');
+  }
+
+  if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer accent-not-supported case failed');
   }
   if (addMountedFile('main.tex', new TextEncoder().encode('\\~a'), 'tokenizer_accent_not_supported_main') !== 0) {
@@ -516,5 +539,24 @@ export function runTokenizerCases(ctx, helpers) {
       throw new Error(`compile_main tokenizer accent-not-supported log mismatch: ${logText}`);
     }
     assertNoEvents('compile_main_v0(tokenizer accent-not-supported)');
+  }
+
+  if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before tokenizer accent-control-word-not-supported case failed');
+  }
+  if (addMountedFile('main.tex', new TextEncoder().encode('\\~{\\par}'), 'tokenizer_accent_control_word_not_supported_main') !== 0) {
+    throw new Error('mount_add_file(tokenizer accent-control-word-not-supported main.tex) failed');
+  }
+  const accentControlWordFinalizeCode = ctx.mountFinalize();
+  if (accentControlWordFinalizeCode !== 0 && accentControlWordFinalizeCode !== 1) {
+    throw new Error(`mount_finalize(tokenizer accent-control-word-not-supported) unexpected code=${accentControlWordFinalizeCode}`);
+  }
+  expectInvalid(ctx.compileMain(), 'compile_main_v0(tokenizer accent-control-word-not-supported)');
+  {
+    const logText = new TextDecoder().decode(readCompileLogBytes());
+    if (!logText.startsWith('INVALID_INPUT:') || !logText.includes('tokenizer_accent_not_supported')) {
+      throw new Error(`compile_main tokenizer accent-control-word-not-supported log mismatch: ${logText}`);
+    }
+    assertNoEvents('compile_main_v0(tokenizer accent-control-word-not-supported)');
   }
 }
