@@ -41,4 +41,7 @@ scripts/proof_wasm_smoke.sh
 scripts/proof_v0.sh
 ```
 
+`scripts/proof_v0.sh` is quiet by default (concise step PASS lines + canonical 3-line PASS tail).
+Use `PROOF_VERBOSE=1 scripts/proof_v0.sh` or `scripts/proof_v0.sh --verbose` for full subcommand output.
+
 CI runs the same `scripts/proof_v0.sh` gate on every PR and on pushes to `main`.
