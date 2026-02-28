@@ -69,6 +69,8 @@ pub(super) fn parse_control_word_v0(
         vec![TokenV0::Char(b'-')]
     } else if control_word.as_slice() == b"textellipsis" {
         vec![TokenV0::Char(b'.'), TokenV0::Char(b'.'), TokenV0::Char(b'.')]
+    } else if control_word.as_slice() == b"textbullet" {
+        vec![TokenV0::Char(b'*')]
     } else if control_word.as_slice() == b"par" {
         vec![TokenV0::Space]
     } else {
