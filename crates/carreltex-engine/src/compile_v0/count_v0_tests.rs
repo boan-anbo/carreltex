@@ -6,6 +6,7 @@ fn valid_request() -> CompileRequestV0 {
         entrypoint: "main.tex".to_owned(),
         source_date_epoch: 1,
         max_log_bytes: 4096,
+        ok_max_line_glyphs_v0: None,
     }
 }
 
@@ -63,7 +64,9 @@ fn count_assignment_rejects_negative_values() {
     assert!(mount.add_file(b"main.tex", b"\\count0=-1").is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
     assert_eq!(result.status, CompileStatus::InvalidInput);
-    assert!(result.log_bytes.ends_with(b"macro_count_assignment_unsupported"));
+    assert!(result
+        .log_bytes
+        .ends_with(b"macro_count_assignment_unsupported"));
 }
 
 #[test]
