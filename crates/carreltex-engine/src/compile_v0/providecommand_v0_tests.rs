@@ -6,6 +6,7 @@ fn valid_request() -> CompileRequestV0 {
         entrypoint: "main.tex".to_owned(),
         source_date_epoch: 1,
         max_log_bytes: 4096,
+        ok_max_line_glyphs_v0: None,
     }
 }
 
@@ -71,8 +72,12 @@ fn providecommand_single_param_positive() {
 #[test]
 fn providecommand_rejects_unsupported_syntax() {
     let mut mount = Mount::default();
-    assert!(mount.add_file(b"main.tex", b"\\providecommand\\foo{XYZ}").is_ok());
+    assert!(mount
+        .add_file(b"main.tex", b"\\providecommand\\foo{XYZ}")
+        .is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
     assert_eq!(result.status, CompileStatus::InvalidInput);
-    assert!(result.log_bytes.ends_with(b"macro_providecommand_unsupported"));
+    assert!(result
+        .log_bytes
+        .ends_with(b"macro_providecommand_unsupported"));
 }

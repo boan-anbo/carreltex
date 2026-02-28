@@ -7,6 +7,7 @@ fn valid_request() -> CompileRequestV0 {
         entrypoint: "main.tex".to_owned(),
         source_date_epoch: 1,
         max_log_bytes: 4096,
+        ok_max_line_glyphs_v0: None,
     }
 }
 
@@ -83,11 +84,12 @@ fn ifnum_uses_counts_defined_via_input() {
 #[test]
 fn ifnum_else_is_invalid() {
     let mut mount = Mount::default();
-    assert!(
-        mount
-            .add_file(b"main.tex", b"\\ifnum\\count0<\\count1 X\\else Y\\else Z\\fi")
-            .is_ok()
-    );
+    assert!(mount
+        .add_file(
+            b"main.tex",
+            b"\\ifnum\\count0<\\count1 X\\else Y\\else Z\\fi"
+        )
+        .is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
     assert_eq!(result.status, CompileStatus::InvalidInput);
     assert!(result.log_bytes.ends_with(b"macro_if_else_duplicate"));
@@ -96,11 +98,9 @@ fn ifnum_else_is_invalid() {
 #[test]
 fn ifnum_missing_fi_is_invalid() {
     let mut mount = Mount::default();
-    assert!(
-        mount
-            .add_file(b"main.tex", b"\\ifnum\\count0<\\count1 X")
-            .is_ok()
-    );
+    assert!(mount
+        .add_file(b"main.tex", b"\\ifnum\\count0<\\count1 X")
+        .is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
     assert_eq!(result.status, CompileStatus::InvalidInput);
     assert!(result.log_bytes.ends_with(b"macro_if_missing_fi"));
@@ -159,7 +159,9 @@ fn unsupported_accent_control_symbol_maps_to_tokenizer_accent_reason() {
     assert!(mount.add_file(b"main.tex", b"\\~a").is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
     assert_eq!(result.status, CompileStatus::InvalidInput);
-    assert!(result.log_bytes.ends_with(b"tokenizer_accent_not_supported"));
+    assert!(result
+        .log_bytes
+        .ends_with(b"tokenizer_accent_not_supported"));
 }
 
 #[test]
@@ -192,7 +194,9 @@ fn non_ascii_control_sequence_byte_maps_to_specific_reason_token() {
     assert!(mount.add_file(b"main.tex", b"\\def\\^^ff{XYZ}").is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
     assert_eq!(result.status, CompileStatus::InvalidInput);
-    assert!(result.log_bytes.ends_with(b"tokenizer_control_seq_non_ascii"));
+    assert!(result
+        .log_bytes
+        .ends_with(b"tokenizer_control_seq_non_ascii"));
 }
 
 #[test]
@@ -407,7 +411,8 @@ fn control_word_textquotedbl_is_counted_as_literal_char_and_space_is_swallowed()
 fn control_word_textless_is_counted_as_literal_char_and_space_is_swallowed() {
     let baseline = hello_baseline_char_count();
     let mut mount = Mount::default();
-    let main = b"\\documentclass{article}\n\\begin{document}\nHello.\\textless XYZ\n\\end{document}\n";
+    let main =
+        b"\\documentclass{article}\n\\begin{document}\nHello.\\textless XYZ\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
     assert_eq!(result.status, CompileStatus::Ok);

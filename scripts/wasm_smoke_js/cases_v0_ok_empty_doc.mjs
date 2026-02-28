@@ -6,6 +6,7 @@ export function runOkEmptyDocCases(ctx, helpers) {
     readCompileLogBytes,
     assertEventsMatchLogAndStats,
     readMainXdvArtifactBytes,
+    callWithBytes,
   } = helpers;
 
   const countPagesInDviV2 = (bytes, label) => {
@@ -83,6 +84,32 @@ export function runOkEmptyDocCases(ctx, helpers) {
       index += 1;
     }
     return { right3, w3, w0, down3 };
+  };
+
+  const runCompileRequestOkCase = (maxLineGlyphs, label) => {
+    if (ctx.compileRequestReset() !== 0) {
+      throw new Error(`${label} compile_request_reset_v0 failed`);
+    }
+    const entrypointBytes = new TextEncoder().encode('main.tex');
+    const setEntrypoint = callWithBytes(
+      entrypointBytes,
+      `${label}_entrypoint`,
+      (ptr, len) => ctx.compileRequestSetEntrypoint(ptr, len),
+    );
+    if (setEntrypoint !== 0) {
+      throw new Error(`${label} compile_request_set_entrypoint_v0 failed`);
+    }
+    if (ctx.compileRequestSetEpoch(1700000000n) !== 0) {
+      throw new Error(`${label} compile_request_set_source_date_epoch_v0 failed`);
+    }
+    if (ctx.compileRequestSetMaxLogBytes(2048) !== 0) {
+      throw new Error(`${label} compile_request_set_max_log_bytes_v0 failed`);
+    }
+    if (ctx.compileRequestSetOkMaxLineGlyphs(maxLineGlyphs) !== 0) {
+      throw new Error(`${label} compile_request_set_ok_max_line_glyphs_v0 failed`);
+    }
+    expectOk(ctx.compileRun(), `${label} compile_run_v0`);
+    return readMainXdvArtifactBytes(`${label} compile_run_v0`);
   };
 
   if (ctx.mountReset() !== 0) {
@@ -407,5 +434,53 @@ export function runOkEmptyDocCases(ctx, helpers) {
   const wrappedMovement = countMovementOpsInTextPages(wrappedXdvBytes, 'compile_main(ok wrapped text doc)');
   if (wrappedMovement.down3 < 1) {
     throw new Error('compile_main(ok wrapped text doc) expected at least one DOWN3 opcode from auto-wrap');
+  }
+
+  if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before OK request max_line_glyphs case failed');
+  }
+  const requestWrapMain = new TextEncoder().encode(
+    '\\documentclass{article}\\begin{document}word word word word word word word word word word\\end{document}',
+  );
+  if (addMountedFile('main.tex', requestWrapMain, 'ok_request_wrap_main') !== 0) {
+    throw new Error('mount_add_file(ok request wrap main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) {
+    throw new Error('mount_finalize for OK request wrap case failed');
+  }
+
+  const xdvCap80 = runCompileRequestOkCase(80, 'ok_request_wrap_cap_80');
+  const xdvCap10 = runCompileRequestOkCase(10, 'ok_request_wrap_cap_10');
+  const movement80 = countMovementOpsInTextPages(xdvCap80, 'ok_request_wrap_cap_80');
+  const movement10 = countMovementOpsInTextPages(xdvCap10, 'ok_request_wrap_cap_10');
+  if (!(movement10.down3 > movement80.down3)) {
+    throw new Error(
+      `ok request wrap cap expected down3(10) > down3(80), got ${movement10.down3} <= ${movement80.down3}`,
+    );
+  }
+
+  if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before OK request max_line_glyphs=1 case failed');
+  }
+  const requestCapOneMain = new TextEncoder().encode(
+    '\\documentclass{article}\\begin{document}AB\\end{document}',
+  );
+  if (addMountedFile('main.tex', requestCapOneMain, 'ok_request_wrap_cap_one_main') !== 0) {
+    throw new Error('mount_add_file(ok request wrap cap one main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) {
+    throw new Error('mount_finalize for OK request wrap cap one case failed');
+  }
+  const xdvCapOne = runCompileRequestOkCase(1, 'ok_request_wrap_cap_1');
+  const movementCapOne = countMovementOpsInTextPages(xdvCapOne, 'ok_request_wrap_cap_1');
+  if (movementCapOne.down3 !== 1) {
+    throw new Error(`ok request wrap cap one expected down3=1, got ${movementCapOne.down3}`);
+  }
+
+  if (ctx.compileRequestSetOkMaxLineGlyphs(0) === 0) {
+    throw new Error('compile_request_set_ok_max_line_glyphs_v0(0) expected failure');
+  }
+  if (ctx.compileRequestSetOkMaxLineGlyphs(257) === 0) {
+    throw new Error('compile_request_set_ok_max_line_glyphs_v0(257) expected failure');
   }
 }

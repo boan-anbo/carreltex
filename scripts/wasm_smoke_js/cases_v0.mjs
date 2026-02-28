@@ -404,7 +404,7 @@ export function runCasesV0(ctx, mem, helpers) {
   runEdefCases(ctx, { addMountedFile, expectInvalid, expectOk, expectNotImplemented, readCompileLogBytes, assertEventsMatchLogAndStats, assertMainXdvArtifactEmpty, assertNoEvents });
   runNewcommandCases(ctx, { addMountedFile, expectInvalid, expectOk, expectNotImplemented, readCompileLogBytes, assertEventsMatchLogAndStats, assertMainXdvArtifactEmpty, assertNoEvents });
   runProvidecommandCases(ctx, { addMountedFile, expectInvalid, expectOk, expectNotImplemented, readCompileLogBytes, assertEventsMatchLogAndStats, assertMainXdvArtifactEmpty, assertNoEvents });
-  runOkEmptyDocCases(ctx, { addMountedFile, expectOk, readCompileReportJson, readCompileLogBytes, assertEventsMatchLogAndStats, readMainXdvArtifactBytes });
+  runOkEmptyDocCases(ctx, { addMountedFile, expectOk, readCompileReportJson, readCompileLogBytes, assertEventsMatchLogAndStats, readMainXdvArtifactBytes, callWithBytes: mem.callWithBytes });
   runXdefNoexpandCases(ctx, { addMountedFile, expectInvalid, expectOk, expectNotImplemented, readCompileLogBytes, assertEventsMatchLogAndStats, assertMainXdvArtifactEmpty, assertNoEvents });
   runIfnumCases(ctx, { addMountedFile, expectInvalid, expectOk, expectNotImplemented, readCompileLogBytes, assertEventsMatchLogAndStats, assertMainXdvArtifactEmpty, assertNoEvents });
   runIfxCases(ctx, { addMountedFile, expectInvalid, expectOk, expectNotImplemented, readCompileLogBytes, assertEventsMatchLogAndStats, assertMainXdvArtifactEmpty, assertNoEvents });

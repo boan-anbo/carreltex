@@ -6,6 +6,7 @@ fn valid_request() -> CompileRequestV0 {
         entrypoint: "main.tex".to_owned(),
         source_date_epoch: 1,
         max_log_bytes: 4096,
+        ok_max_line_glyphs_v0: None,
     }
 }
 
