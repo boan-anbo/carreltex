@@ -346,6 +346,8 @@ pub(super) fn parse_control_word_v0(
         vec![TokenV0::Char(b'%')]
     } else if control_word.as_slice() == b"textpilcrow" {
         vec![TokenV0::Char(b'P')]
+    } else if control_word.as_slice() == b"pagebreak" {
+        vec![TokenV0::Char(0x0c)]
     } else if control_word.as_slice() == b"par" {
         vec![TokenV0::Space]
     } else {
