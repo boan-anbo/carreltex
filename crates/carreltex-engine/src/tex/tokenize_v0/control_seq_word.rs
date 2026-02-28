@@ -77,6 +77,8 @@ pub(super) fn parse_control_word_v0(
         vec![TokenV0::Char(b'+')]
     } else if control_word.as_slice() == b"textdaggerdbl" {
         vec![TokenV0::Char(b'#')]
+    } else if control_word.as_slice() == b"textsection" {
+        vec![TokenV0::Char(b'S')]
     } else if control_word.as_slice() == b"par" {
         vec![TokenV0::Space]
     } else {
