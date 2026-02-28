@@ -119,27 +119,26 @@ export function runCasesV0(ctx, mem, helpers) {
     throw new Error(`mount_has_file(missing.tex) expected 1, got ${hasMissing}`);
   }
 
-  expectNotImplemented(ctx.compileMain(), 'compile_main_v0');
+  expectOk(ctx.compileMain(), 'compile_main_v0');
   let baselineMainCharCount = null;
   {
     const report = readCompileReportJson();
-    if (report.status !== 'NOT_IMPLEMENTED') {
-      throw new Error(`compile_main report.status expected NOT_IMPLEMENTED, got ${report.status}`);
+    if (report.status !== 'OK') {
+      throw new Error(`compile_main report.status expected OK, got ${report.status}`);
     }
-    if (!Array.isArray(report.missing_components) || report.missing_components.length === 0) {
-      throw new Error('compile_main report.missing_components expected non-empty array');
+    if (!Array.isArray(report.missing_components) || report.missing_components.length !== 0) {
+      throw new Error('compile_main report.missing_components expected empty array');
     }
     const logBytes = readCompileLogBytes();
-    const logText = new TextDecoder().decode(logBytes);
-    if (logBytes.length <= 0 || !logText.startsWith('NOT_IMPLEMENTED:')) {
-      throw new Error('compile_main log expected non-empty NOT_IMPLEMENTED prefix');
+    if (logBytes.length !== 0) {
+      throw new Error(`compile_main expected empty log, got ${logBytes.length} bytes`);
     }
     if (logBytes.length > 1024) {
       throw new Error(`compile_main log exceeds default max_log_bytes: ${logBytes.length}`);
     }
     const stats = assertEventsMatchLogAndStats(logBytes, expectedMainTexStatsExact, 'compile_main');
     baselineMainCharCount = stats.char_count;
-    assertMainXdvArtifactEmpty('compile_main');
+    readMainXdvArtifactBytes('compile_main');
   }
 
   if (ctx.compileRequestReset() !== 0) {
@@ -158,25 +157,24 @@ export function runCasesV0(ctx, mem, helpers) {
   if (ctx.compileRequestSetMaxLogBytes(1024) !== 0) {
     throw new Error('compile_request_set_max_log_bytes_v0 failed');
   }
-  expectNotImplemented(ctx.compileRun(), 'compile_run_v0(valid request)');
+  expectOk(ctx.compileRun(), 'compile_run_v0(valid request)');
   {
     const report = readCompileReportJson();
-    if (report.status !== 'NOT_IMPLEMENTED') {
-      throw new Error(`compile_run report.status expected NOT_IMPLEMENTED, got ${report.status}`);
+    if (report.status !== 'OK') {
+      throw new Error(`compile_run report.status expected OK, got ${report.status}`);
     }
-    if (!Array.isArray(report.missing_components) || report.missing_components.length === 0) {
-      throw new Error('compile_run report.missing_components expected non-empty array');
+    if (!Array.isArray(report.missing_components) || report.missing_components.length !== 0) {
+      throw new Error('compile_run report.missing_components expected empty array');
     }
     const logBytes = readCompileLogBytes();
-    const logText = new TextDecoder().decode(logBytes);
-    if (logBytes.length <= 0 || !logText.startsWith('NOT_IMPLEMENTED:')) {
-      throw new Error('compile_run log expected non-empty NOT_IMPLEMENTED prefix');
+    if (logBytes.length !== 0) {
+      throw new Error(`compile_run expected empty log, got ${logBytes.length} bytes`);
     }
     if (logBytes.length > 1024) {
       throw new Error(`compile_run log exceeds max_log_bytes: ${logBytes.length}`);
     }
     assertEventsMatchLogAndStats(logBytes, expectedMainTexStatsExact, 'compile_run(valid request)');
-    assertMainXdvArtifactEmpty('compile_run(valid request)');
+    readMainXdvArtifactBytes('compile_run(valid request)');
   }
 
   if (ctx.mountReset() !== 0) {
@@ -193,26 +191,15 @@ export function runCasesV0(ctx, mem, helpers) {
   if (ctx.mountFinalize() !== 0) {
     throw new Error('mount_finalize for input expansion positive case failed');
   }
-  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(input expansion positive)');
+  expectOk(ctx.compileMain(), 'compile_main_v0(input expansion positive)');
   {
     const report = readCompileReportJson();
-    if (report.status !== 'NOT_IMPLEMENTED') {
-      throw new Error(`compile_main(input expansion) report.status expected NOT_IMPLEMENTED, got ${report.status}`);
+    if (report.status !== 'OK') {
+      throw new Error(`compile_main(input expansion) report.status expected OK, got ${report.status}`);
     }
     const logBytes = readCompileLogBytes();
-    const logText = new TextDecoder().decode(logBytes);
-    const tracePrefix = 'INPUT_TRACE_V0:';
-    const tracePrefixIndex = logText.indexOf(tracePrefix);
-    if (tracePrefixIndex < 0) {
-      throw new Error(`compile_main(input expansion) missing ${tracePrefix}`);
-    }
-    const traceJsonText = logText.slice(tracePrefixIndex + tracePrefix.length);
-    const trace = JSON.parse(traceJsonText);
-    if (trace.expansions !== 1) {
-      throw new Error(`compile_main(input expansion) trace.expansions expected 1, got ${trace.expansions}`);
-    }
-    if (!Array.isArray(trace.files) || !trace.files.includes('main.tex') || !trace.files.includes('sub.tex')) {
-      throw new Error(`compile_main(input expansion) trace.files missing expected paths: ${traceJsonText}`);
+    if (logBytes.length !== 0) {
+      throw new Error(`compile_main(input expansion) expected empty log, got ${logBytes.length} bytes`);
     }
     const stats = assertEventsMatchLogAndStats(logBytes, expectedMainTexStatsExact, 'compile_main(input expansion positive)');
     if (baselineMainCharCount === null) {
@@ -221,7 +208,7 @@ export function runCasesV0(ctx, mem, helpers) {
     if (stats.char_count !== baselineMainCharCount + 3) {
       throw new Error(`compile_main(input expansion) char_count delta expected +3, got baseline=${baselineMainCharCount}, current=${stats.char_count}`);
     }
-    assertMainXdvArtifactEmpty('compile_main(input expansion positive)');
+    readMainXdvArtifactBytes('compile_main(input expansion positive)');
   }
 
   if (ctx.mountReset() !== 0) {
@@ -421,21 +408,21 @@ export function runCasesV0(ctx, mem, helpers) {
   runXdefNoexpandCases(ctx, { addMountedFile, expectInvalid, expectOk, expectNotImplemented, readCompileLogBytes, assertEventsMatchLogAndStats, assertMainXdvArtifactEmpty, assertNoEvents });
   runIfnumCases(ctx, { addMountedFile, expectInvalid, expectOk, expectNotImplemented, readCompileLogBytes, assertEventsMatchLogAndStats, assertMainXdvArtifactEmpty, assertNoEvents });
   runIfxCases(ctx, { addMountedFile, expectInvalid, expectOk, expectNotImplemented, readCompileLogBytes, assertEventsMatchLogAndStats, assertMainXdvArtifactEmpty, assertNoEvents });
-  runTokenizerCases(ctx, { addMountedFile, expectInvalid, expectOk, expectNotImplemented, readCompileLogBytes, assertEventsMatchLogAndStats, assertMainXdvArtifactEmpty, assertNoEvents });
-  runTokenizerTextwordLeaf133Cases(ctx, { addMountedFile, expectNotImplemented, readCompileLogBytes, assertEventsMatchLogAndStats, assertMainXdvArtifactEmpty });
-  runTokenizerTextwordLeaf134Cases(ctx, { addMountedFile, expectNotImplemented, readCompileLogBytes, assertEventsMatchLogAndStats, assertMainXdvArtifactEmpty });
-  runTokenizerTextwordLeaf135Cases(ctx, { addMountedFile, expectNotImplemented, readCompileLogBytes, assertEventsMatchLogAndStats, assertMainXdvArtifactEmpty });
-  runTokenizerTextwordLeaf137Cases(ctx, { addMountedFile, expectNotImplemented, readCompileLogBytes, assertEventsMatchLogAndStats, assertMainXdvArtifactEmpty });
-  runTokenizerTextwordLeaf138Cases(ctx, { addMountedFile, expectNotImplemented, readCompileLogBytes, assertEventsMatchLogAndStats, assertMainXdvArtifactEmpty });
-  runTokenizerTextwordLeaf139Cases(ctx, { addMountedFile, expectNotImplemented, readCompileLogBytes, assertEventsMatchLogAndStats, assertMainXdvArtifactEmpty });
-  runTokenizerTextwordLeaf140Cases(ctx, { addMountedFile, expectNotImplemented, readCompileLogBytes, assertEventsMatchLogAndStats, assertMainXdvArtifactEmpty });
-  runTokenizerTextwordLeaf141Cases(ctx, { addMountedFile, expectNotImplemented, readCompileLogBytes, assertEventsMatchLogAndStats, assertMainXdvArtifactEmpty });
-  runTokenizerTextwordLeaf142Cases(ctx, { addMountedFile, expectNotImplemented, readCompileLogBytes, assertEventsMatchLogAndStats, assertMainXdvArtifactEmpty });
-  runTokenizerTextwordLeaf143Cases(ctx, { addMountedFile, expectNotImplemented, readCompileLogBytes, assertEventsMatchLogAndStats, assertMainXdvArtifactEmpty });
-  runTokenizerTextwordLeaf144Cases(ctx, { addMountedFile, expectNotImplemented, readCompileLogBytes, assertEventsMatchLogAndStats, assertMainXdvArtifactEmpty });
-  runTokenizerTextwordLeaf145Cases(ctx, { addMountedFile, expectNotImplemented, readCompileLogBytes, assertEventsMatchLogAndStats, assertMainXdvArtifactEmpty });
-  runTokenizerTextwordLeaf147Cases(ctx, { addMountedFile, expectNotImplemented, readCompileLogBytes, assertEventsMatchLogAndStats, assertMainXdvArtifactEmpty });
-  runTokenizerTextwordLeaf148Cases(ctx, { addMountedFile, expectNotImplemented, readCompileLogBytes, assertEventsMatchLogAndStats, assertMainXdvArtifactEmpty });
+  runTokenizerCases(ctx, { addMountedFile, expectInvalid, expectOk, expectNotImplemented, readCompileLogBytes, assertEventsMatchLogAndStats, readMainXdvArtifactBytes, assertMainXdvArtifactEmpty, assertNoEvents });
+  runTokenizerTextwordLeaf133Cases(ctx, { addMountedFile, expectOk, readCompileLogBytes, assertEventsMatchLogAndStats, readMainXdvArtifactBytes });
+  runTokenizerTextwordLeaf134Cases(ctx, { addMountedFile, expectOk, readCompileLogBytes, assertEventsMatchLogAndStats, readMainXdvArtifactBytes });
+  runTokenizerTextwordLeaf135Cases(ctx, { addMountedFile, expectOk, readCompileLogBytes, assertEventsMatchLogAndStats, readMainXdvArtifactBytes });
+  runTokenizerTextwordLeaf137Cases(ctx, { addMountedFile, expectOk, readCompileLogBytes, assertEventsMatchLogAndStats, readMainXdvArtifactBytes });
+  runTokenizerTextwordLeaf138Cases(ctx, { addMountedFile, expectOk, readCompileLogBytes, assertEventsMatchLogAndStats, readMainXdvArtifactBytes });
+  runTokenizerTextwordLeaf139Cases(ctx, { addMountedFile, expectOk, readCompileLogBytes, assertEventsMatchLogAndStats, readMainXdvArtifactBytes });
+  runTokenizerTextwordLeaf140Cases(ctx, { addMountedFile, expectOk, readCompileLogBytes, assertEventsMatchLogAndStats, readMainXdvArtifactBytes });
+  runTokenizerTextwordLeaf141Cases(ctx, { addMountedFile, expectOk, readCompileLogBytes, assertEventsMatchLogAndStats, readMainXdvArtifactBytes });
+  runTokenizerTextwordLeaf142Cases(ctx, { addMountedFile, expectOk, readCompileLogBytes, assertEventsMatchLogAndStats, readMainXdvArtifactBytes });
+  runTokenizerTextwordLeaf143Cases(ctx, { addMountedFile, expectOk, readCompileLogBytes, assertEventsMatchLogAndStats, readMainXdvArtifactBytes });
+  runTokenizerTextwordLeaf144Cases(ctx, { addMountedFile, expectOk, readCompileLogBytes, assertEventsMatchLogAndStats, readMainXdvArtifactBytes });
+  runTokenizerTextwordLeaf145Cases(ctx, { addMountedFile, expectOk, readCompileLogBytes, assertEventsMatchLogAndStats, readMainXdvArtifactBytes });
+  runTokenizerTextwordLeaf147Cases(ctx, { addMountedFile, expectOk, readCompileLogBytes, assertEventsMatchLogAndStats, readMainXdvArtifactBytes });
+  runTokenizerTextwordLeaf148Cases(ctx, { addMountedFile, expectOk, readCompileLogBytes, assertEventsMatchLogAndStats, readMainXdvArtifactBytes });
 
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before compile_request negative setter tests failed');
@@ -458,6 +445,17 @@ export function runCasesV0(ctx, mem, helpers) {
   );
   expectInvalid(ctx.compileRequestSetEpoch(0n), 'compile_request_set_source_date_epoch_v0(0)');
   expectInvalid(ctx.compileRequestSetMaxLogBytes(0), 'compile_request_set_max_log_bytes_v0(0)');
+
+  if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before truncation check failed');
+  }
+  const truncationMainBytes = new TextEncoder().encode('\\documentclass{article}\n\\begin{document}\n\\foo\n\\end{document}\n');
+  if (addMountedFile('main.tex', truncationMainBytes, 'truncation_main') !== 0) {
+    throw new Error('mount_add_file(truncation main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) {
+    throw new Error('mount_finalize for truncation case failed');
+  }
 
   if (ctx.compileRequestReset() !== 0) {
     throw new Error('compile_request_reset_v0 before truncation check failed');
@@ -486,7 +484,7 @@ export function runCasesV0(ctx, mem, helpers) {
     if (logText.includes('INPUT_TRACE_V0:')) {
       throw new Error(`compile_run truncated log must omit INPUT_TRACE_V0 marker, got: ${logText}`);
     }
-    assertEventsMatchLogAndStats(logBytes, expectedMainTexStatsExact, 'compile_run(truncation case)');
+    assertEventsMatchLogAndStats(logBytes, {}, 'compile_run(truncation case)');
   }
 
   if (ctx.mountReset() !== 0) {
