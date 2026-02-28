@@ -490,6 +490,18 @@ fn control_word_textregistered_maps_to_r_and_swallows_space() {
 }
 
 #[test]
+fn control_word_textordfeminine_maps_to_a_and_swallows_space() {
+    let tokens = tokenize_v0(b"\\textordfeminine X").expect("tokenize should succeed");
+    assert_eq!(tokens, vec![TokenV0::Char(b'a'), TokenV0::Char(b'X')]);
+}
+
+#[test]
+fn control_word_textordmasculine_maps_to_o_and_swallows_space() {
+    let tokens = tokenize_v0(b"\\textordmasculine X").expect("tokenize should succeed");
+    assert_eq!(tokens, vec![TokenV0::Char(b'o'), TokenV0::Char(b'X')]);
+}
+
+#[test]
 fn control_word_par_maps_to_space_and_swallows_following_whitespace() {
     let tokens = tokenize_v0(b"A\\par B").expect("tokenize should succeed");
     assert_eq!(
