@@ -466,6 +466,12 @@ fn control_word_textdaggerdbl_maps_to_hash_and_swallows_space() {
 }
 
 #[test]
+fn control_word_textsection_maps_to_s_and_swallows_space() {
+    let tokens = tokenize_v0(b"\\textsection X").expect("tokenize should succeed");
+    assert_eq!(tokens, vec![TokenV0::Char(b'S'), TokenV0::Char(b'X')]);
+}
+
+#[test]
 fn control_word_par_maps_to_space_and_swallows_following_whitespace() {
     let tokens = tokenize_v0(b"A\\par B").expect("tokenize should succeed");
     assert_eq!(
