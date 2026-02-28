@@ -5,8 +5,6 @@ const DVI_POST: u8 = 248;
 const DVI_POSTPOST: u8 = 249;
 const DVI_FNT_DEF1: u8 = 243;
 const DVI_FNT_NUM_0: u8 = 171;
-const DVI_W0: u8 = 147;
-const DVI_W3: u8 = 150;
 const DVI_RIGHT3: u8 = 145;
 const DVI_DOWN3: u8 = 160;
 const DVI_ID_V2: u8 = 2;
@@ -84,6 +82,23 @@ fn is_supported_text_byte_v0(byte: u8) -> bool {
     (0x20..=0x7e).contains(&byte)
 }
 
+fn glyph_width_sp_v0(byte: u8, glyph_advance_sp: i32) -> Option<i32> {
+    if glyph_advance_sp <= 0 {
+        return None;
+    }
+    let half_em = glyph_advance_sp / 2;
+    let one_and_half_em = glyph_advance_sp.checked_add(half_em)?;
+    let width = match byte {
+        b' ' | b'.' | b'i' => half_em,
+        b'm' | b'W' => one_and_half_em,
+        _ => glyph_advance_sp,
+    };
+    if !(1..=8_388_607).contains(&width) {
+        return None;
+    }
+    Some(width)
+}
+
 fn split_pages_v0(text: &[u8]) -> Option<Vec<&[u8]>> {
     if text.iter().any(|byte| {
         !is_supported_text_byte_v0(*byte)
@@ -159,22 +174,12 @@ fn wrap_logical_line_v0(line: &[u8], max_line_glyphs: usize) -> Option<Vec<Vec<u
 
 fn emit_line_glyphs_v0(out: &mut Vec<u8>, line: &[u8], glyph_advance_sp: i32) -> Option<u32> {
     let mut line_h = 0u32;
-    let mut w_defined = false;
-    for (index, byte) in line.iter().enumerate() {
-        if index > 0 {
-            if index % 2 == 1 {
-                out.push(DVI_RIGHT3);
-                push_i24_be(out, glyph_advance_sp)?;
-            } else if !w_defined {
-                out.push(DVI_W3);
-                push_i24_be(out, glyph_advance_sp)?;
-                w_defined = true;
-            } else {
-                out.push(DVI_W0);
-            }
-            line_h = line_h.checked_add(u32::try_from(glyph_advance_sp).ok()?)?;
-        }
+    for byte in line {
         out.push(*byte);
+        let glyph_width = glyph_width_sp_v0(*byte, glyph_advance_sp)?;
+        out.push(DVI_RIGHT3);
+        push_i24_be(out, glyph_width)?;
+        line_h = line_h.checked_add(u32::try_from(glyph_width).ok()?)?;
     }
     Some(line_h)
 }
@@ -540,8 +545,8 @@ pub fn count_dvi_v2_text_movements_with_layout_v0(
     }
 
     let mut right3_count = 0u32;
-    let mut w3_count = 0u32;
-    let mut w0_count = 0u32;
+    let w3_count = 0u32;
+    let w0_count = 0u32;
     let mut down3_count = 0u32;
     let mut page_count = 0u16;
     let mut previous_bop_offset: Option<usize> = None;
@@ -579,57 +584,29 @@ pub fn count_dvi_v2_text_movements_with_layout_v0(
         let mut page_h = 0u32;
         let mut page_h_max = 0u32;
         let mut page_v = 0u32;
-        let mut expect_move_after_char = false;
+        let mut expect_width_right_after_char = false;
         let mut expect_down3_after_reset = false;
-        let mut w_defined = false;
+        let mut expected_right_after_char = 0i32;
         while let Some(op) = bytes.get(index).copied() {
             if op == DVI_EOP {
-                if expect_down3_after_reset {
+                if expect_down3_after_reset || expect_width_right_after_char {
                     return None;
                 }
                 index += 1;
                 break;
             }
-            if expect_move_after_char {
-                if expect_down3_after_reset && op != DVI_DOWN3 {
-                    return None;
-                }
+            if expect_width_right_after_char {
                 if op == DVI_RIGHT3 {
                     right3_count = right3_count.checked_add(1)?;
                     index += 1;
                     let amount = read_i24_be(bytes, &mut index)?;
-                    if amount == glyph_advance_sp {
-                        page_h = page_h.checked_add(u32::try_from(glyph_advance_sp).ok()?)?;
-                        page_h_max = page_h_max.max(page_h);
-                    } else if amount < 0 {
-                        let back = u32::try_from(-amount).ok()?;
-                        if back != page_h {
-                            return None;
-                        }
-                        page_h = 0;
-                        expect_down3_after_reset = true;
-                        expect_move_after_char = false;
-                        continue;
-                    } else {
+                    if amount != expected_right_after_char {
                         return None;
                     }
-                } else if op == DVI_W3 {
-                    w3_count = w3_count.checked_add(1)?;
-                    index += 1;
-                    if read_i24_be(bytes, &mut index)? != glyph_advance_sp {
-                        return None;
-                    }
-                    w_defined = true;
-                    page_h = page_h.checked_add(u32::try_from(glyph_advance_sp).ok()?)?;
+                    page_h = page_h.checked_add(u32::try_from(amount).ok()?)?;
                     page_h_max = page_h_max.max(page_h);
-                } else if op == DVI_W0 {
-                    if !w_defined {
-                        return None;
-                    }
-                    w0_count = w0_count.checked_add(1)?;
-                    index += 1;
-                    page_h = page_h.checked_add(u32::try_from(glyph_advance_sp).ok()?)?;
-                    page_h_max = page_h_max.max(page_h);
+                    expect_width_right_after_char = false;
+                    continue;
                 } else if op == DVI_DOWN3 {
                     down3_count = down3_count.checked_add(1)?;
                     index += 1;
@@ -643,20 +620,27 @@ pub fn count_dvi_v2_text_movements_with_layout_v0(
                         expect_down3_after_reset = false;
                     }
                     page_v = page_v.checked_add(u32::try_from(line_advance_sp).ok()?)?;
-                    w_defined = false;
-                    expect_move_after_char = false;
+                    expect_width_right_after_char = false;
                     continue;
                 } else {
                     return None;
                 }
-                let next = *bytes.get(index)?;
-                if next > 127 || !is_supported_text_byte_v0(next) {
-                    return None;
-                }
-                index += 1;
-                expect_move_after_char = true;
             } else {
-                if op == DVI_DOWN3 {
+                if op == DVI_RIGHT3 {
+                    right3_count = right3_count.checked_add(1)?;
+                    index += 1;
+                    let amount = read_i24_be(bytes, &mut index)?;
+                    if amount >= 0 {
+                        return None;
+                    }
+                    let back = u32::try_from(-amount).ok()?;
+                    if back != page_h {
+                        return None;
+                    }
+                    page_h = 0;
+                    expect_down3_after_reset = true;
+                    continue;
+                } else if op == DVI_DOWN3 {
                     down3_count = down3_count.checked_add(1)?;
                     index += 1;
                     if read_i24_be(bytes, &mut index)? != line_advance_sp {
@@ -669,7 +653,6 @@ pub fn count_dvi_v2_text_movements_with_layout_v0(
                         expect_down3_after_reset = false;
                     }
                     page_v = page_v.checked_add(u32::try_from(line_advance_sp).ok()?)?;
-                    w_defined = false;
                     continue;
                 }
                 if op > 127 || !is_supported_text_byte_v0(op) {
@@ -678,8 +661,9 @@ pub fn count_dvi_v2_text_movements_with_layout_v0(
                 if expect_down3_after_reset {
                     return None;
                 }
+                expected_right_after_char = glyph_width_sp_v0(op, glyph_advance_sp)?;
                 index += 1;
-                expect_move_after_char = true;
+                expect_width_right_after_char = true;
             }
         }
         if page_h_max > max_h {
@@ -740,6 +724,28 @@ pub fn count_dvi_v2_text_movements_with_layout_v0(
         return None;
     }
     Some((right3_count, w3_count, w0_count, down3_count, page_count))
+}
+
+pub fn sum_dvi_v2_positive_right3_amounts_with_layout_v0(
+    bytes: &[u8],
+    glyph_advance_sp: i32,
+    line_advance_sp: i32,
+) -> Option<u32> {
+    count_dvi_v2_text_movements_with_layout_v0(bytes, glyph_advance_sp, line_advance_sp)?;
+    let mut index = 0usize;
+    let mut total = 0u32;
+    while index < bytes.len() {
+        if bytes[index] == DVI_RIGHT3 {
+            index += 1;
+            let amount = read_i24_be(bytes, &mut index)?;
+            if amount > 0 {
+                total = total.checked_add(u32::try_from(amount).ok()?)?;
+            }
+        } else {
+            index += 1;
+        }
+    }
+    Some(total)
 }
 
 pub fn count_dvi_v2_text_pages_with_advance_v0(bytes: &[u8], glyph_advance_sp: i32) -> Option<u16> {
