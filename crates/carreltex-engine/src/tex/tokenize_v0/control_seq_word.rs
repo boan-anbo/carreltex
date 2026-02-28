@@ -159,6 +159,26 @@ pub(super) fn parse_control_word_v0(
         vec![TokenV0::Char(b'n')]
     } else if control_word.as_slice() == b"textreferencemark" {
         vec![TokenV0::Char(b'*')]
+    } else if control_word.as_slice() == b"textonehalf" {
+        vec![TokenV0::Char(b'1'), TokenV0::Char(b'/'), TokenV0::Char(b'2')]
+    } else if control_word.as_slice() == b"textonequarter" {
+        vec![TokenV0::Char(b'1'), TokenV0::Char(b'/'), TokenV0::Char(b'4')]
+    } else if control_word.as_slice() == b"textthreequarters" {
+        vec![TokenV0::Char(b'3'), TokenV0::Char(b'/'), TokenV0::Char(b'4')]
+    } else if control_word.as_slice() == b"texttimes" {
+        vec![TokenV0::Char(b'*')]
+    } else if control_word.as_slice() == b"textdiv" {
+        vec![TokenV0::Char(b'/')]
+    } else if control_word.as_slice() == b"textpm" {
+        vec![TokenV0::Char(b'+'), TokenV0::Char(b'-')]
+    } else if control_word.as_slice() == b"textdag" {
+        vec![TokenV0::Char(b'+')]
+    } else if control_word.as_slice() == b"textbardbl" {
+        vec![TokenV0::Char(b'|'), TokenV0::Char(b'|')]
+    } else if control_word.as_slice() == b"textasciiacute" {
+        vec![TokenV0::Char(b'\'')]
+    } else if control_word.as_slice() == b"textasciidblquote" {
+        vec![TokenV0::Char(b'"')]
     } else if control_word.as_slice() == b"par" {
         vec![TokenV0::Space]
     } else {
