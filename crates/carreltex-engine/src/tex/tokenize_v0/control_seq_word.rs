@@ -99,6 +99,26 @@ pub(super) fn parse_control_word_v0(
         vec![TokenV0::Char(b'.')]
     } else if control_word.as_slice() == b"texttrademark" {
         vec![TokenV0::Char(b'T')]
+    } else if control_word.as_slice() == b"textbrokenbar" {
+        vec![TokenV0::Char(b'|')]
+    } else if control_word.as_slice() == b"textcurrency" {
+        vec![TokenV0::Char(b'C')]
+    } else if control_word.as_slice() == b"textexclamdown" {
+        vec![TokenV0::Char(b'!')]
+    } else if control_word.as_slice() == b"textquestiondown" {
+        vec![TokenV0::Char(b'?')]
+    } else if control_word.as_slice() == b"textguillemotleft" {
+        vec![TokenV0::Char(b'<')]
+    } else if control_word.as_slice() == b"textguillemotright" {
+        vec![TokenV0::Char(b'>')]
+    } else if control_word.as_slice() == b"textquoteleft" {
+        vec![TokenV0::Char(b'\'')]
+    } else if control_word.as_slice() == b"textquoteright" {
+        vec![TokenV0::Char(b'\'')]
+    } else if control_word.as_slice() == b"textquotedblbase" {
+        vec![TokenV0::Char(b'"')]
+    } else if control_word.as_slice() == b"textquotesinglbase" {
+        vec![TokenV0::Char(b'\'')]
     } else if control_word.as_slice() == b"par" {
         vec![TokenV0::Space]
     } else {
