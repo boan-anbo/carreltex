@@ -198,6 +198,20 @@ fn validator_rejects_wrong_reset_amount_before_down3() {
 }
 
 #[test]
+fn validator_rejects_missing_width_right3_after_glyph() {
+    let mut bytes = write_dvi_v2_text_page_v0(b"AB").expect("writer should accept AB");
+    let right_index = bytes
+        .iter()
+        .position(|byte| *byte == DVI_RIGHT3)
+        .expect("right3 opcode should exist");
+    bytes[right_index] = DVI_DOWN3;
+    bytes[right_index + 1] = 0x0c;
+    bytes[right_index + 2] = 0x00;
+    bytes[right_index + 3] = 0x00;
+    assert!(!validate_dvi_v2_text_page_v0(&bytes));
+}
+
+#[test]
 fn validator_rejects_wrong_reset_amount_in_wrapped_output() {
     let mut line = Vec::<u8>::new();
     for _ in 0..50 {
