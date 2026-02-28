@@ -250,6 +250,42 @@ pub(super) fn parse_control_word_v0(
         vec![TokenV0::Char(b'=')]
     } else if control_word.as_slice() == b"textasciislash" {
         vec![TokenV0::Char(b'/')]
+    } else if control_word.as_slice() == b"textmu" {
+        vec![TokenV0::Char(b'u')]
+    } else if control_word.as_slice() == b"textohm" {
+        vec![TokenV0::Char(b'O')]
+    } else if control_word.as_slice() == b"textmho" {
+        vec![TokenV0::Char(b'm')]
+    } else if control_word.as_slice() == b"textcelsius" {
+        vec![TokenV0::Char(b'C')]
+    } else if control_word.as_slice() == b"textnaira" {
+        vec![TokenV0::Char(b'N')]
+    } else if control_word.as_slice() == b"textpeso" {
+        vec![TokenV0::Char(b'P')]
+    } else if control_word.as_slice() == b"textwon" {
+        vec![TokenV0::Char(b'W')]
+    } else if control_word.as_slice() == b"textrupee" {
+        vec![TokenV0::Char(b'R')]
+    } else if control_word.as_slice() == b"textbaht" {
+        vec![TokenV0::Char(b'B')]
+    } else if control_word.as_slice() == b"textflorin" {
+        vec![TokenV0::Char(b'f')]
+    } else if control_word.as_slice() == b"textcolonmonetary" {
+        vec![TokenV0::Char(b'C')]
+    } else if control_word.as_slice() == b"textdong" {
+        vec![TokenV0::Char(b'd')]
+    } else if control_word.as_slice() == b"textlira" {
+        vec![TokenV0::Char(b'l')]
+    } else if control_word.as_slice() == b"textestimated" {
+        vec![TokenV0::Char(b'e')]
+    } else if control_word.as_slice() == b"textrecipe" {
+        vec![TokenV0::Char(b'r')]
+    } else if control_word.as_slice() == b"textservicemark" {
+        vec![TokenV0::Char(b'S'), TokenV0::Char(b'M')]
+    } else if control_word.as_slice() == b"textcopyleft" {
+        vec![TokenV0::Char(b'c'), TokenV0::Char(b'c')]
+    } else if control_word.as_slice() == b"textinterrobang" {
+        vec![TokenV0::Char(b'!'), TokenV0::Char(b'?')]
     } else if control_word.as_slice() == b"par" {
         vec![TokenV0::Space]
     } else {
