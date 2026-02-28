@@ -210,6 +210,26 @@ pub(super) fn parse_control_word_v0(
         vec![TokenV0::Char(b'^')]
     } else if control_word.as_slice() == b"textdownarrow" {
         vec![TokenV0::Char(b'v')]
+    } else if control_word.as_slice() == b"textlbrack" {
+        vec![TokenV0::Char(b'[')]
+    } else if control_word.as_slice() == b"textrbrack" {
+        vec![TokenV0::Char(b']')]
+    } else if control_word.as_slice() == b"textlbrace" {
+        vec![TokenV0::Char(b'{')]
+    } else if control_word.as_slice() == b"textrbrace" {
+        vec![TokenV0::Char(b'}')]
+    } else if control_word.as_slice() == b"textleftparen" {
+        vec![TokenV0::Char(b'(')]
+    } else if control_word.as_slice() == b"textrightparen" {
+        vec![TokenV0::Char(b')')]
+    } else if control_word.as_slice() == b"textpipe" {
+        vec![TokenV0::Char(b'|')]
+    } else if control_word.as_slice() == b"textasciispace" {
+        vec![TokenV0::Space]
+    } else if control_word.as_slice() == b"textvisiblehyphen" {
+        vec![TokenV0::Char(b'-')]
+    } else if control_word.as_slice() == b"textvisiblespace" {
+        vec![TokenV0::Char(b'_')]
     } else if control_word.as_slice() == b"par" {
         vec![TokenV0::Space]
     } else {
