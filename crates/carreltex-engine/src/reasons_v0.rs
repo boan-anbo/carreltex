@@ -31,6 +31,7 @@ pub(crate) enum InvalidInputReasonV0 {
     MacroNewcommandAlreadyDefined,
     MacroRenewcommandUnsupported,
     MacroRenewcommandUndefined,
+    MacroProvidecommandUnsupported,
     MacroNoexpandUnsupported,
     MacroGroupUnderflow,
     MacroGroupDepthExceeded,
@@ -110,6 +111,9 @@ pub(crate) fn invalid_log_bytes_v0(reason: InvalidInputReasonV0) -> &'static [u8
         }
         InvalidInputReasonV0::MacroRenewcommandUndefined => {
             b"INVALID_INPUT: macro_renewcommand_undefined"
+        }
+        InvalidInputReasonV0::MacroProvidecommandUnsupported => {
+            b"INVALID_INPUT: macro_providecommand_unsupported"
         }
         InvalidInputReasonV0::MacroNoexpandUnsupported => {
             b"INVALID_INPUT: macro_noexpand_unsupported"
