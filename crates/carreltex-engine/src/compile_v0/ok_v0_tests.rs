@@ -1,6 +1,8 @@
 use super::compile_request_v0;
 use carreltex_core::{CompileRequestV0, CompileStatus, Mount};
-use carreltex_xdv::{count_dvi_v2_text_pages_v0, validate_dvi_v2_text_page_v0};
+use carreltex_xdv::{
+    count_dvi_v2_text_movements_v0, count_dvi_v2_text_pages_v0, validate_dvi_v2_text_page_v0,
+};
 
 fn valid_request() -> CompileRequestV0 {
     CompileRequestV0 {
@@ -139,6 +141,34 @@ fn pagebreak_marker_emits_two_pages() {
 }
 
 #[test]
+fn ok_text_emits_deterministic_movement_sequence() {
+    let mut mount = Mount::default();
+    let main = b"\\documentclass{article}\\begin{document}ABCDE\\end{document}";
+    assert!(mount.add_file(b"main.tex", main).is_ok());
+    let result = compile_request_v0(&mut mount, &valid_request());
+    assert_eq!(result.status, CompileStatus::Ok);
+    assert!(validate_dvi_v2_text_page_v0(&result.main_xdv_bytes));
+    assert_eq!(
+        count_dvi_v2_text_movements_v0(&result.main_xdv_bytes),
+        Some((2, 1, 1))
+    );
+}
+
+#[test]
+fn ok_text_two_chars_emits_single_right_move_only() {
+    let mut mount = Mount::default();
+    let main = b"\\documentclass{article}\\begin{document}AB\\end{document}";
+    assert!(mount.add_file(b"main.tex", main).is_ok());
+    let result = compile_request_v0(&mut mount, &valid_request());
+    assert_eq!(result.status, CompileStatus::Ok);
+    assert!(validate_dvi_v2_text_page_v0(&result.main_xdv_bytes));
+    assert_eq!(
+        count_dvi_v2_text_movements_v0(&result.main_xdv_bytes),
+        Some((1, 0, 0))
+    );
+}
+
+#[test]
 fn unsupported_char_backslash_in_body_falls_back_to_not_implemented() {
     let mut mount = Mount::default();
     let main = b"\\documentclass{article}\n\\begin{document}\nA\\textbackslash B\n\\end{document}\n";
@@ -152,6 +182,16 @@ fn unsupported_char_backslash_in_body_falls_back_to_not_implemented() {
 fn control_sequence_in_body_falls_back_to_not_implemented() {
     let mut mount = Mount::default();
     let main = b"\\documentclass{article}\n\\begin{document}\n\\foo\n\\end{document}\n";
+    assert!(mount.add_file(b"main.tex", main).is_ok());
+    let result = compile_request_v0(&mut mount, &valid_request());
+    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert!(result.main_xdv_bytes.is_empty());
+}
+
+#[test]
+fn non_printable_body_char_falls_back_to_not_implemented() {
+    let mut mount = Mount::default();
+    let main = b"\\documentclass{article}\n\\begin{document}\n^^1f\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
     assert_eq!(result.status, CompileStatus::NotImplemented);

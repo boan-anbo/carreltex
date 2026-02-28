@@ -21,6 +21,65 @@ export function runOkEmptyDocCases(ctx, helpers) {
     return pageCount;
   };
 
+  const countMovementOpsInTextPages = (bytes, label) => {
+    const DVI_PRE = 247;
+    const DVI_BOP = 139;
+    const DVI_EOP = 140;
+    const DVI_POST = 248;
+    const DVI_FNT_DEF1 = 243;
+    const DVI_FNT_NUM_0 = 171;
+    const DVI_RIGHT3 = 145;
+    const DVI_W0 = 147;
+    const DVI_W3 = 150;
+    let index = 0;
+    if (bytes[index++] !== DVI_PRE) {
+      throw new Error(`${label} expected DVI preamble`);
+    }
+    index += 14;
+    let right3 = 0;
+    let w3 = 0;
+    let w0 = 0;
+    while (index < bytes.length) {
+      const opcode = bytes[index];
+      if (opcode === DVI_POST) {
+        break;
+      }
+      if (opcode !== DVI_BOP) {
+        throw new Error(`${label} expected BOP opcode before page stream`);
+      }
+      index += 1 + 44;
+      if (bytes[index] !== DVI_FNT_DEF1) {
+        throw new Error(`${label} expected font definition`);
+      }
+      const areaLen = bytes[index + 14];
+      const nameLen = bytes[index + 15];
+      index += 16 + areaLen + nameLen;
+      if (bytes[index] !== DVI_FNT_NUM_0) {
+        throw new Error(`${label} expected font select`);
+      }
+      index += 1;
+      while (index < bytes.length && bytes[index] !== DVI_EOP) {
+        if (bytes[index] === DVI_RIGHT3) {
+          right3 += 1;
+          index += 4;
+        } else if (bytes[index] === DVI_W3) {
+          w3 += 1;
+          index += 4;
+        } else if (bytes[index] === DVI_W0) {
+          w0 += 1;
+          index += 1;
+        } else {
+          index += 1;
+        }
+      }
+      if (bytes[index] !== DVI_EOP) {
+        throw new Error(`${label} expected EOP opcode`);
+      }
+      index += 1;
+    }
+    return { right3, w3, w0 };
+  };
+
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before OK empty doc case failed');
   }
@@ -99,6 +158,13 @@ export function runOkEmptyDocCases(ctx, helpers) {
   if (textXdvBytes.length === 0) {
     throw new Error('compile_main(ok text doc) main.xdv expected non-empty bytes');
   }
+  const textMovement = countMovementOpsInTextPages(textXdvBytes, 'compile_main(ok text doc)');
+  if (textMovement.right3 < 1) {
+    throw new Error('compile_main(ok text doc) expected at least one RIGHT3 opcode');
+  }
+  if (textMovement.w3 < 1) {
+    throw new Error('compile_main(ok text doc) expected at least one W3 opcode');
+  }
 
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before OK printable text doc case failed');
@@ -135,6 +201,13 @@ export function runOkEmptyDocCases(ctx, helpers) {
   const printableXdvBytes = readMainXdvArtifactBytes('compile_main(ok printable text doc)');
   if (printableXdvBytes.length === 0) {
     throw new Error('compile_main(ok printable text doc) main.xdv expected non-empty bytes');
+  }
+  const printableMovement = countMovementOpsInTextPages(
+    printableXdvBytes,
+    'compile_main(ok printable text doc)',
+  );
+  if (printableMovement.w0 <= 0) {
+    throw new Error('compile_main(ok printable text doc) expected at least one W0 opcode');
   }
 
   if (ctx.mountReset() !== 0) {
@@ -236,5 +309,12 @@ export function runOkEmptyDocCases(ctx, helpers) {
   const pageCount = countPagesInDviV2(pagebreakXdvBytes, 'compile_main(ok pagebreak text doc)');
   if (pageCount !== 2) {
     throw new Error(`compile_main(ok pagebreak text doc) expected 2 pages, got ${pageCount}`);
+  }
+  const pagebreakMovement = countMovementOpsInTextPages(
+    pagebreakXdvBytes,
+    'compile_main(ok pagebreak text doc)',
+  );
+  if (pagebreakMovement.right3 < 1) {
+    throw new Error('compile_main(ok pagebreak text doc) expected at least one RIGHT3 opcode');
   }
 }
