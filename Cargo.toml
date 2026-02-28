@@ -3,6 +3,7 @@ members = [
   "crates/carreltex-wasm-smoke",
   "crates/carreltex-core",
   "crates/carreltex-engine",
+  "crates/carreltex-xdv",
 ]
 resolver = "2"
 
