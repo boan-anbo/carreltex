@@ -2,6 +2,7 @@ export function runCountCases(ctx, helpers) {
   const {
     addMountedFile,
     expectInvalid,
+    expectOk,
     expectNotImplemented,
     readCompileLogBytes,
     assertEventsMatchLogAndStats,
@@ -19,13 +20,12 @@ export function runCountCases(ctx, helpers) {
   if (ctx.mountFinalize() !== 0) {
     throw new Error('mount_finalize for count baseline case failed');
   }
-  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(macro count baseline)');
+  expectOk(ctx.compileMain(), 'compile_main_v0(macro count baseline)');
   let countBaselineCharCount = null;
   {
     const baselineLogBytes = readCompileLogBytes();
     const baselineStats = assertEventsMatchLogAndStats(baselineLogBytes, {}, 'compile_main(macro count baseline)');
     countBaselineCharCount = baselineStats.char_count;
-    assertMainXdvArtifactEmpty('compile_main(macro count baseline)');
   }
 
   if (ctx.mountReset() !== 0) {

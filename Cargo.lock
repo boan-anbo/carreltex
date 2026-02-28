@@ -11,6 +11,7 @@ name = "carreltex-engine"
 version = "0.1.0"
 dependencies = [
  "carreltex-core",
+ "carreltex-xdv",
 ]
 
 [[package]]
@@ -20,3 +21,7 @@ dependencies = [
  "carreltex-core",
  "carreltex-engine",
 ]
+
+[[package]]
+name = "carreltex-xdv"
+version = "0.1.0"

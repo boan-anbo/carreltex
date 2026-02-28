@@ -28,7 +28,7 @@ fn baseline_char_count() -> u64 {
     let baseline_main = b"\\documentclass{article}\n\\begin{document}\n\n\\end{document}\n";
     assert!(baseline_mount.add_file(b"main.tex", baseline_main).is_ok());
     let baseline_result = compile_request_v0(&mut baseline_mount, &valid_request());
-    assert_eq!(baseline_result.status, CompileStatus::NotImplemented);
+    assert_eq!(baseline_result.status, CompileStatus::Ok);
     stats_u64_field(&baseline_result.tex_stats_json, "char_count").expect("char_count")
 }
 

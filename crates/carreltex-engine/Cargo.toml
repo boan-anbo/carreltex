@@ -6,3 +6,4 @@ license.workspace = true
 
 [dependencies]
 carreltex-core = { path = "../carreltex-core" }
+carreltex-xdv = { path = "../carreltex-xdv" }

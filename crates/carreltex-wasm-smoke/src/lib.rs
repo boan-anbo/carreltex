@@ -359,18 +359,24 @@ fn store_compile_result_or_fail_closed(
         write_report_for_status(CompileStatus::InvalidInput);
         return CompileStatus::InvalidInput as i32;
     }
+    if matches!(status, CompileStatus::Ok) && !log_bytes.is_empty() {
+        write_report_for_status(CompileStatus::InvalidInput);
+        return CompileStatus::InvalidInput as i32;
+    }
     match status {
         CompileStatus::InvalidInput if !tex_stats_json.is_empty() => {
             write_report_for_status(CompileStatus::InvalidInput);
             return CompileStatus::InvalidInput as i32;
         }
-        CompileStatus::NotImplemented
+        CompileStatus::NotImplemented | CompileStatus::Ok
             if tex_stats_json.is_empty() || tex_stats_json.len() > MAX_TEX_STATS_JSON_BYTES_V0 =>
         {
             write_report_for_status(CompileStatus::InvalidInput);
             return CompileStatus::InvalidInput as i32;
         }
-        CompileStatus::NotImplemented if validate_tex_stats_json_v0(tex_stats_json).is_err() => {
+        CompileStatus::NotImplemented | CompileStatus::Ok
+            if validate_tex_stats_json_v0(tex_stats_json).is_err() =>
+        {
             write_report_for_status(CompileStatus::InvalidInput);
             return CompileStatus::InvalidInput as i32;
         }
@@ -390,10 +396,6 @@ fn store_compile_result_or_fail_closed(
                     return CompileStatus::InvalidInput as i32;
                 }
             }
-        }
-        CompileStatus::Ok => {
-            write_report_for_status(CompileStatus::InvalidInput);
-            return CompileStatus::InvalidInput as i32;
         }
         _ => {}
     }
