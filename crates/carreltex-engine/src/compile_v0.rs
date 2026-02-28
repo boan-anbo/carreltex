@@ -5,8 +5,7 @@ mod macro_expand_v0;
 mod stats_v0;
 mod tokenize_reason_v0;
 mod trace_v0;
-#[cfg(test)]
-mod count_v0_tests;
+#[cfg(test)] mod count_v0_tests;
 #[cfg(test)]
 mod edef_v0_tests;
 #[cfg(test)]
@@ -20,6 +19,7 @@ mod input_macro_v0_tests;
 #[cfg(test)] mod meaning_v0_tests_base;
 #[cfg(test)] mod meaning_v0_tests_input_guards;
 #[cfg(test)] mod tokenizer_textword_139_tests;
+#[cfg(test)] mod tokenizer_textword_140_tests;
 use crate::reasons_v0::{invalid_log_bytes_v0, InvalidInputReasonV0};
 use crate::tex::tokenize_v0::{tokenize_v0, TokenV0, MAX_TOKENS_V0};
 use carreltex_core::{

@@ -139,6 +139,26 @@ pub(super) fn parse_control_word_v0(
         vec![TokenV0::Char(b'(')]
     } else if control_word.as_slice() == b"textparenright" {
         vec![TokenV0::Char(b')')]
+    } else if control_word.as_slice() == b"textasciimacron" {
+        vec![TokenV0::Char(b'-')]
+    } else if control_word.as_slice() == b"textasciibreve" {
+        vec![TokenV0::Char(b'u')]
+    } else if control_word.as_slice() == b"textasciidieresis" {
+        vec![TokenV0::Char(b'"')]
+    } else if control_word.as_slice() == b"textasciicaron" {
+        vec![TokenV0::Char(b'v')]
+    } else if control_word.as_slice() == b"textnumero" {
+        vec![TokenV0::Char(b'N')]
+    } else if control_word.as_slice() == b"textordmhyphen" {
+        vec![TokenV0::Char(b'-')]
+    } else if control_word.as_slice() == b"textopenbullet" {
+        vec![TokenV0::Char(b'o')]
+    } else if control_word.as_slice() == b"textleaf" {
+        vec![TokenV0::Char(b'L')]
+    } else if control_word.as_slice() == b"textmusicalnote" {
+        vec![TokenV0::Char(b'n')]
+    } else if control_word.as_slice() == b"textreferencemark" {
+        vec![TokenV0::Char(b'*')]
     } else if control_word.as_slice() == b"par" {
         vec![TokenV0::Space]
     } else {
