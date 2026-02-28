@@ -43,6 +43,10 @@ pub(super) fn parse_control_word_v0(
         TokenV0::Char(b'^')
     } else if control_word.as_slice() == b"textquotedbl" {
         TokenV0::Char(b'"')
+    } else if control_word.as_slice() == b"textless" {
+        TokenV0::Char(b'<')
+    } else if control_word.as_slice() == b"textgreater" {
+        TokenV0::Char(b'>')
     } else if control_word.as_slice() == b"par" {
         TokenV0::Space
     } else {
