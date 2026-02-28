@@ -7,6 +7,7 @@ import { runIfxCases } from './cases_v0_ifx.mjs';
 import { runTokenizerCases } from './cases_v0_tokenizer.mjs';
 import { runTokenizerTextwordLeaf133Cases } from './cases_v0_tokenizer_textword_133.mjs';
 import { runTokenizerTextwordLeaf134Cases } from './cases_v0_tokenizer_textword_134.mjs';
+import { runTokenizerTextwordLeaf135Cases } from './cases_v0_tokenizer_textword_135.mjs';
 import { runMacroCases } from './cases_v0_macro.mjs';
 
 export function runCasesV0(ctx, mem, helpers) {
@@ -404,6 +405,7 @@ export function runCasesV0(ctx, mem, helpers) {
   runTokenizerCases(ctx, { addMountedFile, expectInvalid, expectNotImplemented, readCompileLogBytes, assertEventsMatchLogAndStats, assertMainXdvArtifactEmpty, assertNoEvents });
   runTokenizerTextwordLeaf133Cases(ctx, { addMountedFile, expectNotImplemented, readCompileLogBytes, assertEventsMatchLogAndStats, assertMainXdvArtifactEmpty });
   runTokenizerTextwordLeaf134Cases(ctx, { addMountedFile, expectNotImplemented, readCompileLogBytes, assertEventsMatchLogAndStats, assertMainXdvArtifactEmpty });
+  runTokenizerTextwordLeaf135Cases(ctx, { addMountedFile, expectNotImplemented, readCompileLogBytes, assertEventsMatchLogAndStats, assertMainXdvArtifactEmpty });
 
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before compile_request negative setter tests failed');
