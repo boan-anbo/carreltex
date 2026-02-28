@@ -8,6 +8,7 @@ mod trace_v0;
 #[cfg(test)] mod count_v0_tests;
 #[cfg(test)] mod edef_v0_tests;
 #[cfg(test)] mod newcommand_v0_tests;
+#[cfg(test)] mod providecommand_v0_tests;
 #[cfg(test)] mod xdef_noexpand_v0_tests;
 #[cfg(test)] mod ifnum_v0_tests;
 #[cfg(test)] mod ifx_v0_tests;
@@ -32,7 +33,6 @@ use stats_v0::build_tex_stats_from_tokens_v0;
 use trace_v0::build_not_implemented_log_v0;
 const MISSING_COMPONENTS_V0: &[&str] = &["tex-engine"];
 const EMPTY_TEX_STATS_JSON: &str = "";
-
 fn invalid_result_v0(max_log_bytes: u32, reason: InvalidInputReasonV0) -> CompileResultV0 {
     build_compile_result_v0(
         CompileStatus::InvalidInput,

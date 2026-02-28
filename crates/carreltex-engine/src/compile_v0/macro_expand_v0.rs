@@ -23,6 +23,8 @@ mod let_futurelet;
 mod noexpand;
 #[path = "macro_v0/newcommand_renewcommand.rs"]
 mod newcommand_renewcommand;
+#[path = "macro_v0/providecommand.rs"]
+mod providecommand;
 #[path = "macro_v0/string_meaning.rs"]
 mod string_meaning;
 #[path = "macro_v0/utils.rs"]
@@ -39,6 +41,7 @@ use group_synonyms::{control_seq_to_group_token_v0, is_endgroup_synonym_v0};
 use let_futurelet::{parse_futurelet_v0, parse_let_v0};
 use noexpand::parse_noexpand_v0;
 use newcommand_renewcommand::{parse_newcommand_v0, parse_renewcommand_v0};
+use providecommand::parse_providecommand_v0;
 use string_meaning::{parse_meaning_v0, parse_string_v0};
 use utils::{push_checked_v0, substitute_single_param_placeholders_v0};
 
@@ -115,6 +118,9 @@ fn expand_stream_v0(
             }
             TokenV0::ControlSeq(name) if name.as_slice() == b"renewcommand" => {
                 index = parse_renewcommand_v0(tokens, index, macro_frames)?;
+            }
+            TokenV0::ControlSeq(name) if name.as_slice() == b"providecommand" => {
+                index = parse_providecommand_v0(tokens, index, macro_frames)?;
             }
             TokenV0::ControlSeq(name) if name.as_slice() == b"xdef" => {
                 index = parse_xdef_v0(tokens, index, macro_frames, counters, true)?;
