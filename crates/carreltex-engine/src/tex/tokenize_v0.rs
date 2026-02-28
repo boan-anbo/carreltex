@@ -26,6 +26,8 @@ mod whitespace;
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_textword_144;
 
 /// Tokenize TeX input bytes with strict v0 assumptions.
 ///
