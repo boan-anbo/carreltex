@@ -184,6 +184,21 @@ fn ok_newline_control_word_emits_down3_and_stays_single_page() {
 }
 
 #[test]
+fn ok_multichar_newline_control_word_uses_reset_sequence() {
+    let mut mount = Mount::default();
+    let main = b"\\documentclass{article}\\begin{document}AB\\newline C\\end{document}";
+    assert!(mount.add_file(b"main.tex", main).is_ok());
+    let result = compile_request_v0(&mut mount, &valid_request());
+    assert_eq!(result.status, CompileStatus::Ok);
+    assert!(validate_dvi_v2_text_page_v0(&result.main_xdv_bytes));
+    assert_eq!(count_dvi_v2_text_pages_v0(&result.main_xdv_bytes), Some(1));
+    assert_eq!(
+        count_dvi_v2_text_movements_v0(&result.main_xdv_bytes),
+        Some((2, 0, 0, 1, 1))
+    );
+}
+
+#[test]
 fn unsupported_char_backslash_in_body_falls_back_to_not_implemented() {
     let mut mount = Mount::default();
     let main = b"\\documentclass{article}\n\\begin{document}\nA\\textbackslash B\n\\end{document}\n";

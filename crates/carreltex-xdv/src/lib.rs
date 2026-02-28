@@ -485,27 +485,39 @@ pub fn count_dvi_v2_text_movements_with_layout_v0(
             return None;
         }
         let mut page_h = 0u32;
+        let mut page_h_max = 0u32;
         let mut page_v = 0u32;
         let mut expect_move_after_char = false;
+        let mut expect_down3_after_reset = false;
         let mut w_defined = false;
         while let Some(op) = bytes.get(index).copied() {
             if op == DVI_EOP {
+                if expect_down3_after_reset {
+                    return None;
+                }
                 index += 1;
                 break;
             }
             if expect_move_after_char {
+                if expect_down3_after_reset && op != DVI_DOWN3 {
+                    return None;
+                }
                 if op == DVI_RIGHT3 {
                     right3_count = right3_count.checked_add(1)?;
                     index += 1;
                     let amount = read_i24_be(bytes, &mut index)?;
                     if amount == glyph_advance_sp {
                         page_h = page_h.checked_add(u32::try_from(glyph_advance_sp).ok()?)?;
+                        page_h_max = page_h_max.max(page_h);
                     } else if amount < 0 {
                         let back = u32::try_from(-amount).ok()?;
-                        if back > page_h {
+                        if back != page_h {
                             return None;
                         }
-                        page_h -= back;
+                        page_h = 0;
+                        expect_down3_after_reset = true;
+                        expect_move_after_char = false;
+                        continue;
                     } else {
                         return None;
                     }
@@ -517,6 +529,7 @@ pub fn count_dvi_v2_text_movements_with_layout_v0(
                     }
                     w_defined = true;
                     page_h = page_h.checked_add(u32::try_from(glyph_advance_sp).ok()?)?;
+                    page_h_max = page_h_max.max(page_h);
                 } else if op == DVI_W0 {
                     if !w_defined {
                         return None;
@@ -524,11 +537,18 @@ pub fn count_dvi_v2_text_movements_with_layout_v0(
                     w0_count = w0_count.checked_add(1)?;
                     index += 1;
                     page_h = page_h.checked_add(u32::try_from(glyph_advance_sp).ok()?)?;
+                    page_h_max = page_h_max.max(page_h);
                 } else if op == DVI_DOWN3 {
                     down3_count = down3_count.checked_add(1)?;
                     index += 1;
                     if read_i24_be(bytes, &mut index)? != line_advance_sp {
                         return None;
+                    }
+                    if page_h != 0 {
+                        return None;
+                    }
+                    if expect_down3_after_reset {
+                        expect_down3_after_reset = false;
                     }
                     page_v = page_v.checked_add(u32::try_from(line_advance_sp).ok()?)?;
                     w_defined = false;
@@ -544,15 +564,34 @@ pub fn count_dvi_v2_text_movements_with_layout_v0(
                 index += 1;
                 expect_move_after_char = true;
             } else {
+                if op == DVI_DOWN3 {
+                    down3_count = down3_count.checked_add(1)?;
+                    index += 1;
+                    if read_i24_be(bytes, &mut index)? != line_advance_sp {
+                        return None;
+                    }
+                    if page_h != 0 {
+                        return None;
+                    }
+                    if expect_down3_after_reset {
+                        expect_down3_after_reset = false;
+                    }
+                    page_v = page_v.checked_add(u32::try_from(line_advance_sp).ok()?)?;
+                    w_defined = false;
+                    continue;
+                }
                 if op > 127 || !is_supported_text_byte_v0(op) {
+                    return None;
+                }
+                if expect_down3_after_reset {
                     return None;
                 }
                 index += 1;
                 expect_move_after_char = true;
             }
         }
-        if page_h > max_h {
-            max_h = page_h;
+        if page_h_max > max_h {
+            max_h = page_h_max;
         }
         if page_v > max_v {
             max_v = page_v;
@@ -710,6 +749,14 @@ mod tests {
     }
 
     #[test]
+    fn text_writer_multichar_newline_reset_validates() {
+        let bytes = write_dvi_v2_text_page_v0(b"AB\nC").expect("writer should accept newline");
+        assert!(validate_dvi_v2_text_page_v0(&bytes));
+        let movement = count_dvi_v2_text_movements_v0(&bytes).expect("movement summary should parse");
+        assert_eq!(movement, (2, 0, 0, 1, 1));
+    }
+
+    #[test]
     fn text_writer_rejects_non_positive_advance() {
         assert!(write_dvi_v2_text_page_with_advance_v0(b"ABC", 0).is_none());
         assert!(write_dvi_v2_text_page_with_advance_v0(b"ABC", -1).is_none());
@@ -782,6 +829,24 @@ mod tests {
         bytes[amount_start] = 0x00;
         bytes[amount_start + 1] = 0x00;
         bytes[amount_start + 2] = 0x01;
+        assert!(!validate_dvi_v2_text_page_v0(&bytes));
+    }
+
+    #[test]
+    fn validator_rejects_wrong_reset_amount_before_down3() {
+        let mut bytes = write_dvi_v2_text_page_v0(b"AB\nC").expect("writer should accept newline");
+        let down3_index = bytes
+            .iter()
+            .position(|byte| *byte == DVI_DOWN3)
+            .expect("down3 opcode should exist");
+        let reset_index = bytes[..down3_index]
+            .iter()
+            .rposition(|byte| *byte == DVI_RIGHT3)
+            .expect("reset right3 opcode should exist");
+        let amount_start = reset_index + 1;
+        bytes[amount_start] = 0xff;
+        bytes[amount_start + 1] = 0xff;
+        bytes[amount_start + 2] = 0xff;
         assert!(!validate_dvi_v2_text_page_v0(&bytes));
     }
 
