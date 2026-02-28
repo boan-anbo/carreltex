@@ -1,15 +1,31 @@
-mod input_expand_v0; mod ifnum_v0; mod ifx_v0; mod macro_expand_v0;
-mod ok_v0; mod stats_v0; mod tokenize_reason_v0; mod trace_v0;
-#[cfg(test)] mod count_v0_tests; #[cfg(test)] mod edef_v0_tests;
-#[cfg(test)] mod newcommand_v0_tests; #[cfg(test)] mod providecommand_v0_tests;
-#[cfg(test)] mod xdef_noexpand_v0_tests; #[cfg(test)] mod ifnum_v0_tests;
-#[cfg(test)] mod ifx_v0_tests; #[cfg(test)] mod input_macro_v0_tests;
-#[cfg(test)] mod meaning_v0_tests_base; #[cfg(test)] mod meaning_v0_tests_input_guards;
-#[cfg(test)] mod ok_v0_tests; #[cfg(test)] mod tokenizer_textword_139_tests;
-#[cfg(test)] mod tokenizer_textword_140_tests; #[cfg(test)] mod tokenizer_textword_141_tests;
-#[cfg(test)] mod tokenizer_textword_142_tests; #[cfg(test)] mod tokenizer_textword_143_tests;
-#[cfg(test)] mod tokenizer_textword_144_tests; #[cfg(test)] mod tokenizer_textword_145_tests;
-#[cfg(test)] mod tokenizer_textword_147_tests; #[cfg(test)] mod tokenizer_textword_148_tests;
+mod input_expand_v0;
+mod ifnum_v0;
+mod ifx_v0;
+mod macro_expand_v0;
+mod ok_v0;
+mod stats_v0;
+mod tokenize_reason_v0;
+mod trace_v0;
+#[cfg(test)] mod count_v0_tests;
+#[cfg(test)] mod edef_v0_tests;
+#[cfg(test)] mod newcommand_v0_tests;
+#[cfg(test)] mod providecommand_v0_tests;
+#[cfg(test)] mod xdef_noexpand_v0_tests;
+#[cfg(test)] mod ifnum_v0_tests;
+#[cfg(test)] mod ifx_v0_tests;
+#[cfg(test)] mod input_macro_v0_tests;
+#[cfg(test)] mod meaning_v0_tests_base;
+#[cfg(test)] mod meaning_v0_tests_input_guards;
+#[cfg(test)] mod ok_v0_tests;
+#[cfg(test)] mod tokenizer_textword_139_tests;
+#[cfg(test)] mod tokenizer_textword_140_tests;
+#[cfg(test)] mod tokenizer_textword_141_tests;
+#[cfg(test)] mod tokenizer_textword_142_tests;
+#[cfg(test)] mod tokenizer_textword_143_tests;
+#[cfg(test)] mod tokenizer_textword_144_tests;
+#[cfg(test)] mod tokenizer_textword_145_tests;
+#[cfg(test)] mod tokenizer_textword_147_tests;
+#[cfg(test)] mod tokenizer_textword_148_tests;
 use crate::reasons_v0::{invalid_log_bytes_v0, InvalidInputReasonV0};
 use crate::tex::tokenize_v0::{tokenize_v0, TokenV0, MAX_TOKENS_V0};
 use carreltex_core::{
@@ -178,7 +194,6 @@ mod tests {
         }
         rest[..digits_len].parse::<u64>().ok()
     }
-
     #[test]
     fn compile_requires_valid_mount() {
         let mut mount = Mount::default();
@@ -187,7 +202,6 @@ mod tests {
         assert!(result.log_bytes.starts_with(b"INVALID_INPUT:"));
         assert!(result.log_bytes.ends_with(b"mount_finalize_failed"));
     }
-
     #[test]
     fn compile_main_uses_default_log_cap_and_not_implemented() {
         let mut mount = Mount::default();
@@ -197,7 +211,6 @@ mod tests {
         assert_eq!(result.status, CompileStatus::NotImplemented);
         assert!(result.log_bytes.len() <= DEFAULT_COMPILE_MAIN_MAX_LOG_BYTES_V0 as usize);
     }
-
     #[test]
     fn compile_request_returns_not_implemented_when_valid() {
         let mut mount = Mount::default();
@@ -215,7 +228,6 @@ mod tests {
         assert!(result.main_xdv_bytes.is_empty());
         assert!(!result.tex_stats_json.is_empty());
     }
-
     #[test]
     fn compile_request_rejects_invalid_entrypoint() {
         let mut mount = Mount::default();
@@ -230,7 +242,6 @@ mod tests {
         assert!(result.log_bytes.starts_with(b"INVALID_INPUT:"));
         assert!(result.log_bytes.ends_with(b"request_invalid"));
     }
-
     #[test]
     fn compile_request_rejects_zero_epoch_or_log_cap() {
         let mut mount = Mount::default();
@@ -252,7 +263,6 @@ mod tests {
         assert!(result.tex_stats_json.is_empty());
         assert!(result.log_bytes.is_empty());
     }
-
     #[test]
     fn compile_request_rejects_log_cap_above_limit() {
         let mut mount = Mount::default();
@@ -266,7 +276,6 @@ mod tests {
         assert!(result.tex_stats_json.is_empty());
         assert!(result.log_bytes.ends_with(b"request_invalid"));
     }
-
     #[test]
     fn compile_request_log_is_truncated_by_max_log_bytes() {
         let mut mount = Mount::default();
@@ -282,7 +291,6 @@ mod tests {
         assert!(result.main_xdv_bytes.is_empty());
         assert!(!result.tex_stats_json.is_empty());
     }
-
     #[test]
     fn compile_request_trace_is_emitted_when_log_budget_allows() {
         let mut mount = Mount::default();
@@ -294,7 +302,6 @@ mod tests {
         assert!(log.starts_with("NOT_IMPLEMENTED:"));
         assert!(log.contains("INPUT_TRACE_V0:"));
     }
-
     #[test]
     fn compile_request_rejects_trailing_backslash_in_main_tex() {
         let mut mount = Mount::default();
@@ -311,7 +318,6 @@ mod tests {
         assert!(result.log_bytes.starts_with(b"INVALID_INPUT:"));
         assert!(result.log_bytes.ends_with(b"tokenize_failed"));
     }
-
     #[test]
     fn compile_request_still_not_implemented_when_tokenization_succeeds() {
         let mut mount = Mount::default();
@@ -326,7 +332,6 @@ mod tests {
         assert!(result.log_bytes.starts_with(b"NOT_IMPLEMENTED:"));
         assert!(!result.tex_stats_json.is_empty());
     }
-
     #[test]
     fn compile_request_rejects_unbalanced_groups() {
         let mut mount = Mount::default();
@@ -339,7 +344,6 @@ mod tests {
         assert!(result.log_bytes.starts_with(b"INVALID_INPUT:"));
         assert!(result.log_bytes.ends_with(b"stats_build_failed"));
     }
-
     #[test]
     fn compile_request_missing_main_tex_reports_entrypoint_missing_reason() {
         let mut mount = Mount::default();
@@ -348,7 +352,6 @@ mod tests {
         assert!(result.log_bytes.starts_with(b"INVALID_INPUT:"));
         assert!(result.log_bytes.ends_with(b"mount_finalize_failed"));
     }
-
     #[test]
     fn compile_request_invalid_main_content_reports_mount_finalize_failed_reason() {
         let mut mount = Mount::default();
@@ -358,7 +361,6 @@ mod tests {
         assert!(result.log_bytes.starts_with(b"INVALID_INPUT:"));
         assert!(result.log_bytes.ends_with(b"mount_finalize_failed"));
     }
-
     #[test]
     fn compile_request_missing_entrypoint_reports_request_invalid_reason() {
         let mut mount = Mount::default();
@@ -370,7 +372,6 @@ mod tests {
         assert!(result.log_bytes.starts_with(b"INVALID_INPUT:"));
         assert!(result.log_bytes.ends_with(b"request_invalid"));
     }
-
     #[test]
     fn compile_request_precedence_request_invalid_over_mount_finalize_failed() {
         let mut mount = Mount::default();
@@ -382,7 +383,6 @@ mod tests {
         assert!(result.log_bytes.starts_with(b"INVALID_INPUT:"));
         assert!(result.log_bytes.ends_with(b"request_invalid"));
     }
-
     #[test]
     fn compile_request_stats_json_contains_expected_fields() {
         let mut mount = Mount::default();
@@ -398,7 +398,6 @@ mod tests {
         assert!(result.tex_stats_json.contains("\"end_group_count\":"));
         assert!(result.tex_stats_json.contains("\"max_group_depth\":"));
     }
-
     #[test]
     fn input_valid_when_file_exists() {
         let mut mount = Mount::default();
@@ -411,7 +410,6 @@ mod tests {
         assert_eq!(result.status, CompileStatus::NotImplemented);
         assert!(result.log_bytes.starts_with(b"NOT_IMPLEMENTED:"));
     }
-
     #[test]
     fn input_expands_tokens_from_subfile() {
         let mut mount_without_input = Mount::default();
@@ -450,7 +448,6 @@ mod tests {
                 .expect("char_count should exist");
         assert_eq!(char_count_with_input, char_count_without_input + 3);
     }
-
     #[test]
     fn input_missing_file_is_invalid() {
         let mut mount = Mount::default();
@@ -463,7 +460,6 @@ mod tests {
         assert!(result.log_bytes.starts_with(b"INVALID_INPUT:"));
         assert!(result.log_bytes.ends_with(b"input_validation_failed"));
     }
-
     #[test]
     fn input_invalid_syntax_is_invalid() {
         let cases: [&[u8]; 3] = [
@@ -479,7 +475,6 @@ mod tests {
             assert!(result.log_bytes.ends_with(b"input_validation_failed"));
         }
     }
-
     #[test]
     fn input_cycle_is_invalid() {
         let mut mount = Mount::default();
@@ -501,7 +496,6 @@ mod tests {
         assert!(result.log_bytes.ends_with(b"input_cycle_failed"));
         assert!(!String::from_utf8_lossy(&result.log_bytes).contains("INPUT_TRACE_V0:"));
     }
-
     #[test]
     fn input_depth_cap_is_invalid() {
         let mut mount = Mount::default();
@@ -528,7 +522,6 @@ mod tests {
         assert_eq!(result.status, CompileStatus::InvalidInput);
         assert!(result.log_bytes.ends_with(b"input_depth_exceeded"));
     }
-
     #[test]
     fn input_expansions_cap_is_invalid() {
         let mut mount = Mount::default();
@@ -544,7 +537,6 @@ mod tests {
         assert_eq!(result.status, CompileStatus::InvalidInput);
         assert!(result.log_bytes.ends_with(b"input_expansions_exceeded"));
     }
-
     #[test]
     fn macro_expansion_positive_increases_char_count() {
         let mut baseline_mount = Mount::default();
@@ -565,7 +557,6 @@ mod tests {
             stats_u64_field(&macro_result.tex_stats_json, "char_count").expect("char_count");
         assert_eq!(macro_char_count, baseline_char_count + 3);
     }
-
     #[test]
     fn macro_single_param_positive_increases_char_count() {
         let mut baseline_mount = Mount::default();
@@ -586,7 +577,6 @@ mod tests {
             stats_u64_field(&macro_result.tex_stats_json, "char_count").expect("char_count");
         assert_eq!(macro_char_count, baseline_char_count + 3);
     }
-
     #[test]
     fn macro_cycle_is_invalid() {
         let mut mount = Mount::default();
@@ -598,7 +588,6 @@ mod tests {
         assert_eq!(result.status, CompileStatus::InvalidInput);
         assert!(result.log_bytes.ends_with(b"macro_cycle_failed"));
     }
-
     #[test]
     fn macro_params_unsupported_is_invalid() {
         let mut mount = Mount::default();
@@ -610,7 +599,6 @@ mod tests {
         assert_eq!(result.status, CompileStatus::InvalidInput);
         assert!(result.log_bytes.ends_with(b"macro_params_unsupported"));
     }
-
     #[test]
     fn macro_single_param_missing_arg_is_invalid() {
         let mut mount = Mount::default();
@@ -622,7 +610,6 @@ mod tests {
         assert_eq!(result.status, CompileStatus::InvalidInput);
         assert!(result.log_bytes.ends_with(b"macro_validation_failed"));
     }
-
     #[test]
     fn macro_defs_inside_group_do_not_leak_outside() {
         let mut baseline_mount = Mount::default();
@@ -644,7 +631,6 @@ mod tests {
             stats_u64_field(&scoped_result.tex_stats_json, "char_count").expect("char_count");
         assert_eq!(scoped_char_count, baseline_char_count);
     }
-
     #[test]
     fn gdef_inside_group_leaks_globally() {
         let mut baseline_mount = Mount::default();
@@ -666,7 +652,6 @@ mod tests {
             stats_u64_field(&gdef_result.tex_stats_json, "char_count").expect("char_count");
         assert_eq!(gdef_char_count, baseline_char_count + 3);
     }
-
     #[test]
     fn global_def_inside_group_leaks_globally() {
         let mut baseline_mount = Mount::default();
@@ -690,7 +675,6 @@ mod tests {
             stats_u64_field(&global_def_result.tex_stats_json, "char_count").expect("char_count");
         assert_eq!(global_def_char_count, baseline_char_count + 3);
     }
-
     #[test]
     fn global_gdef_inside_group_leaks_globally() {
         let mut baseline_mount = Mount::default();
@@ -711,7 +695,6 @@ mod tests {
         let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
         assert_eq!(char_count, baseline_char_count + 3);
     }
-
     #[test]
     fn stacked_global_def_inside_group_leaks_globally() {
         let mut baseline_mount = Mount::default();
@@ -732,7 +715,6 @@ mod tests {
         let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
         assert_eq!(char_count, baseline_char_count + 3);
     }
-
     #[test]
     fn let_alias_expands_control_sequence() {
         let mut baseline_mount = Mount::default();
@@ -752,7 +734,6 @@ mod tests {
         let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
         assert_eq!(char_count, baseline_char_count + 3);
     }
-
     #[test]
     fn global_let_inside_group_leaks_globally() {
         let mut baseline_mount = Mount::default();
@@ -771,7 +752,6 @@ mod tests {
         let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
         assert_eq!(char_count, baseline_char_count + 1);
     }
-
     #[test]
     fn let_to_non_control_sequence_is_invalid() {
         let mut mount = Mount::default();
@@ -781,7 +761,6 @@ mod tests {
         assert_eq!(result.status, CompileStatus::InvalidInput);
         assert!(result.log_bytes.ends_with(b"macro_let_unsupported"));
     }
-
     #[test]
     fn futurelet_alias_expands_control_sequence() {
         let mut baseline_mount = Mount::default();
@@ -801,7 +780,6 @@ mod tests {
         let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
         assert_eq!(char_count, baseline_char_count + 3);
     }
-
     #[test]
     fn global_futurelet_inside_group_leaks_globally() {
         let mut baseline_mount = Mount::default();
@@ -820,7 +798,6 @@ mod tests {
         let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
         assert_eq!(char_count, baseline_char_count + 1);
     }
-
     #[test]
     fn futurelet_with_non_control_sequence_is_invalid() {
         let mut mount = Mount::default();
@@ -830,7 +807,6 @@ mod tests {
         assert_eq!(result.status, CompileStatus::InvalidInput);
         assert!(result.log_bytes.ends_with(b"macro_futurelet_unsupported"));
     }
-
     #[test]
     fn expandafter_reorders_two_control_sequences() {
         let mut baseline_mount = Mount::default();
@@ -849,7 +825,6 @@ mod tests {
         let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
         assert_eq!(char_count, baseline_char_count + 4);
     }
-
     #[test]
     fn expandafter_with_unsupported_tokens_is_invalid() {
         let mut mount = Mount::default();
@@ -859,7 +834,6 @@ mod tests {
         assert_eq!(result.status, CompileStatus::InvalidInput);
         assert!(result.log_bytes.ends_with(b"macro_expandafter_unsupported"));
     }
-
     #[test]
     fn csname_generates_control_sequence_for_macro_lookup() {
         let mut baseline_mount = Mount::default();
@@ -879,7 +853,6 @@ mod tests {
         let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
         assert_eq!(char_count, baseline_char_count + 3);
     }
-
     #[test]
     fn csname_with_invalid_inner_tokens_is_invalid() {
         let mut mount = Mount::default();
@@ -889,7 +862,6 @@ mod tests {
         assert_eq!(result.status, CompileStatus::InvalidInput);
         assert!(result.log_bytes.ends_with(b"macro_csname_unsupported"));
     }
-
     #[test]
     fn string_control_sequence_produces_literal_chars() {
         let mut baseline_mount = Mount::default();
@@ -909,7 +881,6 @@ mod tests {
         let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
         assert_eq!(char_count, baseline_char_count + 4);
     }
-
     #[test]
     fn string_with_unsupported_tokens_is_invalid() {
         let mut mount = Mount::default();
@@ -919,7 +890,6 @@ mod tests {
         assert_eq!(result.status, CompileStatus::InvalidInput);
         assert!(result.log_bytes.ends_with(b"macro_string_unsupported"));
     }
-
     #[test]
     fn global_def_single_param_inside_group_leaks_globally() {
         let mut baseline_mount = Mount::default();
@@ -943,7 +913,6 @@ mod tests {
             stats_u64_field(&global_def_result.tex_stats_json, "char_count").expect("char_count");
         assert_eq!(global_def_char_count, baseline_char_count + 1);
     }
-
     #[test]
     fn global_prefix_without_def_is_invalid() {
         let mut mount = Mount::default();
@@ -953,7 +922,6 @@ mod tests {
         assert_eq!(result.status, CompileStatus::InvalidInput);
         assert!(result.log_bytes.ends_with(b"macro_global_prefix_unsupported"));
     }
-
     #[test]
     fn stacked_global_prefix_without_def_is_invalid() {
         let mut mount = Mount::default();
@@ -963,7 +931,6 @@ mod tests {
         assert_eq!(result.status, CompileStatus::InvalidInput);
         assert!(result.log_bytes.ends_with(b"macro_global_prefix_unsupported"));
     }
-
     #[test]
     fn macro_defs_can_override_inside_group_without_leaking() {
         let mut baseline_mount = Mount::default();
@@ -983,7 +950,6 @@ mod tests {
             stats_u64_field(&scoped_result.tex_stats_json, "char_count").expect("char_count");
         assert_eq!(scoped_char_count, baseline_char_count);
     }
-
     #[test]
     fn macro_expansions_cap_is_invalid() {
         let mut mount = Mount::default();
