@@ -261,6 +261,24 @@ fn control_word_textbackslash_then_percent_symbol_maps_to_backslash_and_percent(
 }
 
 #[test]
+fn control_word_textasciitilde_maps_to_tilde_and_swallows_space() {
+    let tokens = tokenize_v0(b"\\textasciitilde X").expect("tokenize should succeed");
+    assert_eq!(tokens, vec![TokenV0::Char(b'~'), TokenV0::Char(b'X')]);
+}
+
+#[test]
+fn control_word_textasciicircum_maps_to_caret_and_swallows_space() {
+    let tokens = tokenize_v0(b"\\textasciicircum X").expect("tokenize should succeed");
+    assert_eq!(tokens, vec![TokenV0::Char(b'^'), TokenV0::Char(b'X')]);
+}
+
+#[test]
+fn control_word_textquotedbl_maps_to_quote_and_swallows_space() {
+    let tokens = tokenize_v0(b"\\textquotedbl X").expect("tokenize should succeed");
+    assert_eq!(tokens, vec![TokenV0::Char(b'\"'), TokenV0::Char(b'X')]);
+}
+
+#[test]
 fn control_word_par_maps_to_space_and_swallows_following_whitespace() {
     let tokens = tokenize_v0(b"A\\par B").expect("tokenize should succeed");
     assert_eq!(
