@@ -510,6 +510,75 @@ export function runTokenizerCases(ctx, helpers) {
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer control-word-par case failed');
   }
+  const textunderscoreMainBytes = new TextEncoder().encode('\\documentclass{article}\n\\begin{document}\nHello.\\textunderscore XYZ\n\\end{document}\n');
+  if (addMountedFile('main.tex', textunderscoreMainBytes, 'tokenizer_control_word_textunderscore_main') !== 0) {
+    throw new Error('mount_add_file(tokenizer control-word-textunderscore main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) {
+    throw new Error('mount_finalize for tokenizer control-word-textunderscore case failed');
+  }
+  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(tokenizer control-word-textunderscore)');
+  {
+    const logBytes = readCompileLogBytes();
+    const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(tokenizer control-word-textunderscore)');
+    if (helloBaselineCharCount === null) {
+      throw new Error('helloBaselineCharCount not initialized for tokenizer control-word-textunderscore case');
+    }
+    if (stats.char_count !== helloBaselineCharCount + 4) {
+      throw new Error(`compile_main(tokenizer control-word-textunderscore) char_count delta expected +4, got baseline=${helloBaselineCharCount}, current=${stats.char_count}`);
+    }
+    assertMainXdvArtifactEmpty('compile_main(tokenizer control-word-textunderscore)');
+  }
+
+  if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before tokenizer control-word-textquotesingle case failed');
+  }
+  const textquotesingleMainBytes = new TextEncoder().encode('\\documentclass{article}\n\\begin{document}\nHello.\\textquotesingle XYZ\n\\end{document}\n');
+  if (addMountedFile('main.tex', textquotesingleMainBytes, 'tokenizer_control_word_textquotesingle_main') !== 0) {
+    throw new Error('mount_add_file(tokenizer control-word-textquotesingle main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) {
+    throw new Error('mount_finalize for tokenizer control-word-textquotesingle case failed');
+  }
+  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(tokenizer control-word-textquotesingle)');
+  {
+    const logBytes = readCompileLogBytes();
+    const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(tokenizer control-word-textquotesingle)');
+    if (helloBaselineCharCount === null) {
+      throw new Error('helloBaselineCharCount not initialized for tokenizer control-word-textquotesingle case');
+    }
+    if (stats.char_count !== helloBaselineCharCount + 4) {
+      throw new Error(`compile_main(tokenizer control-word-textquotesingle) char_count delta expected +4, got baseline=${helloBaselineCharCount}, current=${stats.char_count}`);
+    }
+    assertMainXdvArtifactEmpty('compile_main(tokenizer control-word-textquotesingle)');
+  }
+
+  if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before tokenizer control-word-textasciigrave case failed');
+  }
+  const textasciigraveMainBytes = new TextEncoder().encode('\\documentclass{article}\n\\begin{document}\nHello.\\textasciigrave XYZ\n\\end{document}\n');
+  if (addMountedFile('main.tex', textasciigraveMainBytes, 'tokenizer_control_word_textasciigrave_main') !== 0) {
+    throw new Error('mount_add_file(tokenizer control-word-textasciigrave main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) {
+    throw new Error('mount_finalize for tokenizer control-word-textasciigrave case failed');
+  }
+  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(tokenizer control-word-textasciigrave)');
+  {
+    const logBytes = readCompileLogBytes();
+    const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(tokenizer control-word-textasciigrave)');
+    if (helloBaselineCharCount === null) {
+      throw new Error('helloBaselineCharCount not initialized for tokenizer control-word-textasciigrave case');
+    }
+    if (stats.char_count !== helloBaselineCharCount + 4) {
+      throw new Error(`compile_main(tokenizer control-word-textasciigrave) char_count delta expected +4, got baseline=${helloBaselineCharCount}, current=${stats.char_count}`);
+    }
+    assertMainXdvArtifactEmpty('compile_main(tokenizer control-word-textasciigrave)');
+  }
+
+  if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before tokenizer control-word-par case failed');
+  }
   const parMainBytes = new TextEncoder().encode('\\documentclass{article}\n\\begin{document}\nHello.\\par XYZ\n\\end{document}\n');
   if (addMountedFile('main.tex', parMainBytes, 'tokenizer_control_word_par_main') !== 0) {
     throw new Error('mount_add_file(tokenizer control-word-par main.tex) failed');
