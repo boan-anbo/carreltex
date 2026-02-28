@@ -86,7 +86,15 @@ export function runOkEmptyDocCases(ctx, helpers) {
     return { right3, w3, w0, down3 };
   };
 
-  const runCompileRequestOkCase = (maxLineGlyphs, label) => {
+  const runCompileRequestOkCase = (
+    maxLineGlyphs,
+    label,
+    {
+      maxLinesPerPage = null,
+      lineAdvanceSp = null,
+      glyphAdvanceSp = null,
+    } = {},
+  ) => {
     if (ctx.compileRequestReset() !== 0) {
       throw new Error(`${label} compile_request_reset_v0 failed`);
     }
@@ -107,6 +115,15 @@ export function runOkEmptyDocCases(ctx, helpers) {
     }
     if (ctx.compileRequestSetOkMaxLineGlyphs(maxLineGlyphs) !== 0) {
       throw new Error(`${label} compile_request_set_ok_max_line_glyphs_v0 failed`);
+    }
+    if (maxLinesPerPage !== null && ctx.compileRequestSetOkMaxLinesPerPage(maxLinesPerPage) !== 0) {
+      throw new Error(`${label} compile_request_set_ok_max_lines_per_page_v0 failed`);
+    }
+    if (lineAdvanceSp !== null && ctx.compileRequestSetOkLineAdvanceSp(lineAdvanceSp) !== 0) {
+      throw new Error(`${label} compile_request_set_ok_line_advance_sp_v0 failed`);
+    }
+    if (glyphAdvanceSp !== null && ctx.compileRequestSetOkGlyphAdvanceSp(glyphAdvanceSp) !== 0) {
+      throw new Error(`${label} compile_request_set_ok_glyph_advance_sp_v0 failed`);
     }
     expectOk(ctx.compileRun(), `${label} compile_run_v0`);
     return readMainXdvArtifactBytes(`${label} compile_run_v0`);
@@ -482,5 +499,43 @@ export function runOkEmptyDocCases(ctx, helpers) {
   }
   if (ctx.compileRequestSetOkMaxLineGlyphs(257) === 0) {
     throw new Error('compile_request_set_ok_max_line_glyphs_v0(257) expected failure');
+  }
+
+  if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before OK request layout controls case failed');
+  }
+  if (addMountedFile('main.tex', requestWrapMain, 'ok_request_layout_controls_main') !== 0) {
+    throw new Error('mount_add_file(ok request layout controls main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) {
+    throw new Error('mount_finalize for OK request layout controls case failed');
+  }
+  const xdvLayoutControls = runCompileRequestOkCase(
+    10,
+    'ok_request_layout_controls',
+    { maxLinesPerPage: 1, lineAdvanceSp: 786432, glyphAdvanceSp: 65536 },
+  );
+  const layoutPages = countPagesInDviV2(xdvLayoutControls, 'ok_request_layout_controls');
+  if (layoutPages < 2) {
+    throw new Error(`ok request layout controls expected pages >= 2, got ${layoutPages}`);
+  }
+
+  if (ctx.compileRequestSetOkMaxLinesPerPage(0) === 0) {
+    throw new Error('compile_request_set_ok_max_lines_per_page_v0(0) expected failure');
+  }
+  if (ctx.compileRequestSetOkMaxLinesPerPage(201) === 0) {
+    throw new Error('compile_request_set_ok_max_lines_per_page_v0(201) expected failure');
+  }
+  if (ctx.compileRequestSetOkLineAdvanceSp(0) === 0) {
+    throw new Error('compile_request_set_ok_line_advance_sp_v0(0) expected failure');
+  }
+  if (ctx.compileRequestSetOkLineAdvanceSp(10000001) === 0) {
+    throw new Error('compile_request_set_ok_line_advance_sp_v0(10000001) expected failure');
+  }
+  if (ctx.compileRequestSetOkGlyphAdvanceSp(0) === 0) {
+    throw new Error('compile_request_set_ok_glyph_advance_sp_v0(0) expected failure');
+  }
+  if (ctx.compileRequestSetOkGlyphAdvanceSp(10000001) === 0) {
+    throw new Error('compile_request_set_ok_glyph_advance_sp_v0(10000001) expected failure');
   }
 }
