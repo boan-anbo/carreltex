@@ -356,6 +356,18 @@ fn control_word_textquotedbl_maps_to_quote_and_swallows_space() {
 }
 
 #[test]
+fn control_word_textless_maps_to_less_than_and_swallows_space() {
+    let tokens = tokenize_v0(b"\\textless X").expect("tokenize should succeed");
+    assert_eq!(tokens, vec![TokenV0::Char(b'<'), TokenV0::Char(b'X')]);
+}
+
+#[test]
+fn control_word_textgreater_maps_to_greater_than_and_swallows_space() {
+    let tokens = tokenize_v0(b"\\textgreater X").expect("tokenize should succeed");
+    assert_eq!(tokens, vec![TokenV0::Char(b'>'), TokenV0::Char(b'X')]);
+}
+
+#[test]
 fn control_word_par_maps_to_space_and_swallows_following_whitespace() {
     let tokens = tokenize_v0(b"A\\par B").expect("tokenize should succeed");
     assert_eq!(

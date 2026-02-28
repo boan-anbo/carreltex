@@ -393,6 +393,52 @@ export function runTokenizerCases(ctx, helpers) {
   }
 
   if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before tokenizer control-word-textless case failed');
+  }
+  const textlessMainBytes = new TextEncoder().encode('\\documentclass{article}\n\\begin{document}\nHello.\\textless XYZ\n\\end{document}\n');
+  if (addMountedFile('main.tex', textlessMainBytes, 'tokenizer_control_word_textless_main') !== 0) {
+    throw new Error('mount_add_file(tokenizer control-word-textless main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) {
+    throw new Error('mount_finalize for tokenizer control-word-textless case failed');
+  }
+  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(tokenizer control-word-textless)');
+  {
+    const logBytes = readCompileLogBytes();
+    const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(tokenizer control-word-textless)');
+    if (helloBaselineCharCount === null) {
+      throw new Error('helloBaselineCharCount not initialized for tokenizer control-word-textless case');
+    }
+    if (stats.char_count !== helloBaselineCharCount + 4) {
+      throw new Error(`compile_main(tokenizer control-word-textless) char_count delta expected +4, got baseline=${helloBaselineCharCount}, current=${stats.char_count}`);
+    }
+    assertMainXdvArtifactEmpty('compile_main(tokenizer control-word-textless)');
+  }
+
+  if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before tokenizer control-word-textgreater case failed');
+  }
+  const textgreaterMainBytes = new TextEncoder().encode('\\documentclass{article}\n\\begin{document}\nHello.\\textgreater XYZ\n\\end{document}\n');
+  if (addMountedFile('main.tex', textgreaterMainBytes, 'tokenizer_control_word_textgreater_main') !== 0) {
+    throw new Error('mount_add_file(tokenizer control-word-textgreater main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) {
+    throw new Error('mount_finalize for tokenizer control-word-textgreater case failed');
+  }
+  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(tokenizer control-word-textgreater)');
+  {
+    const logBytes = readCompileLogBytes();
+    const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(tokenizer control-word-textgreater)');
+    if (helloBaselineCharCount === null) {
+      throw new Error('helloBaselineCharCount not initialized for tokenizer control-word-textgreater case');
+    }
+    if (stats.char_count !== helloBaselineCharCount + 4) {
+      throw new Error(`compile_main(tokenizer control-word-textgreater) char_count delta expected +4, got baseline=${helloBaselineCharCount}, current=${stats.char_count}`);
+    }
+    assertMainXdvArtifactEmpty('compile_main(tokenizer control-word-textgreater)');
+  }
+
+  if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer control-word-par case failed');
   }
   const parMainBytes = new TextEncoder().encode('\\documentclass{article}\n\\begin{document}\nHello.\\par XYZ\n\\end{document}\n');
