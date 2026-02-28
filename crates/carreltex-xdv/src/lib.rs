@@ -607,21 +607,6 @@ pub fn count_dvi_v2_text_movements_with_layout_v0(
                     page_h_max = page_h_max.max(page_h);
                     expect_width_right_after_char = false;
                     continue;
-                } else if op == DVI_DOWN3 {
-                    down3_count = down3_count.checked_add(1)?;
-                    index += 1;
-                    if read_i24_be(bytes, &mut index)? != line_advance_sp {
-                        return None;
-                    }
-                    if page_h != 0 {
-                        return None;
-                    }
-                    if expect_down3_after_reset {
-                        expect_down3_after_reset = false;
-                    }
-                    page_v = page_v.checked_add(u32::try_from(line_advance_sp).ok()?)?;
-                    expect_width_right_after_char = false;
-                    continue;
                 } else {
                     return None;
                 }
