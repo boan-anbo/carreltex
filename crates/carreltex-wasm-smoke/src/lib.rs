@@ -568,7 +568,7 @@ pub extern "C" fn carreltex_wasm_compile_request_set_ok_max_lines_per_page_v0(va
 
 #[no_mangle]
 pub extern "C" fn carreltex_wasm_compile_request_set_ok_line_advance_sp_v0(value: i32) -> i32 {
-    if !(1..=10_000_000).contains(&value) {
+    if !(1..=8_388_607).contains(&value) {
         return 1;
     }
     let mut state = match compile_request_state().lock() {
@@ -581,7 +581,7 @@ pub extern "C" fn carreltex_wasm_compile_request_set_ok_line_advance_sp_v0(value
 
 #[no_mangle]
 pub extern "C" fn carreltex_wasm_compile_request_set_ok_glyph_advance_sp_v0(value: i32) -> i32 {
-    if !(1..=10_000_000).contains(&value) {
+    if !(1..=8_388_607).contains(&value) {
         return 1;
     }
     let mut state = match compile_request_state().lock() {
