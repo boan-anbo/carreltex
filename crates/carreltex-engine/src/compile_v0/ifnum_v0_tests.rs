@@ -559,6 +559,19 @@ fn control_word_textemdash_is_counted_as_literal_char_and_space_is_swallowed() {
 }
 
 #[test]
+fn control_word_textellipsis_is_counted_as_three_literal_chars_and_space_is_swallowed() {
+    let baseline = hello_baseline_char_count();
+    let mut mount = Mount::default();
+    let main =
+        b"\\documentclass{article}\n\\begin{document}\nHello.\\textellipsis XYZ\n\\end{document}\n";
+    assert!(mount.add_file(b"main.tex", main).is_ok());
+    let result = compile_request_v0(&mut mount, &valid_request());
+    assert_eq!(result.status, CompileStatus::NotImplemented);
+    let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
+    assert_eq!(char_count, baseline + 6);
+}
+
+#[test]
 fn control_word_par_is_counted_as_single_space_with_no_extra_whitespace() {
     let baseline = hello_baseline_char_count();
     let mut mount = Mount::default();

@@ -35,45 +35,47 @@ pub(super) fn parse_control_word_v0(
             index = consume_whitespace_run_v0(input, index)?;
         }
     }
-    let token = if control_word.as_slice() == b"textbackslash" {
-        TokenV0::Char(b'\\')
+    let tokens = if control_word.as_slice() == b"textbackslash" {
+        vec![TokenV0::Char(b'\\')]
     } else if control_word.as_slice() == b"textasciitilde" {
-        TokenV0::Char(b'~')
+        vec![TokenV0::Char(b'~')]
     } else if control_word.as_slice() == b"textasciicircum" {
-        TokenV0::Char(b'^')
+        vec![TokenV0::Char(b'^')]
     } else if control_word.as_slice() == b"textquotedbl" {
-        TokenV0::Char(b'"')
+        vec![TokenV0::Char(b'"')]
     } else if control_word.as_slice() == b"textless" {
-        TokenV0::Char(b'<')
+        vec![TokenV0::Char(b'<')]
     } else if control_word.as_slice() == b"textgreater" {
-        TokenV0::Char(b'>')
+        vec![TokenV0::Char(b'>')]
     } else if control_word.as_slice() == b"textbar" {
-        TokenV0::Char(b'|')
+        vec![TokenV0::Char(b'|')]
     } else if control_word.as_slice() == b"textbraceleft" {
-        TokenV0::Char(b'{')
+        vec![TokenV0::Char(b'{')]
     } else if control_word.as_slice() == b"textbraceright" {
-        TokenV0::Char(b'}')
+        vec![TokenV0::Char(b'}')]
     } else if control_word.as_slice() == b"textunderscore" {
-        TokenV0::Char(b'_')
+        vec![TokenV0::Char(b'_')]
     } else if control_word.as_slice() == b"textquotesingle" {
-        TokenV0::Char(b'\'')
+        vec![TokenV0::Char(b'\'')]
     } else if control_word.as_slice() == b"textasciigrave" {
-        TokenV0::Char(b'`')
+        vec![TokenV0::Char(b'`')]
     } else if control_word.as_slice() == b"textquotedblleft" {
-        TokenV0::Char(b'"')
+        vec![TokenV0::Char(b'"')]
     } else if control_word.as_slice() == b"textquotedblright" {
-        TokenV0::Char(b'"')
+        vec![TokenV0::Char(b'"')]
     } else if control_word.as_slice() == b"textendash" {
-        TokenV0::Char(b'-')
+        vec![TokenV0::Char(b'-')]
     } else if control_word.as_slice() == b"textemdash" {
-        TokenV0::Char(b'-')
+        vec![TokenV0::Char(b'-')]
+    } else if control_word.as_slice() == b"textellipsis" {
+        vec![TokenV0::Char(b'.'), TokenV0::Char(b'.'), TokenV0::Char(b'.')]
     } else if control_word.as_slice() == b"par" {
-        TokenV0::Space
+        vec![TokenV0::Space]
     } else {
-        TokenV0::ControlSeq(control_word)
+        vec![TokenV0::ControlSeq(control_word)]
     };
     Ok(ParsedControlSeqV0 {
-        token: Some(token),
+        tokens,
         next_index: index,
     })
 }
