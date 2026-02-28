@@ -139,7 +139,7 @@ fn caret_hex_uppercase_decode_in_document_body_is_counted_in_stats() {
     let main = b"\\documentclass{article}\n\\begin{document}\nA^^4AB\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert_eq!(result.status, CompileStatus::Ok);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline + 3);
 }
@@ -202,7 +202,7 @@ fn unsupported_caret_inside_comment_does_not_fail_and_body_counts_chars() {
     let main = b"\\documentclass{article}\n\\begin{document}\n% ^^ZZ\nXYZ\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert_eq!(result.status, CompileStatus::Ok);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline + 3);
 }
@@ -214,7 +214,7 @@ fn crlf_in_body_is_normalized_as_single_whitespace_run() {
     let main = b"\\documentclass{article}\n\\begin{document}\nA\r\nB\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert_eq!(result.status, CompileStatus::Ok);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline + 2);
 }
@@ -226,7 +226,7 @@ fn lone_cr_in_body_is_normalized_as_single_whitespace_run() {
     let main = b"\\documentclass{article}\n\\begin{document}\nA\rB\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert_eq!(result.status, CompileStatus::Ok);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline + 2);
 }
