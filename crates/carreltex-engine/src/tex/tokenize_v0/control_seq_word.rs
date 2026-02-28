@@ -93,6 +93,12 @@ pub(super) fn parse_control_word_v0(
         vec![TokenV0::Char(b'Y')]
     } else if control_word.as_slice() == b"textsterling" {
         vec![TokenV0::Char(b'L')]
+    } else if control_word.as_slice() == b"textasteriskcentered" {
+        vec![TokenV0::Char(b'*')]
+    } else if control_word.as_slice() == b"textperiodcentered" {
+        vec![TokenV0::Char(b'.')]
+    } else if control_word.as_slice() == b"texttrademark" {
+        vec![TokenV0::Char(b'T')]
     } else if control_word.as_slice() == b"par" {
         vec![TokenV0::Space]
     } else {
