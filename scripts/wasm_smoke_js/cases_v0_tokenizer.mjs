@@ -6,6 +6,7 @@ export function runTokenizerCases(ctx, helpers) {
     expectNotImplemented,
     readCompileLogBytes,
     assertEventsMatchLogAndStats,
+    readMainXdvArtifactBytes,
     assertMainXdvArtifactEmpty,
     assertNoEvents,
   } = helpers;
@@ -37,12 +38,12 @@ export function runTokenizerCases(ctx, helpers) {
   if (ctx.mountFinalize() !== 0) {
     throw new Error('mount_finalize for tokenizer hello baseline case failed');
   }
-  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(tokenizer hello baseline)');
+  expectOk(ctx.compileMain(), 'compile_main_v0(tokenizer hello baseline)');
   {
     const logBytes = readCompileLogBytes();
     const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(tokenizer hello baseline)');
     helloBaselineCharCount = stats.char_count;
-    assertMainXdvArtifactEmpty('compile_main(tokenizer hello baseline)');
+    readMainXdvArtifactBytes('compile_main(tokenizer hello baseline)');
   }
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer control-symbol-comma case failed');
@@ -54,7 +55,7 @@ export function runTokenizerCases(ctx, helpers) {
   if (ctx.mountFinalize() !== 0) {
     throw new Error('mount_finalize for tokenizer control-symbol-comma case failed');
   }
-  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(tokenizer control-symbol-comma)');
+  expectOk(ctx.compileMain(), 'compile_main_v0(tokenizer control-symbol-comma)');
   {
     const logBytes = readCompileLogBytes();
     const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(tokenizer control-symbol-comma)');
@@ -64,7 +65,7 @@ export function runTokenizerCases(ctx, helpers) {
     if (stats.char_count !== helloBaselineCharCount + 4) {
       throw new Error(`compile_main(tokenizer control-symbol-comma) char_count delta expected +4, got baseline=${helloBaselineCharCount}, current=${stats.char_count}`);
     }
-    assertMainXdvArtifactEmpty('compile_main(tokenizer control-symbol-comma)');
+    readMainXdvArtifactBytes('compile_main(tokenizer control-symbol-comma)');
   }
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer control-symbol-bang-noop case failed');
@@ -76,7 +77,7 @@ export function runTokenizerCases(ctx, helpers) {
   if (ctx.mountFinalize() !== 0) {
     throw new Error('mount_finalize for tokenizer control-symbol-bang-noop case failed');
   }
-  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(tokenizer control-symbol-bang-noop)');
+  expectOk(ctx.compileMain(), 'compile_main_v0(tokenizer control-symbol-bang-noop)');
   {
     const logBytes = readCompileLogBytes();
     const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(tokenizer control-symbol-bang-noop)');
@@ -86,7 +87,7 @@ export function runTokenizerCases(ctx, helpers) {
     if (stats.char_count !== helloBaselineCharCount + 3) {
       throw new Error(`compile_main(tokenizer control-symbol-bang-noop) char_count delta expected +3, got baseline=${helloBaselineCharCount}, current=${stats.char_count}`);
     }
-    assertMainXdvArtifactEmpty('compile_main(tokenizer control-symbol-bang-noop)');
+    readMainXdvArtifactBytes('compile_main(tokenizer control-symbol-bang-noop)');
   }
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer control-symbol-semicolon case failed');
@@ -98,7 +99,7 @@ export function runTokenizerCases(ctx, helpers) {
   if (ctx.mountFinalize() !== 0) {
     throw new Error('mount_finalize for tokenizer control-symbol-semicolon case failed');
   }
-  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(tokenizer control-symbol-semicolon)');
+  expectOk(ctx.compileMain(), 'compile_main_v0(tokenizer control-symbol-semicolon)');
   {
     const logBytes = readCompileLogBytes();
     const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(tokenizer control-symbol-semicolon)');
@@ -108,7 +109,7 @@ export function runTokenizerCases(ctx, helpers) {
     if (stats.char_count !== helloBaselineCharCount + 4) {
       throw new Error(`compile_main(tokenizer control-symbol-semicolon) char_count delta expected +4, got baseline=${helloBaselineCharCount}, current=${stats.char_count}`);
     }
-    assertMainXdvArtifactEmpty('compile_main(tokenizer control-symbol-semicolon)');
+    readMainXdvArtifactBytes('compile_main(tokenizer control-symbol-semicolon)');
   }
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer caret-hex decode case failed');
@@ -141,7 +142,7 @@ export function runTokenizerCases(ctx, helpers) {
   if (ctx.mountFinalize() !== 0) {
     throw new Error('mount_finalize for tokenizer control-symbol-percent case failed');
   }
-  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(tokenizer control-symbol-percent)');
+  expectOk(ctx.compileMain(), 'compile_main_v0(tokenizer control-symbol-percent)');
   {
     const logBytes = readCompileLogBytes();
     const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(tokenizer control-symbol-percent)');
@@ -151,7 +152,7 @@ export function runTokenizerCases(ctx, helpers) {
     if (stats.char_count !== helloBaselineCharCount + 4) {
       throw new Error(`compile_main(tokenizer control-symbol-percent) char_count delta expected +4, got baseline=${helloBaselineCharCount}, current=${stats.char_count}`);
     }
-    assertMainXdvArtifactEmpty('compile_main(tokenizer control-symbol-percent)');
+    readMainXdvArtifactBytes('compile_main(tokenizer control-symbol-percent)');
   }
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer control-symbol-underscore case failed');
@@ -163,7 +164,7 @@ export function runTokenizerCases(ctx, helpers) {
   if (ctx.mountFinalize() !== 0) {
     throw new Error('mount_finalize for tokenizer control-symbol-underscore case failed');
   }
-  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(tokenizer control-symbol-underscore)');
+  expectOk(ctx.compileMain(), 'compile_main_v0(tokenizer control-symbol-underscore)');
   {
     const logBytes = readCompileLogBytes();
     const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(tokenizer control-symbol-underscore)');
@@ -173,7 +174,7 @@ export function runTokenizerCases(ctx, helpers) {
     if (stats.char_count !== helloBaselineCharCount + 4) {
       throw new Error(`compile_main(tokenizer control-symbol-underscore) char_count delta expected +4, got baseline=${helloBaselineCharCount}, current=${stats.char_count}`);
     }
-    assertMainXdvArtifactEmpty('compile_main(tokenizer control-symbol-underscore)');
+    readMainXdvArtifactBytes('compile_main(tokenizer control-symbol-underscore)');
   }
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer control-symbol-hash case failed');
@@ -185,7 +186,7 @@ export function runTokenizerCases(ctx, helpers) {
   if (ctx.mountFinalize() !== 0) {
     throw new Error('mount_finalize for tokenizer control-symbol-hash case failed');
   }
-  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(tokenizer control-symbol-hash)');
+  expectOk(ctx.compileMain(), 'compile_main_v0(tokenizer control-symbol-hash)');
   {
     const logBytes = readCompileLogBytes();
     const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(tokenizer control-symbol-hash)');
@@ -195,7 +196,7 @@ export function runTokenizerCases(ctx, helpers) {
     if (stats.char_count !== helloBaselineCharCount + 4) {
       throw new Error(`compile_main(tokenizer control-symbol-hash) char_count delta expected +4, got baseline=${helloBaselineCharCount}, current=${stats.char_count}`);
     }
-    assertMainXdvArtifactEmpty('compile_main(tokenizer control-symbol-hash)');
+    readMainXdvArtifactBytes('compile_main(tokenizer control-symbol-hash)');
   }
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer control-symbol-dollar case failed');
@@ -207,7 +208,7 @@ export function runTokenizerCases(ctx, helpers) {
   if (ctx.mountFinalize() !== 0) {
     throw new Error('mount_finalize for tokenizer control-symbol-dollar case failed');
   }
-  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(tokenizer control-symbol-dollar)');
+  expectOk(ctx.compileMain(), 'compile_main_v0(tokenizer control-symbol-dollar)');
   {
     const logBytes = readCompileLogBytes();
     const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(tokenizer control-symbol-dollar)');
@@ -217,7 +218,7 @@ export function runTokenizerCases(ctx, helpers) {
     if (stats.char_count !== helloBaselineCharCount + 4) {
       throw new Error(`compile_main(tokenizer control-symbol-dollar) char_count delta expected +4, got baseline=${helloBaselineCharCount}, current=${stats.char_count}`);
     }
-    assertMainXdvArtifactEmpty('compile_main(tokenizer control-symbol-dollar)');
+    readMainXdvArtifactBytes('compile_main(tokenizer control-symbol-dollar)');
   }
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer control-symbol-ampersand case failed');
@@ -229,7 +230,7 @@ export function runTokenizerCases(ctx, helpers) {
   if (ctx.mountFinalize() !== 0) {
     throw new Error('mount_finalize for tokenizer control-symbol-ampersand case failed');
   }
-  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(tokenizer control-symbol-ampersand)');
+  expectOk(ctx.compileMain(), 'compile_main_v0(tokenizer control-symbol-ampersand)');
   {
     const logBytes = readCompileLogBytes();
     const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(tokenizer control-symbol-ampersand)');
@@ -239,7 +240,7 @@ export function runTokenizerCases(ctx, helpers) {
     if (stats.char_count !== helloBaselineCharCount + 4) {
       throw new Error(`compile_main(tokenizer control-symbol-ampersand) char_count delta expected +4, got baseline=${helloBaselineCharCount}, current=${stats.char_count}`);
     }
-    assertMainXdvArtifactEmpty('compile_main(tokenizer control-symbol-ampersand)');
+    readMainXdvArtifactBytes('compile_main(tokenizer control-symbol-ampersand)');
   }
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer control-symbol-lbrace case failed');
@@ -251,7 +252,7 @@ export function runTokenizerCases(ctx, helpers) {
   if (ctx.mountFinalize() !== 0) {
     throw new Error('mount_finalize for tokenizer control-symbol-lbrace case failed');
   }
-  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(tokenizer control-symbol-lbrace)');
+  expectOk(ctx.compileMain(), 'compile_main_v0(tokenizer control-symbol-lbrace)');
   {
     const logBytes = readCompileLogBytes();
     const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(tokenizer control-symbol-lbrace)');
@@ -261,7 +262,7 @@ export function runTokenizerCases(ctx, helpers) {
     if (stats.char_count !== helloBaselineCharCount + 4) {
       throw new Error(`compile_main(tokenizer control-symbol-lbrace) char_count delta expected +4, got baseline=${helloBaselineCharCount}, current=${stats.char_count}`);
     }
-    assertMainXdvArtifactEmpty('compile_main(tokenizer control-symbol-lbrace)');
+    readMainXdvArtifactBytes('compile_main(tokenizer control-symbol-lbrace)');
   }
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer control-symbol-rbrace case failed');
@@ -273,7 +274,7 @@ export function runTokenizerCases(ctx, helpers) {
   if (ctx.mountFinalize() !== 0) {
     throw new Error('mount_finalize for tokenizer control-symbol-rbrace case failed');
   }
-  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(tokenizer control-symbol-rbrace)');
+  expectOk(ctx.compileMain(), 'compile_main_v0(tokenizer control-symbol-rbrace)');
   {
     const logBytes = readCompileLogBytes();
     const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(tokenizer control-symbol-rbrace)');
@@ -283,7 +284,7 @@ export function runTokenizerCases(ctx, helpers) {
     if (stats.char_count !== helloBaselineCharCount + 4) {
       throw new Error(`compile_main(tokenizer control-symbol-rbrace) char_count delta expected +4, got baseline=${helloBaselineCharCount}, current=${stats.char_count}`);
     }
-    assertMainXdvArtifactEmpty('compile_main(tokenizer control-symbol-rbrace)');
+    readMainXdvArtifactBytes('compile_main(tokenizer control-symbol-rbrace)');
   }
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer control-word-textbackslash case failed');
@@ -317,7 +318,7 @@ export function runTokenizerCases(ctx, helpers) {
   if (ctx.mountFinalize() !== 0) {
     throw new Error('mount_finalize for tokenizer control-word-textasciitilde case failed');
   }
-  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(tokenizer control-word-textasciitilde)');
+  expectOk(ctx.compileMain(), 'compile_main_v0(tokenizer control-word-textasciitilde)');
   {
     const logBytes = readCompileLogBytes();
     const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(tokenizer control-word-textasciitilde)');
@@ -327,7 +328,7 @@ export function runTokenizerCases(ctx, helpers) {
     if (stats.char_count !== helloBaselineCharCount + 4) {
       throw new Error(`compile_main(tokenizer control-word-textasciitilde) char_count delta expected +4, got baseline=${helloBaselineCharCount}, current=${stats.char_count}`);
     }
-    assertMainXdvArtifactEmpty('compile_main(tokenizer control-word-textasciitilde)');
+    readMainXdvArtifactBytes('compile_main(tokenizer control-word-textasciitilde)');
   }
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer control-word-textasciicircum case failed');
@@ -339,7 +340,7 @@ export function runTokenizerCases(ctx, helpers) {
   if (ctx.mountFinalize() !== 0) {
     throw new Error('mount_finalize for tokenizer control-word-textasciicircum case failed');
   }
-  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(tokenizer control-word-textasciicircum)');
+  expectOk(ctx.compileMain(), 'compile_main_v0(tokenizer control-word-textasciicircum)');
   {
     const logBytes = readCompileLogBytes();
     const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(tokenizer control-word-textasciicircum)');
@@ -349,7 +350,7 @@ export function runTokenizerCases(ctx, helpers) {
     if (stats.char_count !== helloBaselineCharCount + 4) {
       throw new Error(`compile_main(tokenizer control-word-textasciicircum) char_count delta expected +4, got baseline=${helloBaselineCharCount}, current=${stats.char_count}`);
     }
-    assertMainXdvArtifactEmpty('compile_main(tokenizer control-word-textasciicircum)');
+    readMainXdvArtifactBytes('compile_main(tokenizer control-word-textasciicircum)');
   }
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer control-word-textquotedbl case failed');
@@ -361,7 +362,7 @@ export function runTokenizerCases(ctx, helpers) {
   if (ctx.mountFinalize() !== 0) {
     throw new Error('mount_finalize for tokenizer control-word-textquotedbl case failed');
   }
-  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(tokenizer control-word-textquotedbl)');
+  expectOk(ctx.compileMain(), 'compile_main_v0(tokenizer control-word-textquotedbl)');
   {
     const logBytes = readCompileLogBytes();
     const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(tokenizer control-word-textquotedbl)');
@@ -371,7 +372,7 @@ export function runTokenizerCases(ctx, helpers) {
     if (stats.char_count !== helloBaselineCharCount + 4) {
       throw new Error(`compile_main(tokenizer control-word-textquotedbl) char_count delta expected +4, got baseline=${helloBaselineCharCount}, current=${stats.char_count}`);
     }
-    assertMainXdvArtifactEmpty('compile_main(tokenizer control-word-textquotedbl)');
+    readMainXdvArtifactBytes('compile_main(tokenizer control-word-textquotedbl)');
   }
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer control-word-textless case failed');
@@ -383,7 +384,7 @@ export function runTokenizerCases(ctx, helpers) {
   if (ctx.mountFinalize() !== 0) {
     throw new Error('mount_finalize for tokenizer control-word-textless case failed');
   }
-  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(tokenizer control-word-textless)');
+  expectOk(ctx.compileMain(), 'compile_main_v0(tokenizer control-word-textless)');
   {
     const logBytes = readCompileLogBytes();
     const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(tokenizer control-word-textless)');
@@ -393,7 +394,7 @@ export function runTokenizerCases(ctx, helpers) {
     if (stats.char_count !== helloBaselineCharCount + 4) {
       throw new Error(`compile_main(tokenizer control-word-textless) char_count delta expected +4, got baseline=${helloBaselineCharCount}, current=${stats.char_count}`);
     }
-    assertMainXdvArtifactEmpty('compile_main(tokenizer control-word-textless)');
+    readMainXdvArtifactBytes('compile_main(tokenizer control-word-textless)');
   }
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer control-word-textgreater case failed');
@@ -405,7 +406,7 @@ export function runTokenizerCases(ctx, helpers) {
   if (ctx.mountFinalize() !== 0) {
     throw new Error('mount_finalize for tokenizer control-word-textgreater case failed');
   }
-  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(tokenizer control-word-textgreater)');
+  expectOk(ctx.compileMain(), 'compile_main_v0(tokenizer control-word-textgreater)');
   {
     const logBytes = readCompileLogBytes();
     const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(tokenizer control-word-textgreater)');
@@ -415,7 +416,7 @@ export function runTokenizerCases(ctx, helpers) {
     if (stats.char_count !== helloBaselineCharCount + 4) {
       throw new Error(`compile_main(tokenizer control-word-textgreater) char_count delta expected +4, got baseline=${helloBaselineCharCount}, current=${stats.char_count}`);
     }
-    assertMainXdvArtifactEmpty('compile_main(tokenizer control-word-textgreater)');
+    readMainXdvArtifactBytes('compile_main(tokenizer control-word-textgreater)');
   }
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer control-word-par case failed');
@@ -427,7 +428,7 @@ export function runTokenizerCases(ctx, helpers) {
   if (ctx.mountFinalize() !== 0) {
     throw new Error('mount_finalize for tokenizer control-word-textbar case failed');
   }
-  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(tokenizer control-word-textbar)');
+  expectOk(ctx.compileMain(), 'compile_main_v0(tokenizer control-word-textbar)');
   {
     const logBytes = readCompileLogBytes();
     const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(tokenizer control-word-textbar)');
@@ -437,7 +438,7 @@ export function runTokenizerCases(ctx, helpers) {
     if (stats.char_count !== helloBaselineCharCount + 4) {
       throw new Error(`compile_main(tokenizer control-word-textbar) char_count delta expected +4, got baseline=${helloBaselineCharCount}, current=${stats.char_count}`);
     }
-    assertMainXdvArtifactEmpty('compile_main(tokenizer control-word-textbar)');
+    readMainXdvArtifactBytes('compile_main(tokenizer control-word-textbar)');
   }
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer control-word-textbraceleft case failed');
@@ -449,7 +450,7 @@ export function runTokenizerCases(ctx, helpers) {
   if (ctx.mountFinalize() !== 0) {
     throw new Error('mount_finalize for tokenizer control-word-textbraceleft case failed');
   }
-  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(tokenizer control-word-textbraceleft)');
+  expectOk(ctx.compileMain(), 'compile_main_v0(tokenizer control-word-textbraceleft)');
   {
     const logBytes = readCompileLogBytes();
     const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(tokenizer control-word-textbraceleft)');
@@ -459,7 +460,7 @@ export function runTokenizerCases(ctx, helpers) {
     if (stats.char_count !== helloBaselineCharCount + 4) {
       throw new Error(`compile_main(tokenizer control-word-textbraceleft) char_count delta expected +4, got baseline=${helloBaselineCharCount}, current=${stats.char_count}`);
     }
-    assertMainXdvArtifactEmpty('compile_main(tokenizer control-word-textbraceleft)');
+    readMainXdvArtifactBytes('compile_main(tokenizer control-word-textbraceleft)');
   }
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer control-word-textbraceright case failed');
@@ -471,7 +472,7 @@ export function runTokenizerCases(ctx, helpers) {
   if (ctx.mountFinalize() !== 0) {
     throw new Error('mount_finalize for tokenizer control-word-textbraceright case failed');
   }
-  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(tokenizer control-word-textbraceright)');
+  expectOk(ctx.compileMain(), 'compile_main_v0(tokenizer control-word-textbraceright)');
   {
     const logBytes = readCompileLogBytes();
     const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(tokenizer control-word-textbraceright)');
@@ -481,7 +482,7 @@ export function runTokenizerCases(ctx, helpers) {
     if (stats.char_count !== helloBaselineCharCount + 4) {
       throw new Error(`compile_main(tokenizer control-word-textbraceright) char_count delta expected +4, got baseline=${helloBaselineCharCount}, current=${stats.char_count}`);
     }
-    assertMainXdvArtifactEmpty('compile_main(tokenizer control-word-textbraceright)');
+    readMainXdvArtifactBytes('compile_main(tokenizer control-word-textbraceright)');
   }
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer control-word-par case failed');
@@ -493,7 +494,7 @@ export function runTokenizerCases(ctx, helpers) {
   if (ctx.mountFinalize() !== 0) {
     throw new Error('mount_finalize for tokenizer control-word-textunderscore case failed');
   }
-  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(tokenizer control-word-textunderscore)');
+  expectOk(ctx.compileMain(), 'compile_main_v0(tokenizer control-word-textunderscore)');
   {
     const logBytes = readCompileLogBytes();
     const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(tokenizer control-word-textunderscore)');
@@ -503,7 +504,7 @@ export function runTokenizerCases(ctx, helpers) {
     if (stats.char_count !== helloBaselineCharCount + 4) {
       throw new Error(`compile_main(tokenizer control-word-textunderscore) char_count delta expected +4, got baseline=${helloBaselineCharCount}, current=${stats.char_count}`);
     }
-    assertMainXdvArtifactEmpty('compile_main(tokenizer control-word-textunderscore)');
+    readMainXdvArtifactBytes('compile_main(tokenizer control-word-textunderscore)');
   }
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer control-word-textquotesingle case failed');
@@ -515,7 +516,7 @@ export function runTokenizerCases(ctx, helpers) {
   if (ctx.mountFinalize() !== 0) {
     throw new Error('mount_finalize for tokenizer control-word-textquotesingle case failed');
   }
-  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(tokenizer control-word-textquotesingle)');
+  expectOk(ctx.compileMain(), 'compile_main_v0(tokenizer control-word-textquotesingle)');
   {
     const logBytes = readCompileLogBytes();
     const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(tokenizer control-word-textquotesingle)');
@@ -525,7 +526,7 @@ export function runTokenizerCases(ctx, helpers) {
     if (stats.char_count !== helloBaselineCharCount + 4) {
       throw new Error(`compile_main(tokenizer control-word-textquotesingle) char_count delta expected +4, got baseline=${helloBaselineCharCount}, current=${stats.char_count}`);
     }
-    assertMainXdvArtifactEmpty('compile_main(tokenizer control-word-textquotesingle)');
+    readMainXdvArtifactBytes('compile_main(tokenizer control-word-textquotesingle)');
   }
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer control-word-textasciigrave case failed');
@@ -537,7 +538,7 @@ export function runTokenizerCases(ctx, helpers) {
   if (ctx.mountFinalize() !== 0) {
     throw new Error('mount_finalize for tokenizer control-word-textasciigrave case failed');
   }
-  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(tokenizer control-word-textasciigrave)');
+  expectOk(ctx.compileMain(), 'compile_main_v0(tokenizer control-word-textasciigrave)');
   {
     const logBytes = readCompileLogBytes();
     const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(tokenizer control-word-textasciigrave)');
@@ -547,7 +548,7 @@ export function runTokenizerCases(ctx, helpers) {
     if (stats.char_count !== helloBaselineCharCount + 4) {
       throw new Error(`compile_main(tokenizer control-word-textasciigrave) char_count delta expected +4, got baseline=${helloBaselineCharCount}, current=${stats.char_count}`);
     }
-    assertMainXdvArtifactEmpty('compile_main(tokenizer control-word-textasciigrave)');
+    readMainXdvArtifactBytes('compile_main(tokenizer control-word-textasciigrave)');
   }
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer control-word-par case failed');
@@ -559,7 +560,7 @@ export function runTokenizerCases(ctx, helpers) {
   if (ctx.mountFinalize() !== 0) {
     throw new Error('mount_finalize for tokenizer control-word-textquotedblleft case failed');
   }
-  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(tokenizer control-word-textquotedblleft)');
+  expectOk(ctx.compileMain(), 'compile_main_v0(tokenizer control-word-textquotedblleft)');
   {
     const logBytes = readCompileLogBytes();
     const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(tokenizer control-word-textquotedblleft)');
@@ -569,7 +570,7 @@ export function runTokenizerCases(ctx, helpers) {
     if (stats.char_count !== helloBaselineCharCount + 4) {
       throw new Error(`compile_main(tokenizer control-word-textquotedblleft) char_count delta expected +4, got baseline=${helloBaselineCharCount}, current=${stats.char_count}`);
     }
-    assertMainXdvArtifactEmpty('compile_main(tokenizer control-word-textquotedblleft)');
+    readMainXdvArtifactBytes('compile_main(tokenizer control-word-textquotedblleft)');
   }
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer control-word-textquotedblright case failed');
@@ -581,7 +582,7 @@ export function runTokenizerCases(ctx, helpers) {
   if (ctx.mountFinalize() !== 0) {
     throw new Error('mount_finalize for tokenizer control-word-textquotedblright case failed');
   }
-  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(tokenizer control-word-textquotedblright)');
+  expectOk(ctx.compileMain(), 'compile_main_v0(tokenizer control-word-textquotedblright)');
   {
     const logBytes = readCompileLogBytes();
     const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(tokenizer control-word-textquotedblright)');
@@ -591,7 +592,7 @@ export function runTokenizerCases(ctx, helpers) {
     if (stats.char_count !== helloBaselineCharCount + 4) {
       throw new Error(`compile_main(tokenizer control-word-textquotedblright) char_count delta expected +4, got baseline=${helloBaselineCharCount}, current=${stats.char_count}`);
     }
-    assertMainXdvArtifactEmpty('compile_main(tokenizer control-word-textquotedblright)');
+    readMainXdvArtifactBytes('compile_main(tokenizer control-word-textquotedblright)');
   }
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer control-word-par case failed');
@@ -603,7 +604,7 @@ export function runTokenizerCases(ctx, helpers) {
   if (ctx.mountFinalize() !== 0) {
     throw new Error('mount_finalize for tokenizer control-word-textendash case failed');
   }
-  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(tokenizer control-word-textendash)');
+  expectOk(ctx.compileMain(), 'compile_main_v0(tokenizer control-word-textendash)');
   {
     const logBytes = readCompileLogBytes();
     const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(tokenizer control-word-textendash)');
@@ -613,7 +614,7 @@ export function runTokenizerCases(ctx, helpers) {
     if (stats.char_count !== helloBaselineCharCount + 4) {
       throw new Error(`compile_main(tokenizer control-word-textendash) char_count delta expected +4, got baseline=${helloBaselineCharCount}, current=${stats.char_count}`);
     }
-    assertMainXdvArtifactEmpty('compile_main(tokenizer control-word-textendash)');
+    readMainXdvArtifactBytes('compile_main(tokenizer control-word-textendash)');
   }
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer control-word-textemdash case failed');
@@ -625,7 +626,7 @@ export function runTokenizerCases(ctx, helpers) {
   if (ctx.mountFinalize() !== 0) {
     throw new Error('mount_finalize for tokenizer control-word-textemdash case failed');
   }
-  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(tokenizer control-word-textemdash)');
+  expectOk(ctx.compileMain(), 'compile_main_v0(tokenizer control-word-textemdash)');
   {
     const logBytes = readCompileLogBytes();
     const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(tokenizer control-word-textemdash)');
@@ -635,7 +636,7 @@ export function runTokenizerCases(ctx, helpers) {
     if (stats.char_count !== helloBaselineCharCount + 4) {
       throw new Error(`compile_main(tokenizer control-word-textemdash) char_count delta expected +4, got baseline=${helloBaselineCharCount}, current=${stats.char_count}`);
     }
-    assertMainXdvArtifactEmpty('compile_main(tokenizer control-word-textemdash)');
+    readMainXdvArtifactBytes('compile_main(tokenizer control-word-textemdash)');
   }
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer control-word-par case failed');
@@ -647,7 +648,7 @@ export function runTokenizerCases(ctx, helpers) {
   if (ctx.mountFinalize() !== 0) {
     throw new Error('mount_finalize for tokenizer control-word-textellipsis case failed');
   }
-  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(tokenizer control-word-textellipsis)');
+  expectOk(ctx.compileMain(), 'compile_main_v0(tokenizer control-word-textellipsis)');
   {
     const logBytes = readCompileLogBytes();
     const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(tokenizer control-word-textellipsis)');
@@ -657,7 +658,7 @@ export function runTokenizerCases(ctx, helpers) {
     if (stats.char_count !== helloBaselineCharCount + 6) {
       throw new Error(`compile_main(tokenizer control-word-textellipsis) char_count delta expected +6, got baseline=${helloBaselineCharCount}, current=${stats.char_count}`);
     }
-    assertMainXdvArtifactEmpty('compile_main(tokenizer control-word-textellipsis)');
+    readMainXdvArtifactBytes('compile_main(tokenizer control-word-textellipsis)');
   }
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer control-word-par case failed');
@@ -669,7 +670,7 @@ export function runTokenizerCases(ctx, helpers) {
   if (ctx.mountFinalize() !== 0) {
     throw new Error('mount_finalize for tokenizer control-word-textbullet case failed');
   }
-  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(tokenizer control-word-textbullet)');
+  expectOk(ctx.compileMain(), 'compile_main_v0(tokenizer control-word-textbullet)');
   {
     const logBytes = readCompileLogBytes();
     const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(tokenizer control-word-textbullet)');
@@ -679,7 +680,7 @@ export function runTokenizerCases(ctx, helpers) {
     if (stats.char_count !== helloBaselineCharCount + 4) {
       throw new Error(`compile_main(tokenizer control-word-textbullet) char_count delta expected +4, got baseline=${helloBaselineCharCount}, current=${stats.char_count}`);
     }
-    assertMainXdvArtifactEmpty('compile_main(tokenizer control-word-textbullet)');
+    readMainXdvArtifactBytes('compile_main(tokenizer control-word-textbullet)');
   }
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer control-word-par case failed');
@@ -691,7 +692,7 @@ export function runTokenizerCases(ctx, helpers) {
   if (ctx.mountFinalize() !== 0) {
     throw new Error('mount_finalize for tokenizer control-word-textdegree case failed');
   }
-  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(tokenizer control-word-textdegree)');
+  expectOk(ctx.compileMain(), 'compile_main_v0(tokenizer control-word-textdegree)');
   {
     const logBytes = readCompileLogBytes();
     const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(tokenizer control-word-textdegree)');
@@ -701,7 +702,7 @@ export function runTokenizerCases(ctx, helpers) {
     if (stats.char_count !== helloBaselineCharCount + 4) {
       throw new Error(`compile_main(tokenizer control-word-textdegree) char_count delta expected +4, got baseline=${helloBaselineCharCount}, current=${stats.char_count}`);
     }
-    assertMainXdvArtifactEmpty('compile_main(tokenizer control-word-textdegree)');
+    readMainXdvArtifactBytes('compile_main(tokenizer control-word-textdegree)');
   }
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer control-word-textdagger case failed');
@@ -713,7 +714,7 @@ export function runTokenizerCases(ctx, helpers) {
   if (ctx.mountFinalize() !== 0) {
     throw new Error('mount_finalize for tokenizer control-word-textdagger case failed');
   }
-  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(tokenizer control-word-textdagger)');
+  expectOk(ctx.compileMain(), 'compile_main_v0(tokenizer control-word-textdagger)');
   {
     const logBytes = readCompileLogBytes();
     const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(tokenizer control-word-textdagger)');
@@ -723,7 +724,7 @@ export function runTokenizerCases(ctx, helpers) {
     if (stats.char_count !== helloBaselineCharCount + 4) {
       throw new Error(`compile_main(tokenizer control-word-textdagger) char_count delta expected +4, got baseline=${helloBaselineCharCount}, current=${stats.char_count}`);
     }
-    assertMainXdvArtifactEmpty('compile_main(tokenizer control-word-textdagger)');
+    readMainXdvArtifactBytes('compile_main(tokenizer control-word-textdagger)');
   }
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer control-word-textdaggerdbl case failed');
@@ -735,7 +736,7 @@ export function runTokenizerCases(ctx, helpers) {
   if (ctx.mountFinalize() !== 0) {
     throw new Error('mount_finalize for tokenizer control-word-textdaggerdbl case failed');
   }
-  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(tokenizer control-word-textdaggerdbl)');
+  expectOk(ctx.compileMain(), 'compile_main_v0(tokenizer control-word-textdaggerdbl)');
   {
     const logBytes = readCompileLogBytes();
     const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(tokenizer control-word-textdaggerdbl)');
@@ -745,7 +746,7 @@ export function runTokenizerCases(ctx, helpers) {
     if (stats.char_count !== helloBaselineCharCount + 4) {
       throw new Error(`compile_main(tokenizer control-word-textdaggerdbl) char_count delta expected +4, got baseline=${helloBaselineCharCount}, current=${stats.char_count}`);
     }
-    assertMainXdvArtifactEmpty('compile_main(tokenizer control-word-textdaggerdbl)');
+    readMainXdvArtifactBytes('compile_main(tokenizer control-word-textdaggerdbl)');
   }
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer control-word-textsection case failed');
@@ -757,7 +758,7 @@ export function runTokenizerCases(ctx, helpers) {
   if (ctx.mountFinalize() !== 0) {
     throw new Error('mount_finalize for tokenizer control-word-textsection case failed');
   }
-  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(tokenizer control-word-textsection)');
+  expectOk(ctx.compileMain(), 'compile_main_v0(tokenizer control-word-textsection)');
   {
     const logBytes = readCompileLogBytes();
     const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(tokenizer control-word-textsection)');
@@ -767,7 +768,7 @@ export function runTokenizerCases(ctx, helpers) {
     if (stats.char_count !== helloBaselineCharCount + 4) {
       throw new Error(`compile_main(tokenizer control-word-textsection) char_count delta expected +4, got baseline=${helloBaselineCharCount}, current=${stats.char_count}`);
     }
-    assertMainXdvArtifactEmpty('compile_main(tokenizer control-word-textsection)');
+    readMainXdvArtifactBytes('compile_main(tokenizer control-word-textsection)');
   }
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer control-word-par case failed');
@@ -779,7 +780,7 @@ export function runTokenizerCases(ctx, helpers) {
   if (ctx.mountFinalize() !== 0) {
     throw new Error('mount_finalize for tokenizer control-word-par case failed');
   }
-  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(tokenizer control-word-par)');
+  expectOk(ctx.compileMain(), 'compile_main_v0(tokenizer control-word-par)');
   {
     const logBytes = readCompileLogBytes();
     const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(tokenizer control-word-par)');
@@ -789,7 +790,7 @@ export function runTokenizerCases(ctx, helpers) {
     if (stats.char_count !== helloBaselineCharCount + 3) {
       throw new Error(`compile_main(tokenizer control-word-par) char_count delta expected +3, got baseline=${helloBaselineCharCount}, current=${stats.char_count}`);
     }
-    assertMainXdvArtifactEmpty('compile_main(tokenizer control-word-par)');
+    readMainXdvArtifactBytes('compile_main(tokenizer control-word-par)');
   }
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer CRLF normalization case failed');
@@ -900,7 +901,7 @@ export function runTokenizerCases(ctx, helpers) {
   if (ctx.mountFinalize() !== 0) {
     throw new Error('mount_finalize for tokenizer braced-accent-passthrough case failed');
   }
-  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(tokenizer braced-accent-passthrough)');
+  expectOk(ctx.compileMain(), 'compile_main_v0(tokenizer braced-accent-passthrough)');
   {
     const logBytes = readCompileLogBytes();
     const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(tokenizer braced-accent-passthrough)');
@@ -910,7 +911,7 @@ export function runTokenizerCases(ctx, helpers) {
     if (stats.char_count !== helloBaselineCharCount + 4) {
       throw new Error(`compile_main(tokenizer braced-accent-passthrough) char_count delta expected +4, got baseline=${helloBaselineCharCount}, current=${stats.char_count}`);
     }
-    assertMainXdvArtifactEmpty('compile_main(tokenizer braced-accent-passthrough)');
+    readMainXdvArtifactBytes('compile_main(tokenizer braced-accent-passthrough)');
   }
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer braced-accent control-symbol payload case failed');
@@ -922,7 +923,7 @@ export function runTokenizerCases(ctx, helpers) {
   if (ctx.mountFinalize() !== 0) {
     throw new Error('mount_finalize for tokenizer braced-accent control-symbol payload case failed');
   }
-  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(tokenizer braced-accent control-symbol payload)');
+  expectOk(ctx.compileMain(), 'compile_main_v0(tokenizer braced-accent control-symbol payload)');
   {
     const logBytes = readCompileLogBytes();
     const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(tokenizer braced-accent control-symbol payload)');
@@ -932,7 +933,7 @@ export function runTokenizerCases(ctx, helpers) {
     if (stats.char_count !== helloBaselineCharCount + 4) {
       throw new Error(`compile_main(tokenizer braced-accent control-symbol payload) char_count delta expected +4, got baseline=${helloBaselineCharCount}, current=${stats.char_count}`);
     }
-    assertMainXdvArtifactEmpty('compile_main(tokenizer braced-accent control-symbol payload)');
+    readMainXdvArtifactBytes('compile_main(tokenizer braced-accent control-symbol payload)');
   }
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer accent-not-supported case failed');

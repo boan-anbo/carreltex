@@ -201,21 +201,6 @@ mod tests {
         rest[..digits_len].parse::<u64>().ok()
     }
 
-    fn trace_u64_field(log_text: &str, field: &str) -> Option<u64> {
-        let trace_start = log_text.find("INPUT_TRACE_V0:")?;
-        let trace_json = &log_text[(trace_start + "INPUT_TRACE_V0:".len())..];
-        let marker = format!("\"{field}\":");
-        let start = trace_json.find(&marker)? + marker.len();
-        let rest = &trace_json[start..];
-        let digits_len = rest
-            .bytes()
-            .take_while(|byte| byte.is_ascii_digit())
-            .count();
-        if digits_len == 0 {
-            return None;
-        }
-        rest[..digits_len].parse::<u64>().ok()
-    }
     #[test]
     fn compile_requires_valid_mount() {
         let mut mount = Mount::default();
@@ -230,7 +215,9 @@ mod tests {
         assert!(mount.add_file(b"main.tex", valid_main()).is_ok());
 
         let result = compile_main_v0(&mut mount);
-        assert_eq!(result.status, CompileStatus::NotImplemented);
+        assert_eq!(result.status, CompileStatus::Ok);
+        assert!(result.log_bytes.is_empty());
+        assert!(!result.main_xdv_bytes.is_empty());
         assert!(result.log_bytes.len() <= DEFAULT_COMPILE_MAIN_MAX_LOG_BYTES_V0 as usize);
     }
     #[test]
@@ -239,15 +226,14 @@ mod tests {
         assert!(mount.add_file(b"main.tex", valid_main()).is_ok());
 
         let result = compile_request_v0(&mut mount, &valid_request());
-        assert_eq!(result.status, CompileStatus::NotImplemented);
+        assert_eq!(result.status, CompileStatus::Ok);
         assert_eq!(
             result.report_json,
-            "{\"status\":\"NOT_IMPLEMENTED\",\"missing_components\":[\"tex-engine\"]}"
+            "{\"status\":\"OK\",\"missing_components\":[]}"
         );
-        assert!(!result.log_bytes.is_empty());
-        assert!(result.log_bytes.starts_with(b"NOT_IMPLEMENTED:"));
+        assert!(result.log_bytes.is_empty());
         assert!(result.log_bytes.len() <= valid_request().max_log_bytes as usize);
-        assert!(result.main_xdv_bytes.is_empty());
+        assert!(!result.main_xdv_bytes.is_empty());
         assert!(!result.tex_stats_json.is_empty());
     }
     #[test]
@@ -301,7 +287,9 @@ mod tests {
     #[test]
     fn compile_request_log_is_truncated_by_max_log_bytes() {
         let mut mount = Mount::default();
-        assert!(mount.add_file(b"main.tex", valid_main()).is_ok());
+        let unsupported_main =
+            b"\\documentclass{article}\n\\begin{document}\n\\foo\n\\end{document}\n";
+        assert!(mount.add_file(b"main.tex", unsupported_main).is_ok());
 
         let mut request = valid_request();
         request.max_log_bytes = 8;
@@ -316,7 +304,9 @@ mod tests {
     #[test]
     fn compile_request_trace_is_emitted_when_log_budget_allows() {
         let mut mount = Mount::default();
-        assert!(mount.add_file(b"main.tex", valid_main()).is_ok());
+        let main = b"\\documentclass{article}\n\\begin{document}\n\\input{sub.tex}\\foo\n\\end{document}\n";
+        assert!(mount.add_file(b"main.tex", main).is_ok());
+        assert!(mount.add_file(b"sub.tex", b"XYZ").is_ok());
 
         let result = compile_request_v0(&mut mount, &valid_request());
         assert_eq!(result.status, CompileStatus::NotImplemented);
@@ -343,7 +333,9 @@ mod tests {
     #[test]
     fn compile_request_still_not_implemented_when_tokenization_succeeds() {
         let mut mount = Mount::default();
-        assert!(mount.add_file(b"main.tex", valid_main()).is_ok());
+        let unsupported_main =
+            b"\\documentclass{article}\n\\begin{document}\n\\foo\n\\end{document}\n";
+        assert!(mount.add_file(b"main.tex", unsupported_main).is_ok());
 
         let result = compile_request_v0(&mut mount, &valid_request());
         assert_eq!(result.status, CompileStatus::NotImplemented);
@@ -411,7 +403,7 @@ mod tests {
         assert!(mount.add_file(b"main.tex", valid_main()).is_ok());
 
         let result = compile_request_v0(&mut mount, &valid_request());
-        assert_eq!(result.status, CompileStatus::NotImplemented);
+        assert_eq!(result.status, CompileStatus::Ok);
         assert!(result.tex_stats_json.contains("\"token_count\":"));
         assert!(result.tex_stats_json.contains("\"control_seq_count\":"));
         assert!(result.tex_stats_json.contains("\"char_count\":"));
@@ -429,8 +421,8 @@ mod tests {
         assert!(mount.add_file(b"sub.tex", b"Sub content\n").is_ok());
 
         let result = compile_request_v0(&mut mount, &valid_request());
-        assert_eq!(result.status, CompileStatus::NotImplemented);
-        assert!(result.log_bytes.starts_with(b"NOT_IMPLEMENTED:"));
+        assert_eq!(result.status, CompileStatus::Ok);
+        assert!(result.log_bytes.is_empty());
     }
     #[test]
     fn input_expands_tokens_from_subfile() {
@@ -441,7 +433,7 @@ mod tests {
             .add_file(b"main.tex", main_without_input)
             .is_ok());
         let result_without_input = compile_request_v0(&mut mount_without_input, &valid_request());
-        assert_eq!(result_without_input.status, CompileStatus::NotImplemented);
+        assert_eq!(result_without_input.status, CompileStatus::Ok);
         let char_count_without_input =
             stats_u64_field(&result_without_input.tex_stats_json, "char_count")
                 .expect("char_count should exist");
@@ -454,17 +446,8 @@ mod tests {
             .is_ok());
         assert!(mount_with_input.add_file(b"sub.tex", b"ABC").is_ok());
         let result_with_input = compile_request_v0(&mut mount_with_input, &valid_request());
-        assert_eq!(result_with_input.status, CompileStatus::NotImplemented);
-        let log_with_input = String::from_utf8_lossy(&result_with_input.log_bytes);
-        assert!(
-            log_with_input.contains("INPUT_TRACE_V0:"),
-            "missing trace in log: {log_with_input}"
-        );
-        assert_eq!(
-            trace_u64_field(&log_with_input, "expansions"),
-            Some(1),
-            "trace log: {log_with_input}"
-        );
+        assert_eq!(result_with_input.status, CompileStatus::Ok);
+        assert!(result_with_input.log_bytes.is_empty());
         let char_count_with_input =
             stats_u64_field(&result_with_input.tex_stats_json, "char_count")
                 .expect("char_count should exist");
@@ -566,7 +549,7 @@ mod tests {
             b"\\documentclass{article}\n\\begin{document}\nHello.\n\\end{document}\n";
         assert!(baseline_mount.add_file(b"main.tex", baseline_main).is_ok());
         let baseline_result = compile_request_v0(&mut baseline_mount, &valid_request());
-        assert_eq!(baseline_result.status, CompileStatus::NotImplemented);
+        assert_eq!(baseline_result.status, CompileStatus::Ok);
         let baseline_char_count =
             stats_u64_field(&baseline_result.tex_stats_json, "char_count").expect("char_count");
 
@@ -586,7 +569,7 @@ mod tests {
             b"\\documentclass{article}\n\\begin{document}\nHello.\n\\end{document}\n";
         assert!(baseline_mount.add_file(b"main.tex", baseline_main).is_ok());
         let baseline_result = compile_request_v0(&mut baseline_mount, &valid_request());
-        assert_eq!(baseline_result.status, CompileStatus::NotImplemented);
+        assert_eq!(baseline_result.status, CompileStatus::Ok);
         let baseline_char_count =
             stats_u64_field(&baseline_result.tex_stats_json, "char_count").expect("char_count");
 
