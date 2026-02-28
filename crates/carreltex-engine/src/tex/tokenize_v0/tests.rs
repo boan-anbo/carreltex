@@ -448,6 +448,12 @@ fn control_word_textbullet_maps_to_asterisk_and_swallows_space() {
 }
 
 #[test]
+fn control_word_textdegree_maps_to_o_and_swallows_space() {
+    let tokens = tokenize_v0(b"\\textdegree X").expect("tokenize should succeed");
+    assert_eq!(tokens, vec![TokenV0::Char(b'o'), TokenV0::Char(b'X')]);
+}
+
+#[test]
 fn control_word_par_maps_to_space_and_swallows_following_whitespace() {
     let tokens = tokenize_v0(b"A\\par B").expect("tokenize should succeed");
     assert_eq!(
