@@ -8,7 +8,6 @@ export function runTokenizerCases(ctx, helpers) {
     assertMainXdvArtifactEmpty,
     assertNoEvents,
   } = helpers;
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer baseline case failed');
   }
@@ -28,7 +27,6 @@ export function runTokenizerCases(ctx, helpers) {
     baselineCharCount = stats.char_count;
     assertMainXdvArtifactEmpty('compile_main(tokenizer baseline)');
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer hello baseline case failed');
   }
@@ -46,7 +44,6 @@ export function runTokenizerCases(ctx, helpers) {
     helloBaselineCharCount = stats.char_count;
     assertMainXdvArtifactEmpty('compile_main(tokenizer hello baseline)');
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer control-symbol-comma case failed');
   }
@@ -69,7 +66,6 @@ export function runTokenizerCases(ctx, helpers) {
     }
     assertMainXdvArtifactEmpty('compile_main(tokenizer control-symbol-comma)');
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer control-symbol-bang-noop case failed');
   }
@@ -92,7 +88,6 @@ export function runTokenizerCases(ctx, helpers) {
     }
     assertMainXdvArtifactEmpty('compile_main(tokenizer control-symbol-bang-noop)');
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer control-symbol-semicolon case failed');
   }
@@ -115,7 +110,6 @@ export function runTokenizerCases(ctx, helpers) {
     }
     assertMainXdvArtifactEmpty('compile_main(tokenizer control-symbol-semicolon)');
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer caret-hex decode case failed');
   }
@@ -138,7 +132,6 @@ export function runTokenizerCases(ctx, helpers) {
     }
     assertMainXdvArtifactEmpty('compile_main(tokenizer caret-hex decode)');
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer control-symbol-percent case failed');
   }
@@ -161,7 +154,6 @@ export function runTokenizerCases(ctx, helpers) {
     }
     assertMainXdvArtifactEmpty('compile_main(tokenizer control-symbol-percent)');
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer control-symbol-underscore case failed');
   }
@@ -184,7 +176,6 @@ export function runTokenizerCases(ctx, helpers) {
     }
     assertMainXdvArtifactEmpty('compile_main(tokenizer control-symbol-underscore)');
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer control-symbol-hash case failed');
   }
@@ -207,7 +198,6 @@ export function runTokenizerCases(ctx, helpers) {
     }
     assertMainXdvArtifactEmpty('compile_main(tokenizer control-symbol-hash)');
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer control-symbol-dollar case failed');
   }
@@ -230,7 +220,6 @@ export function runTokenizerCases(ctx, helpers) {
     }
     assertMainXdvArtifactEmpty('compile_main(tokenizer control-symbol-dollar)');
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer control-symbol-ampersand case failed');
   }
@@ -253,7 +242,6 @@ export function runTokenizerCases(ctx, helpers) {
     }
     assertMainXdvArtifactEmpty('compile_main(tokenizer control-symbol-ampersand)');
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer control-symbol-lbrace case failed');
   }
@@ -276,7 +264,6 @@ export function runTokenizerCases(ctx, helpers) {
     }
     assertMainXdvArtifactEmpty('compile_main(tokenizer control-symbol-lbrace)');
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer control-symbol-rbrace case failed');
   }
@@ -299,7 +286,6 @@ export function runTokenizerCases(ctx, helpers) {
     }
     assertMainXdvArtifactEmpty('compile_main(tokenizer control-symbol-rbrace)');
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer control-word-textbackslash case failed');
   }
@@ -322,7 +308,6 @@ export function runTokenizerCases(ctx, helpers) {
     }
     assertMainXdvArtifactEmpty('compile_main(tokenizer control-word-textbackslash)');
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer control-word-textasciitilde case failed');
   }
@@ -345,7 +330,6 @@ export function runTokenizerCases(ctx, helpers) {
     }
     assertMainXdvArtifactEmpty('compile_main(tokenizer control-word-textasciitilde)');
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer control-word-textasciicircum case failed');
   }
@@ -368,7 +352,6 @@ export function runTokenizerCases(ctx, helpers) {
     }
     assertMainXdvArtifactEmpty('compile_main(tokenizer control-word-textasciicircum)');
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer control-word-textquotedbl case failed');
   }
@@ -391,7 +374,6 @@ export function runTokenizerCases(ctx, helpers) {
     }
     assertMainXdvArtifactEmpty('compile_main(tokenizer control-word-textquotedbl)');
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer control-word-textless case failed');
   }
@@ -414,7 +396,6 @@ export function runTokenizerCases(ctx, helpers) {
     }
     assertMainXdvArtifactEmpty('compile_main(tokenizer control-word-textless)');
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer control-word-textgreater case failed');
   }
@@ -437,7 +418,6 @@ export function runTokenizerCases(ctx, helpers) {
     }
     assertMainXdvArtifactEmpty('compile_main(tokenizer control-word-textgreater)');
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer control-word-par case failed');
   }
@@ -460,7 +440,6 @@ export function runTokenizerCases(ctx, helpers) {
     }
     assertMainXdvArtifactEmpty('compile_main(tokenizer control-word-textbar)');
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer control-word-textbraceleft case failed');
   }
@@ -483,7 +462,6 @@ export function runTokenizerCases(ctx, helpers) {
     }
     assertMainXdvArtifactEmpty('compile_main(tokenizer control-word-textbraceleft)');
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer control-word-textbraceright case failed');
   }
@@ -506,7 +484,6 @@ export function runTokenizerCases(ctx, helpers) {
     }
     assertMainXdvArtifactEmpty('compile_main(tokenizer control-word-textbraceright)');
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer control-word-par case failed');
   }
@@ -529,7 +506,6 @@ export function runTokenizerCases(ctx, helpers) {
     }
     assertMainXdvArtifactEmpty('compile_main(tokenizer control-word-textunderscore)');
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer control-word-textquotesingle case failed');
   }
@@ -552,7 +528,6 @@ export function runTokenizerCases(ctx, helpers) {
     }
     assertMainXdvArtifactEmpty('compile_main(tokenizer control-word-textquotesingle)');
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer control-word-textasciigrave case failed');
   }
@@ -575,7 +550,6 @@ export function runTokenizerCases(ctx, helpers) {
     }
     assertMainXdvArtifactEmpty('compile_main(tokenizer control-word-textasciigrave)');
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer control-word-par case failed');
   }
@@ -598,7 +572,6 @@ export function runTokenizerCases(ctx, helpers) {
     }
     assertMainXdvArtifactEmpty('compile_main(tokenizer control-word-textquotedblleft)');
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer control-word-textquotedblright case failed');
   }
@@ -621,7 +594,6 @@ export function runTokenizerCases(ctx, helpers) {
     }
     assertMainXdvArtifactEmpty('compile_main(tokenizer control-word-textquotedblright)');
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer control-word-par case failed');
   }
@@ -644,7 +616,6 @@ export function runTokenizerCases(ctx, helpers) {
     }
     assertMainXdvArtifactEmpty('compile_main(tokenizer control-word-textendash)');
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer control-word-textemdash case failed');
   }
@@ -667,7 +638,6 @@ export function runTokenizerCases(ctx, helpers) {
     }
     assertMainXdvArtifactEmpty('compile_main(tokenizer control-word-textemdash)');
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer control-word-par case failed');
   }
@@ -690,7 +660,6 @@ export function runTokenizerCases(ctx, helpers) {
     }
     assertMainXdvArtifactEmpty('compile_main(tokenizer control-word-textellipsis)');
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer control-word-par case failed');
   }
@@ -713,7 +682,6 @@ export function runTokenizerCases(ctx, helpers) {
     }
     assertMainXdvArtifactEmpty('compile_main(tokenizer control-word-textbullet)');
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer control-word-par case failed');
   }
@@ -736,7 +704,6 @@ export function runTokenizerCases(ctx, helpers) {
     }
     assertMainXdvArtifactEmpty('compile_main(tokenizer control-word-textdegree)');
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer control-word-textdagger case failed');
   }
@@ -759,7 +726,6 @@ export function runTokenizerCases(ctx, helpers) {
     }
     assertMainXdvArtifactEmpty('compile_main(tokenizer control-word-textdagger)');
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer control-word-textdaggerdbl case failed');
   }
@@ -782,7 +748,28 @@ export function runTokenizerCases(ctx, helpers) {
     }
     assertMainXdvArtifactEmpty('compile_main(tokenizer control-word-textdaggerdbl)');
   }
-
+  if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before tokenizer control-word-textsection case failed');
+  }
+  const textsectionMainBytes = new TextEncoder().encode('\\documentclass{article}\n\\begin{document}\nHello.\\textsection XYZ\n\\end{document}\n');
+  if (addMountedFile('main.tex', textsectionMainBytes, 'tokenizer_control_word_textsection_main') !== 0) {
+    throw new Error('mount_add_file(tokenizer control-word-textsection main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) {
+    throw new Error('mount_finalize for tokenizer control-word-textsection case failed');
+  }
+  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(tokenizer control-word-textsection)');
+  {
+    const logBytes = readCompileLogBytes();
+    const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(tokenizer control-word-textsection)');
+    if (helloBaselineCharCount === null) {
+      throw new Error('helloBaselineCharCount not initialized for tokenizer control-word-textsection case');
+    }
+    if (stats.char_count !== helloBaselineCharCount + 4) {
+      throw new Error(`compile_main(tokenizer control-word-textsection) char_count delta expected +4, got baseline=${helloBaselineCharCount}, current=${stats.char_count}`);
+    }
+    assertMainXdvArtifactEmpty('compile_main(tokenizer control-word-textsection)');
+  }
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer control-word-par case failed');
   }
@@ -805,7 +792,6 @@ export function runTokenizerCases(ctx, helpers) {
     }
     assertMainXdvArtifactEmpty('compile_main(tokenizer control-word-par)');
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer CRLF normalization case failed');
   }
@@ -828,7 +814,6 @@ export function runTokenizerCases(ctx, helpers) {
     }
     assertMainXdvArtifactEmpty('compile_main(tokenizer CRLF normalization)');
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer lone-CR normalization case failed');
   }
@@ -851,7 +836,6 @@ export function runTokenizerCases(ctx, helpers) {
     }
     assertMainXdvArtifactEmpty('compile_main(tokenizer lone-CR normalization)');
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer caret-in-comment case failed');
   }
@@ -874,7 +858,6 @@ export function runTokenizerCases(ctx, helpers) {
     }
     assertMainXdvArtifactEmpty('compile_main(tokenizer caret-in-comment)');
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer unsupported-caret case failed');
   }
@@ -893,7 +876,6 @@ export function runTokenizerCases(ctx, helpers) {
     }
     assertNoEvents('compile_main_v0(tokenizer unsupported-caret)');
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer non-ascii control-seq case failed');
   }
@@ -912,7 +894,6 @@ export function runTokenizerCases(ctx, helpers) {
     }
     assertNoEvents('compile_main_v0(tokenizer non-ascii control-seq)');
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer braced-accent-passthrough case failed');
   }
@@ -935,7 +916,6 @@ export function runTokenizerCases(ctx, helpers) {
     }
     assertMainXdvArtifactEmpty('compile_main(tokenizer braced-accent-passthrough)');
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer braced-accent control-symbol payload case failed');
   }
@@ -958,7 +938,6 @@ export function runTokenizerCases(ctx, helpers) {
     }
     assertMainXdvArtifactEmpty('compile_main(tokenizer braced-accent control-symbol payload)');
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer accent-not-supported case failed');
   }
@@ -977,7 +956,6 @@ export function runTokenizerCases(ctx, helpers) {
     }
     assertNoEvents('compile_main_v0(tokenizer accent-not-supported)');
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer accent-control-word-not-supported case failed');
   }
