@@ -32,10 +32,10 @@ use carreltex_core::{
     build_compile_result_v0, truncate_log_bytes_v0, CompileRequestV0, CompileResultV0,
     CompileStatus, Mount, DEFAULT_COMPILE_MAIN_MAX_LOG_BYTES_V0, MAX_LOG_BYTES_V0,
 };
-use carreltex_xdv::{validate_dvi_v2_empty_page_v0, write_dvi_v2_empty_page_v0};
+use carreltex_xdv::{validate_dvi_v2_text_page_v0, write_dvi_v2_text_page_v0};
 use input_expand_v0::expand_inputs_v0;
 use macro_expand_v0::expand_macros_v0;
-use ok_v0::is_strict_empty_article_doc_v0;
+use ok_v0::{extract_strict_ok_text_body_v0, MAX_OK_TEXT_BYTES_V0};
 use stats_v0::build_tex_stats_from_tokens_v0;
 use trace_v0::build_not_implemented_log_v0;
 const MISSING_COMPONENTS_V0: &[&str] = &["tex-engine"];
@@ -117,14 +117,36 @@ pub fn compile_request_v0(mount: &mut Mount, req: &CompileRequestV0) -> CompileR
     if tex_stats_json.is_empty() {
         return invalid_result_v0(req.max_log_bytes, InvalidInputReasonV0::StatsBuildFailed);
     }
-    if is_strict_empty_article_doc_v0(&expanded_tokens)
-        && is_strict_empty_article_doc_v0(&macro_expanded_tokens)
-    {
-        let xdv_bytes = write_dvi_v2_empty_page_v0();
-        if !validate_dvi_v2_empty_page_v0(&xdv_bytes) {
-            return invalid_result_v0(req.max_log_bytes, InvalidInputReasonV0::StatsBuildFailed);
+    let ok_text_bytes = match (
+        extract_strict_ok_text_body_v0(&expanded_tokens),
+        extract_strict_ok_text_body_v0(&macro_expanded_tokens),
+    ) {
+        (Some(pre_macro), Some(post_macro)) if pre_macro == post_macro => Some(post_macro),
+        _ => None,
+    };
+
+    if let Some(ok_text_bytes) = ok_text_bytes {
+        if ok_text_bytes.len() <= MAX_OK_TEXT_BYTES_V0 {
+            let xdv_bytes = match write_dvi_v2_text_page_v0(&ok_text_bytes) {
+                Some(bytes) => bytes,
+                None => {
+                    return invalid_result_v0(
+                        req.max_log_bytes,
+                        InvalidInputReasonV0::StatsBuildFailed,
+                    )
+                }
+            };
+            if !validate_dvi_v2_text_page_v0(&xdv_bytes) {
+                return invalid_result_v0(req.max_log_bytes, InvalidInputReasonV0::StatsBuildFailed);
+            }
+            return build_compile_result_v0(
+                CompileStatus::Ok,
+                &[],
+                vec![],
+                xdv_bytes,
+                tex_stats_json,
+            );
         }
-        return build_compile_result_v0(CompileStatus::Ok, &[], vec![], xdv_bytes, tex_stats_json);
     }
 
     let not_implemented_log =
