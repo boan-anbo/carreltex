@@ -16,6 +16,7 @@ Regression guards (proof scenarios):
 - `\input{sub.tex}\expandafter\bar\foo`
 - `\input{sub.tex}\ifnum\count0<\count1 XYZ\else AAA\fi`
 - `\input{sub.tex}\let\bar=\foo\ifx\bar\foo SAME\else DIFF\fi`
+- Leaf 148 tokenizer textword mappings: `\textalpha->a`, `\textbeta->b`, `\textgamma->g`, `\textdelta->d`, `\textepsilon->e`, `\texttheta->t`, `\textlambda->l`, `\textpi->p`, `\textrho->r`, `\textsigma->s`, `\texttau->u`, `\textphi->f`, `\textchi->c`, `\textpsi->y`, `\textomega->w`
 
 These lock engine order and `\edef`/`\xdef`/`\let` snapshot semantics, plus `\futurelet`/`\csname`/`\string`/`\expandafter` visibility and `\ifnum`/`\ifx` state behavior across input boundaries.
 
