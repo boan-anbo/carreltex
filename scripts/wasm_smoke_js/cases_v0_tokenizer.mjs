@@ -2,6 +2,7 @@ export function runTokenizerCases(ctx, helpers) {
   const {
     addMountedFile,
     expectInvalid,
+    expectOk,
     expectNotImplemented,
     readCompileLogBytes,
     assertEventsMatchLogAndStats,
@@ -18,14 +19,13 @@ export function runTokenizerCases(ctx, helpers) {
   if (ctx.mountFinalize() !== 0) {
     throw new Error('mount_finalize for tokenizer baseline case failed');
   }
-  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(tokenizer baseline)');
+  expectOk(ctx.compileMain(), 'compile_main_v0(tokenizer baseline)');
   let baselineCharCount = null;
   let helloBaselineCharCount = null;
   {
     const logBytes = readCompileLogBytes();
     const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(tokenizer baseline)');
     baselineCharCount = stats.char_count;
-    assertMainXdvArtifactEmpty('compile_main(tokenizer baseline)');
   }
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer hello baseline case failed');
