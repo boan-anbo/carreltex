@@ -28,6 +28,6 @@ pub(super) fn parse_control_seq_v0(
     if next.is_ascii_alphabetic() {
         parse_control_word_v0(input, next, after_next_index)
     } else {
-        parse_control_symbol_v0(next, after_next_index)
+        parse_control_symbol_v0(input, next, after_next_index)
     }
 }
