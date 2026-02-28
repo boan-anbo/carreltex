@@ -32,10 +32,13 @@ use carreltex_core::{
     build_compile_result_v0, truncate_log_bytes_v0, CompileRequestV0, CompileResultV0,
     CompileStatus, Mount, DEFAULT_COMPILE_MAIN_MAX_LOG_BYTES_V0, MAX_LOG_BYTES_V0,
 };
-use carreltex_xdv::{validate_dvi_v2_text_page_v0, write_dvi_v2_text_page_with_advance_v0};
+use carreltex_xdv::{validate_dvi_v2_text_page_v0, write_dvi_v2_text_page_with_layout_v0};
 use input_expand_v0::expand_inputs_v0;
 use macro_expand_v0::expand_macros_v0;
-use ok_v0::{extract_strict_ok_text_body_v0, MAX_OK_TEXT_BYTES_V0, OK_GLYPH_ADVANCE_SP_V0};
+use ok_v0::{
+    extract_strict_ok_text_body_v0, MAX_OK_TEXT_BYTES_V0, OK_GLYPH_ADVANCE_SP_V0,
+    OK_LINE_ADVANCE_SP_V0,
+};
 use stats_v0::build_tex_stats_from_tokens_v0;
 use trace_v0::build_not_implemented_log_v0;
 const MISSING_COMPONENTS_V0: &[&str] = &["tex-engine"];
@@ -127,9 +130,10 @@ pub fn compile_request_v0(mount: &mut Mount, req: &CompileRequestV0) -> CompileR
 
     if let Some(ok_text_bytes) = ok_text_bytes {
         if ok_text_bytes.len() <= MAX_OK_TEXT_BYTES_V0 {
-            let xdv_bytes = match write_dvi_v2_text_page_with_advance_v0(
+            let xdv_bytes = match write_dvi_v2_text_page_with_layout_v0(
                 &ok_text_bytes,
                 OK_GLYPH_ADVANCE_SP_V0,
+                OK_LINE_ADVANCE_SP_V0,
             ) {
                 Some(bytes) => bytes,
                 None => {
