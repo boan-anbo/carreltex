@@ -5,6 +5,9 @@ const DVI_POST: u8 = 248;
 const DVI_POSTPOST: u8 = 249;
 const DVI_FNT_DEF1: u8 = 243;
 const DVI_FNT_NUM_0: u8 = 171;
+const DVI_W0: u8 = 147;
+const DVI_W3: u8 = 150;
+const DVI_RIGHT3: u8 = 145;
 const DVI_ID_V2: u8 = 2;
 const DVI_TRAILER_BYTE: u8 = 223;
 const DVI_NUM: u32 = 25_400_000;
@@ -13,6 +16,7 @@ const DVI_MAG: u32 = 1000;
 const FONT_ID_V0: u8 = 0;
 const FONT_NAME_V0: &[u8] = b"carreltex-v0";
 const PAGEBREAK_MARKER_V0: u8 = 0x0c;
+pub const DEFAULT_GLYPH_ADVANCE_SP_V0: i32 = 65_536;
 
 fn push_u32_be(out: &mut Vec<u8>, value: u32) {
     out.extend_from_slice(&value.to_be_bytes());
@@ -20,6 +24,16 @@ fn push_u32_be(out: &mut Vec<u8>, value: u32) {
 
 fn push_i32_be(out: &mut Vec<u8>, value: i32) {
     out.extend_from_slice(&value.to_be_bytes());
+}
+
+fn push_i24_be(out: &mut Vec<u8>, value: i32) -> Option<()> {
+    if !(-8_388_608..=8_388_607).contains(&value) {
+        return None;
+    }
+    out.push(((value >> 16) & 0xff) as u8);
+    out.push(((value >> 8) & 0xff) as u8);
+    out.push((value & 0xff) as u8);
+    Some(())
 }
 
 fn read_u8(bytes: &[u8], index: &mut usize) -> Option<u8> {
@@ -47,6 +61,18 @@ fn read_i32_be(bytes: &[u8], index: &mut usize) -> Option<i32> {
     let slice = bytes.get(*index..end)?;
     *index = end;
     Some(i32::from_be_bytes([slice[0], slice[1], slice[2], slice[3]]))
+}
+
+fn read_i24_be(bytes: &[u8], index: &mut usize) -> Option<i32> {
+    let end = index.checked_add(3)?;
+    let slice = bytes.get(*index..end)?;
+    *index = end;
+    let raw = ((slice[0] as i32) << 16) | ((slice[1] as i32) << 8) | (slice[2] as i32);
+    if (raw & 0x80_0000) != 0 {
+        Some(raw | !0x00ff_ffff)
+    } else {
+        Some(raw)
+    }
 }
 
 fn is_supported_text_byte_v0(byte: u8) -> bool {
@@ -160,7 +186,10 @@ pub fn write_dvi_v2_empty_page_v0() -> Vec<u8> {
     out
 }
 
-pub fn write_dvi_v2_text_page_v0(text: &[u8]) -> Option<Vec<u8>> {
+pub fn write_dvi_v2_text_page_with_advance_v0(text: &[u8], glyph_advance_sp: i32) -> Option<Vec<u8>> {
+    if glyph_advance_sp <= 0 {
+        return None;
+    }
     let pages = split_pages_v0(text)?;
     let page_count = u16::try_from(pages.len()).ok()?;
     if page_count == 0 {
@@ -176,6 +205,7 @@ pub fn write_dvi_v2_text_page_v0(text: &[u8]) -> Option<Vec<u8>> {
     out.push(0);
 
     let mut bop_offsets = Vec::<u32>::new();
+    let mut max_h = 0u32;
     for page in pages {
         let bop_offset = out.len() as u32;
         out.push(DVI_BOP);
@@ -190,7 +220,25 @@ pub fn write_dvi_v2_text_page_v0(text: &[u8]) -> Option<Vec<u8>> {
         push_i32_be(&mut out, prev_bop);
         append_font_def_v0(&mut out);
         out.push(DVI_FNT_NUM_0);
-        out.extend_from_slice(page);
+        let mut page_h = 0u32;
+        let mut w_defined = false;
+        for (index, byte) in page.iter().enumerate() {
+            if index > 0 {
+                if index % 2 == 1 {
+                    out.push(DVI_RIGHT3);
+                    push_i24_be(&mut out, glyph_advance_sp)?;
+                } else if !w_defined {
+                    out.push(DVI_W3);
+                    push_i24_be(&mut out, glyph_advance_sp)?;
+                    w_defined = true;
+                } else {
+                    out.push(DVI_W0);
+                }
+                page_h = page_h.checked_add(u32::try_from(glyph_advance_sp).ok()?)?;
+            }
+            out.push(*byte);
+        }
+        max_h = max_h.max(page_h);
         out.push(DVI_EOP);
         bop_offsets.push(bop_offset);
     }
@@ -201,7 +249,7 @@ pub fn write_dvi_v2_text_page_v0(text: &[u8]) -> Option<Vec<u8>> {
     push_u32_be(&mut out, DVI_NUM);
     push_u32_be(&mut out, DVI_DEN);
     push_u32_be(&mut out, DVI_MAG);
-    push_u32_be(&mut out, 0);
+    push_u32_be(&mut out, max_h);
     push_u32_be(&mut out, 0);
     out.extend_from_slice(&0u16.to_be_bytes());
     out.extend_from_slice(&page_count.to_be_bytes());
@@ -211,6 +259,10 @@ pub fn write_dvi_v2_text_page_v0(text: &[u8]) -> Option<Vec<u8>> {
     out.push(DVI_ID_V2);
     append_trailer(&mut out);
     Some(out)
+}
+
+pub fn write_dvi_v2_text_page_v0(text: &[u8]) -> Option<Vec<u8>> {
+    write_dvi_v2_text_page_with_advance_v0(text, DEFAULT_GLYPH_ADVANCE_SP_V0)
 }
 
 pub fn validate_dvi_v2_empty_page_v0(bytes: &[u8]) -> bool {
@@ -302,7 +354,10 @@ pub fn validate_dvi_v2_empty_page_v0(bytes: &[u8]) -> bool {
     true
 }
 
-pub fn count_dvi_v2_text_pages_v0(bytes: &[u8]) -> Option<u16> {
+pub fn count_dvi_v2_text_pages_with_advance_v0(bytes: &[u8], glyph_advance_sp: i32) -> Option<u16> {
+    if glyph_advance_sp <= 0 {
+        return None;
+    }
     if bytes.is_empty() || bytes.len() % 4 != 0 {
         return None;
     }
@@ -330,6 +385,7 @@ pub fn count_dvi_v2_text_pages_v0(bytes: &[u8]) -> Option<u16> {
     let mut page_count = 0u16;
     let mut previous_bop_offset: Option<usize> = None;
     let mut last_bop_offset = 0u32;
+    let mut max_h = 0u32;
     loop {
         let opcode = *bytes.get(index)?;
         if opcode == DVI_POST {
@@ -360,15 +416,57 @@ pub fn count_dvi_v2_text_pages_v0(bytes: &[u8]) -> Option<u16> {
         if read_u8(bytes, &mut index) != Some(DVI_FNT_NUM_0) {
             return None;
         }
+        let mut page_h = 0u32;
+        let mut expect_move_after_char = false;
+        let mut saw_page_char = false;
+        let mut w_defined = false;
         while let Some(opcode) = bytes.get(index).copied() {
             if opcode == DVI_EOP {
+                if !saw_page_char && expect_move_after_char {
+                    return None;
+                }
                 index += 1;
                 break;
             }
-            if opcode > 127 || !is_supported_text_byte_v0(opcode) {
-                return None;
+            if expect_move_after_char {
+                if opcode == DVI_RIGHT3 {
+                    index += 1;
+                    if read_i24_be(bytes, &mut index)? != glyph_advance_sp {
+                        return None;
+                    }
+                } else if opcode == DVI_W3 {
+                    index += 1;
+                    if read_i24_be(bytes, &mut index)? != glyph_advance_sp {
+                        return None;
+                    }
+                    w_defined = true;
+                } else if opcode == DVI_W0 {
+                    if !w_defined {
+                        return None;
+                    }
+                    index += 1;
+                } else {
+                    return None;
+                }
+                page_h = page_h.checked_add(u32::try_from(glyph_advance_sp).ok()?)?;
+                let next = *bytes.get(index)?;
+                if next > 127 || !is_supported_text_byte_v0(next) {
+                    return None;
+                }
+                index += 1;
+                saw_page_char = true;
+                expect_move_after_char = true;
+            } else {
+                if opcode > 127 || !is_supported_text_byte_v0(opcode) {
+                    return None;
+                }
+                index += 1;
+                saw_page_char = true;
+                expect_move_after_char = true;
             }
-            index += 1;
+        }
+        if page_h > max_h {
+            max_h = page_h;
         }
         previous_bop_offset = Some(bop_offset);
         page_count = page_count.checked_add(1)?;
@@ -393,7 +491,7 @@ pub fn count_dvi_v2_text_pages_v0(bytes: &[u8]) -> Option<u16> {
     if read_u32_be(bytes, &mut index) != Some(DVI_MAG) {
         return None;
     }
-    if read_u32_be(bytes, &mut index) != Some(0) {
+    if read_u32_be(bytes, &mut index) != Some(max_h) {
         return None;
     }
     if read_u32_be(bytes, &mut index) != Some(0) {
@@ -425,6 +523,113 @@ pub fn count_dvi_v2_text_pages_v0(bytes: &[u8]) -> Option<u16> {
     Some(page_count)
 }
 
+pub fn count_dvi_v2_text_movements_with_advance_v0(
+    bytes: &[u8],
+    glyph_advance_sp: i32,
+) -> Option<(u32, u32, u32)> {
+    if glyph_advance_sp <= 0 {
+        return None;
+    }
+    if bytes.is_empty() || bytes.len() % 4 != 0 {
+        return None;
+    }
+
+    let mut index = 0usize;
+    if read_u8(bytes, &mut index) != Some(DVI_PRE) {
+        return None;
+    }
+    if read_u8(bytes, &mut index) != Some(DVI_ID_V2) {
+        return None;
+    }
+    if read_u32_be(bytes, &mut index) != Some(DVI_NUM) {
+        return None;
+    }
+    if read_u32_be(bytes, &mut index) != Some(DVI_DEN) {
+        return None;
+    }
+    if read_u32_be(bytes, &mut index) != Some(DVI_MAG) {
+        return None;
+    }
+    if read_u8(bytes, &mut index) != Some(0) {
+        return None;
+    }
+
+    let mut right3_count = 0u32;
+    let mut w3_count = 0u32;
+    let mut w0_count = 0u32;
+    loop {
+        let opcode = *bytes.get(index)?;
+        if opcode == DVI_POST {
+            break;
+        }
+        if opcode != DVI_BOP {
+            return None;
+        }
+        index += 1;
+        for _ in 0..10 {
+            read_i32_be(bytes, &mut index)?;
+        }
+        read_i32_be(bytes, &mut index)?;
+        read_and_validate_font_def_v0(bytes, &mut index)?;
+        if read_u8(bytes, &mut index) != Some(DVI_FNT_NUM_0) {
+            return None;
+        }
+        let mut expect_move_after_char = false;
+        let mut w_defined = false;
+        while let Some(op) = bytes.get(index).copied() {
+            if op == DVI_EOP {
+                index += 1;
+                break;
+            }
+            if expect_move_after_char {
+                if op == DVI_RIGHT3 {
+                    right3_count = right3_count.checked_add(1)?;
+                    index += 1;
+                    if read_i24_be(bytes, &mut index)? != glyph_advance_sp {
+                        return None;
+                    }
+                } else if op == DVI_W3 {
+                    w3_count = w3_count.checked_add(1)?;
+                    index += 1;
+                    if read_i24_be(bytes, &mut index)? != glyph_advance_sp {
+                        return None;
+                    }
+                    w_defined = true;
+                } else if op == DVI_W0 {
+                    if !w_defined {
+                        return None;
+                    }
+                    w0_count = w0_count.checked_add(1)?;
+                    index += 1;
+                } else {
+                    return None;
+                }
+                let next = *bytes.get(index)?;
+                if next > 127 || !is_supported_text_byte_v0(next) {
+                    return None;
+                }
+                index += 1;
+                expect_move_after_char = true;
+            } else {
+                if op > 127 || !is_supported_text_byte_v0(op) {
+                    return None;
+                }
+                index += 1;
+                expect_move_after_char = true;
+            }
+        }
+    }
+    Some((right3_count, w3_count, w0_count))
+}
+
+pub fn count_dvi_v2_text_movements_v0(bytes: &[u8]) -> Option<(u32, u32, u32)> {
+    count_dvi_v2_text_movements_with_advance_v0(bytes, DEFAULT_GLYPH_ADVANCE_SP_V0)
+}
+
+pub fn count_dvi_v2_text_pages_v0(bytes: &[u8]) -> Option<u16> {
+    count_dvi_v2_text_pages_with_advance_v0(bytes, DEFAULT_GLYPH_ADVANCE_SP_V0)
+}
+
 pub fn validate_dvi_v2_text_page_v0(bytes: &[u8]) -> bool {
     count_dvi_v2_text_pages_v0(bytes).is_some()
 }
@@ -432,9 +637,11 @@ pub fn validate_dvi_v2_text_page_v0(bytes: &[u8]) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        count_dvi_v2_text_pages_v0, validate_dvi_v2_empty_page_v0, validate_dvi_v2_text_page_v0,
-        write_dvi_v2_empty_page_v0, write_dvi_v2_text_page_v0, DVI_EOP, DVI_FNT_DEF1, DVI_PRE,
-        DVI_TRAILER_BYTE,
+        count_dvi_v2_text_pages_v0, count_dvi_v2_text_pages_with_advance_v0,
+        count_dvi_v2_text_movements_v0,
+        validate_dvi_v2_empty_page_v0, validate_dvi_v2_text_page_v0, write_dvi_v2_empty_page_v0,
+        write_dvi_v2_text_page_v0, write_dvi_v2_text_page_with_advance_v0, DVI_EOP, DVI_FNT_DEF1,
+        DVI_PRE, DVI_RIGHT3, DVI_TRAILER_BYTE, DVI_W0, DVI_W3,
     };
 
     #[test]
@@ -478,6 +685,20 @@ mod tests {
     }
 
     #[test]
+    fn text_writer_emits_right_and_w_movement_ops() {
+        let bytes = write_dvi_v2_text_page_v0(b"ABCDE").expect("writer should accept text");
+        assert!(validate_dvi_v2_text_page_v0(&bytes));
+        let movement = count_dvi_v2_text_movements_v0(&bytes).expect("movement summary should parse");
+        assert_eq!(movement, (2, 1, 1));
+    }
+
+    #[test]
+    fn text_writer_rejects_non_positive_advance() {
+        assert!(write_dvi_v2_text_page_with_advance_v0(b"ABC", 0).is_none());
+        assert!(write_dvi_v2_text_page_with_advance_v0(b"ABC", -1).is_none());
+    }
+
+    #[test]
     fn text_writer_rejects_out_of_range_bytes() {
         assert!(write_dvi_v2_text_page_v0(&[0x1f]).is_none());
         assert!(write_dvi_v2_text_page_v0(&[0x7f]).is_none());
@@ -504,5 +725,37 @@ mod tests {
         let font_select_index = font_def_index + 27;
         bytes[font_select_index] = b'X';
         assert!(!validate_dvi_v2_text_page_v0(&bytes));
+    }
+
+    #[test]
+    fn validator_rejects_w0_without_w_definition() {
+        let mut bytes = write_dvi_v2_text_page_v0(b"AB").expect("writer should accept AB");
+        let right_index = bytes
+            .iter()
+            .position(|byte| *byte == DVI_RIGHT3)
+            .expect("right3 opcode should exist");
+        bytes[right_index] = DVI_W0;
+        assert!(!validate_dvi_v2_text_page_v0(&bytes));
+    }
+
+    #[test]
+    fn validator_rejects_wrong_movement_amount() {
+        let mut bytes = write_dvi_v2_text_page_v0(b"ABCD").expect("writer should accept ABCD");
+        let w3_index = bytes
+            .iter()
+            .position(|byte| *byte == DVI_W3)
+            .expect("w3 opcode should exist");
+        let amount_start = w3_index + 1;
+        bytes[amount_start] = 0x00;
+        bytes[amount_start + 1] = 0x00;
+        bytes[amount_start + 2] = 0x01;
+        assert!(!validate_dvi_v2_text_page_v0(&bytes));
+    }
+
+    #[test]
+    fn count_rejects_mismatched_advance_parameter() {
+        let bytes = write_dvi_v2_text_page_with_advance_v0(b"ABC", 1024).expect("writer should accept");
+        assert_eq!(count_dvi_v2_text_pages_with_advance_v0(&bytes, 1024), Some(1));
+        assert_eq!(count_dvi_v2_text_pages_with_advance_v0(&bytes, 2048), None);
     }
 }

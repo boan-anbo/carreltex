@@ -1,5 +1,6 @@
 use crate::tex::tokenize_v0::TokenV0;
 pub(crate) const MAX_OK_TEXT_BYTES_V0: usize = 64 * 1024;
+pub(crate) const OK_GLYPH_ADVANCE_SP_V0: i32 = 65_536;
 
 fn skip_spaces(tokens: &[TokenV0], mut index: usize) -> usize {
     while matches!(tokens.get(index), Some(TokenV0::Space)) {
