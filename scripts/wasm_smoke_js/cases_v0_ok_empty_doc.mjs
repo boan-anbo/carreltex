@@ -529,13 +529,13 @@ export function runOkEmptyDocCases(ctx, helpers) {
   if (ctx.compileRequestSetOkLineAdvanceSp(0) === 0) {
     throw new Error('compile_request_set_ok_line_advance_sp_v0(0) expected failure');
   }
-  if (ctx.compileRequestSetOkLineAdvanceSp(10000001) === 0) {
-    throw new Error('compile_request_set_ok_line_advance_sp_v0(10000001) expected failure');
+  if (ctx.compileRequestSetOkLineAdvanceSp(8388608) === 0) {
+    throw new Error('compile_request_set_ok_line_advance_sp_v0(8388608) expected failure');
   }
   if (ctx.compileRequestSetOkGlyphAdvanceSp(0) === 0) {
     throw new Error('compile_request_set_ok_glyph_advance_sp_v0(0) expected failure');
   }
-  if (ctx.compileRequestSetOkGlyphAdvanceSp(10000001) === 0) {
-    throw new Error('compile_request_set_ok_glyph_advance_sp_v0(10000001) expected failure');
+  if (ctx.compileRequestSetOkGlyphAdvanceSp(8388608) === 0) {
+    throw new Error('compile_request_set_ok_glyph_advance_sp_v0(8388608) expected failure');
   }
 }

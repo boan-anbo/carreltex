@@ -107,12 +107,12 @@ pub fn compile_request_v0(mount: &mut Mount, req: &CompileRequestV0) -> CompileR
         }
     }
     if let Some(value) = req.ok_line_advance_sp_v0 {
-        if !(1..=10_000_000).contains(&value) {
+        if !(1..=8_388_607).contains(&value) {
             return invalid_result_v0(req.max_log_bytes, InvalidInputReasonV0::RequestInvalid);
         }
     }
     if let Some(value) = req.ok_glyph_advance_sp_v0 {
-        if !(1..=10_000_000).contains(&value) {
+        if !(1..=8_388_607).contains(&value) {
             return invalid_result_v0(req.max_log_bytes, InvalidInputReasonV0::RequestInvalid);
         }
     }
