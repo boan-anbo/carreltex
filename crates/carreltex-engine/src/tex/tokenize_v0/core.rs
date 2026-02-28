@@ -43,7 +43,9 @@ pub fn tokenize_v0(input: &[u8]) -> Result<Vec<TokenV0>, TokenizeErrorV0> {
             }
             b'\\' => {
                 let parsed = parse_control_seq_v0(input, next_index)?;
-                push_token_v0(&mut tokens, parsed.token)?;
+                if let Some(token) = parsed.token {
+                    push_token_v0(&mut tokens, token)?;
+                }
                 index = parsed.next_index;
             }
             _ => {

@@ -49,7 +49,7 @@ pub(super) fn parse_control_word_v0(
         TokenV0::ControlSeq(control_word)
     };
     Ok(ParsedControlSeqV0 {
-        token,
+        token: Some(token),
         next_index: index,
     })
 }

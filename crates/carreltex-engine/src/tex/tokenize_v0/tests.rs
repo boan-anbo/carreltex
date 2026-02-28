@@ -206,6 +206,18 @@ fn control_symbol_comma_maps_to_space_char_without_swallowing_following_space() 
 }
 
 #[test]
+fn control_symbol_bang_is_noop_and_drops_token() {
+    let tokens = tokenize_v0(b"\\!X").expect("tokenize should succeed");
+    assert_eq!(tokens, vec![TokenV0::Char(b'X')]);
+}
+
+#[test]
+fn control_symbol_bang_noop_does_not_swallow_following_whitespace() {
+    let tokens = tokenize_v0(b"\\! X").expect("tokenize should succeed");
+    assert_eq!(tokens, vec![TokenV0::Space, TokenV0::Char(b'X')]);
+}
+
+#[test]
 fn control_symbol_percent_maps_to_percent_char() {
     let tokens = tokenize_v0(b"\\%X").expect("tokenize should succeed");
     assert_eq!(tokens, vec![TokenV0::Char(b'%'), TokenV0::Char(b'X')]);
