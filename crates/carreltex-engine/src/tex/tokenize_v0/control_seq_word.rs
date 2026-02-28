@@ -119,6 +119,26 @@ pub(super) fn parse_control_word_v0(
         vec![TokenV0::Char(b'"')]
     } else if control_word.as_slice() == b"textquotesinglbase" {
         vec![TokenV0::Char(b'\'')]
+    } else if control_word.as_slice() == b"textminus" {
+        vec![TokenV0::Char(b'-')]
+    } else if control_word.as_slice() == b"textplus" {
+        vec![TokenV0::Char(b'+')]
+    } else if control_word.as_slice() == b"textequals" {
+        vec![TokenV0::Char(b'=')]
+    } else if control_word.as_slice() == b"textcolon" {
+        vec![TokenV0::Char(b':')]
+    } else if control_word.as_slice() == b"textsemicolon" {
+        vec![TokenV0::Char(b';')]
+    } else if control_word.as_slice() == b"textcomma" {
+        vec![TokenV0::Char(b',')]
+    } else if control_word.as_slice() == b"textperiod" {
+        vec![TokenV0::Char(b'.')]
+    } else if control_word.as_slice() == b"textslash" {
+        vec![TokenV0::Char(b'/')]
+    } else if control_word.as_slice() == b"textparenleft" {
+        vec![TokenV0::Char(b'(')]
+    } else if control_word.as_slice() == b"textparenright" {
+        vec![TokenV0::Char(b')')]
     } else if control_word.as_slice() == b"par" {
         vec![TokenV0::Space]
     } else {
