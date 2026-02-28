@@ -1,34 +1,25 @@
-mod input_expand_v0;
-mod ifnum_v0;
-mod ifx_v0;
-mod macro_expand_v0;
-mod stats_v0;
-mod tokenize_reason_v0;
-mod trace_v0;
-#[cfg(test)] mod count_v0_tests;
-#[cfg(test)] mod edef_v0_tests;
-#[cfg(test)] mod newcommand_v0_tests;
-#[cfg(test)] mod providecommand_v0_tests;
-#[cfg(test)] mod xdef_noexpand_v0_tests;
-#[cfg(test)] mod ifnum_v0_tests;
-#[cfg(test)] mod ifx_v0_tests;
-#[cfg(test)] mod input_macro_v0_tests;
+mod input_expand_v0; mod ifnum_v0; mod ifx_v0; mod macro_expand_v0;
+mod ok_v0; mod stats_v0; mod tokenize_reason_v0; mod trace_v0;
+#[cfg(test)] mod count_v0_tests; #[cfg(test)] mod edef_v0_tests;
+#[cfg(test)] mod newcommand_v0_tests; #[cfg(test)] mod providecommand_v0_tests;
+#[cfg(test)] mod xdef_noexpand_v0_tests; #[cfg(test)] mod ifnum_v0_tests;
+#[cfg(test)] mod ifx_v0_tests; #[cfg(test)] mod input_macro_v0_tests;
 #[cfg(test)] mod meaning_v0_tests_base; #[cfg(test)] mod meaning_v0_tests_input_guards;
-#[cfg(test)] mod tokenizer_textword_139_tests;
-#[cfg(test)] mod tokenizer_textword_140_tests;
-#[cfg(test)] mod tokenizer_textword_141_tests;
-#[cfg(test)] mod tokenizer_textword_142_tests;
-#[cfg(test)] mod tokenizer_textword_143_tests;
-#[cfg(test)] mod tokenizer_textword_144_tests;
-#[cfg(test)] mod tokenizer_textword_145_tests; #[cfg(test)] mod tokenizer_textword_147_tests; #[cfg(test)] mod tokenizer_textword_148_tests;
+#[cfg(test)] mod ok_v0_tests; #[cfg(test)] mod tokenizer_textword_139_tests;
+#[cfg(test)] mod tokenizer_textword_140_tests; #[cfg(test)] mod tokenizer_textword_141_tests;
+#[cfg(test)] mod tokenizer_textword_142_tests; #[cfg(test)] mod tokenizer_textword_143_tests;
+#[cfg(test)] mod tokenizer_textword_144_tests; #[cfg(test)] mod tokenizer_textword_145_tests;
+#[cfg(test)] mod tokenizer_textword_147_tests; #[cfg(test)] mod tokenizer_textword_148_tests;
 use crate::reasons_v0::{invalid_log_bytes_v0, InvalidInputReasonV0};
 use crate::tex::tokenize_v0::{tokenize_v0, TokenV0, MAX_TOKENS_V0};
 use carreltex_core::{
     build_compile_result_v0, truncate_log_bytes_v0, CompileRequestV0, CompileResultV0,
     CompileStatus, Mount, DEFAULT_COMPILE_MAIN_MAX_LOG_BYTES_V0, MAX_LOG_BYTES_V0,
 };
+use carreltex_xdv::{validate_dvi_v2_empty_page_v0, write_dvi_v2_empty_page_v0};
 use input_expand_v0::expand_inputs_v0;
 use macro_expand_v0::expand_macros_v0;
+use ok_v0::is_strict_empty_article_doc_v0;
 use stats_v0::build_tex_stats_from_tokens_v0;
 use trace_v0::build_not_implemented_log_v0;
 const MISSING_COMPONENTS_V0: &[&str] = &["tex-engine"];
@@ -42,7 +33,6 @@ fn invalid_result_v0(max_log_bytes: u32, reason: InvalidInputReasonV0) -> Compil
         EMPTY_TEX_STATS_JSON.to_owned(),
     )
 }
-
 pub fn compile_main_v0(mount: &mut Mount) -> CompileResultV0 {
     let request = CompileRequestV0 {
         entrypoint: "main.tex".to_owned(),
@@ -111,6 +101,16 @@ pub fn compile_request_v0(mount: &mut Mount, req: &CompileRequestV0) -> CompileR
     if tex_stats_json.is_empty() {
         return invalid_result_v0(req.max_log_bytes, InvalidInputReasonV0::StatsBuildFailed);
     }
+    if is_strict_empty_article_doc_v0(&expanded_tokens)
+        && is_strict_empty_article_doc_v0(&macro_expanded_tokens)
+    {
+        let xdv_bytes = write_dvi_v2_empty_page_v0();
+        if !validate_dvi_v2_empty_page_v0(&xdv_bytes) {
+            return invalid_result_v0(req.max_log_bytes, InvalidInputReasonV0::StatsBuildFailed);
+        }
+        return build_compile_result_v0(CompileStatus::Ok, &[], vec![], xdv_bytes, tex_stats_json);
+    }
+
     let not_implemented_log =
         match build_not_implemented_log_v0(req.max_log_bytes as usize, &input_trace) {
             Some(log) => log,
@@ -837,7 +837,7 @@ mod tests {
         let baseline_main = b"\\documentclass{article}\n\\begin{document}\n\n\\end{document}\n";
         assert!(baseline_mount.add_file(b"main.tex", baseline_main).is_ok());
         let baseline_result = compile_request_v0(&mut baseline_mount, &valid_request());
-        assert_eq!(baseline_result.status, CompileStatus::NotImplemented);
+        assert_eq!(baseline_result.status, CompileStatus::Ok);
         let baseline_char_count =
             stats_u64_field(&baseline_result.tex_stats_json, "char_count").expect("char_count");
 
@@ -866,7 +866,7 @@ mod tests {
         let baseline_main = b"\\documentclass{article}\n\\begin{document}\n\n\\end{document}\n";
         assert!(baseline_mount.add_file(b"main.tex", baseline_main).is_ok());
         let baseline_result = compile_request_v0(&mut baseline_mount, &valid_request());
-        assert_eq!(baseline_result.status, CompileStatus::NotImplemented);
+        assert_eq!(baseline_result.status, CompileStatus::Ok);
         let baseline_char_count =
             stats_u64_field(&baseline_result.tex_stats_json, "char_count").expect("char_count");
 
@@ -896,7 +896,7 @@ mod tests {
         let baseline_main = b"\\documentclass{article}\n\\begin{document}\n\n\\end{document}\n";
         assert!(baseline_mount.add_file(b"main.tex", baseline_main).is_ok());
         let baseline_result = compile_request_v0(&mut baseline_mount, &valid_request());
-        assert_eq!(baseline_result.status, CompileStatus::NotImplemented);
+        assert_eq!(baseline_result.status, CompileStatus::Ok);
         let baseline_char_count =
             stats_u64_field(&baseline_result.tex_stats_json, "char_count").expect("char_count");
 

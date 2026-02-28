@@ -3,6 +3,7 @@ import { runCountCases } from './cases_v0_count.mjs';
 import { runEdefCases } from './cases_v0_edef.mjs';
 import { runNewcommandCases } from './cases_v0_newcommand.mjs';
 import { runProvidecommandCases } from './cases_v0_providecommand.mjs';
+import { runOkEmptyDocCases } from './cases_v0_ok_empty_doc.mjs';
 import { runXdefNoexpandCases } from './cases_v0_xdef_noexpand.mjs';
 import { runIfnumCases } from './cases_v0_ifnum.mjs';
 import { runIfxCases } from './cases_v0_ifx.mjs';
@@ -27,6 +28,7 @@ export function runCasesV0(ctx, mem, helpers) {
   const {
     addMountedFile,
     expectInvalid,
+    expectOk,
     expectNotImplemented,
     readCompileReportJson,
     readCompileLogBytes,
@@ -36,6 +38,7 @@ export function runCasesV0(ctx, mem, helpers) {
     readMountedFileBytes,
     assertReadbackZero,
     assertMainXdvArtifactEmpty,
+    readMainXdvArtifactBytes,
     assertNoEvents,
   } = helpers;
 
@@ -410,14 +413,15 @@ export function runCasesV0(ctx, mem, helpers) {
   if (gdefBaselineCharCount === null) {
     throw new Error('gdefBaselineCharCount not initialized before count cases');
   }
-  runCountCases(ctx, { addMountedFile, expectInvalid, expectNotImplemented, readCompileLogBytes, assertEventsMatchLogAndStats, assertMainXdvArtifactEmpty, assertNoEvents });
-  runEdefCases(ctx, { addMountedFile, expectInvalid, expectNotImplemented, readCompileLogBytes, assertEventsMatchLogAndStats, assertMainXdvArtifactEmpty, assertNoEvents });
-  runNewcommandCases(ctx, { addMountedFile, expectInvalid, expectNotImplemented, readCompileLogBytes, assertEventsMatchLogAndStats, assertMainXdvArtifactEmpty, assertNoEvents });
-  runProvidecommandCases(ctx, { addMountedFile, expectInvalid, expectNotImplemented, readCompileLogBytes, assertEventsMatchLogAndStats, assertMainXdvArtifactEmpty, assertNoEvents });
-  runXdefNoexpandCases(ctx, { addMountedFile, expectInvalid, expectNotImplemented, readCompileLogBytes, assertEventsMatchLogAndStats, assertMainXdvArtifactEmpty, assertNoEvents });
-  runIfnumCases(ctx, { addMountedFile, expectInvalid, expectNotImplemented, readCompileLogBytes, assertEventsMatchLogAndStats, assertMainXdvArtifactEmpty, assertNoEvents });
-  runIfxCases(ctx, { addMountedFile, expectInvalid, expectNotImplemented, readCompileLogBytes, assertEventsMatchLogAndStats, assertMainXdvArtifactEmpty, assertNoEvents });
-  runTokenizerCases(ctx, { addMountedFile, expectInvalid, expectNotImplemented, readCompileLogBytes, assertEventsMatchLogAndStats, assertMainXdvArtifactEmpty, assertNoEvents });
+  runCountCases(ctx, { addMountedFile, expectInvalid, expectOk, expectNotImplemented, readCompileLogBytes, assertEventsMatchLogAndStats, assertMainXdvArtifactEmpty, assertNoEvents });
+  runEdefCases(ctx, { addMountedFile, expectInvalid, expectOk, expectNotImplemented, readCompileLogBytes, assertEventsMatchLogAndStats, assertMainXdvArtifactEmpty, assertNoEvents });
+  runNewcommandCases(ctx, { addMountedFile, expectInvalid, expectOk, expectNotImplemented, readCompileLogBytes, assertEventsMatchLogAndStats, assertMainXdvArtifactEmpty, assertNoEvents });
+  runProvidecommandCases(ctx, { addMountedFile, expectInvalid, expectOk, expectNotImplemented, readCompileLogBytes, assertEventsMatchLogAndStats, assertMainXdvArtifactEmpty, assertNoEvents });
+  runOkEmptyDocCases(ctx, { addMountedFile, expectOk, readCompileReportJson, readCompileLogBytes, assertEventsMatchLogAndStats, readMainXdvArtifactBytes });
+  runXdefNoexpandCases(ctx, { addMountedFile, expectInvalid, expectOk, expectNotImplemented, readCompileLogBytes, assertEventsMatchLogAndStats, assertMainXdvArtifactEmpty, assertNoEvents });
+  runIfnumCases(ctx, { addMountedFile, expectInvalid, expectOk, expectNotImplemented, readCompileLogBytes, assertEventsMatchLogAndStats, assertMainXdvArtifactEmpty, assertNoEvents });
+  runIfxCases(ctx, { addMountedFile, expectInvalid, expectOk, expectNotImplemented, readCompileLogBytes, assertEventsMatchLogAndStats, assertMainXdvArtifactEmpty, assertNoEvents });
+  runTokenizerCases(ctx, { addMountedFile, expectInvalid, expectOk, expectNotImplemented, readCompileLogBytes, assertEventsMatchLogAndStats, assertMainXdvArtifactEmpty, assertNoEvents });
   runTokenizerTextwordLeaf133Cases(ctx, { addMountedFile, expectNotImplemented, readCompileLogBytes, assertEventsMatchLogAndStats, assertMainXdvArtifactEmpty });
   runTokenizerTextwordLeaf134Cases(ctx, { addMountedFile, expectNotImplemented, readCompileLogBytes, assertEventsMatchLogAndStats, assertMainXdvArtifactEmpty });
   runTokenizerTextwordLeaf135Cases(ctx, { addMountedFile, expectNotImplemented, readCompileLogBytes, assertEventsMatchLogAndStats, assertMainXdvArtifactEmpty });

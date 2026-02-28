@@ -2,6 +2,7 @@ export function runEdefCases(ctx, helpers) {
   const {
     addMountedFile,
     expectInvalid,
+    expectOk,
     expectNotImplemented,
     readCompileLogBytes,
     assertEventsMatchLogAndStats,
@@ -19,13 +20,12 @@ export function runEdefCases(ctx, helpers) {
   if (ctx.mountFinalize() !== 0) {
     throw new Error('mount_finalize for edef baseline case failed');
   }
-  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(macro edef baseline)');
+  expectOk(ctx.compileMain(), 'compile_main_v0(macro edef baseline)');
   let baselineCharCount = null;
   {
     const logBytes = readCompileLogBytes();
     const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(macro edef baseline)');
     baselineCharCount = stats.char_count;
-    assertMainXdvArtifactEmpty('compile_main(macro edef baseline)');
   }
 
   if (ctx.mountReset() !== 0) {

@@ -2,6 +2,7 @@ export function runIfnumCases(ctx, helpers) {
   const {
     addMountedFile,
     expectInvalid,
+    expectOk,
     expectNotImplemented,
     readCompileLogBytes,
     assertEventsMatchLogAndStats,
@@ -19,13 +20,12 @@ export function runIfnumCases(ctx, helpers) {
   if (ctx.mountFinalize() !== 0) {
     throw new Error('mount_finalize for ifnum baseline case failed');
   }
-  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(macro ifnum baseline)');
+  expectOk(ctx.compileMain(), 'compile_main_v0(macro ifnum baseline)');
   let baselineCharCount = null;
   {
     const logBytes = readCompileLogBytes();
     const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(macro ifnum baseline)');
     baselineCharCount = stats.char_count;
-    assertMainXdvArtifactEmpty('compile_main(macro ifnum baseline)');
   }
 
   if (ctx.mountReset() !== 0) {

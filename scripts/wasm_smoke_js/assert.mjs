@@ -23,6 +23,12 @@ export function createAssertHelpers(ctx, mem) {
     }
   }
 
+  function expectOk(value, label) {
+    if (value !== 0) {
+      throw new Error(`${label} expected OK(0), got ${value}`);
+    }
+  }
+
   function expectNotImplemented(value, label) {
     if (value !== 2) {
       throw new Error(`${label} expected NOT_IMPLEMENTED(2), got ${value}`);
@@ -198,8 +204,8 @@ export function createAssertHelpers(ctx, mem) {
     if (!(typeof stats.token_count === 'number' && stats.token_count > 0)) {
       throw new Error(`${label}: event[1] token_count expected >0`);
     }
-    if (!(typeof stats.char_count === 'number' && stats.char_count > 0)) {
-      throw new Error(`${label}: event[1] char_count expected >0`);
+    if (!(typeof stats.char_count === 'number' && stats.char_count >= 0)) {
+      throw new Error(`${label}: event[1] char_count expected >=0`);
     }
     return stats;
   }
@@ -322,6 +328,55 @@ export function createAssertHelpers(ctx, mem) {
     }
   }
 
+  function readMainXdvArtifactBytes(label) {
+    const bytesLen = ctx.artifactMainXdvLen();
+    if (!Number.isInteger(bytesLen) || bytesLen <= 0 || bytesLen > 32 * 1024 * 1024) {
+      throw new Error(`${label}: expected main.xdv len>0, got ${bytesLen}`);
+    }
+    const outPtr = ctx.alloc(bytesLen);
+    if (!Number.isInteger(outPtr) || outPtr <= 0) {
+      throw new Error(`${label}: alloc failed for main.xdv copy`);
+    }
+    let dedicatedBytes;
+    try {
+      const written = ctx.artifactMainXdvCopy(outPtr, bytesLen);
+      if (written !== bytesLen) {
+        throw new Error(`${label}: artifact_main_xdv_copy_v0 expected ${bytesLen}, got ${written}`);
+      }
+      dedicatedBytes = new Uint8Array(ctx.memory.buffer, outPtr, bytesLen).slice();
+    } finally {
+      ctx.dealloc(outPtr, bytesLen);
+    }
+
+    const mainName = new TextEncoder().encode('main.xdv');
+    const genericLen = mem.callWithBytes(mainName, `${label}_generic_main_len`, (namePtr, nameLen) =>
+      ctx.artifactLenByName(namePtr, nameLen),
+    );
+    if (genericLen !== bytesLen) {
+      throw new Error(`${label}: artifact_len_v0(main.xdv) expected ${bytesLen}, got ${genericLen}`);
+    }
+
+    const genericOutPtr = ctx.alloc(bytesLen);
+    if (!Number.isInteger(genericOutPtr) || genericOutPtr <= 0) {
+      throw new Error(`${label}: alloc failed for generic main.xdv copy`);
+    }
+    try {
+      const genericWritten = mem.callWithBytes(mainName, `${label}_generic_main_copy`, (namePtr, nameLen) =>
+        ctx.artifactCopyByName(namePtr, nameLen, genericOutPtr, bytesLen),
+      );
+      if (genericWritten !== bytesLen) {
+        throw new Error(`${label}: artifact_copy_v0(main.xdv) expected ${bytesLen}, got ${genericWritten}`);
+      }
+      const genericBytes = new Uint8Array(ctx.memory.buffer, genericOutPtr, bytesLen);
+      if (!genericBytes.every((byte, index) => byte === dedicatedBytes[index])) {
+        throw new Error(`${label}: generic artifact bytes mismatch with dedicated main.xdv bytes`);
+      }
+    } finally {
+      ctx.dealloc(genericOutPtr, bytesLen);
+    }
+    return dedicatedBytes;
+  }
+
   function assertNoEvents(label) {
     const bytes = readEventsBytes();
     if (bytes.length !== 0) {
@@ -333,6 +388,7 @@ export function createAssertHelpers(ctx, mem) {
     addMountedFile,
     pathBytes,
     expectInvalid,
+    expectOk,
     expectNotImplemented,
     readCompileReportJson,
     readCompileLogBytes,
@@ -342,6 +398,7 @@ export function createAssertHelpers(ctx, mem) {
     readMountedFileBytes,
     assertReadbackZero,
     assertMainXdvArtifactEmpty,
+    readMainXdvArtifactBytes,
     assertNoEvents,
   };
 }
