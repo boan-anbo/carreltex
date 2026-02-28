@@ -7,6 +7,7 @@ mod tokenize_reason_v0;
 mod trace_v0;
 #[cfg(test)] mod count_v0_tests;
 #[cfg(test)] mod edef_v0_tests;
+#[cfg(test)] mod newcommand_v0_tests;
 #[cfg(test)] mod xdef_noexpand_v0_tests;
 #[cfg(test)] mod ifnum_v0_tests;
 #[cfg(test)] mod ifx_v0_tests;
