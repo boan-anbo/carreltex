@@ -366,4 +366,46 @@ export function runOkEmptyDocCases(ctx, helpers) {
   if (newlineMovement.down3 !== 1) {
     throw new Error(`compile_main(ok newline text doc) expected exactly one DOWN3 opcode, got ${newlineMovement.down3}`);
   }
+
+  if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before OK wrapped text doc case failed');
+  }
+
+  const wrappedTextBody = 'A'.repeat(81);
+  const wrappedTextDocBytes = new TextEncoder().encode(
+    `\\documentclass{article}\\begin{document}${wrappedTextBody}\\end{document}`,
+  );
+  if (addMountedFile('main.tex', wrappedTextDocBytes, 'ok_wrapped_text_doc_main') !== 0) {
+    throw new Error('mount_add_file(ok wrapped text doc main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) {
+    throw new Error('mount_finalize for OK wrapped text doc case failed');
+  }
+
+  expectOk(ctx.compileMain(), 'compile_main_v0(ok wrapped text doc)');
+  const wrappedReport = readCompileReportJson();
+  if (wrappedReport.status !== 'OK') {
+    throw new Error(`compile_main(ok wrapped text doc) report.status expected OK, got ${wrappedReport.status}`);
+  }
+  const wrappedLogBytes = readCompileLogBytes();
+  if (wrappedLogBytes.length !== 0) {
+    throw new Error(`compile_main(ok wrapped text doc) expected empty log, got ${wrappedLogBytes.length} bytes`);
+  }
+  assertEventsMatchLogAndStats(
+    wrappedLogBytes,
+    { char_count: stats.char_count + 81 },
+    'compile_main(ok wrapped text doc)',
+  );
+  const wrappedXdvBytes = readMainXdvArtifactBytes('compile_main(ok wrapped text doc)');
+  if (wrappedXdvBytes.length === 0) {
+    throw new Error('compile_main(ok wrapped text doc) main.xdv expected non-empty bytes');
+  }
+  const wrappedPages = countPagesInDviV2(wrappedXdvBytes, 'compile_main(ok wrapped text doc)');
+  if (wrappedPages !== 1) {
+    throw new Error(`compile_main(ok wrapped text doc) expected 1 page, got ${wrappedPages}`);
+  }
+  const wrappedMovement = countMovementOpsInTextPages(wrappedXdvBytes, 'compile_main(ok wrapped text doc)');
+  if (wrappedMovement.down3 < 1) {
+    throw new Error('compile_main(ok wrapped text doc) expected at least one DOWN3 opcode from auto-wrap');
+  }
 }
