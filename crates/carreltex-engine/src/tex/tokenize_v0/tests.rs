@@ -368,6 +368,24 @@ fn control_word_textgreater_maps_to_greater_than_and_swallows_space() {
 }
 
 #[test]
+fn control_word_textbar_maps_to_pipe_and_swallows_space() {
+    let tokens = tokenize_v0(b"\\textbar X").expect("tokenize should succeed");
+    assert_eq!(tokens, vec![TokenV0::Char(b'|'), TokenV0::Char(b'X')]);
+}
+
+#[test]
+fn control_word_textbraceleft_maps_to_lbrace_and_swallows_space() {
+    let tokens = tokenize_v0(b"\\textbraceleft X").expect("tokenize should succeed");
+    assert_eq!(tokens, vec![TokenV0::Char(b'{'), TokenV0::Char(b'X')]);
+}
+
+#[test]
+fn control_word_textbraceright_maps_to_rbrace_and_swallows_space() {
+    let tokens = tokenize_v0(b"\\textbraceright X").expect("tokenize should succeed");
+    assert_eq!(tokens, vec![TokenV0::Char(b'}'), TokenV0::Char(b'X')]);
+}
+
+#[test]
 fn control_word_par_maps_to_space_and_swallows_following_whitespace() {
     let tokens = tokenize_v0(b"A\\par B").expect("tokenize should succeed");
     assert_eq!(
