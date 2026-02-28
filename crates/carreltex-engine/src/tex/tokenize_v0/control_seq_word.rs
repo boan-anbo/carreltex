@@ -230,6 +230,26 @@ pub(super) fn parse_control_word_v0(
         vec![TokenV0::Char(b'-')]
     } else if control_word.as_slice() == b"textvisiblespace" {
         vec![TokenV0::Char(b'_')]
+    } else if control_word.as_slice() == b"textfractionsolidus" {
+        vec![TokenV0::Char(b'/')]
+    } else if control_word.as_slice() == b"textasterisklow" {
+        vec![TokenV0::Char(b'*')]
+    } else if control_word.as_slice() == b"textdoublepipe" {
+        vec![TokenV0::Char(b'|'), TokenV0::Char(b'|')]
+    } else if control_word.as_slice() == b"textasciicomma" {
+        vec![TokenV0::Char(b',')]
+    } else if control_word.as_slice() == b"textasciiperiod" {
+        vec![TokenV0::Char(b'.')]
+    } else if control_word.as_slice() == b"textasciicolon" {
+        vec![TokenV0::Char(b':')]
+    } else if control_word.as_slice() == b"textasciiplus" {
+        vec![TokenV0::Char(b'+')]
+    } else if control_word.as_slice() == b"textasciiminus" {
+        vec![TokenV0::Char(b'-')]
+    } else if control_word.as_slice() == b"textasciiequal" {
+        vec![TokenV0::Char(b'=')]
+    } else if control_word.as_slice() == b"textasciislash" {
+        vec![TokenV0::Char(b'/')]
     } else if control_word.as_slice() == b"par" {
         vec![TokenV0::Space]
     } else {
