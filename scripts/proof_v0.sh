@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-VERBOSE="${PROOF_VERBOSE:-0}"
+VERBOSE="${PROOF_V0_VERBOSE:-${PROOF_VERBOSE:-0}}"
 
 if [[ "${1:-}" == "--verbose" ]]; then
   VERBOSE=1
@@ -43,7 +43,7 @@ run_step_quiet() {
 }
 
 if [[ "$VERBOSE" == "1" ]]; then
-  "$ROOT_DIR/scripts/loc_guard.sh"
+  "$ROOT_DIR/scripts/loc_guard.sh" --verbose
   cargo test --manifest-path "$ROOT_DIR/crates/carreltex-core/Cargo.toml"
   cargo test --manifest-path "$ROOT_DIR/crates/carreltex-engine/Cargo.toml"
   "$ROOT_DIR/scripts/proof_wasm_smoke.sh"
