@@ -16,6 +16,7 @@ import { runTokenizerTextwordLeaf141Cases } from './cases_v0_tokenizer_textword_
 import { runTokenizerTextwordLeaf142Cases } from './cases_v0_tokenizer_textword_142.mjs';
 import { runTokenizerTextwordLeaf143Cases } from './cases_v0_tokenizer_textword_143.mjs';
 import { runTokenizerTextwordLeaf144Cases } from './cases_v0_tokenizer_textword_144.mjs';
+import { runTokenizerTextwordLeaf145Cases } from './cases_v0_tokenizer_textword_145.mjs';
 import { runMacroCases } from './cases_v0_macro.mjs';
 
 export function runCasesV0(ctx, mem, helpers) {
@@ -422,6 +423,7 @@ export function runCasesV0(ctx, mem, helpers) {
   runTokenizerTextwordLeaf142Cases(ctx, { addMountedFile, expectNotImplemented, readCompileLogBytes, assertEventsMatchLogAndStats, assertMainXdvArtifactEmpty });
   runTokenizerTextwordLeaf143Cases(ctx, { addMountedFile, expectNotImplemented, readCompileLogBytes, assertEventsMatchLogAndStats, assertMainXdvArtifactEmpty });
   runTokenizerTextwordLeaf144Cases(ctx, { addMountedFile, expectNotImplemented, readCompileLogBytes, assertEventsMatchLogAndStats, assertMainXdvArtifactEmpty });
+  runTokenizerTextwordLeaf145Cases(ctx, { addMountedFile, expectNotImplemented, readCompileLogBytes, assertEventsMatchLogAndStats, assertMainXdvArtifactEmpty });
 
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before compile_request negative setter tests failed');
