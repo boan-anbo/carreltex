@@ -404,6 +404,18 @@ fn control_word_textasciigrave_maps_to_backtick_and_swallows_space() {
 }
 
 #[test]
+fn control_word_textquotedblleft_maps_to_quote_and_swallows_space() {
+    let tokens = tokenize_v0(b"\\textquotedblleft X").expect("tokenize should succeed");
+    assert_eq!(tokens, vec![TokenV0::Char(b'"'), TokenV0::Char(b'X')]);
+}
+
+#[test]
+fn control_word_textquotedblright_maps_to_quote_and_swallows_space() {
+    let tokens = tokenize_v0(b"\\textquotedblright X").expect("tokenize should succeed");
+    assert_eq!(tokens, vec![TokenV0::Char(b'"'), TokenV0::Char(b'X')]);
+}
+
+#[test]
 fn control_word_par_maps_to_space_and_swallows_following_whitespace() {
     let tokens = tokenize_v0(b"A\\par B").expect("tokenize should succeed");
     assert_eq!(
