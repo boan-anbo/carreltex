@@ -472,6 +472,24 @@ fn control_word_textsection_maps_to_s_and_swallows_space() {
 }
 
 #[test]
+fn control_word_textparagraph_maps_to_p_and_swallows_space() {
+    let tokens = tokenize_v0(b"\\textparagraph X").expect("tokenize should succeed");
+    assert_eq!(tokens, vec![TokenV0::Char(b'P'), TokenV0::Char(b'X')]);
+}
+
+#[test]
+fn control_word_textcopyright_maps_to_c_and_swallows_space() {
+    let tokens = tokenize_v0(b"\\textcopyright X").expect("tokenize should succeed");
+    assert_eq!(tokens, vec![TokenV0::Char(b'c'), TokenV0::Char(b'X')]);
+}
+
+#[test]
+fn control_word_textregistered_maps_to_r_and_swallows_space() {
+    let tokens = tokenize_v0(b"\\textregistered X").expect("tokenize should succeed");
+    assert_eq!(tokens, vec![TokenV0::Char(b'R'), TokenV0::Char(b'X')]);
+}
+
+#[test]
 fn control_word_par_maps_to_space_and_swallows_following_whitespace() {
     let tokens = tokenize_v0(b"A\\par B").expect("tokenize should succeed");
     assert_eq!(

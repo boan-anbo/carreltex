@@ -79,6 +79,12 @@ pub(super) fn parse_control_word_v0(
         vec![TokenV0::Char(b'#')]
     } else if control_word.as_slice() == b"textsection" {
         vec![TokenV0::Char(b'S')]
+    } else if control_word.as_slice() == b"textparagraph" {
+        vec![TokenV0::Char(b'P')]
+    } else if control_word.as_slice() == b"textcopyright" {
+        vec![TokenV0::Char(b'c')]
+    } else if control_word.as_slice() == b"textregistered" {
+        vec![TokenV0::Char(b'R')]
     } else if control_word.as_slice() == b"par" {
         vec![TokenV0::Space]
     } else {

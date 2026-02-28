@@ -5,6 +5,7 @@ import { runXdefNoexpandCases } from './cases_v0_xdef_noexpand.mjs';
 import { runIfnumCases } from './cases_v0_ifnum.mjs';
 import { runIfxCases } from './cases_v0_ifx.mjs';
 import { runTokenizerCases } from './cases_v0_tokenizer.mjs';
+import { runTokenizerTextwordLeaf133Cases } from './cases_v0_tokenizer_textword_133.mjs';
 import { runMacroCases } from './cases_v0_macro.mjs';
 
 export function runCasesV0(ctx, mem, helpers) {
@@ -400,6 +401,7 @@ export function runCasesV0(ctx, mem, helpers) {
   runIfnumCases(ctx, { addMountedFile, expectInvalid, expectNotImplemented, readCompileLogBytes, assertEventsMatchLogAndStats, assertMainXdvArtifactEmpty, assertNoEvents });
   runIfxCases(ctx, { addMountedFile, expectInvalid, expectNotImplemented, readCompileLogBytes, assertEventsMatchLogAndStats, assertMainXdvArtifactEmpty, assertNoEvents });
   runTokenizerCases(ctx, { addMountedFile, expectInvalid, expectNotImplemented, readCompileLogBytes, assertEventsMatchLogAndStats, assertMainXdvArtifactEmpty, assertNoEvents });
+  runTokenizerTextwordLeaf133Cases(ctx, { addMountedFile, expectNotImplemented, readCompileLogBytes, assertEventsMatchLogAndStats, assertMainXdvArtifactEmpty });
 
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before compile_request negative setter tests failed');
