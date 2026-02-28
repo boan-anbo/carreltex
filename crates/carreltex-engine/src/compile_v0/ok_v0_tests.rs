@@ -10,6 +10,9 @@ fn valid_request() -> CompileRequestV0 {
         source_date_epoch: 1,
         max_log_bytes: 4096,
         ok_max_line_glyphs_v0: None,
+        ok_max_lines_per_page_v0: None,
+        ok_line_advance_sp_v0: None,
+        ok_glyph_advance_sp_v0: None,
     }
 }
 
@@ -312,4 +315,20 @@ fn request_wrap_cap_out_of_range_is_invalid_input() {
     assert_eq!(result.status, CompileStatus::InvalidInput);
     assert!(result.main_xdv_bytes.is_empty());
     assert!(result.log_bytes.ends_with(b"request_invalid"));
+}
+
+#[test]
+fn request_max_lines_per_page_one_splits_wrapped_output_into_multiple_pages() {
+    let mut mount = Mount::default();
+    let main =
+        b"\\documentclass{article}\\begin{document}word word word word word word word word word word\\end{document}";
+    assert!(mount.add_file(b"main.tex", main).is_ok());
+    let mut request = valid_request();
+    request.ok_max_line_glyphs_v0 = Some(10);
+    request.ok_max_lines_per_page_v0 = Some(1);
+    let result = compile_request_v0(&mut mount, &request);
+    assert_eq!(result.status, CompileStatus::Ok);
+    assert!(validate_dvi_v2_text_page_v0(&result.main_xdv_bytes));
+    let pages = count_dvi_v2_text_pages_v0(&result.main_xdv_bytes).expect("page count");
+    assert!(pages >= 2);
 }
