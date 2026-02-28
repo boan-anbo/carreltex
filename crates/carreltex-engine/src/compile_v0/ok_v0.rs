@@ -26,7 +26,7 @@ fn consume_group_literal(tokens: &[TokenV0], mut index: usize, literal: &[u8]) -
 }
 
 fn is_supported_ok_char_v0(byte: u8) -> bool {
-    byte.is_ascii_uppercase()
+    (0x20..=0x7e).contains(&byte) && byte != b'\\'
 }
 
 pub(crate) fn extract_strict_ok_text_body_v0(tokens: &[TokenV0]) -> Option<Vec<u8>> {
