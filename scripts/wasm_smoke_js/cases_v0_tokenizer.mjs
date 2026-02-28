@@ -71,6 +71,29 @@ export function runTokenizerCases(ctx, helpers) {
   }
 
   if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before tokenizer control-symbol-bang-noop case failed');
+  }
+  const bangMainBytes = new TextEncoder().encode('\\documentclass{article}\n\\begin{document}\nHello.\\!XYZ\n\\end{document}\n');
+  if (addMountedFile('main.tex', bangMainBytes, 'tokenizer_control_symbol_bang_noop_main') !== 0) {
+    throw new Error('mount_add_file(tokenizer control-symbol-bang-noop main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) {
+    throw new Error('mount_finalize for tokenizer control-symbol-bang-noop case failed');
+  }
+  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(tokenizer control-symbol-bang-noop)');
+  {
+    const logBytes = readCompileLogBytes();
+    const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(tokenizer control-symbol-bang-noop)');
+    if (helloBaselineCharCount === null) {
+      throw new Error('helloBaselineCharCount not initialized for tokenizer control-symbol-bang-noop case');
+    }
+    if (stats.char_count !== helloBaselineCharCount + 3) {
+      throw new Error(`compile_main(tokenizer control-symbol-bang-noop) char_count delta expected +3, got baseline=${helloBaselineCharCount}, current=${stats.char_count}`);
+    }
+    assertMainXdvArtifactEmpty('compile_main(tokenizer control-symbol-bang-noop)');
+  }
+
+  if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer caret-hex decode case failed');
   }
   const decodeMainBytes = new TextEncoder().encode('\\documentclass{article}\n\\begin{document}\nA^^4AB\n\\end{document}\n');
