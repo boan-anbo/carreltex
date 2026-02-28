@@ -30,8 +30,6 @@ export function runOkEmptyDocCases(ctx, helpers) {
     const DVI_FNT_DEF1 = 243;
     const DVI_FNT_NUM_0 = 171;
     const DVI_RIGHT3 = 145;
-    const DVI_W0 = 147;
-    const DVI_W3 = 150;
     const DVI_DOWN3 = 160;
     let index = 0;
     if (bytes[index++] !== DVI_PRE) {
@@ -39,9 +37,9 @@ export function runOkEmptyDocCases(ctx, helpers) {
     }
     index += 14;
     let right3 = 0;
-    let w3 = 0;
-    let w0 = 0;
     let down3 = 0;
+    let right3PositiveTotal = 0;
+    const right3PositiveAmounts = [];
     while (index < bytes.length) {
       const opcode = bytes[index];
       if (opcode === DVI_POST) {
@@ -64,13 +62,13 @@ export function runOkEmptyDocCases(ctx, helpers) {
       while (index < bytes.length && bytes[index] !== DVI_EOP) {
         if (bytes[index] === DVI_RIGHT3) {
           right3 += 1;
+          const amount =
+            ((bytes[index + 1] << 16) | (bytes[index + 2] << 8) | bytes[index + 3]) << 8 >> 8;
+          if (amount > 0) {
+            right3PositiveTotal += amount;
+            right3PositiveAmounts.push(amount);
+          }
           index += 4;
-        } else if (bytes[index] === DVI_W3) {
-          w3 += 1;
-          index += 4;
-        } else if (bytes[index] === DVI_W0) {
-          w0 += 1;
-          index += 1;
         } else if (bytes[index] === DVI_DOWN3) {
           down3 += 1;
           index += 4;
@@ -83,7 +81,7 @@ export function runOkEmptyDocCases(ctx, helpers) {
       }
       index += 1;
     }
-    return { right3, w3, w0, down3 };
+    return { right3, down3, right3PositiveTotal, right3PositiveAmounts };
   };
 
   const runCompileRequestOkCase = (
@@ -208,11 +206,13 @@ export function runOkEmptyDocCases(ctx, helpers) {
     throw new Error('compile_main(ok text doc) main.xdv expected non-empty bytes');
   }
   const textMovement = countMovementOpsInTextPages(textXdvBytes, 'compile_main(ok text doc)');
-  if (textMovement.right3 < 1) {
-    throw new Error('compile_main(ok text doc) expected at least one RIGHT3 opcode');
+  if (textMovement.right3 < 3) {
+    throw new Error(`compile_main(ok text doc) expected right3>=3, got ${textMovement.right3}`);
   }
-  if (textMovement.w3 < 1) {
-    throw new Error('compile_main(ok text doc) expected at least one W3 opcode');
+  if (textMovement.right3PositiveTotal < (3 * 65536)) {
+    throw new Error(
+      `compile_main(ok text doc) expected positive right3 total>=${3 * 65536}, got ${textMovement.right3PositiveTotal}`,
+    );
   }
 
   if (ctx.mountReset() !== 0) {
@@ -255,8 +255,8 @@ export function runOkEmptyDocCases(ctx, helpers) {
     printableXdvBytes,
     'compile_main(ok printable text doc)',
   );
-  if (printableMovement.w0 <= 0) {
-    throw new Error('compile_main(ok printable text doc) expected at least one W0 opcode');
+  if (printableMovement.right3 < 15) {
+    throw new Error(`compile_main(ok printable text doc) expected right3>=15, got ${printableMovement.right3}`);
   }
 
   if (ctx.mountReset() !== 0) {
@@ -365,6 +365,40 @@ export function runOkEmptyDocCases(ctx, helpers) {
   );
   if (pagebreakMovement.right3 < 1) {
     throw new Error('compile_main(ok pagebreak text doc) expected at least one RIGHT3 opcode');
+  }
+
+  if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before OK width metrics text doc case failed');
+  }
+  const wiTextDocBytes = new TextEncoder().encode('\\documentclass{article}\\begin{document}Wi.\\end{document}');
+  if (addMountedFile('main.tex', wiTextDocBytes, 'ok_width_metrics_text_doc_main') !== 0) {
+    throw new Error('mount_add_file(ok width metrics text doc main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) {
+    throw new Error('mount_finalize for OK width metrics text doc case failed');
+  }
+  expectOk(ctx.compileMain(), 'compile_main_v0(ok width metrics text doc)');
+  const wiReport = readCompileReportJson();
+  if (wiReport.status !== 'OK') {
+    throw new Error(`compile_main(ok width metrics text doc) report.status expected OK, got ${wiReport.status}`);
+  }
+  const wiXdvBytes = readMainXdvArtifactBytes('compile_main(ok width metrics text doc)');
+  const wiMovement = countMovementOpsInTextPages(wiXdvBytes, 'compile_main(ok width metrics text doc)');
+  if (wiMovement.right3 !== 3) {
+    throw new Error(`compile_main(ok width metrics text doc) expected right3=3, got ${wiMovement.right3}`);
+  }
+  const expectedWiAmounts = [98304, 32768, 32768];
+  if (wiMovement.right3PositiveAmounts.length !== expectedWiAmounts.length) {
+    throw new Error(
+      `compile_main(ok width metrics text doc) expected ${expectedWiAmounts.length} positive right3 amounts, got ${wiMovement.right3PositiveAmounts.length}`,
+    );
+  }
+  for (let i = 0; i < expectedWiAmounts.length; i += 1) {
+    if (wiMovement.right3PositiveAmounts[i] !== expectedWiAmounts[i]) {
+      throw new Error(
+        `compile_main(ok width metrics text doc) right3 amount[${i}] expected ${expectedWiAmounts[i]}, got ${wiMovement.right3PositiveAmounts[i]}`,
+      );
+    }
   }
 
   if (ctx.mountReset() !== 0) {

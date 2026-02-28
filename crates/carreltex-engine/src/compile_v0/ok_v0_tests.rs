@@ -1,7 +1,8 @@
 use super::compile_request_v0;
 use carreltex_core::{CompileRequestV0, CompileStatus, Mount};
 use carreltex_xdv::{
-    count_dvi_v2_text_movements_v0, count_dvi_v2_text_pages_v0, validate_dvi_v2_text_page_v0,
+    count_dvi_v2_text_movements_v0, count_dvi_v2_text_pages_v0,
+    sum_dvi_v2_positive_right3_amounts_with_layout_v0, validate_dvi_v2_text_page_v0,
 };
 
 fn valid_request() -> CompileRequestV0 {
@@ -155,7 +156,7 @@ fn ok_text_emits_deterministic_movement_sequence() {
     assert!(validate_dvi_v2_text_page_v0(&result.main_xdv_bytes));
     assert_eq!(
         count_dvi_v2_text_movements_v0(&result.main_xdv_bytes),
-        Some((2, 1, 1, 0, 1))
+        Some((5, 0, 0, 0, 1))
     );
 }
 
@@ -169,7 +170,7 @@ fn ok_text_two_chars_emits_single_right_move_only() {
     assert!(validate_dvi_v2_text_page_v0(&result.main_xdv_bytes));
     assert_eq!(
         count_dvi_v2_text_movements_v0(&result.main_xdv_bytes),
-        Some((1, 0, 0, 0, 1))
+        Some((2, 0, 0, 0, 1))
     );
 }
 
@@ -184,7 +185,7 @@ fn ok_newline_control_word_emits_down3_and_stays_single_page() {
     assert_eq!(count_dvi_v2_text_pages_v0(&result.main_xdv_bytes), Some(1));
     assert_eq!(
         count_dvi_v2_text_movements_v0(&result.main_xdv_bytes),
-        Some((0, 0, 0, 1, 1))
+        Some((3, 0, 0, 1, 1))
     );
 }
 
@@ -199,8 +200,25 @@ fn ok_multichar_newline_control_word_uses_reset_sequence() {
     assert_eq!(count_dvi_v2_text_pages_v0(&result.main_xdv_bytes), Some(1));
     assert_eq!(
         count_dvi_v2_text_movements_v0(&result.main_xdv_bytes),
-        Some((2, 0, 0, 1, 1))
+        Some((4, 0, 0, 1, 1))
     );
+}
+
+#[test]
+fn ok_wi_dot_uses_scaled_per_glyph_widths() {
+    let mut mount = Mount::default();
+    let main = b"\\documentclass{article}\\begin{document}Wi.\\end{document}";
+    assert!(mount.add_file(b"main.tex", main).is_ok());
+    let result = compile_request_v0(&mut mount, &valid_request());
+    assert_eq!(result.status, CompileStatus::Ok);
+    assert!(validate_dvi_v2_text_page_v0(&result.main_xdv_bytes));
+    let total = sum_dvi_v2_positive_right3_amounts_with_layout_v0(
+        &result.main_xdv_bytes,
+        65_536,
+        786_432,
+    )
+    .expect("sum parser should parse");
+    assert_eq!(total, (65_536 * 5 / 2) as u32);
 }
 
 #[test]
