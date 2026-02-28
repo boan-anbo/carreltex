@@ -46,6 +46,9 @@ struct CompileRequestState {
     source_date_epoch: Option<u64>,
     max_log_bytes: Option<u32>,
     ok_max_line_glyphs_v0: Option<u32>,
+    ok_max_lines_per_page_v0: Option<u32>,
+    ok_line_advance_sp_v0: Option<i32>,
+    ok_glyph_advance_sp_v0: Option<i32>,
 }
 
 fn compile_request_state() -> &'static Mutex<CompileRequestState> {
@@ -480,6 +483,9 @@ pub extern "C" fn carreltex_wasm_compile_request_reset_v0() -> i32 {
     state.source_date_epoch = None;
     state.max_log_bytes = None;
     state.ok_max_line_glyphs_v0 = None;
+    state.ok_max_lines_per_page_v0 = None;
+    state.ok_line_advance_sp_v0 = None;
+    state.ok_glyph_advance_sp_v0 = None;
     0
 }
 
@@ -548,6 +554,45 @@ pub extern "C" fn carreltex_wasm_compile_request_set_ok_max_line_glyphs_v0(value
 }
 
 #[no_mangle]
+pub extern "C" fn carreltex_wasm_compile_request_set_ok_max_lines_per_page_v0(value: u32) -> i32 {
+    if !(1..=200).contains(&value) {
+        return 1;
+    }
+    let mut state = match compile_request_state().lock() {
+        Ok(guard) => guard,
+        Err(_) => return 1,
+    };
+    state.ok_max_lines_per_page_v0 = Some(value);
+    0
+}
+
+#[no_mangle]
+pub extern "C" fn carreltex_wasm_compile_request_set_ok_line_advance_sp_v0(value: i32) -> i32 {
+    if !(1..=8_388_607).contains(&value) {
+        return 1;
+    }
+    let mut state = match compile_request_state().lock() {
+        Ok(guard) => guard,
+        Err(_) => return 1,
+    };
+    state.ok_line_advance_sp_v0 = Some(value);
+    0
+}
+
+#[no_mangle]
+pub extern "C" fn carreltex_wasm_compile_request_set_ok_glyph_advance_sp_v0(value: i32) -> i32 {
+    if !(1..=8_388_607).contains(&value) {
+        return 1;
+    }
+    let mut state = match compile_request_state().lock() {
+        Ok(guard) => guard,
+        Err(_) => return 1,
+    };
+    state.ok_glyph_advance_sp_v0 = Some(value);
+    0
+}
+
+#[no_mangle]
 pub extern "C" fn carreltex_wasm_compile_run_v0() -> i32 {
     let request = {
         let state = match compile_request_state().lock() {
@@ -562,6 +607,9 @@ pub extern "C" fn carreltex_wasm_compile_run_v0() -> i32 {
             source_date_epoch: state.source_date_epoch.unwrap_or(0),
             max_log_bytes: state.max_log_bytes.unwrap_or(0),
             ok_max_line_glyphs_v0: state.ok_max_line_glyphs_v0,
+            ok_max_lines_per_page_v0: state.ok_max_lines_per_page_v0,
+            ok_line_advance_sp_v0: state.ok_line_advance_sp_v0,
+            ok_glyph_advance_sp_v0: state.ok_glyph_advance_sp_v0,
         }
     };
 

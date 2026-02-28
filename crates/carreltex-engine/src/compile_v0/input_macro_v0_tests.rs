@@ -7,6 +7,9 @@ fn valid_request() -> CompileRequestV0 {
         source_date_epoch: 1,
         max_log_bytes: 4096,
         ok_max_line_glyphs_v0: None,
+        ok_max_lines_per_page_v0: None,
+        ok_line_advance_sp_v0: None,
+        ok_glyph_advance_sp_v0: None,
     }
 }
 
