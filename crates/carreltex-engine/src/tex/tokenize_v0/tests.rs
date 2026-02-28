@@ -218,6 +218,24 @@ fn control_symbol_bang_noop_does_not_swallow_following_whitespace() {
 }
 
 #[test]
+fn control_symbol_semicolon_maps_to_space_char_without_swallowing_following_space() {
+    let tokens = tokenize_v0(b"\\; X").expect("tokenize should succeed");
+    assert_eq!(
+        tokens,
+        vec![TokenV0::Char(b' '), TokenV0::Space, TokenV0::Char(b'X')]
+    );
+}
+
+#[test]
+fn control_symbol_semicolon_between_chars_emits_single_space_char() {
+    let tokens = tokenize_v0(b"A\\;B").expect("tokenize should succeed");
+    assert_eq!(
+        tokens,
+        vec![TokenV0::Char(b'A'), TokenV0::Char(b' '), TokenV0::Char(b'B')]
+    );
+}
+
+#[test]
 fn control_symbol_percent_maps_to_percent_char() {
     let tokens = tokenize_v0(b"\\%X").expect("tokenize should succeed");
     assert_eq!(tokens, vec![TokenV0::Char(b'%'), TokenV0::Char(b'X')]);
