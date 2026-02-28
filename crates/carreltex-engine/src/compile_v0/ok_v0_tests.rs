@@ -60,6 +60,82 @@ fn simple_text_article_doc_returns_ok_with_valid_xdv() {
 }
 
 #[test]
+fn printable_ascii_text_body_returns_ok_with_valid_xdv() {
+    let mut baseline_mount = Mount::default();
+    let baseline_main = b"\\documentclass{article}\n\\begin{document}\n\n\\end{document}\n";
+    assert!(baseline_mount.add_file(b"main.tex", baseline_main).is_ok());
+    let baseline_result = compile_request_v0(&mut baseline_mount, &valid_request());
+    assert_eq!(baseline_result.status, CompileStatus::Ok);
+    let baseline_char_count =
+        stats_u64_field(&baseline_result.tex_stats_json, "char_count").expect("char_count");
+
+    let mut mount = Mount::default();
+    let main = b"\\documentclass{article}\n\\begin{document}\nHello, world! 123\n\\end{document}\n";
+    assert!(mount.add_file(b"main.tex", main).is_ok());
+    let result = compile_request_v0(&mut mount, &valid_request());
+    assert_eq!(result.status, CompileStatus::Ok);
+    assert!(result.log_bytes.is_empty());
+    assert!(result.main_xdv_bytes.len() > 0);
+    assert!(validate_dvi_v2_text_page_v0(&result.main_xdv_bytes));
+    let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
+    assert_eq!(char_count, baseline_char_count + 15);
+}
+
+#[test]
+fn printable_ascii_tilde_char_is_supported() {
+    let mut baseline_mount = Mount::default();
+    let baseline_main = b"\\documentclass{article}\n\\begin{document}\n\n\\end{document}\n";
+    assert!(baseline_mount.add_file(b"main.tex", baseline_main).is_ok());
+    let baseline_result = compile_request_v0(&mut baseline_mount, &valid_request());
+    assert_eq!(baseline_result.status, CompileStatus::Ok);
+    let baseline_char_count =
+        stats_u64_field(&baseline_result.tex_stats_json, "char_count").expect("char_count");
+
+    let mut mount = Mount::default();
+    let main = b"\\documentclass{article}\n\\begin{document}\n~\n\\end{document}\n";
+    assert!(mount.add_file(b"main.tex", main).is_ok());
+    let result = compile_request_v0(&mut mount, &valid_request());
+    assert_eq!(result.status, CompileStatus::Ok);
+    assert!(result.log_bytes.is_empty());
+    assert!(result.main_xdv_bytes.len() > 0);
+    assert!(validate_dvi_v2_text_page_v0(&result.main_xdv_bytes));
+    let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
+    assert_eq!(char_count, baseline_char_count + 1);
+}
+
+#[test]
+fn whitespace_runs_are_normalized_to_single_spaces_in_ok_subset() {
+    let mut baseline_mount = Mount::default();
+    let baseline_main = b"\\documentclass{article}\n\\begin{document}\n\n\\end{document}\n";
+    assert!(baseline_mount.add_file(b"main.tex", baseline_main).is_ok());
+    let baseline_result = compile_request_v0(&mut baseline_mount, &valid_request());
+    assert_eq!(baseline_result.status, CompileStatus::Ok);
+    let baseline_char_count =
+        stats_u64_field(&baseline_result.tex_stats_json, "char_count").expect("char_count");
+
+    let mut mount = Mount::default();
+    let main = b"\\documentclass{article}\n\\begin{document}\nA  \n\nB\tC\r\nD\rE\n\\end{document}\n";
+    assert!(mount.add_file(b"main.tex", main).is_ok());
+    let result = compile_request_v0(&mut mount, &valid_request());
+    assert_eq!(result.status, CompileStatus::Ok);
+    assert!(result.log_bytes.is_empty());
+    assert!(result.main_xdv_bytes.len() > 0);
+    assert!(validate_dvi_v2_text_page_v0(&result.main_xdv_bytes));
+    let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
+    assert_eq!(char_count, baseline_char_count + 5);
+}
+
+#[test]
+fn unsupported_char_backslash_in_body_falls_back_to_not_implemented() {
+    let mut mount = Mount::default();
+    let main = b"\\documentclass{article}\n\\begin{document}\nA\\textbackslash B\n\\end{document}\n";
+    assert!(mount.add_file(b"main.tex", main).is_ok());
+    let result = compile_request_v0(&mut mount, &valid_request());
+    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert!(result.main_xdv_bytes.is_empty());
+}
+
+#[test]
 fn control_sequence_in_body_falls_back_to_not_implemented() {
     let mut mount = Mount::default();
     let main = b"\\documentclass{article}\n\\begin{document}\n\\foo\n\\end{document}\n";

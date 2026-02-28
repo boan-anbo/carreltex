@@ -38,7 +38,7 @@ fn hello_baseline_char_count() -> u64 {
     let main = b"\\documentclass{article}\n\\begin{document}\nHello.\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert_eq!(result.status, CompileStatus::Ok);
     stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count")
 }
 
@@ -169,7 +169,7 @@ fn braced_accent_passthrough_is_counted_as_literal_char() {
     let main = b"\\documentclass{article}\n\\begin{document}\nHello.\\~{a}XYZ\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert_eq!(result.status, CompileStatus::Ok);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline + 4);
 }
@@ -181,7 +181,7 @@ fn braced_accent_passthrough_accepts_control_symbol_payload() {
     let main = b"\\documentclass{article}\n\\begin{document}\nHello.\\~{\\%}XYZ\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert_eq!(result.status, CompileStatus::Ok);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline + 4);
 }
@@ -238,7 +238,7 @@ fn control_symbol_comma_is_counted_as_space_char() {
     let main = b"\\documentclass{article}\n\\begin{document}\nHello.\\,XYZ\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert_eq!(result.status, CompileStatus::Ok);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline + 4);
 }
@@ -250,7 +250,7 @@ fn control_symbol_bang_is_noop_and_only_body_chars_are_counted() {
     let main = b"\\documentclass{article}\n\\begin{document}\nHello.\\!XYZ\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert_eq!(result.status, CompileStatus::Ok);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline + 3);
 }
@@ -262,7 +262,7 @@ fn control_symbol_semicolon_is_counted_as_space_char() {
     let main = b"\\documentclass{article}\n\\begin{document}\nHello.\\;XYZ\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert_eq!(result.status, CompileStatus::Ok);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline + 4);
 }
@@ -274,7 +274,7 @@ fn control_symbol_percent_is_counted_as_literal_char() {
     let main = b"\\documentclass{article}\n\\begin{document}\nHello.\\%XYZ\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert_eq!(result.status, CompileStatus::Ok);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline + 4);
 }
@@ -286,7 +286,7 @@ fn control_symbol_underscore_is_counted_as_literal_char() {
     let main = b"\\documentclass{article}\n\\begin{document}\nHello.\\_XYZ\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert_eq!(result.status, CompileStatus::Ok);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline + 4);
 }
@@ -298,7 +298,7 @@ fn control_symbol_hash_is_counted_as_literal_char() {
     let main = b"\\documentclass{article}\n\\begin{document}\nHello.\\#XYZ\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert_eq!(result.status, CompileStatus::Ok);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline + 4);
 }
@@ -310,7 +310,7 @@ fn control_symbol_dollar_is_counted_as_literal_char() {
     let main = b"\\documentclass{article}\n\\begin{document}\nHello.\\$XYZ\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert_eq!(result.status, CompileStatus::Ok);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline + 4);
 }
@@ -322,7 +322,7 @@ fn control_symbol_ampersand_is_counted_as_literal_char() {
     let main = b"\\documentclass{article}\n\\begin{document}\nHello.\\&XYZ\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert_eq!(result.status, CompileStatus::Ok);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline + 4);
 }
@@ -334,7 +334,7 @@ fn control_symbol_lbrace_is_counted_as_literal_char() {
     let main = b"\\documentclass{article}\n\\begin{document}\nHello.\\{XYZ\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert_eq!(result.status, CompileStatus::Ok);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline + 4);
 }
@@ -346,7 +346,7 @@ fn control_symbol_rbrace_is_counted_as_literal_char() {
     let main = b"\\documentclass{article}\n\\begin{document}\nHello.\\}XYZ\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert_eq!(result.status, CompileStatus::Ok);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline + 4);
 }
@@ -372,7 +372,7 @@ fn control_word_textasciitilde_is_counted_as_literal_char_and_space_is_swallowed
         b"\\documentclass{article}\n\\begin{document}\nHello.\\textasciitilde XYZ\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert_eq!(result.status, CompileStatus::Ok);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline + 4);
 }
@@ -385,7 +385,7 @@ fn control_word_textasciicircum_is_counted_as_literal_char_and_space_is_swallowe
         b"\\documentclass{article}\n\\begin{document}\nHello.\\textasciicircum XYZ\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert_eq!(result.status, CompileStatus::Ok);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline + 4);
 }
@@ -398,7 +398,7 @@ fn control_word_textquotedbl_is_counted_as_literal_char_and_space_is_swallowed()
         b"\\documentclass{article}\n\\begin{document}\nHello.\\textquotedbl XYZ\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert_eq!(result.status, CompileStatus::Ok);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline + 4);
 }
@@ -410,7 +410,7 @@ fn control_word_textless_is_counted_as_literal_char_and_space_is_swallowed() {
     let main = b"\\documentclass{article}\n\\begin{document}\nHello.\\textless XYZ\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert_eq!(result.status, CompileStatus::Ok);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline + 4);
 }
@@ -423,7 +423,7 @@ fn control_word_textgreater_is_counted_as_literal_char_and_space_is_swallowed() 
         b"\\documentclass{article}\n\\begin{document}\nHello.\\textgreater XYZ\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert_eq!(result.status, CompileStatus::Ok);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline + 4);
 }
@@ -436,7 +436,7 @@ fn control_word_textbar_is_counted_as_literal_char_and_space_is_swallowed() {
         b"\\documentclass{article}\n\\begin{document}\nHello.\\textbar XYZ\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert_eq!(result.status, CompileStatus::Ok);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline + 4);
 }
@@ -449,7 +449,7 @@ fn control_word_textbraceleft_is_counted_as_literal_char_and_space_is_swallowed(
         b"\\documentclass{article}\n\\begin{document}\nHello.\\textbraceleft XYZ\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert_eq!(result.status, CompileStatus::Ok);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline + 4);
 }
@@ -462,7 +462,7 @@ fn control_word_textbraceright_is_counted_as_literal_char_and_space_is_swallowed
         b"\\documentclass{article}\n\\begin{document}\nHello.\\textbraceright XYZ\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert_eq!(result.status, CompileStatus::Ok);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline + 4);
 }
@@ -475,7 +475,7 @@ fn control_word_textunderscore_is_counted_as_literal_char_and_space_is_swallowed
         b"\\documentclass{article}\n\\begin{document}\nHello.\\textunderscore XYZ\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert_eq!(result.status, CompileStatus::Ok);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline + 4);
 }
@@ -488,7 +488,7 @@ fn control_word_textquotesingle_is_counted_as_literal_char_and_space_is_swallowe
         b"\\documentclass{article}\n\\begin{document}\nHello.\\textquotesingle XYZ\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert_eq!(result.status, CompileStatus::Ok);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline + 4);
 }
@@ -501,7 +501,7 @@ fn control_word_textasciigrave_is_counted_as_literal_char_and_space_is_swallowed
         b"\\documentclass{article}\n\\begin{document}\nHello.\\textasciigrave XYZ\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert_eq!(result.status, CompileStatus::Ok);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline + 4);
 }
@@ -514,7 +514,7 @@ fn control_word_textquotedblleft_is_counted_as_literal_char_and_space_is_swallow
         b"\\documentclass{article}\n\\begin{document}\nHello.\\textquotedblleft XYZ\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert_eq!(result.status, CompileStatus::Ok);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline + 4);
 }
@@ -527,7 +527,7 @@ fn control_word_textquotedblright_is_counted_as_literal_char_and_space_is_swallo
         b"\\documentclass{article}\n\\begin{document}\nHello.\\textquotedblright XYZ\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert_eq!(result.status, CompileStatus::Ok);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline + 4);
 }
@@ -540,7 +540,7 @@ fn control_word_textendash_is_counted_as_literal_char_and_space_is_swallowed() {
         b"\\documentclass{article}\n\\begin{document}\nHello.\\textendash XYZ\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert_eq!(result.status, CompileStatus::Ok);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline + 4);
 }
@@ -553,7 +553,7 @@ fn control_word_textemdash_is_counted_as_literal_char_and_space_is_swallowed() {
         b"\\documentclass{article}\n\\begin{document}\nHello.\\textemdash XYZ\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert_eq!(result.status, CompileStatus::Ok);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline + 4);
 }
@@ -566,7 +566,7 @@ fn control_word_textellipsis_is_counted_as_three_literal_chars_and_space_is_swal
         b"\\documentclass{article}\n\\begin{document}\nHello.\\textellipsis XYZ\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert_eq!(result.status, CompileStatus::Ok);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline + 6);
 }
@@ -579,7 +579,7 @@ fn control_word_textbullet_is_counted_as_literal_char_and_space_is_swallowed() {
         b"\\documentclass{article}\n\\begin{document}\nHello.\\textbullet XYZ\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert_eq!(result.status, CompileStatus::Ok);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline + 4);
 }
@@ -592,7 +592,7 @@ fn control_word_textdegree_is_counted_as_literal_char_and_space_is_swallowed() {
         b"\\documentclass{article}\n\\begin{document}\nHello.\\textdegree XYZ\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert_eq!(result.status, CompileStatus::Ok);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline + 4);
 }
@@ -605,7 +605,7 @@ fn control_word_textdagger_is_counted_as_literal_char_and_space_is_swallowed() {
         b"\\documentclass{article}\n\\begin{document}\nHello.\\textdagger XYZ\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert_eq!(result.status, CompileStatus::Ok);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline + 4);
 }
@@ -618,7 +618,7 @@ fn control_word_textdaggerdbl_is_counted_as_literal_char_and_space_is_swallowed(
         b"\\documentclass{article}\n\\begin{document}\nHello.\\textdaggerdbl XYZ\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert_eq!(result.status, CompileStatus::Ok);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline + 4);
 }
@@ -631,7 +631,7 @@ fn control_word_textsection_is_counted_as_literal_char_and_space_is_swallowed() 
         b"\\documentclass{article}\n\\begin{document}\nHello.\\textsection XYZ\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert_eq!(result.status, CompileStatus::Ok);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline + 4);
 }
@@ -644,7 +644,7 @@ fn control_word_textparagraph_is_counted_as_literal_char_and_space_is_swallowed(
         b"\\documentclass{article}\n\\begin{document}\nHello.\\textparagraph XYZ\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert_eq!(result.status, CompileStatus::Ok);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline + 4);
 }
@@ -657,7 +657,7 @@ fn control_word_textcopyright_is_counted_as_literal_char_and_space_is_swallowed(
         b"\\documentclass{article}\n\\begin{document}\nHello.\\textcopyright XYZ\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert_eq!(result.status, CompileStatus::Ok);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline + 4);
 }
@@ -670,7 +670,7 @@ fn control_word_textregistered_is_counted_as_literal_char_and_space_is_swallowed
         b"\\documentclass{article}\n\\begin{document}\nHello.\\textregistered XYZ\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert_eq!(result.status, CompileStatus::Ok);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline + 4);
 }
@@ -683,7 +683,7 @@ fn control_word_textordfeminine_is_counted_as_literal_char_and_space_is_swallowe
         b"\\documentclass{article}\n\\begin{document}\nHello.\\textordfeminine XYZ\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert_eq!(result.status, CompileStatus::Ok);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline + 4);
 }
@@ -696,7 +696,7 @@ fn control_word_textordmasculine_is_counted_as_literal_char_and_space_is_swallow
         b"\\documentclass{article}\n\\begin{document}\nHello.\\textordmasculine XYZ\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert_eq!(result.status, CompileStatus::Ok);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline + 4);
 }
@@ -709,7 +709,7 @@ fn control_word_textyen_is_counted_as_literal_char_and_space_is_swallowed() {
         b"\\documentclass{article}\n\\begin{document}\nHello.\\textyen XYZ\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert_eq!(result.status, CompileStatus::Ok);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline + 4);
 }
@@ -722,7 +722,7 @@ fn control_word_textsterling_is_counted_as_literal_char_and_space_is_swallowed()
         b"\\documentclass{article}\n\\begin{document}\nHello.\\textsterling XYZ\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert_eq!(result.status, CompileStatus::Ok);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline + 4);
 }
@@ -735,7 +735,7 @@ fn control_word_textbrokenbar_is_counted_as_literal_char_and_space_is_swallowed(
         b"\\documentclass{article}\n\\begin{document}\nHello.\\textbrokenbar XYZ\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert_eq!(result.status, CompileStatus::Ok);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline + 4);
 }
@@ -748,7 +748,7 @@ fn control_word_textcurrency_is_counted_as_literal_char_and_space_is_swallowed()
         b"\\documentclass{article}\n\\begin{document}\nHello.\\textcurrency XYZ\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert_eq!(result.status, CompileStatus::Ok);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline + 4);
 }
@@ -761,7 +761,7 @@ fn control_word_textexclamdown_is_counted_as_literal_char_and_space_is_swallowed
         b"\\documentclass{article}\n\\begin{document}\nHello.\\textexclamdown XYZ\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert_eq!(result.status, CompileStatus::Ok);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline + 4);
 }
@@ -774,7 +774,7 @@ fn control_word_textquestiondown_is_counted_as_literal_char_and_space_is_swallow
         b"\\documentclass{article}\n\\begin{document}\nHello.\\textquestiondown XYZ\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert_eq!(result.status, CompileStatus::Ok);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline + 4);
 }
@@ -787,7 +787,7 @@ fn control_word_textguillemotleft_is_counted_as_literal_char_and_space_is_swallo
         b"\\documentclass{article}\n\\begin{document}\nHello.\\textguillemotleft XYZ\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert_eq!(result.status, CompileStatus::Ok);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline + 4);
 }
@@ -800,7 +800,7 @@ fn control_word_textguillemotright_is_counted_as_literal_char_and_space_is_swall
         b"\\documentclass{article}\n\\begin{document}\nHello.\\textguillemotright XYZ\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert_eq!(result.status, CompileStatus::Ok);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline + 4);
 }
@@ -813,7 +813,7 @@ fn control_word_textquoteleft_is_counted_as_literal_char_and_space_is_swallowed(
         b"\\documentclass{article}\n\\begin{document}\nHello.\\textquoteleft XYZ\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert_eq!(result.status, CompileStatus::Ok);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline + 4);
 }
@@ -826,7 +826,7 @@ fn control_word_textquoteright_is_counted_as_literal_char_and_space_is_swallowed
         b"\\documentclass{article}\n\\begin{document}\nHello.\\textquoteright XYZ\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert_eq!(result.status, CompileStatus::Ok);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline + 4);
 }
@@ -839,7 +839,7 @@ fn control_word_textquotedblbase_is_counted_as_literal_char_and_space_is_swallow
         b"\\documentclass{article}\n\\begin{document}\nHello.\\textquotedblbase XYZ\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert_eq!(result.status, CompileStatus::Ok);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline + 4);
 }
@@ -852,7 +852,7 @@ fn control_word_textquotesinglbase_is_counted_as_literal_char_and_space_is_swall
         b"\\documentclass{article}\n\\begin{document}\nHello.\\textquotesinglbase XYZ\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert_eq!(result.status, CompileStatus::Ok);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline + 4);
 }
@@ -865,7 +865,7 @@ fn control_word_textasteriskcentered_is_counted_as_literal_char_and_space_is_swa
         b"\\documentclass{article}\n\\begin{document}\nHello.\\textasteriskcentered XYZ\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert_eq!(result.status, CompileStatus::Ok);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline + 4);
 }
@@ -878,7 +878,7 @@ fn control_word_textperiodcentered_is_counted_as_literal_char_and_space_is_swall
         b"\\documentclass{article}\n\\begin{document}\nHello.\\textperiodcentered XYZ\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert_eq!(result.status, CompileStatus::Ok);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline + 4);
 }
@@ -891,7 +891,7 @@ fn control_word_texttrademark_is_counted_as_literal_char_and_space_is_swallowed(
         b"\\documentclass{article}\n\\begin{document}\nHello.\\texttrademark XYZ\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert_eq!(result.status, CompileStatus::Ok);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline + 4);
 }
@@ -903,7 +903,7 @@ fn control_word_par_is_counted_as_single_space_with_no_extra_whitespace() {
     let main = b"\\documentclass{article}\n\\begin{document}\nHello.\\par XYZ\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert_eq!(result.status, CompileStatus::Ok);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline + 3);
 }

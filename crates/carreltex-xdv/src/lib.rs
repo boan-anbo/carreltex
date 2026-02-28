@@ -409,6 +409,20 @@ mod tests {
     }
 
     #[test]
+    fn text_writer_allows_empty_text_body() {
+        let bytes = write_dvi_v2_text_page_v0(b"").expect("writer should accept empty text");
+        assert!(validate_dvi_v2_text_page_v0(&bytes));
+        assert_eq!(bytes.first().copied(), Some(DVI_PRE));
+        assert_eq!(bytes.last().copied(), Some(DVI_TRAILER_BYTE));
+    }
+
+    #[test]
+    fn text_writer_rejects_out_of_range_bytes() {
+        assert!(write_dvi_v2_text_page_v0(&[0x1f]).is_none());
+        assert!(write_dvi_v2_text_page_v0(&[0x7f]).is_none());
+    }
+
+    #[test]
     fn validator_rejects_missing_font_definition() {
         let mut bytes = write_dvi_v2_text_page_v0(b"XYZ").expect("writer should accept XYZ");
         let font_def_index = bytes
