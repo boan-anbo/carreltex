@@ -671,6 +671,29 @@ export function runTokenizerCases(ctx, helpers) {
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer control-word-par case failed');
   }
+  const textellipsisMainBytes = new TextEncoder().encode('\\documentclass{article}\n\\begin{document}\nHello.\\textellipsis XYZ\n\\end{document}\n');
+  if (addMountedFile('main.tex', textellipsisMainBytes, 'tokenizer_control_word_textellipsis_main') !== 0) {
+    throw new Error('mount_add_file(tokenizer control-word-textellipsis main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) {
+    throw new Error('mount_finalize for tokenizer control-word-textellipsis case failed');
+  }
+  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(tokenizer control-word-textellipsis)');
+  {
+    const logBytes = readCompileLogBytes();
+    const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(tokenizer control-word-textellipsis)');
+    if (helloBaselineCharCount === null) {
+      throw new Error('helloBaselineCharCount not initialized for tokenizer control-word-textellipsis case');
+    }
+    if (stats.char_count !== helloBaselineCharCount + 6) {
+      throw new Error(`compile_main(tokenizer control-word-textellipsis) char_count delta expected +6, got baseline=${helloBaselineCharCount}, current=${stats.char_count}`);
+    }
+    assertMainXdvArtifactEmpty('compile_main(tokenizer control-word-textellipsis)');
+  }
+
+  if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before tokenizer control-word-par case failed');
+  }
   const parMainBytes = new TextEncoder().encode('\\documentclass{article}\n\\begin{document}\nHello.\\par XYZ\n\\end{document}\n');
   if (addMountedFile('main.tex', parMainBytes, 'tokenizer_control_word_par_main') !== 0) {
     throw new Error('mount_add_file(tokenizer control-word-par main.tex) failed');

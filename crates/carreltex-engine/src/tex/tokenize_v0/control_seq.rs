@@ -8,7 +8,7 @@ use control_seq_symbol::parse_control_symbol_v0;
 use control_seq_word::parse_control_word_v0;
 
 pub(super) struct ParsedControlSeqV0 {
-    pub(super) token: Option<TokenV0>,
+    pub(super) tokens: Vec<TokenV0>,
     pub(super) next_index: usize,
 }
 
