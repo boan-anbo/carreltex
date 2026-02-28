@@ -20,6 +20,7 @@ const PAGEBREAK_MARKER_V0: u8 = 0x0c;
 const NEWLINE_MARKER_V0: u8 = 0x0a;
 pub const DEFAULT_GLYPH_ADVANCE_SP_V0: i32 = 65_536;
 pub const DEFAULT_LINE_ADVANCE_SP_V0: i32 = 786_432;
+pub const DEFAULT_MAX_LINE_GLYPHS_V0: usize = 80;
 
 fn push_u32_be(out: &mut Vec<u8>, value: u32) {
     out.extend_from_slice(&value.to_be_bytes());
@@ -112,6 +113,46 @@ fn split_lines_v0(page: &[u8]) -> Vec<&[u8]> {
     }
     lines.push(&page[start..]);
     lines
+}
+
+fn wrap_logical_line_v0(line: &[u8], max_line_glyphs: usize) -> Option<Vec<Vec<u8>>> {
+    if max_line_glyphs == 0 {
+        return None;
+    }
+    if line.is_empty() {
+        return Some(vec![Vec::new()]);
+    }
+    let mut wrapped = Vec::<Vec<u8>>::new();
+    let mut start = 0usize;
+    while start < line.len() {
+        if line.len() - start <= max_line_glyphs {
+            wrapped.push(line[start..].to_vec());
+            break;
+        }
+        let limit = start + max_line_glyphs;
+        let mut break_at = None::<usize>;
+        for index in (start..limit).rev() {
+            if line[index] == b' ' {
+                break_at = Some(index);
+                break;
+            }
+        }
+        if let Some(space_index) = break_at {
+            if space_index > start {
+                wrapped.push(line[start..space_index].to_vec());
+            } else {
+                wrapped.push(Vec::new());
+            }
+            start = space_index + 1;
+            while start < line.len() && line[start] == b' ' {
+                start += 1;
+            }
+        } else {
+            wrapped.push(line[start..limit].to_vec());
+            start = limit;
+        }
+    }
+    Some(wrapped)
 }
 
 fn emit_line_glyphs_v0(out: &mut Vec<u8>, line: &[u8], glyph_advance_sp: i32) -> Option<u32> {
@@ -263,12 +304,21 @@ pub fn write_dvi_v2_text_page_with_layout_v0(
         push_i32_be(&mut out, prev_bop);
         append_font_def_v0(&mut out);
         out.push(DVI_FNT_NUM_0);
-        let lines = split_lines_v0(page);
+        let logical_lines = split_lines_v0(page);
+        let mut physical_lines = Vec::<Vec<u8>>::new();
+        for line in logical_lines {
+            let wrapped = wrap_logical_line_v0(line, DEFAULT_MAX_LINE_GLYPHS_V0)?;
+            physical_lines.extend(wrapped);
+        }
         let mut page_h = 0u32;
         let mut page_v = 0u32;
-        let mut previous_line_h = emit_line_glyphs_v0(&mut out, lines.first().copied().unwrap_or(&[]), glyph_advance_sp)?;
+        let mut previous_line_h = emit_line_glyphs_v0(
+            &mut out,
+            physical_lines.first().map(|line| line.as_slice()).unwrap_or(&[]),
+            glyph_advance_sp,
+        )?;
         page_h = page_h.max(previous_line_h);
-        for line in lines.iter().skip(1) {
+        for line in physical_lines.iter().skip(1) {
             if previous_line_h > 0 {
                 out.push(DVI_RIGHT3);
                 let reset_back = -i32::try_from(previous_line_h).ok()?;
@@ -277,7 +327,7 @@ pub fn write_dvi_v2_text_page_with_layout_v0(
             out.push(DVI_DOWN3);
             push_i24_be(&mut out, line_advance_sp)?;
             page_v = page_v.checked_add(u32::try_from(line_advance_sp).ok()?)?;
-            previous_line_h = emit_line_glyphs_v0(&mut out, line, glyph_advance_sp)?;
+            previous_line_h = emit_line_glyphs_v0(&mut out, line.as_slice(), glyph_advance_sp)?;
             page_h = page_h.max(previous_line_h);
         }
         max_h = max_h.max(page_h);
@@ -757,6 +807,19 @@ mod tests {
     }
 
     #[test]
+    fn text_writer_wraps_long_line_with_down3() {
+        let mut line = Vec::<u8>::new();
+        for _ in 0..50 {
+            line.extend_from_slice(b"A ");
+        }
+        let bytes = write_dvi_v2_text_page_v0(&line).expect("writer should accept wrapped line");
+        assert!(validate_dvi_v2_text_page_v0(&bytes));
+        let movement = count_dvi_v2_text_movements_v0(&bytes).expect("movement summary should parse");
+        assert_eq!(movement.4, 1);
+        assert!(movement.3 >= 1);
+    }
+
+    #[test]
     fn text_writer_rejects_non_positive_advance() {
         assert!(write_dvi_v2_text_page_with_advance_v0(b"ABC", 0).is_none());
         assert!(write_dvi_v2_text_page_with_advance_v0(b"ABC", -1).is_none());
@@ -847,6 +910,28 @@ mod tests {
         bytes[amount_start] = 0xff;
         bytes[amount_start + 1] = 0xff;
         bytes[amount_start + 2] = 0xff;
+        assert!(!validate_dvi_v2_text_page_v0(&bytes));
+    }
+
+    #[test]
+    fn validator_rejects_wrong_reset_amount_in_wrapped_output() {
+        let mut line = Vec::<u8>::new();
+        for _ in 0..50 {
+            line.extend_from_slice(b"A ");
+        }
+        let mut bytes = write_dvi_v2_text_page_v0(&line).expect("writer should accept wrapped line");
+        let down3_index = bytes
+            .iter()
+            .position(|byte| *byte == DVI_DOWN3)
+            .expect("down3 opcode should exist");
+        let reset_index = bytes[..down3_index]
+            .iter()
+            .rposition(|byte| *byte == DVI_RIGHT3)
+            .expect("reset right3 opcode should exist");
+        let amount_start = reset_index + 1;
+        bytes[amount_start] = 0x00;
+        bytes[amount_start + 1] = 0x00;
+        bytes[amount_start + 2] = 0x01;
         assert!(!validate_dvi_v2_text_page_v0(&bytes));
     }
 
