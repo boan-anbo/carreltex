@@ -8,6 +8,19 @@ export function runOkEmptyDocCases(ctx, helpers) {
     readMainXdvArtifactBytes,
   } = helpers;
 
+  const countPagesInDviV2 = (bytes, label) => {
+    let pageCount = 0;
+    for (const byte of bytes) {
+      if (byte === 139) {
+        pageCount += 1;
+      }
+    }
+    if (pageCount <= 0) {
+      throw new Error(`${label} expected at least one BOP opcode`);
+    }
+    return pageCount;
+  };
+
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before OK empty doc case failed');
   }
@@ -190,5 +203,38 @@ export function runOkEmptyDocCases(ctx, helpers) {
   const tildeXdvBytes = readMainXdvArtifactBytes('compile_main(ok tilde text doc)');
   if (tildeXdvBytes.length === 0) {
     throw new Error('compile_main(ok tilde text doc) main.xdv expected non-empty bytes');
+  }
+
+  if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before OK pagebreak text doc case failed');
+  }
+
+  const pagebreakTextDocBytes = new TextEncoder().encode(
+    '\\documentclass{article}\n\\begin{document}\nAB\\pagebreak CD\n\\end{document}\n',
+  );
+  if (addMountedFile('main.tex', pagebreakTextDocBytes, 'ok_pagebreak_text_doc_main') !== 0) {
+    throw new Error('mount_add_file(ok pagebreak text doc main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) {
+    throw new Error('mount_finalize for OK pagebreak text doc case failed');
+  }
+
+  expectOk(ctx.compileMain(), 'compile_main_v0(ok pagebreak text doc)');
+  const pagebreakReport = readCompileReportJson();
+  if (pagebreakReport.status !== 'OK') {
+    throw new Error(`compile_main(ok pagebreak text doc) report.status expected OK, got ${pagebreakReport.status}`);
+  }
+  const pagebreakLogBytes = readCompileLogBytes();
+  if (pagebreakLogBytes.length !== 0) {
+    throw new Error(`compile_main(ok pagebreak text doc) expected empty log, got ${pagebreakLogBytes.length} bytes`);
+  }
+  assertEventsMatchLogAndStats(pagebreakLogBytes, {}, 'compile_main(ok pagebreak text doc)');
+  const pagebreakXdvBytes = readMainXdvArtifactBytes('compile_main(ok pagebreak text doc)');
+  if (pagebreakXdvBytes.length === 0) {
+    throw new Error('compile_main(ok pagebreak text doc) main.xdv expected non-empty bytes');
+  }
+  const pageCount = countPagesInDviV2(pagebreakXdvBytes, 'compile_main(ok pagebreak text doc)');
+  if (pageCount !== 2) {
+    throw new Error(`compile_main(ok pagebreak text doc) expected 2 pages, got ${pageCount}`);
   }
 }
