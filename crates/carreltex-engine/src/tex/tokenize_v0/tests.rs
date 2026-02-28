@@ -116,19 +116,50 @@ fn unsupported_caret_form_is_caret_not_supported() {
 }
 
 #[test]
-fn accent_control_symbol_is_not_supported() {
+fn accent_control_symbol_braced_tilde_passthrough_maps_to_payload_char() {
+    let tokens = tokenize_v0(b"\\~{a}").expect("tokenize should succeed");
+    assert_eq!(tokens, vec![TokenV0::Char(b'a')]);
+}
+
+#[test]
+fn accent_control_symbol_braced_caret_passthrough_maps_to_payload_char() {
+    let tokens = tokenize_v0(b"\\^{o}").expect("tokenize should succeed");
+    assert_eq!(tokens, vec![TokenV0::Char(b'o')]);
+}
+
+#[test]
+fn accent_control_symbol_braced_quote_passthrough_maps_to_payload_char() {
+    let tokens = tokenize_v0(b"\\\"{u}").expect("tokenize should succeed");
+    assert_eq!(tokens, vec![TokenV0::Char(b'u')]);
+}
+
+#[test]
+fn unsupported_accent_forms_are_accent_not_supported() {
     assert_eq!(
         tokenize_v0(b"\\~a"),
         Err(TokenizeErrorV0::AccentNotSupported)
     );
     assert_eq!(
-        tokenize_v0(b"\\^{a}"),
+        tokenize_v0(b"\\~{}"),
         Err(TokenizeErrorV0::AccentNotSupported)
     );
     assert_eq!(
-        tokenize_v0(b"\\\"{o}"),
+        tokenize_v0(b"\\\"{ab}"),
         Err(TokenizeErrorV0::AccentNotSupported)
     );
+    assert_eq!(
+        tokenize_v0(b"\\~{\\}"),
+        Err(TokenizeErrorV0::AccentNotSupported)
+    );
+    assert_eq!(
+        tokenize_v0(b"\\~^^7ba^^7d"),
+        Err(TokenizeErrorV0::AccentNotSupported)
+    );
+}
+
+#[test]
+fn accent_payload_nul_is_invalid_input() {
+    assert_eq!(tokenize_v0(b"\\~{^^00}"), Err(TokenizeErrorV0::InvalidInput));
 }
 
 #[test]
