@@ -9,6 +9,7 @@ fn valid_request() -> CompileRequestV0 {
         entrypoint: "main.tex".to_owned(),
         source_date_epoch: 1,
         max_log_bytes: 4096,
+        ok_max_line_glyphs_v0: None,
     }
 }
 
@@ -116,7 +117,8 @@ fn whitespace_runs_are_normalized_to_single_spaces_in_ok_subset() {
         stats_u64_field(&baseline_result.tex_stats_json, "char_count").expect("char_count");
 
     let mut mount = Mount::default();
-    let main = b"\\documentclass{article}\n\\begin{document}\nA  \n\nB\tC\r\nD\rE\n\\end{document}\n";
+    let main =
+        b"\\documentclass{article}\n\\begin{document}\nA  \n\nB\tC\r\nD\rE\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
     assert_eq!(result.status, CompileStatus::Ok);
@@ -202,22 +204,22 @@ fn ok_multichar_newline_control_word_uses_reset_sequence() {
 fn ok_long_text_without_newline_wraps_automatically() {
     let mut mount = Mount::default();
     let long_body = "A".repeat(81);
-    let main = format!(
-        "\\documentclass{{article}}\\begin{{document}}{long_body}\\end{{document}}"
-    );
+    let main = format!("\\documentclass{{article}}\\begin{{document}}{long_body}\\end{{document}}");
     assert!(mount.add_file(b"main.tex", main.as_bytes()).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
     assert_eq!(result.status, CompileStatus::Ok);
     assert!(validate_dvi_v2_text_page_v0(&result.main_xdv_bytes));
     assert_eq!(count_dvi_v2_text_pages_v0(&result.main_xdv_bytes), Some(1));
-    let movement = count_dvi_v2_text_movements_v0(&result.main_xdv_bytes).expect("movement summary");
+    let movement =
+        count_dvi_v2_text_movements_v0(&result.main_xdv_bytes).expect("movement summary");
     assert!(movement.3 >= 1);
 }
 
 #[test]
 fn unsupported_char_backslash_in_body_falls_back_to_not_implemented() {
     let mut mount = Mount::default();
-    let main = b"\\documentclass{article}\n\\begin{document}\nA\\textbackslash B\n\\end{document}\n";
+    let main =
+        b"\\documentclass{article}\n\\begin{document}\nA\\textbackslash B\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
     assert_eq!(result.status, CompileStatus::NotImplemented);
@@ -242,4 +244,72 @@ fn non_printable_body_char_falls_back_to_not_implemented() {
     let result = compile_request_v0(&mut mount, &valid_request());
     assert_eq!(result.status, CompileStatus::NotImplemented);
     assert!(result.main_xdv_bytes.is_empty());
+}
+
+#[test]
+fn ok_request_wrap_cap_10_increases_down3_vs_80() {
+    let main = b"\\documentclass{article}\\begin{document}word word word word word word word word word word\\end{document}";
+
+    let mut wide_mount = Mount::default();
+    assert!(wide_mount.add_file(b"main.tex", main).is_ok());
+    let mut wide_request = valid_request();
+    wide_request.ok_max_line_glyphs_v0 = Some(80);
+    let wide_result = compile_request_v0(&mut wide_mount, &wide_request);
+    assert_eq!(wide_result.status, CompileStatus::Ok);
+    assert!(validate_dvi_v2_text_page_v0(&wide_result.main_xdv_bytes));
+    let wide_down3 = count_dvi_v2_text_movements_v0(&wide_result.main_xdv_bytes)
+        .expect("wide movement summary")
+        .3;
+
+    let mut narrow_mount = Mount::default();
+    assert!(narrow_mount.add_file(b"main.tex", main).is_ok());
+    let mut narrow_request = valid_request();
+    narrow_request.ok_max_line_glyphs_v0 = Some(10);
+    let narrow_result = compile_request_v0(&mut narrow_mount, &narrow_request);
+    assert_eq!(narrow_result.status, CompileStatus::Ok);
+    assert!(validate_dvi_v2_text_page_v0(&narrow_result.main_xdv_bytes));
+    let narrow_down3 = count_dvi_v2_text_movements_v0(&narrow_result.main_xdv_bytes)
+        .expect("narrow movement summary")
+        .3;
+
+    assert!(narrow_down3 > wide_down3);
+}
+
+#[test]
+fn ok_request_wrap_cap_one_hard_breaks_text() {
+    let mut mount = Mount::default();
+    let main = b"\\documentclass{article}\\begin{document}AB\\end{document}";
+    assert!(mount.add_file(b"main.tex", main).is_ok());
+    let mut request = valid_request();
+    request.ok_max_line_glyphs_v0 = Some(1);
+    let result = compile_request_v0(&mut mount, &request);
+    assert_eq!(result.status, CompileStatus::Ok);
+    assert!(validate_dvi_v2_text_page_v0(&result.main_xdv_bytes));
+    let down3_count = count_dvi_v2_text_movements_v0(&result.main_xdv_bytes)
+        .expect("movement summary")
+        .3;
+    assert_eq!(down3_count, 1);
+}
+
+#[test]
+fn request_wrap_cap_out_of_range_is_invalid_input() {
+    let main = b"\\documentclass{article}\\begin{document}AB\\end{document}";
+
+    let mut low_mount = Mount::default();
+    assert!(low_mount.add_file(b"main.tex", main).is_ok());
+    let mut request = valid_request();
+    request.ok_max_line_glyphs_v0 = Some(0);
+    let result = compile_request_v0(&mut low_mount, &request);
+    assert_eq!(result.status, CompileStatus::InvalidInput);
+    assert!(result.main_xdv_bytes.is_empty());
+    assert!(result.log_bytes.ends_with(b"request_invalid"));
+
+    let mut high_mount = Mount::default();
+    assert!(high_mount.add_file(b"main.tex", main).is_ok());
+    request = valid_request();
+    request.ok_max_line_glyphs_v0 = Some(257);
+    let result = compile_request_v0(&mut high_mount, &request);
+    assert_eq!(result.status, CompileStatus::InvalidInput);
+    assert!(result.main_xdv_bytes.is_empty());
+    assert!(result.log_bytes.ends_with(b"request_invalid"));
 }
