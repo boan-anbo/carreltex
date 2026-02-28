@@ -89,6 +89,10 @@ pub(super) fn parse_control_word_v0(
         vec![TokenV0::Char(b'a')]
     } else if control_word.as_slice() == b"textordmasculine" {
         vec![TokenV0::Char(b'o')]
+    } else if control_word.as_slice() == b"textyen" {
+        vec![TokenV0::Char(b'Y')]
+    } else if control_word.as_slice() == b"textsterling" {
+        vec![TokenV0::Char(b'L')]
     } else if control_word.as_slice() == b"par" {
         vec![TokenV0::Space]
     } else {

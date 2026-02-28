@@ -502,6 +502,18 @@ fn control_word_textordmasculine_maps_to_o_and_swallows_space() {
 }
 
 #[test]
+fn control_word_textyen_maps_to_y_and_swallows_space() {
+    let tokens = tokenize_v0(b"\\textyen X").expect("tokenize should succeed");
+    assert_eq!(tokens, vec![TokenV0::Char(b'Y'), TokenV0::Char(b'X')]);
+}
+
+#[test]
+fn control_word_textsterling_maps_to_l_and_swallows_space() {
+    let tokens = tokenize_v0(b"\\textsterling X").expect("tokenize should succeed");
+    assert_eq!(tokens, vec![TokenV0::Char(b'L'), TokenV0::Char(b'X')]);
+}
+
+#[test]
 fn control_word_par_maps_to_space_and_swallows_following_whitespace() {
     let tokens = tokenize_v0(b"A\\par B").expect("tokenize should succeed");
     assert_eq!(
