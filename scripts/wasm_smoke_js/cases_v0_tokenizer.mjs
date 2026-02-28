@@ -761,6 +761,29 @@ export function runTokenizerCases(ctx, helpers) {
   }
 
   if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before tokenizer control-word-textdaggerdbl case failed');
+  }
+  const textdaggerdblMainBytes = new TextEncoder().encode('\\documentclass{article}\n\\begin{document}\nHello.\\textdaggerdbl XYZ\n\\end{document}\n');
+  if (addMountedFile('main.tex', textdaggerdblMainBytes, 'tokenizer_control_word_textdaggerdbl_main') !== 0) {
+    throw new Error('mount_add_file(tokenizer control-word-textdaggerdbl main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) {
+    throw new Error('mount_finalize for tokenizer control-word-textdaggerdbl case failed');
+  }
+  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(tokenizer control-word-textdaggerdbl)');
+  {
+    const logBytes = readCompileLogBytes();
+    const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(tokenizer control-word-textdaggerdbl)');
+    if (helloBaselineCharCount === null) {
+      throw new Error('helloBaselineCharCount not initialized for tokenizer control-word-textdaggerdbl case');
+    }
+    if (stats.char_count !== helloBaselineCharCount + 4) {
+      throw new Error(`compile_main(tokenizer control-word-textdaggerdbl) char_count delta expected +4, got baseline=${helloBaselineCharCount}, current=${stats.char_count}`);
+    }
+    assertMainXdvArtifactEmpty('compile_main(tokenizer control-word-textdaggerdbl)');
+  }
+
+  if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer control-word-par case failed');
   }
   const parMainBytes = new TextEncoder().encode('\\documentclass{article}\n\\begin{document}\nHello.\\par XYZ\n\\end{document}\n');
