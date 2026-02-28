@@ -477,6 +477,29 @@ export function runTokenizerCases(ctx, helpers) {
   }
 
   if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before tokenizer braced-accent-passthrough case failed');
+  }
+  const bracedAccentMainBytes = new TextEncoder().encode('\\documentclass{article}\n\\begin{document}\nHello.\\~{a}XYZ\n\\end{document}\n');
+  if (addMountedFile('main.tex', bracedAccentMainBytes, 'tokenizer_braced_accent_passthrough_main') !== 0) {
+    throw new Error('mount_add_file(tokenizer braced-accent-passthrough main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) {
+    throw new Error('mount_finalize for tokenizer braced-accent-passthrough case failed');
+  }
+  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(tokenizer braced-accent-passthrough)');
+  {
+    const logBytes = readCompileLogBytes();
+    const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(tokenizer braced-accent-passthrough)');
+    if (helloBaselineCharCount === null) {
+      throw new Error('helloBaselineCharCount not initialized for tokenizer braced-accent-passthrough case');
+    }
+    if (stats.char_count !== helloBaselineCharCount + 4) {
+      throw new Error(`compile_main(tokenizer braced-accent-passthrough) char_count delta expected +4, got baseline=${helloBaselineCharCount}, current=${stats.char_count}`);
+    }
+    assertMainXdvArtifactEmpty('compile_main(tokenizer braced-accent-passthrough)');
+  }
+
+  if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer accent-not-supported case failed');
   }
   if (addMountedFile('main.tex', new TextEncoder().encode('\\~a'), 'tokenizer_accent_not_supported_main') !== 0) {
