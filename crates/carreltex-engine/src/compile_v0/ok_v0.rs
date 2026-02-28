@@ -1,4 +1,5 @@
 use crate::tex::tokenize_v0::TokenV0;
+pub(crate) const MAX_OK_TEXT_BYTES_V0: usize = 64 * 1024;
 
 fn skip_spaces(tokens: &[TokenV0], mut index: usize) -> usize {
     while matches!(tokens.get(index), Some(TokenV0::Space)) {
@@ -24,45 +25,57 @@ fn consume_group_literal(tokens: &[TokenV0], mut index: usize, literal: &[u8]) -
     Some(index + 1)
 }
 
-pub(crate) fn is_strict_empty_article_doc_v0(tokens: &[TokenV0]) -> bool {
+fn is_supported_ok_char_v0(byte: u8) -> bool {
+    byte.is_ascii_uppercase()
+}
+
+pub(crate) fn extract_strict_ok_text_body_v0(tokens: &[TokenV0]) -> Option<Vec<u8>> {
     let mut index = 0usize;
     if !matches!(
         tokens.get(index),
         Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"documentclass"
     ) {
-        return false;
+        return None;
     }
     index += 1;
-    index = match consume_group_literal(tokens, index, b"article") {
-        Some(next) => next,
-        None => return false,
-    };
+    index = consume_group_literal(tokens, index, b"article")?;
     index = skip_spaces(tokens, index);
 
     if !matches!(
         tokens.get(index),
         Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"begin"
     ) {
-        return false;
+        return None;
     }
     index += 1;
-    index = match consume_group_literal(tokens, index, b"document") {
-        Some(next) => next,
-        None => return false,
-    };
-    index = skip_spaces(tokens, index);
+    index = consume_group_literal(tokens, index, b"document")?;
+
+    let mut body = Vec::<u8>::new();
+    loop {
+        match tokens.get(index) {
+            Some(TokenV0::Space) => {
+                body.push(b' ');
+                index += 1;
+            }
+            Some(TokenV0::Char(byte)) if is_supported_ok_char_v0(*byte) => {
+                body.push(*byte);
+                index += 1;
+            }
+            _ => break,
+        }
+    }
 
     if !matches!(
         tokens.get(index),
         Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"end"
     ) {
-        return false;
+        return None;
     }
     index += 1;
-    index = match consume_group_literal(tokens, index, b"document") {
-        Some(next) => next,
-        None => return false,
-    };
+    index = consume_group_literal(tokens, index, b"document")?;
     index = skip_spaces(tokens, index);
-    index == tokens.len()
+    if index != tokens.len() {
+        return None;
+    }
+    Some(body)
 }

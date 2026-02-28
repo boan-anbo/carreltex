@@ -120,7 +120,7 @@ export function runTokenizerCases(ctx, helpers) {
   if (ctx.mountFinalize() !== 0) {
     throw new Error('mount_finalize for tokenizer caret-hex decode case failed');
   }
-  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(tokenizer caret-hex decode)');
+  expectOk(ctx.compileMain(), 'compile_main_v0(tokenizer caret-hex decode)');
   {
     const logBytes = readCompileLogBytes();
     const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(tokenizer caret-hex decode)');
@@ -130,7 +130,6 @@ export function runTokenizerCases(ctx, helpers) {
     if (stats.char_count !== baselineCharCount + 3) {
       throw new Error(`compile_main(tokenizer caret-hex decode) char_count delta expected +3, got baseline=${baselineCharCount}, current=${stats.char_count}`);
     }
-    assertMainXdvArtifactEmpty('compile_main(tokenizer caret-hex decode)');
   }
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer control-symbol-percent case failed');
@@ -802,7 +801,7 @@ export function runTokenizerCases(ctx, helpers) {
   if (ctx.mountFinalize() !== 0) {
     throw new Error('mount_finalize for tokenizer CRLF normalization case failed');
   }
-  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(tokenizer CRLF normalization)');
+  expectOk(ctx.compileMain(), 'compile_main_v0(tokenizer CRLF normalization)');
   {
     const logBytes = readCompileLogBytes();
     const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(tokenizer CRLF normalization)');
@@ -812,7 +811,6 @@ export function runTokenizerCases(ctx, helpers) {
     if (stats.char_count !== baselineCharCount + 2) {
       throw new Error(`compile_main(tokenizer CRLF normalization) char_count delta expected +2, got baseline=${baselineCharCount}, current=${stats.char_count}`);
     }
-    assertMainXdvArtifactEmpty('compile_main(tokenizer CRLF normalization)');
   }
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer lone-CR normalization case failed');
@@ -824,7 +822,7 @@ export function runTokenizerCases(ctx, helpers) {
   if (ctx.mountFinalize() !== 0) {
     throw new Error('mount_finalize for tokenizer lone-CR normalization case failed');
   }
-  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(tokenizer lone-CR normalization)');
+  expectOk(ctx.compileMain(), 'compile_main_v0(tokenizer lone-CR normalization)');
   {
     const logBytes = readCompileLogBytes();
     const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(tokenizer lone-CR normalization)');
@@ -834,7 +832,6 @@ export function runTokenizerCases(ctx, helpers) {
     if (stats.char_count !== baselineCharCount + 2) {
       throw new Error(`compile_main(tokenizer lone-CR normalization) char_count delta expected +2, got baseline=${baselineCharCount}, current=${stats.char_count}`);
     }
-    assertMainXdvArtifactEmpty('compile_main(tokenizer lone-CR normalization)');
   }
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer caret-in-comment case failed');
@@ -846,7 +843,7 @@ export function runTokenizerCases(ctx, helpers) {
   if (ctx.mountFinalize() !== 0) {
     throw new Error('mount_finalize for tokenizer caret-in-comment case failed');
   }
-  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(tokenizer caret-in-comment)');
+  expectOk(ctx.compileMain(), 'compile_main_v0(tokenizer caret-in-comment)');
   {
     const logBytes = readCompileLogBytes();
     const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(tokenizer caret-in-comment)');
@@ -856,7 +853,6 @@ export function runTokenizerCases(ctx, helpers) {
     if (stats.char_count !== baselineCharCount + 3) {
       throw new Error(`compile_main(tokenizer caret-in-comment) char_count delta expected +3, got baseline=${baselineCharCount}, current=${stats.char_count}`);
     }
-    assertMainXdvArtifactEmpty('compile_main(tokenizer caret-in-comment)');
   }
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer unsupported-caret case failed');
