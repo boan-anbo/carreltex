@@ -19,7 +19,7 @@ mod trace_v0;
 #[cfg(test)] mod tokenizer_textword_142_tests;
 #[cfg(test)] mod tokenizer_textword_143_tests;
 #[cfg(test)] mod tokenizer_textword_144_tests;
-#[cfg(test)] mod tokenizer_textword_145_tests; #[cfg(test)] mod tokenizer_textword_147_tests;
+#[cfg(test)] mod tokenizer_textword_145_tests; #[cfg(test)] mod tokenizer_textword_147_tests; #[cfg(test)] mod tokenizer_textword_148_tests;
 use crate::reasons_v0::{invalid_log_bytes_v0, InvalidInputReasonV0};
 use crate::tex::tokenize_v0::{tokenize_v0, TokenV0, MAX_TOKENS_V0};
 use carreltex_core::{
