@@ -579,6 +579,30 @@ export function runCasesV0(ctx, mem, helpers) {
   }
 
   if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before invalid-unbraced-brace-boundary compile check failed');
+  }
+  const invalidUnbracedBraceBoundaryMainBytes = new TextEncoder().encode('\\documentclass{article}\n\\begin{document}\n\\input sub{}\n\\end{document}\n');
+  if (addMountedFile('main.tex', invalidUnbracedBraceBoundaryMainBytes, 'invalid_unbraced_brace_boundary_main') !== 0) {
+    throw new Error('mount_add_file(invalid unbraced brace-boundary main.tex) failed');
+  }
+  if (addMountedFile('sub.tex', new TextEncoder().encode('\\def\\foo{XYZ}'), 'invalid_unbraced_brace_boundary_sub') !== 0) {
+    throw new Error('mount_add_file(invalid unbraced brace-boundary sub.tex) failed');
+  }
+  const invalidUnbracedBraceBoundaryFinalizeCode = ctx.mountFinalize();
+  if (invalidUnbracedBraceBoundaryFinalizeCode !== 0 && invalidUnbracedBraceBoundaryFinalizeCode !== 1) {
+    throw new Error(`mount_finalize(invalid unbraced brace-boundary main.tex) unexpected code=${invalidUnbracedBraceBoundaryFinalizeCode}`);
+  }
+  expectInvalid(ctx.compileMain(), 'compile_main_v0(invalid unbraced brace-boundary)');
+  {
+    const logBytes = readCompileLogBytes();
+    const logText = new TextDecoder().decode(logBytes);
+    if (!logText.startsWith('INVALID_INPUT:') || !logText.includes('input_validation_failed')) {
+      throw new Error(`compile_main invalid-unbraced-brace-boundary log mismatch: ${logText}`);
+    }
+    assertNoEvents('compile_main_v0(invalid unbraced brace-boundary)');
+  }
+
+  if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before input cycle compile check failed');
   }
   const cycleMainBytes = new TextEncoder().encode('\\documentclass{article}\n\\begin{document}\n\\input{a.tex}\n\\end{document}\n');

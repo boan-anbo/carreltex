@@ -63,6 +63,12 @@ fn parse_input_path_group_v0(
             path_bytes.push(*byte);
             index += 1;
         }
+        if matches!(
+            tokens.get(index),
+            Some(TokenV0::BeginGroup) | Some(TokenV0::EndGroup)
+        ) {
+            return Err(InvalidInputReasonV0::InputValidationFailed);
+        }
     }
 
     if path_bytes.is_empty() {
