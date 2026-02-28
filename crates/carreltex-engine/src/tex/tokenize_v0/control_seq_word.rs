@@ -179,6 +179,37 @@ pub(super) fn parse_control_word_v0(
         vec![TokenV0::Char(b'\'')]
     } else if control_word.as_slice() == b"textasciidblquote" {
         vec![TokenV0::Char(b'"')]
+    } else if control_word.as_slice() == b"textcent" {
+        vec![TokenV0::Char(b'c')]
+    } else if control_word.as_slice() == b"texteuro" {
+        vec![TokenV0::Char(b'E')]
+    } else if control_word.as_slice() == b"textperthousand" {
+        vec![
+            TokenV0::Char(b'0'),
+            TokenV0::Char(b'/'),
+            TokenV0::Char(b'0'),
+            TokenV0::Char(b'0'),
+        ]
+    } else if control_word.as_slice() == b"textpertenthousand" {
+        vec![
+            TokenV0::Char(b'0'),
+            TokenV0::Char(b'/'),
+            TokenV0::Char(b'0'),
+            TokenV0::Char(b'0'),
+            TokenV0::Char(b'0'),
+        ]
+    } else if control_word.as_slice() == b"textlangle" {
+        vec![TokenV0::Char(b'<')]
+    } else if control_word.as_slice() == b"textrangle" {
+        vec![TokenV0::Char(b'>')]
+    } else if control_word.as_slice() == b"textleftarrow" {
+        vec![TokenV0::Char(b'<'), TokenV0::Char(b'-')]
+    } else if control_word.as_slice() == b"textrightarrow" {
+        vec![TokenV0::Char(b'-'), TokenV0::Char(b'>')]
+    } else if control_word.as_slice() == b"textuparrow" {
+        vec![TokenV0::Char(b'^')]
+    } else if control_word.as_slice() == b"textdownarrow" {
+        vec![TokenV0::Char(b'v')]
     } else if control_word.as_slice() == b"par" {
         vec![TokenV0::Space]
     } else {
