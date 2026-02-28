@@ -47,6 +47,12 @@ pub(super) fn parse_control_word_v0(
         TokenV0::Char(b'<')
     } else if control_word.as_slice() == b"textgreater" {
         TokenV0::Char(b'>')
+    } else if control_word.as_slice() == b"textbar" {
+        TokenV0::Char(b'|')
+    } else if control_word.as_slice() == b"textbraceleft" {
+        TokenV0::Char(b'{')
+    } else if control_word.as_slice() == b"textbraceright" {
+        TokenV0::Char(b'}')
     } else if control_word.as_slice() == b"par" {
         TokenV0::Space
     } else {

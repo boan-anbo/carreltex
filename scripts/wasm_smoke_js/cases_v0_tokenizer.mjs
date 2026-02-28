@@ -441,6 +441,75 @@ export function runTokenizerCases(ctx, helpers) {
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer control-word-par case failed');
   }
+  const textbarMainBytes = new TextEncoder().encode('\\documentclass{article}\n\\begin{document}\nHello.\\textbar XYZ\n\\end{document}\n');
+  if (addMountedFile('main.tex', textbarMainBytes, 'tokenizer_control_word_textbar_main') !== 0) {
+    throw new Error('mount_add_file(tokenizer control-word-textbar main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) {
+    throw new Error('mount_finalize for tokenizer control-word-textbar case failed');
+  }
+  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(tokenizer control-word-textbar)');
+  {
+    const logBytes = readCompileLogBytes();
+    const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(tokenizer control-word-textbar)');
+    if (helloBaselineCharCount === null) {
+      throw new Error('helloBaselineCharCount not initialized for tokenizer control-word-textbar case');
+    }
+    if (stats.char_count !== helloBaselineCharCount + 4) {
+      throw new Error(`compile_main(tokenizer control-word-textbar) char_count delta expected +4, got baseline=${helloBaselineCharCount}, current=${stats.char_count}`);
+    }
+    assertMainXdvArtifactEmpty('compile_main(tokenizer control-word-textbar)');
+  }
+
+  if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before tokenizer control-word-textbraceleft case failed');
+  }
+  const textbraceleftMainBytes = new TextEncoder().encode('\\documentclass{article}\n\\begin{document}\nHello.\\textbraceleft XYZ\n\\end{document}\n');
+  if (addMountedFile('main.tex', textbraceleftMainBytes, 'tokenizer_control_word_textbraceleft_main') !== 0) {
+    throw new Error('mount_add_file(tokenizer control-word-textbraceleft main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) {
+    throw new Error('mount_finalize for tokenizer control-word-textbraceleft case failed');
+  }
+  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(tokenizer control-word-textbraceleft)');
+  {
+    const logBytes = readCompileLogBytes();
+    const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(tokenizer control-word-textbraceleft)');
+    if (helloBaselineCharCount === null) {
+      throw new Error('helloBaselineCharCount not initialized for tokenizer control-word-textbraceleft case');
+    }
+    if (stats.char_count !== helloBaselineCharCount + 4) {
+      throw new Error(`compile_main(tokenizer control-word-textbraceleft) char_count delta expected +4, got baseline=${helloBaselineCharCount}, current=${stats.char_count}`);
+    }
+    assertMainXdvArtifactEmpty('compile_main(tokenizer control-word-textbraceleft)');
+  }
+
+  if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before tokenizer control-word-textbraceright case failed');
+  }
+  const textbracerightMainBytes = new TextEncoder().encode('\\documentclass{article}\n\\begin{document}\nHello.\\textbraceright XYZ\n\\end{document}\n');
+  if (addMountedFile('main.tex', textbracerightMainBytes, 'tokenizer_control_word_textbraceright_main') !== 0) {
+    throw new Error('mount_add_file(tokenizer control-word-textbraceright main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) {
+    throw new Error('mount_finalize for tokenizer control-word-textbraceright case failed');
+  }
+  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(tokenizer control-word-textbraceright)');
+  {
+    const logBytes = readCompileLogBytes();
+    const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(tokenizer control-word-textbraceright)');
+    if (helloBaselineCharCount === null) {
+      throw new Error('helloBaselineCharCount not initialized for tokenizer control-word-textbraceright case');
+    }
+    if (stats.char_count !== helloBaselineCharCount + 4) {
+      throw new Error(`compile_main(tokenizer control-word-textbraceright) char_count delta expected +4, got baseline=${helloBaselineCharCount}, current=${stats.char_count}`);
+    }
+    assertMainXdvArtifactEmpty('compile_main(tokenizer control-word-textbraceright)');
+  }
+
+  if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before tokenizer control-word-par case failed');
+  }
   const parMainBytes = new TextEncoder().encode('\\documentclass{article}\n\\begin{document}\nHello.\\par XYZ\n\\end{document}\n');
   if (addMountedFile('main.tex', parMainBytes, 'tokenizer_control_word_par_main') !== 0) {
     throw new Error('mount_add_file(tokenizer control-word-par main.tex) failed');
