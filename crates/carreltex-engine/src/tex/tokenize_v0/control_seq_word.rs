@@ -286,6 +286,36 @@ pub(super) fn parse_control_word_v0(
         vec![TokenV0::Char(b'c'), TokenV0::Char(b'c')]
     } else if control_word.as_slice() == b"textinterrobang" {
         vec![TokenV0::Char(b'!'), TokenV0::Char(b'?')]
+    } else if control_word.as_slice() == b"textalpha" {
+        vec![TokenV0::Char(b'a')]
+    } else if control_word.as_slice() == b"textbeta" {
+        vec![TokenV0::Char(b'b')]
+    } else if control_word.as_slice() == b"textgamma" {
+        vec![TokenV0::Char(b'g')]
+    } else if control_word.as_slice() == b"textdelta" {
+        vec![TokenV0::Char(b'd')]
+    } else if control_word.as_slice() == b"textepsilon" {
+        vec![TokenV0::Char(b'e')]
+    } else if control_word.as_slice() == b"texttheta" {
+        vec![TokenV0::Char(b't')]
+    } else if control_word.as_slice() == b"textlambda" {
+        vec![TokenV0::Char(b'l')]
+    } else if control_word.as_slice() == b"textpi" {
+        vec![TokenV0::Char(b'p')]
+    } else if control_word.as_slice() == b"textrho" {
+        vec![TokenV0::Char(b'r')]
+    } else if control_word.as_slice() == b"textsigma" {
+        vec![TokenV0::Char(b's')]
+    } else if control_word.as_slice() == b"texttau" {
+        vec![TokenV0::Char(b'u')]
+    } else if control_word.as_slice() == b"textphi" {
+        vec![TokenV0::Char(b'f')]
+    } else if control_word.as_slice() == b"textchi" {
+        vec![TokenV0::Char(b'c')]
+    } else if control_word.as_slice() == b"textpsi" {
+        vec![TokenV0::Char(b'y')]
+    } else if control_word.as_slice() == b"textomega" {
+        vec![TokenV0::Char(b'w')]
     } else if control_word.as_slice() == b"textoneeighth" {
         vec![TokenV0::Char(b'1'), TokenV0::Char(b'/'), TokenV0::Char(b'8')]
     } else if control_word.as_slice() == b"textthreeeighths" {
