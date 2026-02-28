@@ -15,6 +15,12 @@ pub(super) fn parse_control_symbol_v0(
             next_index,
         });
     }
+    if byte == b';' {
+        return Ok(ParsedControlSeqV0 {
+            token: Some(TokenV0::Char(b' ')),
+            next_index,
+        });
+    }
     if byte == b'%' {
         return Ok(ParsedControlSeqV0 {
             token: Some(TokenV0::Char(b'%')),
