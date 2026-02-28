@@ -460,6 +460,12 @@ fn control_word_textdagger_maps_to_plus_and_swallows_space() {
 }
 
 #[test]
+fn control_word_textdaggerdbl_maps_to_hash_and_swallows_space() {
+    let tokens = tokenize_v0(b"\\textdaggerdbl X").expect("tokenize should succeed");
+    assert_eq!(tokens, vec![TokenV0::Char(b'#'), TokenV0::Char(b'X')]);
+}
+
+#[test]
 fn control_word_par_maps_to_space_and_swallows_following_whitespace() {
     let tokens = tokenize_v0(b"A\\par B").expect("tokenize should succeed");
     assert_eq!(
