@@ -694,6 +694,96 @@ fn control_word_textreferencemark_maps_to_asterisk_and_swallows_space() {
 }
 
 #[test]
+fn control_word_textonehalf_maps_to_fraction_and_swallows_space() {
+    let tokens = tokenize_v0(b"\\textonehalf X").expect("tokenize should succeed");
+    assert_eq!(
+        tokens,
+        vec![
+            TokenV0::Char(b'1'),
+            TokenV0::Char(b'/'),
+            TokenV0::Char(b'2'),
+            TokenV0::Char(b'X'),
+        ]
+    );
+}
+
+#[test]
+fn control_word_textonequarter_maps_to_fraction_and_swallows_space() {
+    let tokens = tokenize_v0(b"\\textonequarter X").expect("tokenize should succeed");
+    assert_eq!(
+        tokens,
+        vec![
+            TokenV0::Char(b'1'),
+            TokenV0::Char(b'/'),
+            TokenV0::Char(b'4'),
+            TokenV0::Char(b'X'),
+        ]
+    );
+}
+
+#[test]
+fn control_word_textthreequarters_maps_to_fraction_and_swallows_space() {
+    let tokens = tokenize_v0(b"\\textthreequarters X").expect("tokenize should succeed");
+    assert_eq!(
+        tokens,
+        vec![
+            TokenV0::Char(b'3'),
+            TokenV0::Char(b'/'),
+            TokenV0::Char(b'4'),
+            TokenV0::Char(b'X'),
+        ]
+    );
+}
+
+#[test]
+fn control_word_texttimes_maps_to_star_and_swallows_space() {
+    let tokens = tokenize_v0(b"\\texttimes X").expect("tokenize should succeed");
+    assert_eq!(tokens, vec![TokenV0::Char(b'*'), TokenV0::Char(b'X')]);
+}
+
+#[test]
+fn control_word_textdiv_maps_to_slash_and_swallows_space() {
+    let tokens = tokenize_v0(b"\\textdiv X").expect("tokenize should succeed");
+    assert_eq!(tokens, vec![TokenV0::Char(b'/'), TokenV0::Char(b'X')]);
+}
+
+#[test]
+fn control_word_textpm_maps_to_plus_minus_and_swallows_space() {
+    let tokens = tokenize_v0(b"\\textpm X").expect("tokenize should succeed");
+    assert_eq!(
+        tokens,
+        vec![TokenV0::Char(b'+'), TokenV0::Char(b'-'), TokenV0::Char(b'X')]
+    );
+}
+
+#[test]
+fn control_word_textdag_maps_to_plus_and_swallows_space() {
+    let tokens = tokenize_v0(b"\\textdag X").expect("tokenize should succeed");
+    assert_eq!(tokens, vec![TokenV0::Char(b'+'), TokenV0::Char(b'X')]);
+}
+
+#[test]
+fn control_word_textbardbl_maps_to_double_bar_and_swallows_space() {
+    let tokens = tokenize_v0(b"\\textbardbl X").expect("tokenize should succeed");
+    assert_eq!(
+        tokens,
+        vec![TokenV0::Char(b'|'), TokenV0::Char(b'|'), TokenV0::Char(b'X')]
+    );
+}
+
+#[test]
+fn control_word_textasciiacute_maps_to_quote_and_swallows_space() {
+    let tokens = tokenize_v0(b"\\textasciiacute X").expect("tokenize should succeed");
+    assert_eq!(tokens, vec![TokenV0::Char(b'\''), TokenV0::Char(b'X')]);
+}
+
+#[test]
+fn control_word_textasciidblquote_maps_to_double_quote_and_swallows_space() {
+    let tokens = tokenize_v0(b"\\textasciidblquote X").expect("tokenize should succeed");
+    assert_eq!(tokens, vec![TokenV0::Char(b'"'), TokenV0::Char(b'X')]);
+}
+
+#[test]
 fn control_word_textasteriskcentered_maps_to_asterisk_and_swallows_space() {
     let tokens = tokenize_v0(b"\\textasteriskcentered X").expect("tokenize should succeed");
     assert_eq!(tokens, vec![TokenV0::Char(b'*'), TokenV0::Char(b'X')]);
