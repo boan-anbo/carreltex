@@ -51,14 +51,24 @@ pub(crate) fn extract_strict_ok_text_body_v0(tokens: &[TokenV0]) -> Option<Vec<u
     index = consume_group_literal(tokens, index, b"document")?;
 
     let mut body = Vec::<u8>::new();
+    let mut previous_was_space = false;
     loop {
         match tokens.get(index) {
             Some(TokenV0::Space) => {
-                body.push(b' ');
+                if !previous_was_space {
+                    body.push(b' ');
+                    previous_was_space = true;
+                }
+                index += 1;
+            }
+            Some(TokenV0::Char(0x0c)) => {
+                body.push(0x0c);
+                previous_was_space = false;
                 index += 1;
             }
             Some(TokenV0::Char(byte)) if is_supported_ok_char_v0(*byte) => {
                 body.push(*byte);
+                previous_was_space = false;
                 index += 1;
             }
             _ => break,

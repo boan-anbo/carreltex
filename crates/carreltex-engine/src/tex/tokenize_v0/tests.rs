@@ -949,10 +949,13 @@ fn control_word_texttrademark_maps_to_t_and_swallows_space() {
 #[test]
 fn control_word_par_maps_to_space_and_swallows_following_whitespace() {
     let tokens = tokenize_v0(b"A\\par B").expect("tokenize should succeed");
-    assert_eq!(
-        tokens,
-        vec![TokenV0::Char(b'A'), TokenV0::Space, TokenV0::Char(b'B')]
-    );
+    assert_eq!(tokens, vec![TokenV0::Char(b'A'), TokenV0::Space, TokenV0::Char(b'B')]);
+}
+
+#[test]
+fn control_word_pagebreak_maps_to_formfeed_char_and_swallows_following_whitespace() {
+    let tokens = tokenize_v0(b"A\\pagebreak B").expect("tokenize should succeed");
+    assert_eq!(tokens, vec![TokenV0::Char(b'A'), TokenV0::Char(0x0c), TokenV0::Char(b'B')]);
 }
 
 #[test]
