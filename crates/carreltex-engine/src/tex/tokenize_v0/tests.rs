@@ -134,6 +134,18 @@ fn accent_control_symbol_braced_quote_passthrough_maps_to_payload_char() {
 }
 
 #[test]
+fn accent_control_symbol_braced_payload_accepts_literal_control_symbol_percent() {
+    let tokens = tokenize_v0(b"\\~{\\%}").expect("tokenize should succeed");
+    assert_eq!(tokens, vec![TokenV0::Char(b'%')]);
+}
+
+#[test]
+fn accent_control_symbol_braced_payload_accepts_literal_control_symbol_comma() {
+    let tokens = tokenize_v0(b"\\~{\\,}").expect("tokenize should succeed");
+    assert_eq!(tokens, vec![TokenV0::Char(b' ')]);
+}
+
+#[test]
 fn unsupported_accent_forms_are_accent_not_supported() {
     assert_eq!(
         tokenize_v0(b"\\~a"),
@@ -153,6 +165,10 @@ fn unsupported_accent_forms_are_accent_not_supported() {
     );
     assert_eq!(
         tokenize_v0(b"\\~^^7ba^^7d"),
+        Err(TokenizeErrorV0::AccentNotSupported)
+    );
+    assert_eq!(
+        tokenize_v0(b"\\~{\\par}"),
         Err(TokenizeErrorV0::AccentNotSupported)
     );
 }

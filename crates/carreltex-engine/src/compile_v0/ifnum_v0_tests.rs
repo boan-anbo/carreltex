@@ -175,6 +175,18 @@ fn braced_accent_passthrough_is_counted_as_literal_char() {
 }
 
 #[test]
+fn braced_accent_passthrough_accepts_control_symbol_payload() {
+    let baseline = hello_baseline_char_count();
+    let mut mount = Mount::default();
+    let main = b"\\documentclass{article}\n\\begin{document}\nHello.\\~{\\%}XYZ\n\\end{document}\n";
+    assert!(mount.add_file(b"main.tex", main).is_ok());
+    let result = compile_request_v0(&mut mount, &valid_request());
+    assert_eq!(result.status, CompileStatus::NotImplemented);
+    let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
+    assert_eq!(char_count, baseline + 4);
+}
+
+#[test]
 fn non_ascii_control_sequence_byte_maps_to_specific_reason_token() {
     let mut mount = Mount::default();
     assert!(mount.add_file(b"main.tex", b"\\def\\^^ff{XYZ}").is_ok());

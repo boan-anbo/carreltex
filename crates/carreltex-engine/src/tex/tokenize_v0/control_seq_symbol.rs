@@ -74,20 +74,55 @@ fn parse_braced_accent_passthrough_v0(
         return Err(TokenizeErrorV0::AccentNotSupported);
     }
     let payload_index = start_index + 1;
-    let (payload, close_index) = decode_for_accent_passthrough_v0(input, payload_index)?;
+    let (payload_token, close_index) = parse_accent_payload_token_v0(input, payload_index)?;
+    if input.get(close_index) != Some(&b'}') {
+        return Err(TokenizeErrorV0::AccentNotSupported);
+    }
+    Ok(ParsedControlSeqV0 {
+        token: payload_token,
+        next_index: close_index + 1,
+    })
+}
+
+fn parse_accent_payload_token_v0(
+    input: &[u8],
+    payload_index: usize,
+) -> Result<(TokenV0, usize), TokenizeErrorV0> {
+    let payload_start = *input
+        .get(payload_index)
+        .ok_or(TokenizeErrorV0::AccentNotSupported)?;
+    if payload_start == b'\\' {
+        return parse_accent_payload_control_symbol_v0(input, payload_index + 1);
+    }
+    let (payload, next_index) = decode_for_accent_passthrough_v0(input, payload_index)?;
     if payload == 0 {
         return Err(TokenizeErrorV0::InvalidInput);
     }
     if payload == b'\\' || payload == b'{' || payload == b'}' {
         return Err(TokenizeErrorV0::AccentNotSupported);
     }
-    if input.get(close_index) != Some(&b'}') {
-        return Err(TokenizeErrorV0::AccentNotSupported);
-    }
-    Ok(ParsedControlSeqV0 {
-        token: TokenV0::Char(payload),
-        next_index: close_index + 1,
-    })
+    Ok((TokenV0::Char(payload), next_index))
+}
+
+fn parse_accent_payload_control_symbol_v0(
+    input: &[u8],
+    symbol_index: usize,
+) -> Result<(TokenV0, usize), TokenizeErrorV0> {
+    let symbol = *input
+        .get(symbol_index)
+        .ok_or(TokenizeErrorV0::AccentNotSupported)?;
+    let mapped = match symbol {
+        b',' => b' ',
+        b'%' => b'%',
+        b'_' => b'_',
+        b'#' => b'#',
+        b'$' => b'$',
+        b'&' => b'&',
+        b'{' => b'{',
+        b'}' => b'}',
+        _ => return Err(TokenizeErrorV0::AccentNotSupported),
+    };
+    Ok((TokenV0::Char(mapped), symbol_index + 1))
 }
 
 fn decode_for_accent_passthrough_v0(
