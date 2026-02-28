@@ -31,6 +31,7 @@ export function runOkEmptyDocCases(ctx, helpers) {
     const DVI_RIGHT3 = 145;
     const DVI_W0 = 147;
     const DVI_W3 = 150;
+    const DVI_DOWN3 = 160;
     let index = 0;
     if (bytes[index++] !== DVI_PRE) {
       throw new Error(`${label} expected DVI preamble`);
@@ -39,6 +40,7 @@ export function runOkEmptyDocCases(ctx, helpers) {
     let right3 = 0;
     let w3 = 0;
     let w0 = 0;
+    let down3 = 0;
     while (index < bytes.length) {
       const opcode = bytes[index];
       if (opcode === DVI_POST) {
@@ -68,6 +70,9 @@ export function runOkEmptyDocCases(ctx, helpers) {
         } else if (bytes[index] === DVI_W0) {
           w0 += 1;
           index += 1;
+        } else if (bytes[index] === DVI_DOWN3) {
+          down3 += 1;
+          index += 4;
         } else {
           index += 1;
         }
@@ -77,7 +82,7 @@ export function runOkEmptyDocCases(ctx, helpers) {
       }
       index += 1;
     }
-    return { right3, w3, w0 };
+    return { right3, w3, w0, down3 };
   };
 
   if (ctx.mountReset() !== 0) {
@@ -316,5 +321,49 @@ export function runOkEmptyDocCases(ctx, helpers) {
   );
   if (pagebreakMovement.right3 < 1) {
     throw new Error('compile_main(ok pagebreak text doc) expected at least one RIGHT3 opcode');
+  }
+
+  if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before OK newline text doc case failed');
+  }
+
+  const newlineTextDocBytes = new TextEncoder().encode(
+    '\\documentclass{article}\\begin{document}A\\newline B\\end{document}',
+  );
+  if (addMountedFile('main.tex', newlineTextDocBytes, 'ok_newline_text_doc_main') !== 0) {
+    throw new Error('mount_add_file(ok newline text doc main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) {
+    throw new Error('mount_finalize for OK newline text doc case failed');
+  }
+
+  expectOk(ctx.compileMain(), 'compile_main_v0(ok newline text doc)');
+  const newlineReport = readCompileReportJson();
+  if (newlineReport.status !== 'OK') {
+    throw new Error(`compile_main(ok newline text doc) report.status expected OK, got ${newlineReport.status}`);
+  }
+  const newlineLogBytes = readCompileLogBytes();
+  if (newlineLogBytes.length !== 0) {
+    throw new Error(`compile_main(ok newline text doc) expected empty log, got ${newlineLogBytes.length} bytes`);
+  }
+  const newlineStats = assertEventsMatchLogAndStats(
+    newlineLogBytes,
+    { char_count: stats.char_count + 3 },
+    'compile_main(ok newline text doc)',
+  );
+  if (!(typeof newlineStats.token_count === 'number' && newlineStats.token_count > 0)) {
+    throw new Error('compile_main(ok newline text doc) token_count expected >0');
+  }
+  const newlineXdvBytes = readMainXdvArtifactBytes('compile_main(ok newline text doc)');
+  if (newlineXdvBytes.length === 0) {
+    throw new Error('compile_main(ok newline text doc) main.xdv expected non-empty bytes');
+  }
+  const newlinePages = countPagesInDviV2(newlineXdvBytes, 'compile_main(ok newline text doc)');
+  if (newlinePages !== 1) {
+    throw new Error(`compile_main(ok newline text doc) expected 1 page, got ${newlinePages}`);
+  }
+  const newlineMovement = countMovementOpsInTextPages(newlineXdvBytes, 'compile_main(ok newline text doc)');
+  if (newlineMovement.down3 !== 1) {
+    throw new Error(`compile_main(ok newline text doc) expected exactly one DOWN3 opcode, got ${newlineMovement.down3}`);
   }
 }
