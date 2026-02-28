@@ -11,61 +11,61 @@ pub(super) fn parse_control_symbol_v0(
     }
     if byte == b',' {
         return Ok(ParsedControlSeqV0 {
-            token: Some(TokenV0::Char(b' ')),
+            tokens: vec![TokenV0::Char(b' ')],
             next_index,
         });
     }
     if byte == b';' {
         return Ok(ParsedControlSeqV0 {
-            token: Some(TokenV0::Char(b' ')),
+            tokens: vec![TokenV0::Char(b' ')],
             next_index,
         });
     }
     if byte == b'%' {
         return Ok(ParsedControlSeqV0 {
-            token: Some(TokenV0::Char(b'%')),
+            tokens: vec![TokenV0::Char(b'%')],
             next_index,
         });
     }
     if byte == b'_' {
         return Ok(ParsedControlSeqV0 {
-            token: Some(TokenV0::Char(b'_')),
+            tokens: vec![TokenV0::Char(b'_')],
             next_index,
         });
     }
     if byte == b'#' {
         return Ok(ParsedControlSeqV0 {
-            token: Some(TokenV0::Char(b'#')),
+            tokens: vec![TokenV0::Char(b'#')],
             next_index,
         });
     }
     if byte == b'$' {
         return Ok(ParsedControlSeqV0 {
-            token: Some(TokenV0::Char(b'$')),
+            tokens: vec![TokenV0::Char(b'$')],
             next_index,
         });
     }
     if byte == b'&' {
         return Ok(ParsedControlSeqV0 {
-            token: Some(TokenV0::Char(b'&')),
+            tokens: vec![TokenV0::Char(b'&')],
             next_index,
         });
     }
     if byte == b'{' {
         return Ok(ParsedControlSeqV0 {
-            token: Some(TokenV0::Char(b'{')),
+            tokens: vec![TokenV0::Char(b'{')],
             next_index,
         });
     }
     if byte == b'}' {
         return Ok(ParsedControlSeqV0 {
-            token: Some(TokenV0::Char(b'}')),
+            tokens: vec![TokenV0::Char(b'}')],
             next_index,
         });
     }
     if byte == b'!' {
         return Ok(ParsedControlSeqV0 {
-            token: None,
+            tokens: vec![],
             next_index,
         });
     }
@@ -73,7 +73,7 @@ pub(super) fn parse_control_symbol_v0(
         return parse_braced_accent_passthrough_v0(input, next_index);
     }
     Ok(ParsedControlSeqV0 {
-        token: Some(TokenV0::ControlSeq(vec![byte])),
+        tokens: vec![TokenV0::ControlSeq(vec![byte])],
         next_index,
     })
 }
@@ -91,7 +91,7 @@ fn parse_braced_accent_passthrough_v0(
         return Err(TokenizeErrorV0::AccentNotSupported);
     }
     Ok(ParsedControlSeqV0 {
-        token: Some(payload_token),
+        tokens: vec![payload_token],
         next_index: close_index + 1,
     })
 }
