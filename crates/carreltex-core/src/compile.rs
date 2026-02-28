@@ -23,6 +23,9 @@ pub struct CompileRequestV0 {
     pub source_date_epoch: u64,
     pub max_log_bytes: u32,
     pub ok_max_line_glyphs_v0: Option<u32>,
+    pub ok_max_lines_per_page_v0: Option<u32>,
+    pub ok_line_advance_sp_v0: Option<i32>,
+    pub ok_glyph_advance_sp_v0: Option<i32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -394,11 +397,17 @@ mod tests {
             source_date_epoch: 1_700_000_000,
             max_log_bytes: 1024,
             ok_max_line_glyphs_v0: None,
+            ok_max_lines_per_page_v0: None,
+            ok_line_advance_sp_v0: None,
+            ok_glyph_advance_sp_v0: None,
         };
         assert_eq!(request.entrypoint, "main.tex");
         assert_eq!(request.source_date_epoch, 1_700_000_000);
         assert_eq!(request.max_log_bytes, 1024);
         assert_eq!(request.ok_max_line_glyphs_v0, None);
+        assert_eq!(request.ok_max_lines_per_page_v0, None);
+        assert_eq!(request.ok_line_advance_sp_v0, None);
+        assert_eq!(request.ok_glyph_advance_sp_v0, None);
     }
 
     #[test]
