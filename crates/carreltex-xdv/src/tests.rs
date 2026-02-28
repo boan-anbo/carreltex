@@ -1,10 +1,11 @@
 use super::{
     count_dvi_v2_text_movements_v0, count_dvi_v2_text_pages_v0,
     count_dvi_v2_text_pages_with_advance_v0, validate_dvi_v2_empty_page_v0,
+    sum_dvi_v2_positive_right3_amounts_with_layout_v0,
     validate_dvi_v2_text_page_v0, write_dvi_v2_empty_page_v0, write_dvi_v2_text_page_v0,
     write_dvi_v2_text_page_with_advance_v0, write_dvi_v2_text_page_with_layout_and_wrap_v0,
     write_dvi_v2_text_page_with_layout_v0, write_dvi_v2_text_page_with_layout_wrap_and_paging_v0,
-    DVI_DOWN3, DVI_EOP, DVI_FNT_DEF1, DVI_PRE, DVI_RIGHT3, DVI_TRAILER_BYTE, DVI_W0, DVI_W3,
+    DVI_DOWN3, DVI_EOP, DVI_FNT_DEF1, DVI_PRE, DVI_RIGHT3, DVI_TRAILER_BYTE,
 };
 
 #[test]
@@ -48,11 +49,11 @@ fn text_writer_pagebreak_emits_multiple_pages() {
 }
 
 #[test]
-fn text_writer_emits_right_and_w_movement_ops() {
+fn text_writer_emits_right3_movement_ops_only() {
     let bytes = write_dvi_v2_text_page_v0(b"ABCDE").expect("writer should accept text");
     assert!(validate_dvi_v2_text_page_v0(&bytes));
     let movement = count_dvi_v2_text_movements_v0(&bytes).expect("movement summary should parse");
-    assert_eq!(movement, (2, 1, 1, 0, 1));
+    assert_eq!(movement, (5, 0, 0, 0, 1));
 }
 
 #[test]
@@ -60,7 +61,7 @@ fn text_writer_newline_emits_down3_and_keeps_single_page() {
     let bytes = write_dvi_v2_text_page_v0(b"A\nB").expect("writer should accept newline");
     assert!(validate_dvi_v2_text_page_v0(&bytes));
     let movement = count_dvi_v2_text_movements_v0(&bytes).expect("movement summary should parse");
-    assert_eq!(movement, (0, 0, 0, 1, 1));
+    assert_eq!(movement, (3, 0, 0, 1, 1));
     assert!(bytes.contains(&DVI_DOWN3));
 }
 
@@ -69,7 +70,20 @@ fn text_writer_multichar_newline_reset_validates() {
     let bytes = write_dvi_v2_text_page_v0(b"AB\nC").expect("writer should accept newline");
     assert!(validate_dvi_v2_text_page_v0(&bytes));
     let movement = count_dvi_v2_text_movements_v0(&bytes).expect("movement summary should parse");
-    assert_eq!(movement, (2, 0, 0, 1, 1));
+    assert_eq!(movement, (4, 0, 0, 1, 1));
+}
+
+#[test]
+fn text_writer_uses_per_glyph_metrics_for_right3_amounts() {
+    let glyph_advance_sp = 65_536;
+    let bytes = write_dvi_v2_text_page_with_layout_v0(b"Wi.", glyph_advance_sp, 786_432)
+        .expect("writer should accept Wi.");
+    assert!(validate_dvi_v2_text_page_v0(&bytes));
+    let movement = count_dvi_v2_text_movements_v0(&bytes).expect("movement summary should parse");
+    assert_eq!(movement, (3, 0, 0, 0, 1));
+    let total = sum_dvi_v2_positive_right3_amounts_with_layout_v0(&bytes, glyph_advance_sp, 786_432)
+        .expect("sum parser should parse");
+    assert_eq!(total, (65_536 * 5 / 2) as u32);
 }
 
 #[test]
@@ -124,24 +138,27 @@ fn validator_rejects_set_char_before_font_select() {
 }
 
 #[test]
-fn validator_rejects_w0_without_w_definition() {
+fn validator_rejects_positive_right_without_preceding_char() {
     let mut bytes = write_dvi_v2_text_page_v0(b"AB").expect("writer should accept AB");
     let right_index = bytes
         .iter()
         .position(|byte| *byte == DVI_RIGHT3)
         .expect("right3 opcode should exist");
-    bytes[right_index] = DVI_W0;
+    bytes[right_index - 1] = DVI_RIGHT3;
+    bytes[right_index] = 0x00;
+    bytes[right_index + 1] = 0x00;
+    bytes[right_index + 2] = 0x01;
     assert!(!validate_dvi_v2_text_page_v0(&bytes));
 }
 
 #[test]
 fn validator_rejects_wrong_movement_amount() {
     let mut bytes = write_dvi_v2_text_page_v0(b"ABCD").expect("writer should accept ABCD");
-    let w3_index = bytes
+    let right_index = bytes
         .iter()
-        .position(|byte| *byte == DVI_W3)
-        .expect("w3 opcode should exist");
-    let amount_start = w3_index + 1;
+        .position(|byte| *byte == DVI_RIGHT3)
+        .expect("right3 opcode should exist");
+    let amount_start = right_index + 1;
     bytes[amount_start] = 0x00;
     bytes[amount_start + 1] = 0x00;
     bytes[amount_start + 2] = 0x01;
