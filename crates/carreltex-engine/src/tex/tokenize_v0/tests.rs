@@ -514,6 +514,66 @@ fn control_word_textsterling_maps_to_l_and_swallows_space() {
 }
 
 #[test]
+fn control_word_textbrokenbar_maps_to_pipe_and_swallows_space() {
+    let tokens = tokenize_v0(b"\\textbrokenbar X").expect("tokenize should succeed");
+    assert_eq!(tokens, vec![TokenV0::Char(b'|'), TokenV0::Char(b'X')]);
+}
+
+#[test]
+fn control_word_textcurrency_maps_to_c_and_swallows_space() {
+    let tokens = tokenize_v0(b"\\textcurrency X").expect("tokenize should succeed");
+    assert_eq!(tokens, vec![TokenV0::Char(b'C'), TokenV0::Char(b'X')]);
+}
+
+#[test]
+fn control_word_textexclamdown_maps_to_exclamation_and_swallows_space() {
+    let tokens = tokenize_v0(b"\\textexclamdown X").expect("tokenize should succeed");
+    assert_eq!(tokens, vec![TokenV0::Char(b'!'), TokenV0::Char(b'X')]);
+}
+
+#[test]
+fn control_word_textquestiondown_maps_to_question_and_swallows_space() {
+    let tokens = tokenize_v0(b"\\textquestiondown X").expect("tokenize should succeed");
+    assert_eq!(tokens, vec![TokenV0::Char(b'?'), TokenV0::Char(b'X')]);
+}
+
+#[test]
+fn control_word_textguillemotleft_maps_to_less_and_swallows_space() {
+    let tokens = tokenize_v0(b"\\textguillemotleft X").expect("tokenize should succeed");
+    assert_eq!(tokens, vec![TokenV0::Char(b'<'), TokenV0::Char(b'X')]);
+}
+
+#[test]
+fn control_word_textguillemotright_maps_to_greater_and_swallows_space() {
+    let tokens = tokenize_v0(b"\\textguillemotright X").expect("tokenize should succeed");
+    assert_eq!(tokens, vec![TokenV0::Char(b'>'), TokenV0::Char(b'X')]);
+}
+
+#[test]
+fn control_word_textquoteleft_maps_to_quote_and_swallows_space() {
+    let tokens = tokenize_v0(b"\\textquoteleft X").expect("tokenize should succeed");
+    assert_eq!(tokens, vec![TokenV0::Char(b'\''), TokenV0::Char(b'X')]);
+}
+
+#[test]
+fn control_word_textquoteright_maps_to_quote_and_swallows_space() {
+    let tokens = tokenize_v0(b"\\textquoteright X").expect("tokenize should succeed");
+    assert_eq!(tokens, vec![TokenV0::Char(b'\''), TokenV0::Char(b'X')]);
+}
+
+#[test]
+fn control_word_textquotedblbase_maps_to_double_quote_and_swallows_space() {
+    let tokens = tokenize_v0(b"\\textquotedblbase X").expect("tokenize should succeed");
+    assert_eq!(tokens, vec![TokenV0::Char(b'"'), TokenV0::Char(b'X')]);
+}
+
+#[test]
+fn control_word_textquotesinglbase_maps_to_quote_and_swallows_space() {
+    let tokens = tokenize_v0(b"\\textquotesinglbase X").expect("tokenize should succeed");
+    assert_eq!(tokens, vec![TokenV0::Char(b'\''), TokenV0::Char(b'X')]);
+}
+
+#[test]
 fn control_word_textasteriskcentered_maps_to_asterisk_and_swallows_space() {
     let tokens = tokenize_v0(b"\\textasteriskcentered X").expect("tokenize should succeed");
     assert_eq!(tokens, vec![TokenV0::Char(b'*'), TokenV0::Char(b'X')]);
