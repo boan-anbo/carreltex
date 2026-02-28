@@ -116,6 +116,22 @@ fn unsupported_caret_form_is_caret_not_supported() {
 }
 
 #[test]
+fn accent_control_symbol_is_not_supported() {
+    assert_eq!(
+        tokenize_v0(b"\\~a"),
+        Err(TokenizeErrorV0::AccentNotSupported)
+    );
+    assert_eq!(
+        tokenize_v0(b"\\^{a}"),
+        Err(TokenizeErrorV0::AccentNotSupported)
+    );
+    assert_eq!(
+        tokenize_v0(b"\\\"{o}"),
+        Err(TokenizeErrorV0::AccentNotSupported)
+    );
+}
+
+#[test]
 fn caret_sequence_inside_comment_is_ignored_as_raw_text() {
     let tokens = tokenize_v0(b"% ^^ZZ\nX").expect("tokenize should succeed");
     assert!(
