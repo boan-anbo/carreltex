@@ -286,6 +286,36 @@ pub(super) fn parse_control_word_v0(
         vec![TokenV0::Char(b'c'), TokenV0::Char(b'c')]
     } else if control_word.as_slice() == b"textinterrobang" {
         vec![TokenV0::Char(b'!'), TokenV0::Char(b'?')]
+    } else if control_word.as_slice() == b"textoneeighth" {
+        vec![TokenV0::Char(b'1'), TokenV0::Char(b'/'), TokenV0::Char(b'8')]
+    } else if control_word.as_slice() == b"textthreeeighths" {
+        vec![TokenV0::Char(b'3'), TokenV0::Char(b'/'), TokenV0::Char(b'8')]
+    } else if control_word.as_slice() == b"textfiveeighths" {
+        vec![TokenV0::Char(b'5'), TokenV0::Char(b'/'), TokenV0::Char(b'8')]
+    } else if control_word.as_slice() == b"textseveneighths" {
+        vec![TokenV0::Char(b'7'), TokenV0::Char(b'/'), TokenV0::Char(b'8')]
+    } else if control_word.as_slice() == b"textlnot" {
+        vec![TokenV0::Char(b'!')]
+    } else if control_word.as_slice() == b"textbigcircle" {
+        vec![TokenV0::Char(b'O')]
+    } else if control_word.as_slice() == b"textmarried" {
+        vec![TokenV0::Char(b'M')]
+    } else if control_word.as_slice() == b"textdivorced" {
+        vec![TokenV0::Char(b'D')]
+    } else if control_word.as_slice() == b"textopenstar" {
+        vec![TokenV0::Char(b'*')]
+    } else if control_word.as_slice() == b"textborn" {
+        vec![TokenV0::Char(b'*')]
+    } else if control_word.as_slice() == b"textdied" {
+        vec![TokenV0::Char(b'+')]
+    } else if control_word.as_slice() == b"texttildelow" {
+        vec![TokenV0::Char(b'~')]
+    } else if control_word.as_slice() == b"textdblhyphen" {
+        vec![TokenV0::Char(b'-'), TokenV0::Char(b'-')]
+    } else if control_word.as_slice() == b"textdiscount" {
+        vec![TokenV0::Char(b'%')]
+    } else if control_word.as_slice() == b"textpilcrow" {
+        vec![TokenV0::Char(b'P')]
     } else if control_word.as_slice() == b"par" {
         vec![TokenV0::Space]
     } else {
