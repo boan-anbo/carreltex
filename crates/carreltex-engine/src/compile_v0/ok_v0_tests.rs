@@ -49,7 +49,7 @@ fn strict_empty_article_doc_returns_ok_with_valid_xdv() {
 #[test]
 fn simple_text_article_doc_returns_ok_with_valid_xdv() {
     let mut baseline_mount = Mount::default();
-    let baseline_main = b"\\documentclass{article}\n\\begin{document}\n\n\\end{document}\n";
+    let baseline_main = b"\\documentclass{article}\\begin{document}\\end{document}";
     assert!(baseline_mount.add_file(b"main.tex", baseline_main).is_ok());
     let baseline_result = compile_request_v0(&mut baseline_mount, &valid_request());
     assert_eq!(baseline_result.status, CompileStatus::Ok);
@@ -469,6 +469,40 @@ fn begin_document_trailing_space_is_accepted() {
     assert!(validate_dvi_v2_text_page_v0(&result.main_xdv_bytes));
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline_char_count + 3);
+}
+
+#[test]
+fn par_control_sequence_in_body_is_treated_as_space() {
+    let mut baseline_mount = Mount::default();
+    let baseline_main = b"\\documentclass{article}\n\\begin{document}\n\n\\end{document}\n";
+    assert!(baseline_mount.add_file(b"main.tex", baseline_main).is_ok());
+    let baseline_result = compile_request_v0(&mut baseline_mount, &valid_request());
+    assert_eq!(baseline_result.status, CompileStatus::Ok);
+    let baseline_char_count =
+        stats_u64_field(&baseline_result.tex_stats_json, "char_count").expect("char_count");
+
+    let mut mount = Mount::default();
+    let main = b"\\documentclass{article}\\begin{document}A\\csname par\\endcsname B\\end{document}";
+    assert!(mount.add_file(b"main.tex", main).is_ok());
+    let result = compile_request_v0(&mut mount, &valid_request());
+    assert_eq!(result.status, CompileStatus::Ok);
+    assert!(validate_dvi_v2_text_page_v0(&result.main_xdv_bytes));
+    let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
+    assert_eq!(char_count, baseline_char_count + 2);
+    assert_eq!(
+        count_dvi_v2_text_movements_v0(&result.main_xdv_bytes).expect("movement summary").0,
+        3,
+    );
+}
+
+#[test]
+fn partial_control_sequence_in_body_falls_back_to_not_implemented() {
+    let mut mount = Mount::default();
+    let main = b"\\documentclass{article}\n\\begin{document}\n\\partial\n\\end{document}\n";
+    assert!(mount.add_file(b"main.tex", main).is_ok());
+    let result = compile_request_v0(&mut mount, &valid_request());
+    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert!(result.main_xdv_bytes.is_empty());
 }
 
 #[test]
