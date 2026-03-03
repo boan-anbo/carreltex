@@ -1,6 +1,7 @@
 use crate::tex::tokenize_v0::TokenV0;
 
 const MAX_OK_ENV_SCAN_TOKENS_V0: usize = 8192;
+const MAX_OK_ENV_DEPTH_V0: usize = 64;
 
 fn skip_spaces_until(tokens: &[TokenV0], mut index: usize, end_limit: usize) -> usize {
     while index < end_limit && matches!(tokens.get(index), Some(TokenV0::Space)) {
@@ -99,23 +100,41 @@ pub(super) fn consume_named_environment_span_v0(
     let (env_name, mut cursor) =
         consume_char_only_group_payload_v0(tokens, begin_index + 1, end_limit, 64)?;
     let inner_start = cursor;
+    let mut env_stack = vec![env_name.clone()];
     let mut scanned = 0usize;
     while cursor < end_limit {
-        scanned += 1;
-        if scanned > MAX_OK_ENV_SCAN_TOKENS_V0 {
-            return None;
-        }
         match tokens.get(cursor) {
-            Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"begin" => return None,
+            Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"begin" => {
+                let (nested_name, next_index) =
+                    consume_char_only_group_payload_v0(tokens, cursor + 1, end_limit, 64)?;
+                scanned += next_index - cursor;
+                if scanned > MAX_OK_ENV_SCAN_TOKENS_V0 || env_stack.len() >= MAX_OK_ENV_DEPTH_V0 {
+                    return None;
+                }
+                env_stack.push(nested_name);
+                cursor = next_index;
+            }
             Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"end" => {
                 let (end_name, next_index) =
                     consume_char_only_group_payload_v0(tokens, cursor + 1, end_limit, 64)?;
-                if end_name == env_name {
+                scanned += next_index - cursor;
+                if scanned > MAX_OK_ENV_SCAN_TOKENS_V0 {
+                    return None;
+                }
+                if !matches!(env_stack.last(), Some(top) if top == &end_name) {
+                    return None;
+                }
+                env_stack.pop();
+                if env_stack.is_empty() {
                     return Some((env_name, inner_start, cursor, next_index));
                 }
-                return None;
+                cursor = next_index;
             }
             _ => {
+                scanned += 1;
+                if scanned > MAX_OK_ENV_SCAN_TOKENS_V0 {
+                    return None;
+                }
                 cursor += 1;
             }
         }
