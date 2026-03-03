@@ -154,6 +154,7 @@ pub(crate) fn extract_strict_ok_text_body_v0(tokens: &[TokenV0]) -> Option<Vec<u
         return None;
     }
     index += 1;
+    index = skip_spaces(tokens, index);
     index = consume_group_literal(tokens, index, b"document")?;
 
     let mut body = Vec::<u8>::new();
@@ -196,6 +197,7 @@ pub(crate) fn extract_strict_ok_text_body_v0(tokens: &[TokenV0]) -> Option<Vec<u
         return None;
     }
     index += 1;
+    index = skip_spaces(tokens, index);
     index = consume_group_literal(tokens, index, b"document")?;
     index = skip_spaces(tokens, index);
     if index != tokens.len() {

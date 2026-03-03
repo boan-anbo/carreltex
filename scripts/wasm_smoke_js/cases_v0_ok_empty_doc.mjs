@@ -707,6 +707,29 @@ export function runOkEmptyDocCases(ctx, helpers) {
     throw new Error('compile_main(ok maketitle text doc) main.xdv expected non-empty bytes');
   }
   if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before OK begin/end with space text doc case failed');
+  }
+  const beginEndSpaceTextDocBytes = new TextEncoder().encode('\\documentclass{article}\n\\begin {document}\nXYZ\n\\end {document}\n');
+  if (addMountedFile('main.tex', beginEndSpaceTextDocBytes, 'ok_begin_end_space_text_doc_main') !== 0) {
+    throw new Error('mount_add_file(ok begin/end with space text doc main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) {
+    throw new Error('mount_finalize for OK begin/end with space text doc case failed');
+  }
+  expectOk(ctx.compileMain(), 'compile_main_v0(ok begin/end with space text doc)');
+  const beginEndSpaceTextLogBytes = readCompileLogBytes();
+  if (beginEndSpaceTextLogBytes.length !== 0) {
+    throw new Error(`compile_main(ok begin/end with space text doc) expected empty log, got ${beginEndSpaceTextLogBytes.length} bytes`);
+  }
+  const beginEndSpaceTextStats = assertEventsMatchLogAndStats(beginEndSpaceTextLogBytes, { char_count: stats.char_count + 3 }, 'compile_main(ok begin/end with space text doc)');
+  if (!(typeof beginEndSpaceTextStats.token_count === 'number' && beginEndSpaceTextStats.token_count > 0)) {
+    throw new Error('compile_main(ok begin/end with space text doc) token_count expected >0');
+  }
+  const beginEndSpaceTextXdvBytes = readMainXdvArtifactBytes('compile_main(ok begin/end with space text doc)');
+  if (beginEndSpaceTextXdvBytes.length === 0) {
+    throw new Error('compile_main(ok begin/end with space text doc) main.xdv expected non-empty bytes');
+  }
+  if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before OK pagebreak text doc case failed');
   }
   const pagebreakTextDocBytes = new TextEncoder().encode(
