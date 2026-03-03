@@ -53,7 +53,7 @@ use carreltex_core::{
     CompileStatus, Mount, DEFAULT_COMPILE_MAIN_MAX_LOG_BYTES_V0, MAX_LOG_BYTES_V0,
 };
 use carreltex_xdv::{
-    validate_dvi_v2_text_page_v0, write_dvi_v2_text_page_with_layout_wrap_and_paging_v0,
+    plan_layout_v0, validate_dvi_v2_text_page_with_layout_v0, write_dvi_v2_text_page_from_layout_v0,
     DEFAULT_MAX_LINES_PER_PAGE_V0, DEFAULT_MAX_LINE_GLYPHS_V0,
 };
 use input_expand_v0::expand_inputs_v0;
@@ -185,12 +185,24 @@ pub fn compile_request_v0(mount: &mut Mount, req: &CompileRequestV0) -> CompileR
                     .unwrap_or(DEFAULT_MAX_LINES_PER_PAGE_V0 as u32) as usize;
             let line_advance_sp = req.ok_line_advance_sp_v0.unwrap_or(OK_LINE_ADVANCE_SP_V0);
             let glyph_advance_sp = req.ok_glyph_advance_sp_v0.unwrap_or(OK_GLYPH_ADVANCE_SP_V0);
-            let xdv_bytes = match write_dvi_v2_text_page_with_layout_wrap_and_paging_v0(
+            let layout_plan = match plan_layout_v0(
                 &ok_text_bytes,
                 glyph_advance_sp,
                 line_advance_sp,
                 max_line_glyphs,
                 max_lines_per_page,
+            ) {
+                Some(plan) => plan,
+                None => {
+                    return invalid_result_v0(
+                        req.max_log_bytes,
+                        InvalidInputReasonV0::StatsBuildFailed,
+                    )
+                }
+            };
+            let xdv_bytes = match write_dvi_v2_text_page_from_layout_v0(
+                &layout_plan,
+                line_advance_sp,
             ) {
                 Some(bytes) => bytes,
                 None => {
@@ -200,7 +212,11 @@ pub fn compile_request_v0(mount: &mut Mount, req: &CompileRequestV0) -> CompileR
                     )
                 }
             };
-            if !validate_dvi_v2_text_page_v0(&xdv_bytes) {
+            if !validate_dvi_v2_text_page_with_layout_v0(
+                &xdv_bytes,
+                glyph_advance_sp,
+                line_advance_sp,
+            ) {
                 return invalid_result_v0(
                     req.max_log_bytes,
                     InvalidInputReasonV0::StatsBuildFailed,
