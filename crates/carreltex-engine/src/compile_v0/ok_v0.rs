@@ -156,6 +156,7 @@ pub(crate) fn extract_strict_ok_text_body_v0(tokens: &[TokenV0]) -> Option<Vec<u
     index += 1;
     index = skip_spaces(tokens, index);
     index = consume_group_literal(tokens, index, b"document")?;
+    index = skip_spaces(tokens, index);
 
     let mut body = Vec::<u8>::new();
     let mut previous_was_space = false;
