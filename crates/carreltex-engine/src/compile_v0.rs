@@ -24,6 +24,8 @@ mod ok_v0;
 #[cfg(test)]
 mod ok_v0_color_tests;
 #[cfg(test)]
+mod ok_v0_bib_tests;
+#[cfg(test)]
 mod ok_v0_footnote_tests;
 #[cfg(test)]
 mod ok_v0_quote_tests;

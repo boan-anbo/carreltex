@@ -7,6 +7,7 @@ const MAX_OK_GROUP_DEPTH_V0: usize = 64;
 enum ListEnvV0 {
     Itemize,
     Enumerate { next: u32 },
+    Thebibliography,
 }
 
 fn skip_spaces(tokens: &[TokenV0], mut index: usize) -> usize {
@@ -109,6 +110,10 @@ fn is_supported_meta_preamble_command(name: &[u8]) -> bool {
     matches!(name, b"title" | b"author" | b"date")
 }
 
+fn is_supported_bibliography_preamble_command(name: &[u8]) -> bool {
+    matches!(name, b"bibliographystyle" | b"bibliography")
+}
+
 fn consume_meta_preamble_command(tokens: &[TokenV0], mut index: usize) -> Option<usize> {
     if !matches!(
         tokens.get(index),
@@ -119,6 +124,48 @@ fn consume_meta_preamble_command(tokens: &[TokenV0], mut index: usize) -> Option
     index += 1;
     index = skip_spaces(tokens, index);
     index = consume_char_space_group_non_empty(tokens, index)?;
+    Some(skip_spaces(tokens, index))
+}
+
+fn consume_char_space_nested_group_non_empty_v0(
+    tokens: &[TokenV0],
+    index: usize,
+    end: usize,
+) -> Option<usize> {
+    let cursor = skip_spaces_until(tokens, index, end);
+    let (_, inner_end, next_index) =
+        consume_balanced_group_bounds_v0(tokens, cursor, MAX_OK_GROUP_DEPTH_V0, end)?;
+    let mut scan = cursor + 1;
+    let mut has_non_space_char = false;
+    while scan < inner_end {
+        match tokens.get(scan)? {
+            TokenV0::Char(byte) => {
+                if *byte != b' ' {
+                    has_non_space_char = true;
+                }
+                scan += 1;
+            }
+            TokenV0::Space | TokenV0::BeginGroup | TokenV0::EndGroup => {
+                scan += 1;
+            }
+            _ => return None,
+        }
+    }
+    if !has_non_space_char {
+        return None;
+    }
+    Some(next_index)
+}
+
+fn consume_bibliography_preamble_command(tokens: &[TokenV0], mut index: usize) -> Option<usize> {
+    if !matches!(
+        tokens.get(index),
+        Some(TokenV0::ControlSeq(name)) if is_supported_bibliography_preamble_command(name.as_slice())
+    ) {
+        return None;
+    }
+    index += 1;
+    index = consume_char_space_nested_group_non_empty_v0(tokens, index, tokens.len())?;
     Some(skip_spaces(tokens, index))
 }
 
@@ -453,6 +500,12 @@ fn consume_ok_body_token_v0(
                 *list_env = Some(ListEnvV0::Enumerate { next: 1 });
                 return Some(next_index);
             }
+            if let Some(begin_env_end) = consume_group_literal(tokens, cursor, b"thebibliography") {
+                let next_index =
+                    consume_char_space_nested_group_non_empty_v0(tokens, begin_env_end, end)?;
+                *list_env = Some(ListEnvV0::Thebibliography);
+                return Some(next_index);
+            }
             None
         }
         Some(TokenV0::ControlSeq(name))
@@ -469,6 +522,13 @@ fn consume_ok_body_token_v0(
                 }
                 Some(ListEnvV0::Enumerate { .. }) => {
                     let next_index = consume_group_literal(tokens, cursor, b"enumerate")?;
+                    body.push(0x0a);
+                    *previous_was_space = true;
+                    *list_env = None;
+                    Some(next_index)
+                }
+                Some(ListEnvV0::Thebibliography) => {
+                    let next_index = consume_group_literal(tokens, cursor, b"thebibliography")?;
                     body.push(0x0a);
                     *previous_was_space = true;
                     *list_env = None;
@@ -499,7 +559,24 @@ fn consume_ok_body_token_v0(
                     *previous_was_space = true;
                     Some(index + 1)
                 }
+                Some(ListEnvV0::Thebibliography) => None,
                 None => None,
+            }
+        }
+        Some(TokenV0::ControlSeq(name))
+            if !allow_nested_groups && name.as_slice() == b"bibitem" =>
+        {
+            match list_env {
+                Some(ListEnvV0::Thebibliography) => {
+                    let next_index =
+                        consume_char_space_nested_group_non_empty_v0(tokens, index + 1, end)?;
+                    body.push(0x0a);
+                    body.push(b'-');
+                    body.push(b' ');
+                    *previous_was_space = true;
+                    Some(next_index)
+                }
+                _ => None,
             }
         }
         Some(TokenV0::BeginGroup) if allow_nested_groups => {
@@ -561,6 +638,12 @@ pub(crate) fn extract_strict_ok_text_body_v0(tokens: &[TokenV0]) -> Option<Vec<u
                 if is_supported_meta_preamble_command(name.as_slice()) =>
             {
                 index = consume_meta_preamble_command(tokens, index)?;
+                continue;
+            }
+            Some(TokenV0::ControlSeq(name))
+                if is_supported_bibliography_preamble_command(name.as_slice()) =>
+            {
+                index = consume_bibliography_preamble_command(tokens, index)?;
                 continue;
             }
             _ => {}
