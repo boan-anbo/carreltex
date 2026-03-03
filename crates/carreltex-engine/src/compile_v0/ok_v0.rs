@@ -816,8 +816,14 @@ fn consume_ok_body_token_v0(
         {
             match list_env {
                 Some(ListStateV0::Thebibliography) => {
+                    let after_optional = consume_optional_simple_bracket_span_v0(
+                        tokens,
+                        index + 1,
+                        end,
+                        MAX_OK_BRACKET_BYTES_V0,
+                    )?;
                     let next_index =
-                        consume_char_space_nested_group_non_empty_v0(tokens, index + 1, end)?;
+                        consume_char_space_nested_group_non_empty_v0(tokens, after_optional, end)?;
                     body.push(0x0a);
                     body.push(b'-');
                     body.push(b' ');
