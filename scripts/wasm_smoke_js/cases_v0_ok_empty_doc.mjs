@@ -8,6 +8,7 @@ import { runOkEnvLabelCases } from './cases_v0_ok_env_labels.mjs';
 import { runOkEnvRefCases } from './cases_v0_ok_env_refs.mjs';
 import { runOkFloatCases } from './cases_v0_ok_floats.mjs';
 import { runOkFootnoteCases } from './cases_v0_ok_footnotes.mjs';
+import { runOkHeadingCases } from './cases_v0_ok_headings.mjs';
 import { runOkLinkCases } from './cases_v0_ok_links.mjs';
 import { runOkLinebreakCases } from './cases_v0_ok_linebreaks.mjs';
 import { runOkListCases } from './cases_v0_ok_lists.mjs';
@@ -743,6 +744,7 @@ export function runOkEmptyDocCases(ctx, helpers) {
   runOkColorCases(ctx, okBodyHelpers, stats);
   runOkFloatCases(ctx, okBodyHelpers, stats);
   runOkFootnoteCases(ctx, okBodyHelpers, stats);
+  runOkHeadingCases(ctx, okBodyHelpers, stats);
   runOkQuoteCases(ctx, okBodyHelpers, stats);
   runOkBibCases(ctx, okBodyHelpers, stats);
   runOkRefCases(ctx, okBodyHelpers, stats);
