@@ -32,6 +32,8 @@ mod ok_v0_footnote_tests;
 #[cfg(test)]
 mod ok_v0_linebreak_tests;
 #[cfg(test)]
+mod ok_v0_math_env_tests;
+#[cfg(test)]
 mod ok_v0_math_tests;
 #[cfg(test)]
 mod ok_v0_quote_tests;
