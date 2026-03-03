@@ -119,6 +119,44 @@ fn bibitem_optional_form_is_accepted_for_ok() {
 }
 
 #[test]
+fn bibitem_label_fragment_with_wrappers_and_url_is_accepted_for_ok() {
+    let mut baseline_mount = Mount::default();
+    let baseline_main = b"\\documentclass{article}\\begin{document}\\end{document}";
+    assert!(baseline_mount.add_file(b"main.tex", baseline_main).is_ok());
+    let baseline_result = compile_request_v0(&mut baseline_mount, &valid_request());
+    assert_eq!(baseline_result.status, CompileStatus::Ok);
+    let baseline_char_count =
+        stats_u64_field(&baseline_result.tex_stats_json, "char_count").expect("char_count");
+
+    let mut mount = Mount::default();
+    let main = b"\\documentclass{article}\\begin{document}\\begin{thebibliography}{9}\\bibitem[\\textbf{X}\\url{Y}]{K}A\\end{thebibliography}\\end{document}";
+    assert!(mount.add_file(b"main.tex", main).is_ok());
+    let result = compile_request_v0(&mut mount, &valid_request());
+    assert_eq!(result.status, CompileStatus::Ok);
+    assert!(validate_dvi_v2_text_page_v0(&result.main_xdv_bytes));
+    assert!(!result.main_xdv_bytes.is_empty());
+    let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
+    assert_eq!(char_count, baseline_char_count + 37);
+    let total = sum_dvi_v2_positive_right3_amounts_with_layout_v0(
+        &result.main_xdv_bytes,
+        65_536,
+        786_432,
+    )
+    .expect("sum parser should parse");
+    assert_eq!(total, 458_752);
+}
+
+#[test]
+fn bibitem_label_fragment_with_begin_falls_back_to_not_implemented() {
+    let mut mount = Mount::default();
+    let main = b"\\documentclass{article}\\begin{document}\\begin{thebibliography}{9}\\bibitem[\\begin{itemize}\\item X\\end{itemize}]{K}A\\end{thebibliography}\\end{document}";
+    assert!(mount.add_file(b"main.tex", main).is_ok());
+    let result = compile_request_v0(&mut mount, &valid_request());
+    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert!(result.main_xdv_bytes.is_empty());
+}
+
+#[test]
 fn bibliography_newblock_is_accepted_for_ok() {
     let mut baseline_mount = Mount::default();
     let baseline_main = b"\\documentclass{article}\\begin{document}\\end{document}";
