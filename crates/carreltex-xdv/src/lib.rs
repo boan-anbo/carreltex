@@ -14,12 +14,17 @@ const DVI_DEN: u32 = 473_628_672;
 const DVI_MAG: u32 = 1000;
 const FONT_ID_V0: u8 = 0;
 const FONT_NAME_V0: &[u8] = b"carreltex-v0";
-const PAGEBREAK_MARKER_V0: u8 = 0x0c;
-const NEWLINE_MARKER_V0: u8 = 0x0a;
 pub const DEFAULT_GLYPH_ADVANCE_SP_V0: i32 = 65_536;
 pub const DEFAULT_LINE_ADVANCE_SP_V0: i32 = 786_432;
 pub const DEFAULT_MAX_LINE_GLYPHS_V0: usize = 80;
 pub const DEFAULT_MAX_LINES_PER_PAGE_V0: usize = 200;
+
+mod layout_v0;
+pub use layout_v0::{
+    plan_layout_v0, recompute_line_width_sp_v0, GlyphPlanV0, LayoutPlanV0, LinePlanV0,
+    PagePlanV0,
+};
+use layout_v0::glyph_width_sp_v0;
 
 fn push_u32_be(out: &mut Vec<u8>, value: u32) {
     out.extend_from_slice(&value.to_be_bytes());
@@ -80,108 +85,6 @@ fn read_i24_be(bytes: &[u8], index: &mut usize) -> Option<i32> {
 
 fn is_supported_text_byte_v0(byte: u8) -> bool {
     (0x20..=0x7e).contains(&byte)
-}
-
-fn glyph_width_sp_v0(byte: u8, glyph_advance_sp: i32) -> Option<i32> {
-    if glyph_advance_sp <= 0 {
-        return None;
-    }
-    let half_em = glyph_advance_sp / 2;
-    let one_and_half_em = glyph_advance_sp.checked_add(half_em)?;
-    let width = match byte {
-        b' ' | b'.' | b'i' => half_em,
-        b'm' | b'W' => one_and_half_em,
-        _ => glyph_advance_sp,
-    };
-    if !(1..=8_388_607).contains(&width) {
-        return None;
-    }
-    Some(width)
-}
-
-fn split_pages_v0(text: &[u8]) -> Option<Vec<&[u8]>> {
-    if text.iter().any(|byte| {
-        !is_supported_text_byte_v0(*byte)
-            && *byte != PAGEBREAK_MARKER_V0
-            && *byte != NEWLINE_MARKER_V0
-    }) {
-        return None;
-    }
-    let mut pages = Vec::<&[u8]>::new();
-    let mut start = 0usize;
-    for (index, byte) in text.iter().enumerate() {
-        if *byte == PAGEBREAK_MARKER_V0 {
-            pages.push(&text[start..index]);
-            start = index + 1;
-        }
-    }
-    pages.push(&text[start..]);
-    Some(pages)
-}
-
-fn split_lines_v0(page: &[u8]) -> Vec<&[u8]> {
-    let mut lines = Vec::<&[u8]>::new();
-    let mut start = 0usize;
-    for (index, byte) in page.iter().enumerate() {
-        if *byte == NEWLINE_MARKER_V0 {
-            lines.push(&page[start..index]);
-            start = index + 1;
-        }
-    }
-    lines.push(&page[start..]);
-    lines
-}
-
-fn wrap_logical_line_v0(line: &[u8], max_line_glyphs: usize) -> Option<Vec<Vec<u8>>> {
-    if max_line_glyphs == 0 {
-        return None;
-    }
-    if line.is_empty() {
-        return Some(vec![Vec::new()]);
-    }
-    let mut wrapped = Vec::<Vec<u8>>::new();
-    let mut start = 0usize;
-    while start < line.len() {
-        if line.len() - start <= max_line_glyphs {
-            wrapped.push(line[start..].to_vec());
-            break;
-        }
-        let limit = start + max_line_glyphs;
-        let mut break_at = None::<usize>;
-        for index in (start..limit).rev() {
-            if line[index] == b' ' {
-                break_at = Some(index);
-                break;
-            }
-        }
-        if let Some(space_index) = break_at {
-            if space_index > start {
-                wrapped.push(line[start..space_index].to_vec());
-            } else {
-                wrapped.push(Vec::new());
-            }
-            start = space_index + 1;
-            while start < line.len() && line[start] == b' ' {
-                start += 1;
-            }
-        } else {
-            wrapped.push(line[start..limit].to_vec());
-            start = limit;
-        }
-    }
-    Some(wrapped)
-}
-
-fn emit_line_glyphs_v0(out: &mut Vec<u8>, line: &[u8], glyph_advance_sp: i32) -> Option<u32> {
-    let mut line_h = 0u32;
-    for byte in line {
-        out.push(*byte);
-        let glyph_width = glyph_width_sp_v0(*byte, glyph_advance_sp)?;
-        out.push(DVI_RIGHT3);
-        push_i24_be(out, glyph_width)?;
-        line_h = line_h.checked_add(u32::try_from(glyph_width).ok()?)?;
-    }
-    Some(line_h)
 }
 
 fn append_font_def_v0(out: &mut Vec<u8>) {
@@ -308,15 +211,44 @@ pub fn write_dvi_v2_text_page_with_layout_wrap_and_paging_v0(
     max_line_glyphs: usize,
     max_lines_per_page: usize,
 ) -> Option<Vec<u8>> {
-    if glyph_advance_sp <= 0
-        || line_advance_sp <= 0
-        || max_line_glyphs == 0
-        || max_lines_per_page == 0
-    {
+    let layout = plan_layout_v0(
+        text,
+        glyph_advance_sp,
+        line_advance_sp,
+        max_line_glyphs,
+        max_lines_per_page,
+    )?;
+    write_dvi_v2_text_page_from_layout_v0(&layout, line_advance_sp)
+}
+
+fn emit_line_plan_v0(out: &mut Vec<u8>, line: &LinePlanV0) -> Option<u32> {
+    let expected_width = recompute_line_width_sp_v0(line)?;
+    if expected_width != line.width_sp {
         return None;
     }
-    let forced_pages = split_pages_v0(text)?;
+    let mut emitted_width = 0u32;
+    for glyph in &line.glyphs {
+        if !is_supported_text_byte_v0(glyph.byte) || glyph.advance_sp <= 0 {
+            return None;
+        }
+        out.push(glyph.byte);
+        out.push(DVI_RIGHT3);
+        push_i24_be(out, glyph.advance_sp)?;
+        emitted_width = emitted_width.checked_add(u32::try_from(glyph.advance_sp).ok()?)?;
+    }
+    if emitted_width != line.width_sp {
+        return None;
+    }
+    Some(emitted_width)
+}
 
+pub fn write_dvi_v2_text_page_from_layout_v0(
+    layout: &LayoutPlanV0,
+    line_advance_sp: i32,
+) -> Option<Vec<u8>> {
+    if line_advance_sp <= 0 || layout.pages.is_empty() {
+        return None;
+    }
     let mut out = Vec::<u8>::new();
     out.push(DVI_PRE);
     out.push(DVI_ID_V2);
@@ -328,53 +260,44 @@ pub fn write_dvi_v2_text_page_with_layout_wrap_and_paging_v0(
     let mut bop_offsets = Vec::<u32>::new();
     let mut max_h = 0u32;
     let mut max_v = 0u32;
-    for forced_page in forced_pages {
-        let logical_lines = split_lines_v0(forced_page);
-        let mut physical_lines = Vec::<Vec<u8>>::new();
-        for line in logical_lines {
-            let wrapped = wrap_logical_line_v0(line, max_line_glyphs)?;
-            physical_lines.extend(wrapped);
+    for page in &layout.pages {
+        if page.lines.is_empty() {
+            return None;
         }
-        for chunk in physical_lines.chunks(max_lines_per_page) {
-            let bop_offset = out.len() as u32;
-            out.push(DVI_BOP);
-            for _ in 0..10 {
-                push_i32_be(&mut out, 0);
-            }
-            let prev_bop = if let Some(previous) = bop_offsets.last() {
-                i32::try_from(*previous).ok()?
-            } else {
-                -1
-            };
-            push_i32_be(&mut out, prev_bop);
-            append_font_def_v0(&mut out);
-            out.push(DVI_FNT_NUM_0);
+        let bop_offset = out.len() as u32;
+        out.push(DVI_BOP);
+        for _ in 0..10 {
+            push_i32_be(&mut out, 0);
+        }
+        let prev_bop = if let Some(previous) = bop_offsets.last() {
+            i32::try_from(*previous).ok()?
+        } else {
+            -1
+        };
+        push_i32_be(&mut out, prev_bop);
+        append_font_def_v0(&mut out);
+        out.push(DVI_FNT_NUM_0);
 
-            let mut page_h = 0u32;
-            let mut page_v = 0u32;
-            let mut previous_line_h = emit_line_glyphs_v0(
-                &mut out,
-                chunk.first().map(|line| line.as_slice()).unwrap_or(&[]),
-                glyph_advance_sp,
-            )?;
-            page_h = page_h.max(previous_line_h);
-            for line in chunk.iter().skip(1) {
-                if previous_line_h > 0 {
-                    out.push(DVI_RIGHT3);
-                    let reset_back = -i32::try_from(previous_line_h).ok()?;
-                    push_i24_be(&mut out, reset_back)?;
-                }
-                out.push(DVI_DOWN3);
-                push_i24_be(&mut out, line_advance_sp)?;
-                page_v = page_v.checked_add(u32::try_from(line_advance_sp).ok()?)?;
-                previous_line_h = emit_line_glyphs_v0(&mut out, line.as_slice(), glyph_advance_sp)?;
-                page_h = page_h.max(previous_line_h);
+        let mut page_h = 0u32;
+        let mut page_v = 0u32;
+        let mut previous_line_h = emit_line_plan_v0(&mut out, &page.lines[0])?;
+        page_h = page_h.max(previous_line_h);
+        for line in page.lines.iter().skip(1) {
+            if previous_line_h > 0 {
+                out.push(DVI_RIGHT3);
+                let reset_back = -i32::try_from(previous_line_h).ok()?;
+                push_i24_be(&mut out, reset_back)?;
             }
-            max_h = max_h.max(page_h);
-            max_v = max_v.max(page_v);
-            out.push(DVI_EOP);
-            bop_offsets.push(bop_offset);
+            out.push(DVI_DOWN3);
+            push_i24_be(&mut out, line_advance_sp)?;
+            page_v = page_v.checked_add(u32::try_from(line_advance_sp).ok()?)?;
+            previous_line_h = emit_line_plan_v0(&mut out, line)?;
+            page_h = page_h.max(previous_line_h);
         }
+        max_h = max_h.max(page_h);
+        max_v = max_v.max(page_v);
+        out.push(DVI_EOP);
+        bop_offsets.push(bop_offset);
     }
     let page_count = u16::try_from(bop_offsets.len()).ok()?;
     if page_count == 0 {
@@ -752,8 +675,24 @@ pub fn count_dvi_v2_text_pages_v0(bytes: &[u8]) -> Option<u16> {
     count_dvi_v2_text_pages_with_advance_v0(bytes, DEFAULT_GLYPH_ADVANCE_SP_V0)
 }
 
+pub fn validate_dvi_v2_text_page_with_layout_v0(
+    bytes: &[u8],
+    glyph_advance_sp: i32,
+    line_advance_sp: i32,
+) -> bool {
+    count_dvi_v2_text_movements_with_layout_v0(bytes, glyph_advance_sp, line_advance_sp).is_some()
+}
+
+pub fn validate_dvi_v2_text_page_with_advance_v0(bytes: &[u8], glyph_advance_sp: i32) -> bool {
+    validate_dvi_v2_text_page_with_layout_v0(bytes, glyph_advance_sp, DEFAULT_LINE_ADVANCE_SP_V0)
+}
+
 pub fn validate_dvi_v2_text_page_v0(bytes: &[u8]) -> bool {
-    count_dvi_v2_text_pages_v0(bytes).is_some()
+    validate_dvi_v2_text_page_with_layout_v0(
+        bytes,
+        DEFAULT_GLYPH_ADVANCE_SP_V0,
+        DEFAULT_LINE_ADVANCE_SP_V0,
+    )
 }
 
 #[cfg(test)]
