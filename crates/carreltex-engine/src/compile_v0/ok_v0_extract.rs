@@ -124,6 +124,37 @@ fn consume_config_preamble_command(tokens: &[TokenV0], index: usize) -> Option<u
     }
 }
 
+fn consume_color_graphics_decl_preamble_command(tokens: &[TokenV0], index: usize) -> Option<usize> {
+    let name = match tokens.get(index) {
+        Some(TokenV0::ControlSeq(name)) => name.as_slice(),
+        _ => return None,
+    };
+    match name {
+        b"definecolor" => {
+            let mut cursor = skip_spaces(tokens, index + 1);
+            cursor = consume_char_space_group_non_empty(tokens, cursor)?;
+            cursor = skip_spaces(tokens, cursor);
+            cursor = consume_char_space_group_non_empty(tokens, cursor)?;
+            cursor = skip_spaces(tokens, cursor);
+            cursor = consume_char_space_group_non_empty(tokens, cursor)?;
+            Some(skip_spaces(tokens, cursor))
+        }
+        b"colorlet" => {
+            let mut cursor = skip_spaces(tokens, index + 1);
+            cursor = consume_char_space_group_non_empty(tokens, cursor)?;
+            cursor = skip_spaces(tokens, cursor);
+            cursor = consume_char_space_group_non_empty(tokens, cursor)?;
+            Some(skip_spaces(tokens, cursor))
+        }
+        b"DeclareGraphicsExtensions" => {
+            let mut cursor = skip_spaces(tokens, index + 1);
+            cursor = consume_char_space_group_non_empty(tokens, cursor)?;
+            Some(skip_spaces(tokens, cursor))
+        }
+        _ => None,
+    }
+}
+
 pub(crate) fn extract_strict_ok_text_body_v0(tokens: &[TokenV0]) -> Option<Vec<u8>> {
     let mut index = 0usize;
     if !matches!(
@@ -175,6 +206,15 @@ pub(crate) fn extract_strict_ok_text_body_v0(tokens: &[TokenV0]) -> Option<Vec<u
                 ) =>
             {
                 index = consume_config_preamble_command(tokens, index)?;
+                continue;
+            }
+            Some(TokenV0::ControlSeq(name))
+                if matches!(
+                    name.as_slice(),
+                    b"definecolor" | b"colorlet" | b"DeclareGraphicsExtensions"
+                ) =>
+            {
+                index = consume_color_graphics_decl_preamble_command(tokens, index)?;
                 continue;
             }
             Some(TokenV0::ControlSeq(name))
