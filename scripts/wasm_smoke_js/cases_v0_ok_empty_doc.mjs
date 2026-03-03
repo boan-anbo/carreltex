@@ -702,6 +702,19 @@ export function runOkEmptyDocCases(ctx, helpers) {
   if (beginTrailingSpaceTextLogBytes.length !== 0) throw new Error(`compile_main(ok begin trailing-space text doc) expected empty log, got ${beginTrailingSpaceTextLogBytes.length} bytes`);
   assertEventsMatchLogAndStats(beginTrailingSpaceTextLogBytes, { char_count: stats.char_count + 3 }, 'compile_main(ok begin trailing-space text doc)');
   if (readMainXdvArtifactBytes('compile_main(ok begin trailing-space text doc)').length === 0) throw new Error('compile_main(ok begin trailing-space text doc) main.xdv expected non-empty bytes');
+  if (ctx.mountReset() !== 0) throw new Error('mount_reset before OK par control-seq text doc case failed');
+  const parControlSeqTextDocBytes = new TextEncoder().encode('\\documentclass{article}\\begin{document}A\\par B\\end{document}');
+  if (addMountedFile('main.tex', parControlSeqTextDocBytes, 'ok_par_control_seq_text_doc_main') !== 0) throw new Error('mount_add_file(ok par control-seq text doc main.tex) failed');
+  if (ctx.mountFinalize() !== 0) throw new Error('mount_finalize for OK par control-seq text doc case failed');
+  expectOk(ctx.compileMain(), 'compile_main_v0(ok par control-seq text doc)');
+  const parControlSeqTextLogBytes = readCompileLogBytes();
+  if (parControlSeqTextLogBytes.length !== 0) throw new Error(`compile_main(ok par control-seq text doc) expected empty log, got ${parControlSeqTextLogBytes.length} bytes`);
+  assertEventsMatchLogAndStats(parControlSeqTextLogBytes, { char_count: stats.char_count + 2 }, 'compile_main(ok par control-seq text doc)');
+  const parControlSeqTextXdvBytes = readMainXdvArtifactBytes('compile_main(ok par control-seq text doc)');
+  if (parControlSeqTextXdvBytes.length === 0) throw new Error('compile_main(ok par control-seq text doc) main.xdv expected non-empty bytes');
+  if (countMovementOpsInTextPages(parControlSeqTextXdvBytes, 'compile_main(ok par control-seq text doc)').right3 !== 3) {
+    throw new Error('compile_main(ok par control-seq text doc) expected right3=3 for A space B');
+  }
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before OK pagebreak text doc case failed');
   }
