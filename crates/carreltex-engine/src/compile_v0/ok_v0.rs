@@ -163,6 +163,29 @@ fn is_supported_ok_style_declaration_v0(name: &[u8]) -> bool {
     )
 }
 
+fn consume_ok_group_fragment_v0(
+    tokens: &[TokenV0],
+    index: usize,
+    end: usize,
+    body: &mut Vec<u8>,
+    previous_was_space: &mut bool,
+) -> Option<usize> {
+    let cursor = skip_spaces_until(tokens, index, end);
+    let (inner_start, inner_end, next_index) =
+        consume_balanced_group_bounds_v0(tokens, cursor, MAX_OK_GROUP_DEPTH_V0, end)?;
+    let mut nested_list_env = None;
+    consume_ok_body_range_v0(
+        tokens,
+        inner_start,
+        inner_end,
+        true,
+        &mut nested_list_env,
+        body,
+        previous_was_space,
+    )?;
+    Some(next_index)
+}
+
 fn consume_balanced_group_bounds_v0(
     tokens: &[TokenV0],
     index: usize,
@@ -259,6 +282,21 @@ fn consume_ok_body_token_v0(
             body.push(0x0a);
             *previous_was_space = true;
             Some(index + 1)
+        }
+        Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"href" => {
+            let mut scratch_body = Vec::new();
+            let mut scratch_previous_was_space = *previous_was_space;
+            let first_arg_end = consume_ok_group_fragment_v0(
+                tokens,
+                index + 1,
+                end,
+                &mut scratch_body,
+                &mut scratch_previous_was_space,
+            )?;
+            consume_ok_group_fragment_v0(tokens, first_arg_end, end, body, previous_was_space)
+        }
+        Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"url" => {
+            consume_ok_group_fragment_v0(tokens, index + 1, end, body, previous_was_space)
         }
         Some(TokenV0::ControlSeq(name))
             if is_supported_ok_wrapper_command_v0(name.as_slice()) =>
