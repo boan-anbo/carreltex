@@ -1,11 +1,16 @@
 use crate::tex::tokenize_v0::TokenV0;
+#[path = "ok_v0_env_support.rs"]
+mod ok_v0_env_support;
+use ok_v0_env_support::{
+    consume_display_math_environment_span_v0, consume_named_environment_span_v0,
+    is_supported_ok_block_env_v0,
+};
 pub(crate) const MAX_OK_TEXT_BYTES_V0: usize = 64 * 1024;
 pub(crate) const OK_GLYPH_ADVANCE_SP_V0: i32 = 65_536;
 pub(crate) const OK_LINE_ADVANCE_SP_V0: i32 = 786_432;
 const MAX_OK_GROUP_DEPTH_V0: usize = 64;
 const MAX_OK_BRACKET_BYTES_V0: usize = 256;
 const MAX_OK_MATH_SCAN_TOKENS_V0: usize = 4096;
-const MAX_OK_MATH_ENV_TOKENS_V0: usize = 4096;
 
 enum ListEnvV0 {
     Itemize,
@@ -362,90 +367,6 @@ fn consume_math_control_span_v0(
     None
 }
 
-fn consume_char_only_group_payload_v0(
-    tokens: &[TokenV0],
-    index: usize,
-    end_limit: usize,
-    max_bytes: usize,
-) -> Option<(Vec<u8>, usize)> {
-    let mut cursor = skip_spaces_until(tokens, index, end_limit);
-    if !matches!(tokens.get(cursor), Some(TokenV0::BeginGroup)) {
-        return None;
-    }
-    cursor += 1;
-    let mut bytes = Vec::new();
-    while cursor < end_limit {
-        match tokens.get(cursor)? {
-            TokenV0::EndGroup => {
-                if bytes.is_empty() {
-                    return None;
-                }
-                return Some((bytes, cursor + 1));
-            }
-            TokenV0::Char(byte) => {
-                bytes.push(*byte);
-                if bytes.len() > max_bytes {
-                    return None;
-                }
-                cursor += 1;
-            }
-            _ => return None,
-        }
-    }
-    None
-}
-
-fn is_supported_display_math_env_v0(name: &[u8]) -> bool {
-    matches!(
-        name,
-        b"equation"
-            | b"equation*"
-            | b"align"
-            | b"align*"
-            | b"gather"
-            | b"gather*"
-            | b"multline"
-            | b"multline*"
-    )
-}
-
-fn consume_display_math_environment_span_v0(
-    tokens: &[TokenV0],
-    begin_index: usize,
-    end_limit: usize,
-) -> Option<usize> {
-    if !matches!(tokens.get(begin_index), Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"begin") {
-        return None;
-    }
-    let (env_name, mut cursor) =
-        consume_char_only_group_payload_v0(tokens, begin_index + 1, end_limit, 64)?;
-    if !is_supported_display_math_env_v0(&env_name) {
-        return None;
-    }
-    let mut scanned = 0usize;
-    while cursor < end_limit {
-        scanned += 1;
-        if scanned > MAX_OK_MATH_ENV_TOKENS_V0 {
-            return None;
-        }
-        match tokens.get(cursor) {
-            Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"begin" => return None,
-            Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"end" => {
-                let (end_name, next_index) =
-                    consume_char_only_group_payload_v0(tokens, cursor + 1, end_limit, 64)?;
-                if end_name == env_name {
-                    return Some(next_index);
-                }
-                return None;
-            }
-            _ => {
-                cursor += 1;
-            }
-        }
-    }
-    None
-}
-
 fn emit_ok_inline_math_marker_v0(body: &mut Vec<u8>, previous_was_space: &mut bool) {
     body.push(b' ');
     body.push(b'[');
@@ -464,6 +385,22 @@ fn emit_ok_display_math_marker_v0(body: &mut Vec<u8>, previous_was_space: &mut b
     body.push(b'A');
     body.push(b'T');
     body.push(b'H');
+    body.push(b']');
+    body.push(0x0a);
+    *previous_was_space = true;
+}
+
+fn emit_ok_verbatim_marker_v0(body: &mut Vec<u8>, previous_was_space: &mut bool) {
+    body.push(0x0a);
+    body.push(b'[');
+    body.push(b'V');
+    body.push(b'E');
+    body.push(b'R');
+    body.push(b'B');
+    body.push(b'A');
+    body.push(b'T');
+    body.push(b'I');
+    body.push(b'M');
     body.push(b']');
     body.push(0x0a);
     *previous_was_space = true;
@@ -717,6 +654,34 @@ fn consume_ok_body_token_v0(
             let cursor = skip_spaces_until(tokens, index + 1, end);
             if list_env.is_some() {
                 return None;
+            }
+            if let Some((env_name, inner_start, inner_end, next_index)) =
+                consume_named_environment_span_v0(tokens, index, end)
+            {
+                if is_supported_ok_block_env_v0(&env_name) {
+                    if env_name.as_slice() == b"verbatim" {
+                        emit_ok_verbatim_marker_v0(body, previous_was_space);
+                        return Some(next_index);
+                    }
+                    let mut inner_list_env = None;
+                    body.push(0x0a);
+                    *previous_was_space = true;
+                    consume_ok_body_range_v0(
+                        tokens,
+                        inner_start,
+                        inner_end,
+                        false,
+                        &mut inner_list_env,
+                        body,
+                        previous_was_space,
+                    )?;
+                    if inner_list_env.is_some() {
+                        return None;
+                    }
+                    body.push(0x0a);
+                    *previous_was_space = true;
+                    return Some(next_index);
+                }
             }
             if let Some(next_index) = consume_display_math_environment_span_v0(tokens, index, end) {
                 emit_ok_display_math_marker_v0(body, previous_was_space);
