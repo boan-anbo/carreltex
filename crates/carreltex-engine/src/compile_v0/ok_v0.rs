@@ -512,6 +512,13 @@ fn consume_ok_body_token_v0(
             *previous_was_space = false;
             Some(next_index)
         }
+        Some(TokenV0::ControlSeq(name))
+            if name.as_slice() == b"bibliographystyle"
+                || name.as_slice() == b"bibliography"
+                || name.as_slice() == b"nocite" =>
+        {
+            consume_char_space_nested_group_v0(tokens, index + 1, end)
+        }
         Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"label" => {
             consume_char_space_nested_group_v0(tokens, index + 1, end)
         }
