@@ -447,6 +447,20 @@ fn consume_ok_body_token_v0(
             *previous_was_space = true;
             Some(index + 1)
         }
+        Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"\\" => {
+            let mut next_index = index + 1;
+            if matches!(tokens.get(next_index), Some(TokenV0::Char(b'*')))
+                || matches!(
+                    tokens.get(next_index),
+                    Some(TokenV0::ControlSeq(star)) if star.as_slice() == b"*"
+                )
+            {
+                next_index += 1;
+            }
+            body.push(0x0a);
+            *previous_was_space = true;
+            Some(next_index)
+        }
         Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"(" => {
             let next_index = consume_math_control_span_v0(tokens, index, end, b")")?;
             emit_ok_inline_math_marker_v0(body, previous_was_space);
