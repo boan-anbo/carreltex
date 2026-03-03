@@ -3,9 +3,10 @@ use crate::tex::tokenize_v0::TokenV0;
 use super::ok_v0_body::{
     consume_bracket_options_non_empty, consume_char_space_group_non_empty,
     consume_char_space_nested_group_non_empty_v0, consume_group_literal, consume_ok_body_token_v0,
-    consume_ok_group_fragment_v0, skip_spaces,
+    consume_ok_group_fragment_v0, is_supported_ok_style_declaration_v0, skip_spaces,
 };
 use super::ok_v0_lists::ListStateV0;
+use super::ok_v0_noops::{consume_ok_noop_command_v0, is_ok_noop_command_v0};
 use super::ok_v0_title_state::OkTitleStateV0;
 
 fn consume_usepackage_preamble_command(tokens: &[TokenV0], mut index: usize) -> Option<usize> {
@@ -70,6 +71,35 @@ fn consume_bibliography_preamble_command(tokens: &[TokenV0], mut index: usize) -
     Some(skip_spaces(tokens, index))
 }
 
+fn consume_theorem_preamble_command(tokens: &[TokenV0], index: usize) -> Option<usize> {
+    let name = match tokens.get(index) {
+        Some(TokenV0::ControlSeq(name)) => name.as_slice(),
+        _ => return None,
+    };
+    match name {
+        b"theoremstyle" => {
+            let mut cursor = skip_spaces(tokens, index + 1);
+            cursor = consume_char_space_group_non_empty(tokens, cursor)?;
+            Some(skip_spaces(tokens, cursor))
+        }
+        b"newtheorem" => {
+            let mut cursor = skip_spaces(tokens, index + 1);
+            if matches!(tokens.get(cursor), Some(TokenV0::Char(b'*'))) {
+                cursor += 1;
+                cursor = skip_spaces(tokens, cursor);
+            }
+            cursor = consume_char_space_group_non_empty(tokens, cursor)?;
+            cursor = skip_spaces(tokens, cursor);
+            if matches!(tokens.get(cursor), Some(TokenV0::Char(b'['))) {
+                return None;
+            }
+            cursor = consume_char_space_group_non_empty(tokens, cursor)?;
+            Some(skip_spaces(tokens, cursor))
+        }
+        _ => None,
+    }
+}
+
 pub(crate) fn extract_strict_ok_text_body_v0(tokens: &[TokenV0]) -> Option<Vec<u8>> {
     let mut index = 0usize;
     if !matches!(
@@ -101,6 +131,26 @@ pub(crate) fn extract_strict_ok_text_body_v0(tokens: &[TokenV0]) -> Option<Vec<u
                 if is_supported_bibliography_preamble_command(name.as_slice()) =>
             {
                 index = consume_bibliography_preamble_command(tokens, index)?;
+                continue;
+            }
+            Some(TokenV0::ControlSeq(name))
+                if name.as_slice() == b"newtheorem" || name.as_slice() == b"theoremstyle" =>
+            {
+                index = consume_theorem_preamble_command(tokens, index)?;
+                continue;
+            }
+            Some(TokenV0::ControlSeq(name))
+                if is_supported_ok_style_declaration_v0(name.as_slice()) =>
+            {
+                index += 1;
+                index = skip_spaces(tokens, index);
+                continue;
+            }
+            Some(TokenV0::ControlSeq(name))
+                if is_ok_noop_command_v0(name.as_slice()) =>
+            {
+                index = consume_ok_noop_command_v0(tokens, index, tokens.len(), name.as_slice())?;
+                index = skip_spaces(tokens, index);
                 continue;
             }
             _ => {}
