@@ -33,6 +33,20 @@ export function runOkWrapperCases(ctx, helpers, baselineStats) {
   if (wrapperMovement.right3 !== 4) throw new Error(`compile_main(ok wrapper text doc) expected right3=4, got ${wrapperMovement.right3}`);
   if (wrapperMovement.right3PositiveTotal !== (3 * 65536 + 32768)) throw new Error(`compile_main(ok wrapper text doc) expected right3PositiveTotal=${3 * 65536 + 32768}, got ${wrapperMovement.right3PositiveTotal}`);
 
+  if (ctx.mountReset() !== 0) throw new Error('mount_reset before OK mbox wrapper case failed');
+  const mboxDocBytes = new TextEncoder().encode('\\documentclass{article}\\begin{document}\\mbox{A B}C\\end{document}');
+  if (addMountedFile('main.tex', mboxDocBytes, 'ok_mbox_wrapper_main') !== 0) throw new Error('mount_add_file(ok mbox wrapper main.tex) failed');
+  if (ctx.mountFinalize() !== 0) throw new Error('mount_finalize for OK mbox wrapper case failed');
+  expectOk(ctx.compileMain(), 'compile_main_v0(ok mbox wrapper)');
+  const mboxLogBytes = readCompileLogBytes();
+  if (mboxLogBytes.length !== 0) throw new Error(`compile_main(ok mbox wrapper) expected empty log, got ${mboxLogBytes.length} bytes`);
+  assertEventsMatchLogAndStats(mboxLogBytes, { char_count: baselineStats.char_count + 3 }, 'compile_main(ok mbox wrapper)');
+  const mboxXdvBytes = readMainXdvArtifactBytes('compile_main(ok mbox wrapper)');
+  if (mboxXdvBytes.length === 0) throw new Error('compile_main(ok mbox wrapper) main.xdv expected non-empty bytes');
+  const mboxMovement = countMovementOpsInTextPages(mboxXdvBytes, 'compile_main(ok mbox wrapper)');
+  if (mboxMovement.right3 !== 4) throw new Error(`compile_main(ok mbox wrapper) expected right3=4, got ${mboxMovement.right3}`);
+  if (mboxMovement.right3PositiveTotal !== (3 * 65536 + 32768)) throw new Error(`compile_main(ok mbox wrapper) expected right3PositiveTotal=${3 * 65536 + 32768}, got ${mboxMovement.right3PositiveTotal}`);
+
   if (ctx.mountReset() !== 0) throw new Error('mount_reset before OK heading text doc case failed');
   const headingTextDocBytes = new TextEncoder().encode('\\documentclass{article}\\begin{document}\\section{ABC}D\\end{document}');
   if (addMountedFile('main.tex', headingTextDocBytes, 'ok_heading_text_doc_main') !== 0) throw new Error('mount_add_file(ok heading text doc main.tex) failed');
@@ -64,4 +78,10 @@ export function runOkWrapperCases(ctx, helpers, baselineStats) {
   if (addMountedFile('main.tex', invalidTextsfDocBytes, 'ok_textsf_missing_group_main') !== 0) throw new Error('mount_add_file(ok textsf missing-group main.tex) failed');
   if (ctx.mountFinalize() !== 0) throw new Error('mount_finalize for textsf missing-group invalid case failed');
   expectNotImplemented(ctx.compileMain(), 'compile_main_v0(ok textsf missing-group)');
+
+  if (ctx.mountReset() !== 0) throw new Error('mount_reset before mbox missing-group invalid case failed');
+  const invalidMboxDocBytes = new TextEncoder().encode('\\documentclass{article}\\begin{document}\\mbox X\\end{document}');
+  if (addMountedFile('main.tex', invalidMboxDocBytes, 'ok_mbox_missing_group_main') !== 0) throw new Error('mount_add_file(ok mbox missing-group main.tex) failed');
+  if (ctx.mountFinalize() !== 0) throw new Error('mount_finalize for mbox missing-group invalid case failed');
+  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(ok mbox missing-group)');
 }
