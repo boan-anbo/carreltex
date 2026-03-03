@@ -1,4 +1,5 @@
 import { runOkBodyControlCases } from './cases_v0_ok_body_controls.mjs';
+import { runOkLinkCases } from './cases_v0_ok_links.mjs';
 import { runOkListCases } from './cases_v0_ok_lists.mjs';
 import { runOkWrapperCases } from './cases_v0_ok_wrappers.mjs';
 
@@ -727,6 +728,18 @@ export function runOkEmptyDocCases(ctx, helpers) {
       countMovementOpsInTextPages,
     },
     stats,
+  );
+  runOkLinkCases(
+    ctx,
+    {
+      addMountedFile,
+      expectOk,
+      expectNotImplemented,
+      readCompileLogBytes,
+      assertEventsMatchLogAndStats,
+      readMainXdvArtifactBytes,
+      countMovementOpsInTextPages,
+    },
   );
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before OK pagebreak text doc case failed');

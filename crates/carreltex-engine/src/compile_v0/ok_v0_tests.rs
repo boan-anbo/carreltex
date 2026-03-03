@@ -693,6 +693,69 @@ fn textrm_wrapper_is_transparent_for_ok() {
 }
 
 #[test]
+fn href_wrapper_extracts_only_text_for_ok() {
+    let mut mount = Mount::default();
+    let main = b"\\documentclass{article}\\begin{document}\\href{https://example.test/path?q=1}{XYZ}\\end{document}";
+    assert!(mount.add_file(b"main.tex", main).is_ok());
+    let result = compile_request_v0(&mut mount, &valid_request());
+    assert_eq!(result.status, CompileStatus::Ok);
+    assert!(validate_dvi_v2_text_page_v0(&result.main_xdv_bytes));
+    let movement = count_dvi_v2_text_movements_v0(&result.main_xdv_bytes).expect("movement summary");
+    assert_eq!(movement.3, 0);
+    let total = sum_dvi_v2_positive_right3_amounts_with_layout_v0(
+        &result.main_xdv_bytes,
+        65_536,
+        786_432,
+    )
+    .expect("sum parser should parse");
+    assert_eq!(total, 196_608);
+}
+
+#[test]
+fn url_wrapper_extracts_url_text_for_ok() {
+    let mut mount = Mount::default();
+    let main = b"\\documentclass{article}\\begin{document}\\url{abc}\\end{document}";
+    assert!(mount.add_file(b"main.tex", main).is_ok());
+    let result = compile_request_v0(&mut mount, &valid_request());
+    assert_eq!(result.status, CompileStatus::Ok);
+    assert!(validate_dvi_v2_text_page_v0(&result.main_xdv_bytes));
+    let total = sum_dvi_v2_positive_right3_amounts_with_layout_v0(
+        &result.main_xdv_bytes,
+        65_536,
+        786_432,
+    )
+    .expect("sum parser should parse");
+    assert_eq!(total, 196_608);
+}
+
+#[test]
+fn href_missing_text_argument_falls_back_to_not_implemented() {
+    let mut mount = Mount::default();
+    let main = b"\\documentclass{article}\\begin{document}\\href{abc}XYZ\\end{document}";
+    assert!(mount.add_file(b"main.tex", main).is_ok());
+    let result = compile_request_v0(&mut mount, &valid_request());
+    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert!(result.main_xdv_bytes.is_empty());
+}
+
+#[test]
+fn href_nested_group_text_is_supported_for_ok() {
+    let mut mount = Mount::default();
+    let main = b"\\documentclass{article}\\begin{document}\\href{abc}{{A}B{C}}\\end{document}";
+    assert!(mount.add_file(b"main.tex", main).is_ok());
+    let result = compile_request_v0(&mut mount, &valid_request());
+    assert_eq!(result.status, CompileStatus::Ok);
+    assert!(validate_dvi_v2_text_page_v0(&result.main_xdv_bytes));
+    let total = sum_dvi_v2_positive_right3_amounts_with_layout_v0(
+        &result.main_xdv_bytes,
+        65_536,
+        786_432,
+    )
+    .expect("sum parser should parse");
+    assert_eq!(total, 196_608);
+}
+
+#[test]
 fn textsf_without_braced_argument_falls_back_to_not_implemented() {
     let mut mount = Mount::default();
     let main = b"\\documentclass{article}\\begin{document}\\textsf XYZ\\end{document}";
