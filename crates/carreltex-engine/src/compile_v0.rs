@@ -44,6 +44,8 @@ mod ok_v0_ref_tests;
 #[cfg(test)]
 mod ok_v0_scripts_tests;
 #[cfg(test)]
+mod ok_v0_table_env_tests;
+#[cfg(test)]
 mod ok_v0_tests;
 #[cfg(test)]
 mod providecommand_v0_tests;
