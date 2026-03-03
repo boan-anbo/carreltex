@@ -6,6 +6,7 @@ import { runOkFloatCases } from './cases_v0_ok_floats.mjs';
 import { runOkFootnoteCases } from './cases_v0_ok_footnotes.mjs';
 import { runOkLinkCases } from './cases_v0_ok_links.mjs';
 import { runOkListCases } from './cases_v0_ok_lists.mjs';
+import { runOkMathCases } from './cases_v0_ok_math.mjs';
 import { runOkQuoteCases } from './cases_v0_ok_quotes.mjs';
 import { runOkRefCases } from './cases_v0_ok_refs.mjs';
 import { runOkScriptCases } from './cases_v0_ok_scripts.mjs';
@@ -723,6 +724,7 @@ export function runOkEmptyDocCases(ctx, helpers) {
   runOkWrapperCases(ctx, okBodyHelpers, stats);
   runOkListCases(ctx, okBodyHelpers, stats);
   runOkLinkCases(ctx, okBodyHelpers, stats);
+  runOkMathCases(ctx, okBodyHelpers, stats);
   runOkCiteCases(ctx, okBodyHelpers, stats);
   runOkColorCases(ctx, okBodyHelpers, stats);
   runOkFloatCases(ctx, okBodyHelpers, stats);
