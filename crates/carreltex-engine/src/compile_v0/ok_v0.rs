@@ -15,7 +15,7 @@ use ok_v0_optional_brackets::{
     consume_optional_nested_bracket_span_v0, consume_optional_simple_bracket_span_v0,
 };
 use ok_v0_dollar_math::{consume_display_math_dollar_span_v0, consume_inline_math_dollar_span_v0};
-use ok_v0_ensuremath::{consume_ensuremath_group_span_v0, consume_math_control_span_v0};
+use ok_v0_ensuremath::{consume_inline_math_group_span_v0, consume_math_control_span_v0};
 use ok_v0_env_support::{
     consume_named_environment_span_v0, is_supported_display_math_env_v0,
     is_supported_ok_block_env_v0, is_supported_ok_table_stub_env_v0, ok_thm_stub_marker_v0,
@@ -465,8 +465,10 @@ fn consume_ok_body_token_v0(
             emit_ok_display_math_marker_v0(body, previous_was_space);
             Some(next_index)
         }
-        Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"ensuremath" => {
-            let next_index = consume_ensuremath_group_span_v0(
+        Some(TokenV0::ControlSeq(name))
+            if matches!(name.as_slice(), b"ensuremath" | b"text") =>
+        {
+            let next_index = consume_inline_math_group_span_v0(
                 tokens,
                 index,
                 end,
