@@ -78,3 +78,25 @@ fn vspace_missing_group_falls_back_to_not_implemented() {
     assert_eq!(result.status, CompileStatus::NotImplemented);
     assert!(result.main_xdv_bytes.is_empty());
 }
+
+#[test]
+fn hspace_group_is_noop_ok() {
+    let main = b"\\documentclass{article}\\begin{document}Hello\\hspace{1em}World\\end{document}";
+    assert_spacing_noop_ok(main, 3);
+}
+
+#[test]
+fn hspace_star_group_is_noop_ok() {
+    let main = b"\\documentclass{article}\\begin{document}Hello\\hspace*{1em}World\\end{document}";
+    assert_spacing_noop_ok(main, 4);
+}
+
+#[test]
+fn hspace_missing_group_falls_back_to_not_implemented() {
+    let mut mount = Mount::default();
+    let main = b"\\documentclass{article}\\begin{document}Hello\\hspace World\\end{document}";
+    assert!(mount.add_file(b"main.tex", main).is_ok());
+    let result = compile_request_v0(&mut mount, &valid_request());
+    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert!(result.main_xdv_bytes.is_empty());
+}
