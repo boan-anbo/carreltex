@@ -183,3 +183,37 @@ fn pageref_outside_env_keeps_pageref_marker_ok() {
     .expect("sum parser should parse");
     assert_eq!(total, 753_664);
 }
+
+#[test]
+fn equation_ref_with_optional_note_keeps_env_totals_ok() {
+    let mut mount = Mount::default();
+    let main = br"\documentclass{article}\begin{document}A\begin{equation}x\ref[see]{r}\end{equation}B\end{document}";
+    assert!(mount.add_file(b"main.tex", main).is_ok());
+    let result = compile_request_v0(&mut mount, &valid_request());
+    assert_eq!(result.status, CompileStatus::Ok);
+    assert!(validate_dvi_v2_text_page_v0(&result.main_xdv_bytes));
+    let total = sum_dvi_v2_positive_right3_amounts_with_layout_v0(
+        &result.main_xdv_bytes,
+        65_536,
+        786_432,
+    )
+    .expect("sum parser should parse");
+    assert_eq!(total, 1_015_808);
+}
+
+#[test]
+fn equation_pageref_with_optional_note_keeps_env_totals_ok() {
+    let mut mount = Mount::default();
+    let main = br"\documentclass{article}\begin{document}A\begin{equation}x\pageref[see]{r}\end{equation}B\end{document}";
+    assert!(mount.add_file(b"main.tex", main).is_ok());
+    let result = compile_request_v0(&mut mount, &valid_request());
+    assert_eq!(result.status, CompileStatus::Ok);
+    assert!(validate_dvi_v2_text_page_v0(&result.main_xdv_bytes));
+    let total = sum_dvi_v2_positive_right3_amounts_with_layout_v0(
+        &result.main_xdv_bytes,
+        65_536,
+        786_432,
+    )
+    .expect("sum parser should parse");
+    assert_eq!(total, 1_146_880);
+}

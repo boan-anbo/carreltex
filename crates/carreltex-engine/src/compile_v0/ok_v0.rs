@@ -23,6 +23,7 @@ const MAX_OK_MATH_SCAN_TOKENS_V0: usize = 4096;
 const MAX_OK_MATH_ENV_TOKENS_V0: usize = 4096;
 const MAX_OK_HEADING_SHORT_TOKENS_V0: usize = 2048;
 const MAX_OK_CITE_NOTE_TOKENS_V0: usize = 2048;
+const MAX_OK_REF_NOTE_TOKENS_V0: usize = 2048;
 enum ListEnvV0 {
     Itemize,
     Enumerate { next: u32 },
@@ -249,6 +250,10 @@ fn ok_marker_command_v0(name: &[u8]) -> Option<&'static [u8]> {
 
 fn is_cite_marker_command_v0(name: &[u8]) -> bool {
     matches!(name, b"cite" | b"citet" | b"citep")
+}
+
+fn is_ref_marker_command_v0(name: &[u8]) -> bool {
+    matches!(name, b"ref" | b"autoref" | b"eqref" | b"pageref" | b"cref" | b"Cref")
 }
 
 fn consume_ok_group_fragment_v0(
@@ -541,19 +546,26 @@ fn consume_ok_body_token_v0(
         {
             let marker = ok_marker_command_v0(name.as_slice())?;
             let mut arg_start = index + 1;
-            if is_cite_marker_command_v0(name.as_slice()) {
+            if is_cite_marker_command_v0(name.as_slice())
+                || is_ref_marker_command_v0(name.as_slice())
+            {
+                let max_note_tokens = if is_cite_marker_command_v0(name.as_slice()) {
+                    MAX_OK_CITE_NOTE_TOKENS_V0
+                } else {
+                    MAX_OK_REF_NOTE_TOKENS_V0
+                };
                 arg_start = consume_optional_nested_bracket_span_v0(
                     tokens,
                     arg_start,
                     end,
-                    MAX_OK_CITE_NOTE_TOKENS_V0,
+                    max_note_tokens,
                     MAX_OK_GROUP_DEPTH_V0,
                 )?;
                 arg_start = consume_optional_nested_bracket_span_v0(
                     tokens,
                     arg_start,
                     end,
-                    MAX_OK_CITE_NOTE_TOKENS_V0,
+                    max_note_tokens,
                     MAX_OK_GROUP_DEPTH_V0,
                 )?;
             }

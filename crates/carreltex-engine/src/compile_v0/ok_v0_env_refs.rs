@@ -4,6 +4,7 @@ use super::{
 };
 
 const MAX_OK_CITE_NOTE_TOKENS_V0: usize = 2048;
+const MAX_OK_REF_NOTE_TOKENS_V0: usize = 2048;
 const MAX_OK_GROUP_DEPTH_V0: usize = 64;
 
 #[derive(Copy, Clone)]
@@ -37,6 +38,10 @@ fn is_cite_marker_command_v0(name: &[u8]) -> bool {
     matches!(name, b"cite" | b"citet" | b"citep")
 }
 
+fn is_ref_marker_command_v0(name: &[u8]) -> bool {
+    matches!(name, b"ref" | b"autoref" | b"eqref" | b"pageref" | b"cref" | b"Cref")
+}
+
 fn emit_marker_v0(marker: &[u8], body: &mut Vec<u8>, previous_was_space: &mut bool) {
     body.push(b' ');
     body.push(b'[');
@@ -60,19 +65,26 @@ pub(super) fn emit_ok_markers_in_env_v0(
             TokenV0::ControlSeq(name) => {
                 if let Some(marker) = marker_for_env_command_v0(name.as_slice(), env_markers) {
                     let mut arg_start = index + 1;
-                    if is_cite_marker_command_v0(name.as_slice()) {
+                    if is_cite_marker_command_v0(name.as_slice())
+                        || is_ref_marker_command_v0(name.as_slice())
+                    {
+                        let max_note_tokens = if is_cite_marker_command_v0(name.as_slice()) {
+                            MAX_OK_CITE_NOTE_TOKENS_V0
+                        } else {
+                            MAX_OK_REF_NOTE_TOKENS_V0
+                        };
                         arg_start = consume_optional_nested_bracket_span_v0(
                             tokens,
                             arg_start,
                             end,
-                            MAX_OK_CITE_NOTE_TOKENS_V0,
+                            max_note_tokens,
                             MAX_OK_GROUP_DEPTH_V0,
                         )?;
                         arg_start = consume_optional_nested_bracket_span_v0(
                             tokens,
                             arg_start,
                             end,
-                            MAX_OK_CITE_NOTE_TOKENS_V0,
+                            max_note_tokens,
                             MAX_OK_GROUP_DEPTH_V0,
                         )?;
                     }

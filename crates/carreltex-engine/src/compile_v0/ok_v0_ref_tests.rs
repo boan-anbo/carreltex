@@ -137,3 +137,79 @@ fn ref_missing_arg_not_implemented() {
     assert_eq!(result.status, CompileStatus::NotImplemented);
     assert!(result.main_xdv_bytes.is_empty());
 }
+
+#[test]
+fn ref_with_optional_note_emits_same_marker_totals_ok() {
+    let baseline = baseline_char_count();
+
+    let mut plain_mount = Mount::default();
+    let plain = b"\\documentclass{article}\\begin{document}A\\ref{X}B\\end{document}";
+    assert!(plain_mount.add_file(b"main.tex", plain).is_ok());
+    let plain_result = compile_request_v0(&mut plain_mount, &valid_request());
+    assert_eq!(plain_result.status, CompileStatus::Ok);
+    assert!(validate_dvi_v2_text_page_v0(&plain_result.main_xdv_bytes));
+    let plain_total = sum_dvi_v2_positive_right3_amounts_with_layout_v0(
+        &plain_result.main_xdv_bytes,
+        65_536,
+        786_432,
+    )
+    .expect("sum parser should parse");
+    assert_eq!(plain_total, 491_520);
+
+    let mut mount = Mount::default();
+    let main = b"\\documentclass{article}\\begin{document}A\\ref[see]{X}B\\end{document}";
+    assert!(mount.add_file(b"main.tex", main).is_ok());
+    let result = compile_request_v0(&mut mount, &valid_request());
+    assert_eq!(result.status, CompileStatus::Ok);
+    assert!(validate_dvi_v2_text_page_v0(&result.main_xdv_bytes));
+    let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
+    assert_eq!(char_count, baseline + 8);
+    let total = sum_dvi_v2_positive_right3_amounts_with_layout_v0(
+        &result.main_xdv_bytes,
+        65_536,
+        786_432,
+    )
+    .expect("sum parser should parse");
+    assert_eq!(total, plain_total);
+}
+
+#[test]
+fn eqref_with_two_optional_notes_emits_same_marker_totals_ok() {
+    let mut plain_mount = Mount::default();
+    let plain = b"\\documentclass{article}\\begin{document}A\\eqref{X}B\\end{document}";
+    assert!(plain_mount.add_file(b"main.tex", plain).is_ok());
+    let plain_result = compile_request_v0(&mut plain_mount, &valid_request());
+    assert_eq!(plain_result.status, CompileStatus::Ok);
+    assert!(validate_dvi_v2_text_page_v0(&plain_result.main_xdv_bytes));
+    let plain_total = sum_dvi_v2_positive_right3_amounts_with_layout_v0(
+        &plain_result.main_xdv_bytes,
+        65_536,
+        786_432,
+    )
+    .expect("sum parser should parse");
+
+    let mut mount = Mount::default();
+    let main =
+        b"\\documentclass{article}\\begin{document}A\\eqref[see][p.1]{X}B\\end{document}";
+    assert!(mount.add_file(b"main.tex", main).is_ok());
+    let result = compile_request_v0(&mut mount, &valid_request());
+    assert_eq!(result.status, CompileStatus::Ok);
+    assert!(validate_dvi_v2_text_page_v0(&result.main_xdv_bytes));
+    let total = sum_dvi_v2_positive_right3_amounts_with_layout_v0(
+        &result.main_xdv_bytes,
+        65_536,
+        786_432,
+    )
+    .expect("sum parser should parse");
+    assert_eq!(total, plain_total);
+}
+
+#[test]
+fn ref_with_unclosed_optional_note_not_implemented() {
+    let mut mount = Mount::default();
+    let main = b"\\documentclass{article}\\begin{document}\\ref[see{X}\\end{document}";
+    assert!(mount.add_file(b"main.tex", main).is_ok());
+    let result = compile_request_v0(&mut mount, &valid_request());
+    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert!(result.main_xdv_bytes.is_empty());
+}
