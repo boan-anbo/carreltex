@@ -188,6 +188,12 @@ export function runOkNoopCases(ctx, helpers) {
   runNoopCase('\\vspace*{1em}', 'ok_noop_vspace_star');
   runNoopCase('\\hspace{1em}', 'ok_noop_hspace');
   runNoopCase('\\hspace*{1em}', 'ok_noop_hspace_star');
+  runNoopCase('\\setcounter{enumi}{2}', 'ok_noop_setcounter');
+  runNoopCase('\\addtocounter{enumi}{3}', 'ok_noop_addtocounter');
+  runNoopCase('\\stepcounter{enumi}', 'ok_noop_stepcounter');
+  runNoopCase('\\refstepcounter{equation}', 'ok_noop_refstepcounter');
+  runNoopCase('\\setlength{\\parskip}{1em}', 'ok_noop_setlength');
+  runNoopCase('\\addtolength{\\parindent}{2em}', 'ok_noop_addtolength');
 
   if (ctx.mountReset() !== 0) throw new Error('mount_reset before noop missing-arg invalid case failed');
   const missingArgDocBytes = new TextEncoder().encode(
@@ -240,4 +246,40 @@ export function runOkNoopCases(ctx, helpers) {
     throw new Error('mount_finalize for noop linebreak bad-bracket invalid case failed');
   }
   expectNotImplemented(ctx.compileMain(), 'compile_main_v0(ok noop linebreak bad-bracket invalid)');
+
+  if (ctx.mountReset() !== 0) throw new Error('mount_reset before noop setcounter missing-value invalid case failed');
+  const setcounterMissingValueDocBytes = new TextEncoder().encode(
+    '\\documentclass{article}\\begin{document}Hello\\setcounter{enumi}World\\end{document}',
+  );
+  if (addMountedFile('main.tex', setcounterMissingValueDocBytes, 'ok_noop_setcounter_missing_value_main') !== 0) {
+    throw new Error('mount_add_file(noop setcounter missing-value main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) {
+    throw new Error('mount_finalize for noop setcounter missing-value invalid case failed');
+  }
+  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(ok noop setcounter missing-value invalid)');
+
+  if (ctx.mountReset() !== 0) throw new Error('mount_reset before noop setcounter non-digit invalid case failed');
+  const setcounterNonDigitDocBytes = new TextEncoder().encode(
+    '\\documentclass{article}\\begin{document}Hello\\setcounter{enumi}{ab}World\\end{document}',
+  );
+  if (addMountedFile('main.tex', setcounterNonDigitDocBytes, 'ok_noop_setcounter_non_digit_main') !== 0) {
+    throw new Error('mount_add_file(noop setcounter non-digit main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) {
+    throw new Error('mount_finalize for noop setcounter non-digit invalid case failed');
+  }
+  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(ok noop setcounter non-digit invalid)');
+
+  if (ctx.mountReset() !== 0) throw new Error('mount_reset before noop setlength bad-register invalid case failed');
+  const setlengthBadRegisterDocBytes = new TextEncoder().encode(
+    '\\documentclass{article}\\begin{document}Hello\\setlength{parskip}{1em}World\\end{document}',
+  );
+  if (addMountedFile('main.tex', setlengthBadRegisterDocBytes, 'ok_noop_setlength_bad_register_main') !== 0) {
+    throw new Error('mount_add_file(noop setlength bad-register main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) {
+    throw new Error('mount_finalize for noop setlength bad-register invalid case failed');
+  }
+  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(ok noop setlength bad-register invalid)');
 }
