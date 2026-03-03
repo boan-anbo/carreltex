@@ -402,6 +402,36 @@ fn title_with_control_sequence_argument_falls_back_to_not_implemented() {
 }
 
 #[test]
+fn maketitle_in_body_is_ignored_for_ok() {
+    let mut baseline_mount = Mount::default();
+    let baseline_main = b"\\documentclass{article}\n\\title{T}\n\\author{A}\n\\date{D}\n\\begin{document}\n\n\\end{document}\n";
+    assert!(baseline_mount.add_file(b"main.tex", baseline_main).is_ok());
+    let baseline_result = compile_request_v0(&mut baseline_mount, &valid_request());
+    assert_eq!(baseline_result.status, CompileStatus::Ok);
+    let baseline_char_count =
+        stats_u64_field(&baseline_result.tex_stats_json, "char_count").expect("char_count");
+
+    let mut mount = Mount::default();
+    let main = b"\\documentclass{article}\n\\title{T}\n\\author{A}\n\\date{D}\n\\begin{document}\n\\maketitle\nXYZ\n\\end{document}\n";
+    assert!(mount.add_file(b"main.tex", main).is_ok());
+    let result = compile_request_v0(&mut mount, &valid_request());
+    assert_eq!(result.status, CompileStatus::Ok);
+    assert!(validate_dvi_v2_text_page_v0(&result.main_xdv_bytes));
+    let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
+    assert_eq!(char_count, baseline_char_count + 3);
+}
+
+#[test]
+fn make_title_wrong_case_in_body_falls_back_to_not_implemented() {
+    let mut mount = Mount::default();
+    let main = b"\\documentclass{article}\n\\title{T}\n\\author{A}\n\\date{D}\n\\begin{document}\n\\makeTitle\nXYZ\n\\end{document}\n";
+    assert!(mount.add_file(b"main.tex", main).is_ok());
+    let result = compile_request_v0(&mut mount, &valid_request());
+    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert!(result.main_xdv_bytes.is_empty());
+}
+
+#[test]
 fn control_sequence_in_body_falls_back_to_not_implemented() {
     let mut mount = Mount::default();
     let main = b"\\documentclass{article}\n\\begin{document}\n\\foo\n\\end{document}\n";

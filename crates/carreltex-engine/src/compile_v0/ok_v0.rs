@@ -167,6 +167,9 @@ pub(crate) fn extract_strict_ok_text_body_v0(tokens: &[TokenV0]) -> Option<Vec<u
                 }
                 index += 1;
             }
+            Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"maketitle" => {
+                index += 1;
+            }
             Some(TokenV0::Char(0x0c)) => {
                 body.push(0x0c);
                 previous_was_space = false;
