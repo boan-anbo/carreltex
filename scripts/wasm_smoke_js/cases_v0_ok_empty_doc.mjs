@@ -1,4 +1,5 @@
 import { runOkBodyControlCases } from './cases_v0_ok_body_controls.mjs';
+import { runOkCiteCases } from './cases_v0_ok_cites.mjs';
 import { runOkColorCases } from './cases_v0_ok_colors.mjs';
 import { runOkFootnoteCases } from './cases_v0_ok_footnotes.mjs';
 import { runOkLinkCases } from './cases_v0_ok_links.mjs';
@@ -719,6 +720,7 @@ export function runOkEmptyDocCases(ctx, helpers) {
   runOkWrapperCases(ctx, okBodyHelpers, stats);
   runOkListCases(ctx, okBodyHelpers, stats);
   runOkLinkCases(ctx, okBodyHelpers, stats);
+  runOkCiteCases(ctx, okBodyHelpers, stats);
   runOkColorCases(ctx, okBodyHelpers, stats);
   runOkFootnoteCases(ctx, okBodyHelpers, stats);
   runOkQuoteCases(ctx, okBodyHelpers, stats);
