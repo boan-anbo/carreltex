@@ -470,8 +470,16 @@ fn newline_control_sequence_in_body_is_treated_as_linefeed() {
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline_char_count + 2);
     let movement = count_dvi_v2_text_movements_v0(&result.main_xdv_bytes).expect("movement summary");
+    assert_eq!(movement.0, 3);
     assert_eq!(movement.3, 1);
     assert_eq!(movement.4, 1);
+    let total = sum_dvi_v2_positive_right3_amounts_with_layout_v0(
+        &result.main_xdv_bytes,
+        65_536,
+        786_432,
+    )
+    .expect("sum parser should parse");
+    assert_eq!(total, 65_536 * 2);
 }
 
 #[test]
