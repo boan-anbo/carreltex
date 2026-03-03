@@ -1,4 +1,5 @@
 import { runOkBodyControlCases } from './cases_v0_ok_body_controls.mjs';
+import { runOkListCases } from './cases_v0_ok_lists.mjs';
 import { runOkWrapperCases } from './cases_v0_ok_wrappers.mjs';
 
 export function runOkEmptyDocCases(ctx, helpers) {
@@ -702,6 +703,19 @@ export function runOkEmptyDocCases(ctx, helpers) {
     stats,
   );
   runOkWrapperCases(
+    ctx,
+    {
+      addMountedFile,
+      expectOk,
+      expectNotImplemented,
+      readCompileLogBytes,
+      assertEventsMatchLogAndStats,
+      readMainXdvArtifactBytes,
+      countMovementOpsInTextPages,
+    },
+    stats,
+  );
+  runOkListCases(
     ctx,
     {
       addMountedFile,

@@ -4,6 +4,11 @@ pub(crate) const OK_GLYPH_ADVANCE_SP_V0: i32 = 65_536;
 pub(crate) const OK_LINE_ADVANCE_SP_V0: i32 = 786_432;
 const MAX_OK_GROUP_DEPTH_V0: usize = 64;
 
+enum ListEnvV0 {
+    Itemize,
+    Enumerate { next: u32 },
+}
+
 fn skip_spaces(tokens: &[TokenV0], mut index: usize) -> usize {
     while matches!(tokens.get(index), Some(TokenV0::Space)) {
         index += 1;
@@ -197,6 +202,7 @@ fn consume_ok_body_range_v0(
     start: usize,
     end: usize,
     allow_nested_groups: bool,
+    list_env: &mut Option<ListEnvV0>,
     body: &mut Vec<u8>,
     previous_was_space: &mut bool,
 ) -> Option<()> {
@@ -207,6 +213,7 @@ fn consume_ok_body_range_v0(
             index,
             end,
             allow_nested_groups,
+            list_env,
             body,
             previous_was_space,
         )?;
@@ -219,6 +226,7 @@ fn consume_ok_body_token_v0(
     index: usize,
     end: usize,
     allow_nested_groups: bool,
+    list_env: &mut Option<ListEnvV0>,
     body: &mut Vec<u8>,
     previous_was_space: &mut bool,
 ) -> Option<usize> {
@@ -258,7 +266,15 @@ fn consume_ok_body_token_v0(
             let mut cursor = skip_spaces_until(tokens, index + 1, end);
             let (inner_start, inner_end, next_index) =
                 consume_balanced_group_bounds_v0(tokens, cursor, MAX_OK_GROUP_DEPTH_V0, end)?;
-            consume_ok_body_range_v0(tokens, inner_start, inner_end, true, body, previous_was_space)?;
+            consume_ok_body_range_v0(
+                tokens,
+                inner_start,
+                inner_end,
+                true,
+                list_env,
+                body,
+                previous_was_space,
+            )?;
             cursor = next_index;
             Some(cursor)
         }
@@ -270,16 +286,96 @@ fn consume_ok_body_token_v0(
                 consume_balanced_group_bounds_v0(tokens, cursor, MAX_OK_GROUP_DEPTH_V0, end)?;
             body.push(0x0a);
             *previous_was_space = true;
-            consume_ok_body_range_v0(tokens, inner_start, inner_end, true, body, previous_was_space)?;
+            consume_ok_body_range_v0(
+                tokens,
+                inner_start,
+                inner_end,
+                true,
+                list_env,
+                body,
+                previous_was_space,
+            )?;
             body.push(0x0a);
             *previous_was_space = true;
             cursor = next_index;
             Some(cursor)
         }
+        Some(TokenV0::ControlSeq(name))
+            if !allow_nested_groups && name.as_slice() == b"begin" =>
+        {
+            let cursor = skip_spaces_until(tokens, index + 1, end);
+            if list_env.is_some() {
+                return None;
+            }
+            if let Some(next_index) = consume_group_literal(tokens, cursor, b"itemize") {
+                *list_env = Some(ListEnvV0::Itemize);
+                return Some(next_index);
+            }
+            if let Some(next_index) = consume_group_literal(tokens, cursor, b"enumerate") {
+                *list_env = Some(ListEnvV0::Enumerate { next: 1 });
+                return Some(next_index);
+            }
+            None
+        }
+        Some(TokenV0::ControlSeq(name))
+            if !allow_nested_groups && name.as_slice() == b"end" =>
+        {
+            let cursor = skip_spaces_until(tokens, index + 1, end);
+            match list_env {
+                Some(ListEnvV0::Itemize) => {
+                    let next_index = consume_group_literal(tokens, cursor, b"itemize")?;
+                    body.push(0x0a);
+                    *previous_was_space = true;
+                    *list_env = None;
+                    Some(next_index)
+                }
+                Some(ListEnvV0::Enumerate { .. }) => {
+                    let next_index = consume_group_literal(tokens, cursor, b"enumerate")?;
+                    body.push(0x0a);
+                    *previous_was_space = true;
+                    *list_env = None;
+                    Some(next_index)
+                }
+                None => None,
+            }
+        }
+        Some(TokenV0::ControlSeq(name))
+            if !allow_nested_groups && name.as_slice() == b"item" =>
+        {
+            match list_env {
+                Some(ListEnvV0::Itemize) => {
+                    body.push(0x0a);
+                    body.push(b'-');
+                    body.push(b' ');
+                    *previous_was_space = true;
+                    Some(index + 1)
+                }
+                Some(ListEnvV0::Enumerate { next }) => {
+                    body.push(0x0a);
+                    for byte in next.to_string().as_bytes() {
+                        body.push(*byte);
+                    }
+                    body.push(b'.');
+                    body.push(b' ');
+                    *next += 1;
+                    *previous_was_space = true;
+                    Some(index + 1)
+                }
+                None => None,
+            }
+        }
         Some(TokenV0::BeginGroup) if allow_nested_groups => {
             let (inner_start, inner_end, next_index) =
                 consume_balanced_group_bounds_v0(tokens, index, MAX_OK_GROUP_DEPTH_V0, end)?;
-            consume_ok_body_range_v0(tokens, inner_start, inner_end, true, body, previous_was_space)?;
+            consume_ok_body_range_v0(
+                tokens,
+                inner_start,
+                inner_end,
+                true,
+                list_env,
+                body,
+                previous_was_space,
+            )?;
             Some(next_index)
         }
         Some(TokenV0::Char(0x0c)) => {
@@ -347,18 +443,29 @@ pub(crate) fn extract_strict_ok_text_body_v0(tokens: &[TokenV0]) -> Option<Vec<u
 
     let mut body = Vec::<u8>::new();
     let mut previous_was_space = false;
-    while !matches!(
-        tokens.get(index),
-        Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"end"
-    ) {
+    let mut list_env: Option<ListEnvV0> = None;
+    loop {
+        if list_env.is_none()
+            && matches!(
+                tokens.get(index),
+                Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"end"
+            )
+            && consume_group_literal(tokens, skip_spaces(tokens, index + 1), b"document").is_some()
+        {
+            break;
+        }
         index = consume_ok_body_token_v0(
             tokens,
             index,
             tokens.len(),
             false,
+            &mut list_env,
             &mut body,
             &mut previous_was_space,
         )?;
+    }
+    if list_env.is_some() {
+        return None;
     }
 
     if !matches!(
