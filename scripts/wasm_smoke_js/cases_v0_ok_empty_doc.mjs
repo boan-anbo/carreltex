@@ -16,6 +16,7 @@ import { runOkLinebreakCases } from './cases_v0_ok_linebreaks.mjs';
 import { runOkListCases } from './cases_v0_ok_lists.mjs';
 import { runOkMathCases } from './cases_v0_ok_math.mjs';
 import { runOkMathEnvCases } from './cases_v0_ok_math_envs.mjs';
+import { runOkMathFontWrapperCases } from './cases_v0_ok_math_font_wrappers.mjs';
 import { runOkMathTextWrapperCases } from './cases_v0_ok_math_text_wrappers.mjs';
 import { runOkOptionalBracketCases } from './cases_v0_ok_optional_brackets.mjs';
 import { runOkQuoteCases } from './cases_v0_ok_quotes.mjs';
@@ -741,6 +742,7 @@ export function runOkEmptyDocCases(ctx, helpers) {
   runOkLinkCases(ctx, okBodyHelpers, stats);
   runOkMathCases(ctx, okBodyHelpers, stats);
   runOkMathEnvCases(ctx, okBodyHelpers, stats);
+  runOkMathFontWrapperCases(ctx, okBodyHelpers, stats);
   runOkMathTextWrapperCases(ctx, okBodyHelpers, stats);
   runOkOptionalBracketCases(ctx, okBodyHelpers, stats);
   runOkEnvCases(ctx, okBodyHelpers, stats);

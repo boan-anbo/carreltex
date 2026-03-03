@@ -32,13 +32,7 @@ const MAX_OK_ENSUREMATH_TOKENS_V0: usize = 4096;
 const MAX_OK_HEADING_SHORT_TOKENS_V0: usize = 2048;
 const MAX_OK_CITE_NOTE_TOKENS_V0: usize = 2048;
 const MAX_OK_REF_NOTE_TOKENS_V0: usize = 2048;
-enum ListEnvV0 {
-    Itemize,
-    Enumerate { next: u32 },
-    Thebibliography,
-    Figure,
-    Table,
-}
+enum ListEnvV0 { Itemize, Enumerate { next: u32 }, Thebibliography, Figure, Table }
 fn skip_spaces(tokens: &[TokenV0], mut index: usize) -> usize {
     while matches!(tokens.get(index), Some(TokenV0::Space)) {
         index += 1;
@@ -461,10 +455,7 @@ fn consume_ok_body_token_v0(
             Some(next_index)
         }
         Some(TokenV0::ControlSeq(name))
-            if matches!(
-                name.as_slice(),
-                b"ensuremath" | b"text" | b"textnormal" | b"mathrm" | b"mathit"
-            ) =>
+            if matches!(name.as_slice(), b"ensuremath" | b"text" | b"textnormal" | b"mathrm" | b"mathit" | b"mathbf" | b"mathbb" | b"mathcal" | b"mathsf" | b"mathtt") =>
         {
             let next_index = consume_inline_math_group_span_v0(
                 tokens,
