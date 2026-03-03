@@ -5,6 +5,7 @@ import { runOkColorCases } from './cases_v0_ok_colors.mjs';
 import { runOkFloatCases } from './cases_v0_ok_floats.mjs';
 import { runOkFootnoteCases } from './cases_v0_ok_footnotes.mjs';
 import { runOkLinkCases } from './cases_v0_ok_links.mjs';
+import { runOkLinebreakCases } from './cases_v0_ok_linebreaks.mjs';
 import { runOkListCases } from './cases_v0_ok_lists.mjs';
 import { runOkMathCases } from './cases_v0_ok_math.mjs';
 import { runOkQuoteCases } from './cases_v0_ok_quotes.mjs';
@@ -722,6 +723,7 @@ export function runOkEmptyDocCases(ctx, helpers) {
     countMovementOpsInTextPages,
   };
   runOkWrapperCases(ctx, okBodyHelpers, stats);
+  runOkLinebreakCases(ctx, okBodyHelpers, stats);
   runOkListCases(ctx, okBodyHelpers, stats);
   runOkLinkCases(ctx, okBodyHelpers, stats);
   runOkMathCases(ctx, okBodyHelpers, stats);
