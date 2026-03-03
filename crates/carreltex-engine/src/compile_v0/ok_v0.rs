@@ -419,6 +419,16 @@ fn consume_ok_body_token_v0(
             }
             Some(index + 1)
         }
+        Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"newblock" => {
+            if !matches!(list_env, Some(ListStateV0::Thebibliography)) {
+                return None;
+            }
+            if !*previous_was_space {
+                body.push(b' ');
+                *previous_was_space = true;
+            }
+            Some(index + 1)
+        }
         Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"maketitle" => Some(index + 1),
         Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"noindent" => Some(index + 1),
         Some(TokenV0::ControlSeq(name))
