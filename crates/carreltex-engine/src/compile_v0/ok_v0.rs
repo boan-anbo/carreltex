@@ -113,7 +113,6 @@ fn consume_bracket_options_non_empty(tokens: &[TokenV0], mut index: usize) -> Op
         }
     }
 }
-
 fn consume_usepackage_preamble_command(tokens: &[TokenV0], mut index: usize) -> Option<usize> {
     if !matches!(
         tokens.get(index),
@@ -130,15 +129,12 @@ fn consume_usepackage_preamble_command(tokens: &[TokenV0], mut index: usize) -> 
     index = consume_char_space_group_non_empty(tokens, index)?;
     Some(skip_spaces(tokens, index))
 }
-
 fn is_supported_meta_preamble_command(name: &[u8]) -> bool {
     matches!(name, b"title" | b"author" | b"date")
 }
-
 fn is_supported_bibliography_preamble_command(name: &[u8]) -> bool {
     matches!(name, b"bibliographystyle" | b"bibliography")
 }
-
 fn consume_meta_preamble_command(tokens: &[TokenV0], mut index: usize) -> Option<usize> {
     if !matches!(
         tokens.get(index),
@@ -151,7 +147,6 @@ fn consume_meta_preamble_command(tokens: &[TokenV0], mut index: usize) -> Option
     index = consume_char_space_group_non_empty(tokens, index)?;
     Some(skip_spaces(tokens, index))
 }
-
 fn consume_char_space_nested_group_non_empty_v0(
     tokens: &[TokenV0],
     index: usize,
@@ -466,7 +461,10 @@ fn consume_ok_body_token_v0(
             Some(next_index)
         }
         Some(TokenV0::ControlSeq(name))
-            if matches!(name.as_slice(), b"ensuremath" | b"text") =>
+            if matches!(
+                name.as_slice(),
+                b"ensuremath" | b"text" | b"textnormal" | b"mathrm" | b"mathit"
+            ) =>
         {
             let next_index = consume_inline_math_group_span_v0(
                 tokens,

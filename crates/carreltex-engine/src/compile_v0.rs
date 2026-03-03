@@ -48,6 +48,8 @@ mod ok_v0_math_env_tests;
 #[cfg(test)]
 mod ok_v0_math_tests;
 #[cfg(test)]
+mod ok_v0_math_text_wrappers_tests;
+#[cfg(test)]
 mod ok_v0_quote_tests;
 #[cfg(test)]
 mod ok_v0_ref_tests;
