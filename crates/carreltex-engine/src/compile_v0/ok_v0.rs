@@ -15,7 +15,7 @@ const MAX_OK_GROUP_DEPTH_V0: usize = 64;
 const MAX_OK_BRACKET_BYTES_V0: usize = 256;
 const MAX_OK_MATH_SCAN_TOKENS_V0: usize = 4096;
 const MAX_OK_MATH_ENV_TOKENS_V0: usize = 4096;
-
+const MAX_OK_HEADING_SHORT_TOKENS_V0: usize = 2048;
 enum ListEnvV0 {
     Itemize,
     Enumerate { next: u32 },
@@ -207,7 +207,10 @@ fn is_supported_ok_wrapper_command_v0(name: &[u8]) -> bool {
 }
 
 fn is_supported_ok_heading_command_v0(name: &[u8]) -> bool {
-    matches!(name, b"section" | b"subsection" | b"subsubsection")
+    matches!(
+        name,
+        b"section" | b"subsection" | b"subsubsection" | b"paragraph" | b"subparagraph"
+    )
 }
 
 fn is_supported_ok_style_declaration_v0(name: &[u8]) -> bool {
@@ -346,6 +349,41 @@ fn consume_optional_simple_bracket_span_v0(
             }
             _ => return None,
         }
+    }
+    None
+}
+
+fn consume_optional_heading_short_title_v0(tokens: &[TokenV0], index: usize, end: usize) -> Option<usize> {
+    let mut cursor = skip_spaces_until(tokens, index, end);
+    if !matches!(tokens.get(cursor), Some(TokenV0::Char(b'['))) {
+        return Some(cursor);
+    }
+    cursor += 1;
+    let mut scanned = 0usize;
+    let mut group_depth = 0usize;
+    while cursor < end {
+        scanned += 1;
+        if scanned > MAX_OK_HEADING_SHORT_TOKENS_V0 {
+            return None;
+        }
+        match tokens.get(cursor)? {
+            TokenV0::ControlSeq(name) if name.as_slice() == b"begin" => return None,
+            TokenV0::BeginGroup => {
+                group_depth += 1;
+                if group_depth > MAX_OK_GROUP_DEPTH_V0 {
+                    return None;
+                }
+            }
+            TokenV0::EndGroup => {
+                if group_depth == 0 {
+                    return None;
+                }
+                group_depth -= 1;
+            }
+            TokenV0::Char(b']') if group_depth == 0 => return Some(cursor + 1),
+            _ => {}
+        }
+        cursor += 1;
     }
     None
 }
@@ -627,6 +665,11 @@ fn consume_ok_body_token_v0(
             if is_supported_ok_heading_command_v0(name.as_slice()) =>
         {
             let mut cursor = skip_spaces_until(tokens, index + 1, end);
+            if matches!(tokens.get(cursor), Some(TokenV0::Char(b'*'))) {
+                cursor += 1;
+            }
+            cursor = consume_optional_heading_short_title_v0(tokens, cursor, end)?;
+            cursor = skip_spaces_until(tokens, cursor, end);
             let (inner_start, inner_end, next_index) =
                 consume_balanced_group_bounds_v0(tokens, cursor, MAX_OK_GROUP_DEPTH_V0, end)?;
             body.push(0x0a);
