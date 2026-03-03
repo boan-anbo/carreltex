@@ -16,6 +16,8 @@ mod ok_v0_biblabel;
 mod ok_v0_noops;
 #[path = "ok_v0_markers.rs"]
 mod ok_v0_markers;
+#[path = "ok_v0_title_state.rs"]
+mod ok_v0_title_state;
 #[path = "ok_v0_body.rs"]
 mod ok_v0_body;
 #[path = "ok_v0_extract.rs"]
