@@ -100,4 +100,40 @@ export function runOkEnvCiteCases(ctx, helpers, baselineStats) {
       `compile_main(ok top-level cite) expected right3PositiveTotal=557056, got ${citeOutsideMovement.right3PositiveTotal}`,
     );
   }
+
+  if (ctx.mountReset() !== 0) throw new Error('mount_reset before OK equation cite optional-notes case failed');
+  const equationCiteOptionalNotesDocBytes = new TextEncoder().encode(
+    '\\documentclass{article}\\begin{document}A\\begin{equation}x\\cite[see][p.1]{r}\\end{equation}B\\end{document}',
+  );
+  if (addMountedFile('main.tex', equationCiteOptionalNotesDocBytes, 'ok_env_cite_equation_optional_notes_main') !== 0) {
+    throw new Error('mount_add_file(ok equation cite optional-notes main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) throw new Error('mount_finalize for OK equation cite optional-notes case failed');
+  expectOk(ctx.compileMain(), 'compile_main_v0(ok equation cite optional-notes)');
+  const equationCiteOptionalNotesLogBytes = readCompileLogBytes();
+  if (equationCiteOptionalNotesLogBytes.length !== 0) {
+    throw new Error(
+      `compile_main(ok equation cite optional-notes) expected empty log, got ${equationCiteOptionalNotesLogBytes.length} bytes`,
+    );
+  }
+  assertEventsMatchLogAndStats(
+    equationCiteOptionalNotesLogBytes,
+    {},
+    'compile_main(ok equation cite optional-notes)',
+  );
+  const equationCiteOptionalNotesXdvBytes = readMainXdvArtifactBytes(
+    'compile_main(ok equation cite optional-notes)',
+  );
+  if (equationCiteOptionalNotesXdvBytes.length === 0) {
+    throw new Error('compile_main(ok equation cite optional-notes) main.xdv expected non-empty bytes');
+  }
+  const equationCiteOptionalNotesMovement = countMovementOpsInTextPages(
+    equationCiteOptionalNotesXdvBytes,
+    'compile_main(ok equation cite optional-notes)',
+  );
+  if (equationCiteOptionalNotesMovement.right3PositiveTotal !== 950272) {
+    throw new Error(
+      `compile_main(ok equation cite optional-notes) expected right3PositiveTotal=950272, got ${equationCiteOptionalNotesMovement.right3PositiveTotal}`,
+    );
+  }
 }
