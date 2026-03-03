@@ -51,6 +51,18 @@ export function runOkBodyControlCases(ctx, helpers, baselineStats) {
   assertEventsMatchLogAndStats(noindentTextLogBytes, { char_count: baselineStats.char_count + 3 }, 'compile_main(ok noindent text doc)');
   if (readMainXdvArtifactBytes('compile_main(ok noindent text doc)').length === 0) throw new Error('compile_main(ok noindent text doc) main.xdv expected non-empty bytes');
 
+  if (ctx.mountReset() !== 0) throw new Error('mount_reset before OK verb payload text doc case failed');
+  const verbPayloadTextDocBytes = new TextEncoder().encode('\\documentclass{article}\\begin{document}A\\verb|b c|D\\end{document}');
+  if (addMountedFile('main.tex', verbPayloadTextDocBytes, 'ok_verb_payload_text_doc_main') !== 0) throw new Error('mount_add_file(ok verb payload text doc main.tex) failed');
+  if (ctx.mountFinalize() !== 0) throw new Error('mount_finalize for OK verb payload text doc case failed');
+  expectOk(ctx.compileMain(), 'compile_main_v0(ok verb payload text doc)');
+  const verbPayloadTextLogBytes = readCompileLogBytes();
+  if (verbPayloadTextLogBytes.length !== 0) throw new Error(`compile_main(ok verb payload text doc) expected empty log, got ${verbPayloadTextLogBytes.length} bytes`);
+  assertEventsMatchLogAndStats(verbPayloadTextLogBytes, { char_count: baselineStats.char_count + 5 }, 'compile_main(ok verb payload text doc)');
+  const verbPayloadTextXdvBytes = readMainXdvArtifactBytes('compile_main(ok verb payload text doc)');
+  if (verbPayloadTextXdvBytes.length === 0) throw new Error('compile_main(ok verb payload text doc) main.xdv expected non-empty bytes');
+  if (countMovementOpsInTextPages(verbPayloadTextXdvBytes, 'compile_main(ok verb payload text doc)').right3 !== 5) throw new Error('compile_main(ok verb payload text doc) expected right3=5 for A b<space>c D');
+
   if (ctx.mountReset() !== 0) throw new Error('mount_reset before OK newline control-seq text doc case failed');
   const newlineControlSeqTextDocBytes = new TextEncoder().encode('\\documentclass{article}\\begin{document}A\\csname newline\\endcsname B\\end{document}');
   if (addMountedFile('main.tex', newlineControlSeqTextDocBytes, 'ok_newline_control_seq_text_doc_main') !== 0) throw new Error('mount_add_file(ok newline control-seq text doc main.tex) failed');
