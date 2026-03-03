@@ -40,6 +40,38 @@ export function runOkEnvRefCases(ctx, helpers, baselineStats) {
     );
   }
 
+  if (ctx.mountReset() !== 0) throw new Error('mount_reset before OK equation ref optional-note case failed');
+  const equationRefOptionalNoteDocBytes = new TextEncoder().encode(
+    '\\documentclass{article}\\begin{document}A\\begin{equation}x\\ref[see]{r}\\end{equation}B\\end{document}',
+  );
+  if (addMountedFile('main.tex', equationRefOptionalNoteDocBytes, 'ok_env_ref_equation_optional_note_main') !== 0) {
+    throw new Error('mount_add_file(ok equation ref optional-note main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) throw new Error('mount_finalize for OK equation ref optional-note case failed');
+  expectOk(ctx.compileMain(), 'compile_main_v0(ok equation ref optional-note)');
+  const equationRefOptionalNoteLogBytes = readCompileLogBytes();
+  if (equationRefOptionalNoteLogBytes.length !== 0) {
+    throw new Error(
+      `compile_main(ok equation ref optional-note) expected empty log, got ${equationRefOptionalNoteLogBytes.length} bytes`,
+    );
+  }
+  assertEventsMatchLogAndStats(equationRefOptionalNoteLogBytes, {}, 'compile_main(ok equation ref optional-note)');
+  const equationRefOptionalNoteXdvBytes = readMainXdvArtifactBytes(
+    'compile_main(ok equation ref optional-note)',
+  );
+  if (equationRefOptionalNoteXdvBytes.length === 0) {
+    throw new Error('compile_main(ok equation ref optional-note) main.xdv expected non-empty bytes');
+  }
+  const equationRefOptionalNoteMovement = countMovementOpsInTextPages(
+    equationRefOptionalNoteXdvBytes,
+    'compile_main(ok equation ref optional-note)',
+  );
+  if (equationRefOptionalNoteMovement.right3PositiveTotal !== 1015808) {
+    throw new Error(
+      `compile_main(ok equation ref optional-note) expected right3PositiveTotal=1015808, got ${equationRefOptionalNoteMovement.right3PositiveTotal}`,
+    );
+  }
+
   if (ctx.mountReset() !== 0) throw new Error('mount_reset before OK theorem ref case failed');
   const theoremRefDocBytes = new TextEncoder().encode(
     '\\documentclass{article}\\begin{document}A\\begin{theorem}x\\autoref{r}\\end{theorem}B\\end{document}',
@@ -162,6 +194,42 @@ export function runOkEnvRefCases(ctx, helpers, baselineStats) {
   if (equationPagerefMovement.right3PositiveTotal !== 1146880) {
     throw new Error(
       `compile_main(ok equation pageref) expected right3PositiveTotal=1146880, got ${equationPagerefMovement.right3PositiveTotal}`,
+    );
+  }
+
+  if (ctx.mountReset() !== 0) throw new Error('mount_reset before OK equation pageref optional-note case failed');
+  const equationPagerefOptionalNoteDocBytes = new TextEncoder().encode(
+    '\\documentclass{article}\\begin{document}A\\begin{equation}x\\pageref[see]{r}\\end{equation}B\\end{document}',
+  );
+  if (addMountedFile('main.tex', equationPagerefOptionalNoteDocBytes, 'ok_env_pageref_equation_optional_note_main') !== 0) {
+    throw new Error('mount_add_file(ok equation pageref optional-note main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) throw new Error('mount_finalize for OK equation pageref optional-note case failed');
+  expectOk(ctx.compileMain(), 'compile_main_v0(ok equation pageref optional-note)');
+  const equationPagerefOptionalNoteLogBytes = readCompileLogBytes();
+  if (equationPagerefOptionalNoteLogBytes.length !== 0) {
+    throw new Error(
+      `compile_main(ok equation pageref optional-note) expected empty log, got ${equationPagerefOptionalNoteLogBytes.length} bytes`,
+    );
+  }
+  assertEventsMatchLogAndStats(
+    equationPagerefOptionalNoteLogBytes,
+    {},
+    'compile_main(ok equation pageref optional-note)',
+  );
+  const equationPagerefOptionalNoteXdvBytes = readMainXdvArtifactBytes(
+    'compile_main(ok equation pageref optional-note)',
+  );
+  if (equationPagerefOptionalNoteXdvBytes.length === 0) {
+    throw new Error('compile_main(ok equation pageref optional-note) main.xdv expected non-empty bytes');
+  }
+  const equationPagerefOptionalNoteMovement = countMovementOpsInTextPages(
+    equationPagerefOptionalNoteXdvBytes,
+    'compile_main(ok equation pageref optional-note)',
+  );
+  if (equationPagerefOptionalNoteMovement.right3PositiveTotal !== 1146880) {
+    throw new Error(
+      `compile_main(ok equation pageref optional-note) expected right3PositiveTotal=1146880, got ${equationPagerefOptionalNoteMovement.right3PositiveTotal}`,
     );
   }
 
