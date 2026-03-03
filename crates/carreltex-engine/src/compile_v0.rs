@@ -1,6 +1,8 @@
 #[cfg(test)]
 mod count_v0_tests;
 #[cfg(test)]
+mod ok_v0_cite_tests;
+#[cfg(test)]
 mod edef_v0_tests;
 mod ifnum_v0;
 #[cfg(test)]
