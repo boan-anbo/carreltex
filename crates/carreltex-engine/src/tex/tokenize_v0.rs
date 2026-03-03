@@ -12,6 +12,7 @@ pub enum TokenizeErrorV0 {
     InvalidInput,
     CaretNotSupported,
     AccentNotSupported,
+    VerbNotSupported,
     ControlSeqNonAscii,
     TooManyTokens,
 }
@@ -30,6 +31,8 @@ mod tests;
 mod tests_control_symbol_dollar;
 #[cfg(test)]
 mod tests_newline;
+#[cfg(test)]
+mod tests_verb;
 #[cfg(test)]
 mod tests_textword_144;
 #[cfg(test)]
@@ -58,8 +61,16 @@ mod tests_textword_148;
 ///     (no `Space` token emitted).
 ///   - Control sequence bytes must be ASCII-only (`ControlSeqNonAscii` on
 ///     violations).
-///   - Control word `\verb` is explicitly blocked in v0 (`InvalidInput`).
+///   - Exact control word `\verb` supports a strict raw subset:
+///     - Requires immediate raw delimiter byte after `\verb`.
+///     - Delimiter must be ASCII printable (`0x21..=0x7e`) and not `*`.
+///     - Payload is scanned raw (no caret decoding, no comment handling) until
+///       the same delimiter, with no `\r`/`\n`/NUL allowed and max 4096 bytes.
+///     - Payload emits literal `Char(byte)` tokens.
+///     - Malformed/unsupported forms fail-closed (`VerbNotSupported`).
 ///   - Otherwise emit control symbol as `ControlSeq(vec![next_byte])`.
+///     - Includes exact control symbol `\$` as `ControlSeq(vec![b'$'])`
+///       (distinct from raw `$` math delimiter chars).
 ///   - A trailing terminal backslash is `InvalidInput`.
 /// - All other bytes become `Char(byte)`.
 /// - Fails with `TooManyTokens` if output would exceed `MAX_TOKENS_V0`.

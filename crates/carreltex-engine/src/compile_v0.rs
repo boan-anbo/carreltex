@@ -68,6 +68,8 @@ mod providecommand_v0_tests;
 mod stats_v0;
 mod tokenize_reason_v0;
 #[cfg(test)]
+mod tokenizer_verb_tests;
+#[cfg(test)]
 mod tokenizer_textword_139_tests;
 #[cfg(test)]
 mod tokenizer_textword_140_tests;
