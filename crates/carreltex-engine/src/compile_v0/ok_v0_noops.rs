@@ -1,6 +1,7 @@
 use crate::tex::tokenize_v0::TokenV0;
 
 use super::consume_char_space_nested_group_v0;
+use super::ok_v0_optional_brackets::consume_optional_digits_bracket_span_v0;
 
 fn skip_spaces_until(tokens: &[TokenV0], mut index: usize, end: usize) -> usize {
     while index < end {
@@ -37,6 +38,11 @@ pub(super) fn is_ok_noop_command_v0(name: &[u8]) -> bool {
             | b"nopagebreak"
             | b"linebreak"
             | b"nolinebreak"
+            | b"goodbreak"
+            | b"filbreak"
+            | b"samepage"
+            | b"nobreak"
+            | b"break"
             | b"vspace"
             | b"hspace"
     )
@@ -57,10 +63,14 @@ pub(super) fn consume_ok_noop_command_v0(
         | b"vfill"
         | b"newpage"
         | b"clearpage"
-        | b"pagebreak"
-        | b"nopagebreak"
-        | b"linebreak"
-        | b"nolinebreak" => Some(index + 1),
+        | b"goodbreak"
+        | b"filbreak"
+        | b"samepage"
+        | b"nobreak"
+        | b"break" => Some(index + 1),
+        b"pagebreak" | b"nopagebreak" | b"linebreak" | b"nolinebreak" => {
+            consume_optional_digits_bracket_span_v0(tokens, index + 1, end, 8)
+        }
         b"vspace" | b"hspace" => {
             let mut cursor = skip_spaces_until(tokens, index + 1, end);
             if matches!(tokens.get(cursor), Some(TokenV0::Char(b'*'))) {
