@@ -100,6 +100,30 @@ fn consume_theorem_preamble_command(tokens: &[TokenV0], index: usize) -> Option<
     }
 }
 
+fn consume_config_preamble_command(tokens: &[TokenV0], index: usize) -> Option<usize> {
+    let name = match tokens.get(index) {
+        Some(TokenV0::ControlSeq(name)) => name.as_slice(),
+        _ => return None,
+    };
+    match name {
+        b"hypersetup" | b"geometry" | b"captionsetup" | b"graphicspath" | b"setlist" => {
+            let mut cursor = skip_spaces(tokens, index + 1);
+            if name == b"setlist" && matches!(tokens.get(cursor), Some(TokenV0::Char(b'['))) {
+                cursor = consume_bracket_options_non_empty(tokens, cursor)?;
+                cursor = skip_spaces(tokens, cursor);
+            }
+            cursor = consume_char_space_nested_group_non_empty_v0(tokens, cursor, tokens.len())?;
+            Some(skip_spaces(tokens, cursor))
+        }
+        b"urlstyle" => {
+            let mut cursor = skip_spaces(tokens, index + 1);
+            cursor = consume_char_space_group_non_empty(tokens, cursor)?;
+            Some(skip_spaces(tokens, cursor))
+        }
+        _ => None,
+    }
+}
+
 pub(crate) fn extract_strict_ok_text_body_v0(tokens: &[TokenV0]) -> Option<Vec<u8>> {
     let mut index = 0usize;
     if !matches!(
@@ -137,6 +161,20 @@ pub(crate) fn extract_strict_ok_text_body_v0(tokens: &[TokenV0]) -> Option<Vec<u
                 if name.as_slice() == b"newtheorem" || name.as_slice() == b"theoremstyle" =>
             {
                 index = consume_theorem_preamble_command(tokens, index)?;
+                continue;
+            }
+            Some(TokenV0::ControlSeq(name))
+                if matches!(
+                    name.as_slice(),
+                    b"hypersetup"
+                        | b"geometry"
+                        | b"captionsetup"
+                        | b"graphicspath"
+                        | b"urlstyle"
+                        | b"setlist"
+                ) =>
+            {
+                index = consume_config_preamble_command(tokens, index)?;
                 continue;
             }
             Some(TokenV0::ControlSeq(name))
