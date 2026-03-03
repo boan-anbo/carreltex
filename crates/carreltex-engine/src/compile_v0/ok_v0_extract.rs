@@ -1,0 +1,150 @@
+use crate::tex::tokenize_v0::TokenV0;
+
+use super::ok_v0_body::{
+    consume_bracket_options_non_empty, consume_char_space_group_non_empty,
+    consume_char_space_nested_group_non_empty_v0, consume_group_literal, consume_ok_body_token_v0,
+    skip_spaces,
+};
+use super::ok_v0_lists::ListStateV0;
+
+fn consume_usepackage_preamble_command(tokens: &[TokenV0], mut index: usize) -> Option<usize> {
+    if !matches!(
+        tokens.get(index),
+        Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"usepackage"
+    ) {
+        return None;
+    }
+    index += 1;
+    index = skip_spaces(tokens, index);
+    if matches!(tokens.get(index), Some(TokenV0::Char(b'['))) {
+        index = consume_bracket_options_non_empty(tokens, index)?;
+        index = skip_spaces(tokens, index);
+    }
+    index = consume_char_space_group_non_empty(tokens, index)?;
+    Some(skip_spaces(tokens, index))
+}
+
+fn is_supported_meta_preamble_command(name: &[u8]) -> bool {
+    matches!(name, b"title" | b"author" | b"date")
+}
+
+fn is_supported_bibliography_preamble_command(name: &[u8]) -> bool {
+    matches!(name, b"bibliographystyle" | b"bibliography")
+}
+
+fn consume_meta_preamble_command(tokens: &[TokenV0], mut index: usize) -> Option<usize> {
+    if !matches!(
+        tokens.get(index),
+        Some(TokenV0::ControlSeq(name)) if is_supported_meta_preamble_command(name.as_slice())
+    ) {
+        return None;
+    }
+    index += 1;
+    index = skip_spaces(tokens, index);
+    index = consume_char_space_group_non_empty(tokens, index)?;
+    Some(skip_spaces(tokens, index))
+}
+
+fn consume_bibliography_preamble_command(tokens: &[TokenV0], mut index: usize) -> Option<usize> {
+    if !matches!(
+        tokens.get(index),
+        Some(TokenV0::ControlSeq(name)) if is_supported_bibliography_preamble_command(name.as_slice())
+    ) {
+        return None;
+    }
+    index += 1;
+    index = consume_char_space_nested_group_non_empty_v0(tokens, index, tokens.len())?;
+    Some(skip_spaces(tokens, index))
+}
+
+pub(crate) fn extract_strict_ok_text_body_v0(tokens: &[TokenV0]) -> Option<Vec<u8>> {
+    let mut index = 0usize;
+    if !matches!(
+        tokens.get(index),
+        Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"documentclass"
+    ) {
+        return None;
+    }
+    index += 1;
+    index = skip_spaces(tokens, index);
+    if matches!(tokens.get(index), Some(TokenV0::Char(b'['))) {
+        index = consume_bracket_options_non_empty(tokens, index)?;
+    }
+    index = skip_spaces(tokens, index);
+    index = consume_group_literal(tokens, index, b"article")?;
+    index = skip_spaces(tokens, index);
+    loop {
+        match tokens.get(index) {
+            Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"usepackage" => {
+                index = consume_usepackage_preamble_command(tokens, index)?;
+                continue;
+            }
+            Some(TokenV0::ControlSeq(name)) if is_supported_meta_preamble_command(name.as_slice()) => {
+                index = consume_meta_preamble_command(tokens, index)?;
+                continue;
+            }
+            Some(TokenV0::ControlSeq(name))
+                if is_supported_bibliography_preamble_command(name.as_slice()) =>
+            {
+                index = consume_bibliography_preamble_command(tokens, index)?;
+                continue;
+            }
+            _ => {}
+        }
+        break;
+    }
+
+    if !matches!(
+        tokens.get(index),
+        Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"begin"
+    ) {
+        return None;
+    }
+    index += 1;
+    index = skip_spaces(tokens, index);
+    index = consume_group_literal(tokens, index, b"document")?;
+    index = skip_spaces(tokens, index);
+
+    let mut body = Vec::<u8>::new();
+    let mut previous_was_space = false;
+    let mut list_env: Option<ListStateV0> = None;
+    loop {
+        if list_env.is_none()
+            && matches!(
+                tokens.get(index),
+                Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"end"
+            )
+            && consume_group_literal(tokens, skip_spaces(tokens, index + 1), b"document").is_some()
+        {
+            break;
+        }
+        index = consume_ok_body_token_v0(
+            tokens,
+            index,
+            tokens.len(),
+            false,
+            &mut list_env,
+            &mut body,
+            &mut previous_was_space,
+        )?;
+    }
+    if list_env.is_some() {
+        return None;
+    }
+
+    if !matches!(
+        tokens.get(index),
+        Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"end"
+    ) {
+        return None;
+    }
+    index += 1;
+    index = skip_spaces(tokens, index);
+    index = consume_group_literal(tokens, index, b"document")?;
+    index = skip_spaces(tokens, index);
+    if index != tokens.len() {
+        return None;
+    }
+    Some(body)
+}
+
