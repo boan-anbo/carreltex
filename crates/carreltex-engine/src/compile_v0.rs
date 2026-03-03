@@ -70,6 +70,8 @@ mod ok_v0_ref_tests;
 #[cfg(test)]
 mod ok_v0_maketitle_emit_tests;
 #[cfg(test)]
+mod ok_v0_title_fragment_compat_tests;
+#[cfg(test)]
 mod ok_v0_scripts_tests;
 #[cfg(test)]
 mod ok_v0_box_wrappers_tests;
