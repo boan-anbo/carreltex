@@ -554,6 +554,157 @@ export function runOkEmptyDocCases(ctx, helpers) {
   }
 
   if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before OK documentclass options baseline case failed');
+  }
+  const documentclassOptionsBaselineDocBytes = new TextEncoder().encode(
+    '\\documentclass[11pt]{article}\n\\begin{document}\n\n\\end{document}\n',
+  );
+  if (
+    addMountedFile(
+      'main.tex',
+      documentclassOptionsBaselineDocBytes,
+      'ok_documentclass_options_baseline_main',
+    ) !== 0
+  ) {
+    throw new Error('mount_add_file(ok documentclass options baseline main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) {
+    throw new Error('mount_finalize for OK documentclass options baseline case failed');
+  }
+  expectOk(ctx.compileMain(), 'compile_main_v0(ok documentclass options baseline)');
+  const documentclassOptionsBaselineLogBytes = readCompileLogBytes();
+  if (documentclassOptionsBaselineLogBytes.length !== 0) {
+    throw new Error(
+      `compile_main(ok documentclass options baseline) expected empty log, got ${documentclassOptionsBaselineLogBytes.length} bytes`,
+    );
+  }
+  const documentclassOptionsBaselineStats = assertEventsMatchLogAndStats(
+    documentclassOptionsBaselineLogBytes,
+    {},
+    'compile_main(ok documentclass options baseline)',
+  );
+  readMainXdvArtifactBytes('compile_main(ok documentclass options baseline)');
+
+  if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before OK documentclass options text doc case failed');
+  }
+  const documentclassOptionsTextDocBytes = new TextEncoder().encode(
+    '\\documentclass[11pt]{article}\n\\begin{document}\nXYZ\n\\end{document}\n',
+  );
+  if (
+    addMountedFile(
+      'main.tex',
+      documentclassOptionsTextDocBytes,
+      'ok_documentclass_options_text_doc_main',
+    ) !== 0
+  ) {
+    throw new Error('mount_add_file(ok documentclass options text doc main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) {
+    throw new Error('mount_finalize for OK documentclass options text doc case failed');
+  }
+  expectOk(ctx.compileMain(), 'compile_main_v0(ok documentclass options text doc)');
+  const documentclassOptionsTextReport = readCompileReportJson();
+  if (documentclassOptionsTextReport.status !== 'OK') {
+    throw new Error(
+      `compile_main(ok documentclass options text doc) report.status expected OK, got ${documentclassOptionsTextReport.status}`,
+    );
+  }
+  const documentclassOptionsTextLogBytes = readCompileLogBytes();
+  if (documentclassOptionsTextLogBytes.length !== 0) {
+    throw new Error(
+      `compile_main(ok documentclass options text doc) expected empty log, got ${documentclassOptionsTextLogBytes.length} bytes`,
+    );
+  }
+  const documentclassOptionsTextStats = assertEventsMatchLogAndStats(
+    documentclassOptionsTextLogBytes,
+    { char_count: documentclassOptionsBaselineStats.char_count + 3 },
+    'compile_main(ok documentclass options text doc)',
+  );
+  if (
+    !(typeof documentclassOptionsTextStats.token_count === 'number'
+      && documentclassOptionsTextStats.token_count > 0)
+  ) {
+    throw new Error('compile_main(ok documentclass options text doc) token_count expected >0');
+  }
+  const documentclassOptionsTextXdvBytes = readMainXdvArtifactBytes(
+    'compile_main(ok documentclass options text doc)',
+  );
+  if (documentclassOptionsTextXdvBytes.length === 0) {
+    throw new Error('compile_main(ok documentclass options text doc) main.xdv expected non-empty bytes');
+  }
+
+  if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before OK title/author/date baseline case failed');
+  }
+  const metaPreambleBaselineDocBytes = new TextEncoder().encode(
+    '\\documentclass{article}\n\\title{T}\n\\author{A}\n\\date{D}\n\\begin{document}\n\n\\end{document}\n',
+  );
+  if (
+    addMountedFile(
+      'main.tex',
+      metaPreambleBaselineDocBytes,
+      'ok_meta_preamble_baseline_main',
+    ) !== 0
+  ) {
+    throw new Error('mount_add_file(ok title/author/date baseline main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) {
+    throw new Error('mount_finalize for OK title/author/date baseline case failed');
+  }
+  expectOk(ctx.compileMain(), 'compile_main_v0(ok title/author/date baseline)');
+  const metaPreambleBaselineLogBytes = readCompileLogBytes();
+  if (metaPreambleBaselineLogBytes.length !== 0) {
+    throw new Error(
+      `compile_main(ok title/author/date baseline) expected empty log, got ${metaPreambleBaselineLogBytes.length} bytes`,
+    );
+  }
+  const metaPreambleBaselineStats = assertEventsMatchLogAndStats(
+    metaPreambleBaselineLogBytes,
+    {},
+    'compile_main(ok title/author/date baseline)',
+  );
+  readMainXdvArtifactBytes('compile_main(ok title/author/date baseline)');
+
+  if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before OK title/author/date text doc case failed');
+  }
+  const metaPreambleTextDocBytes = new TextEncoder().encode(
+    '\\documentclass{article}\n\\title{T}\n\\author{A}\n\\date{D}\n\\begin{document}\nXYZ\n\\end{document}\n',
+  );
+  if (addMountedFile('main.tex', metaPreambleTextDocBytes, 'ok_meta_preamble_text_doc_main') !== 0) {
+    throw new Error('mount_add_file(ok title/author/date text doc main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) {
+    throw new Error('mount_finalize for OK title/author/date text doc case failed');
+  }
+  expectOk(ctx.compileMain(), 'compile_main_v0(ok title/author/date text doc)');
+  const metaPreambleTextReport = readCompileReportJson();
+  if (metaPreambleTextReport.status !== 'OK') {
+    throw new Error(
+      `compile_main(ok title/author/date text doc) report.status expected OK, got ${metaPreambleTextReport.status}`,
+    );
+  }
+  const metaPreambleTextLogBytes = readCompileLogBytes();
+  if (metaPreambleTextLogBytes.length !== 0) {
+    throw new Error(
+      `compile_main(ok title/author/date text doc) expected empty log, got ${metaPreambleTextLogBytes.length} bytes`,
+    );
+  }
+  const metaPreambleTextStats = assertEventsMatchLogAndStats(
+    metaPreambleTextLogBytes,
+    { char_count: metaPreambleBaselineStats.char_count + 3 },
+    'compile_main(ok title/author/date text doc)',
+  );
+  if (!(typeof metaPreambleTextStats.token_count === 'number' && metaPreambleTextStats.token_count > 0)) {
+    throw new Error('compile_main(ok title/author/date text doc) token_count expected >0');
+  }
+  const metaPreambleTextXdvBytes = readMainXdvArtifactBytes('compile_main(ok title/author/date text doc)');
+  if (metaPreambleTextXdvBytes.length === 0) {
+    throw new Error('compile_main(ok title/author/date text doc) main.xdv expected non-empty bytes');
+  }
+
+  if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before OK pagebreak text doc case failed');
   }
 
