@@ -5,11 +5,14 @@ mod ok_v0_env_support;
 mod ok_v0_env_refs;
 #[path = "ok_v0_optional_brackets.rs"]
 mod ok_v0_optional_brackets;
+#[path = "ok_v0_dollar_math.rs"]
+mod ok_v0_dollar_math;
 use ok_v0_env_refs::{emit_ok_markers_in_env_v0, OkEnvMarkersV0};
 use ok_v0_optional_brackets::{
     consume_optional_digits_bracket_span_v0, consume_optional_heading_short_title_v0,
     consume_optional_nested_bracket_span_v0, consume_optional_simple_bracket_span_v0,
 };
+use ok_v0_dollar_math::consume_display_math_dollar_span_v0;
 use ok_v0_env_support::{
     consume_named_environment_span_v0, is_supported_display_math_env_v0,
     is_supported_ok_block_env_v0, is_supported_ok_table_stub_env_v0, ok_thm_stub_marker_v0,
@@ -21,6 +24,7 @@ const MAX_OK_GROUP_DEPTH_V0: usize = 64;
 const MAX_OK_BRACKET_BYTES_V0: usize = 256;
 const MAX_OK_MATH_SCAN_TOKENS_V0: usize = 4096;
 const MAX_OK_MATH_ENV_TOKENS_V0: usize = 4096;
+const MAX_OK_DOLLAR_MATH_TOKENS_V0: usize = 4096;
 const MAX_OK_HEADING_SHORT_TOKENS_V0: usize = 2048;
 const MAX_OK_CITE_NOTE_TOKENS_V0: usize = 2048;
 const MAX_OK_REF_NOTE_TOKENS_V0: usize = 2048;
@@ -478,6 +482,12 @@ fn consume_ok_body_token_v0(
         }
         Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"[" => {
             let next_index = consume_math_control_span_v0(tokens, index, end, b"]")?;
+            emit_ok_display_math_marker_v0(body, previous_was_space);
+            Some(next_index)
+        }
+        Some(TokenV0::Char(b'$')) if matches!(tokens.get(index + 1), Some(TokenV0::Char(b'$'))) => {
+            let next_index =
+                consume_display_math_dollar_span_v0(tokens, index, end, MAX_OK_DOLLAR_MATH_TOKENS_V0)?;
             emit_ok_display_math_marker_v0(body, previous_was_space);
             Some(next_index)
         }
