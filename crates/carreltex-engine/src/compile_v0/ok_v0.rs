@@ -4,6 +4,7 @@ pub(crate) const OK_GLYPH_ADVANCE_SP_V0: i32 = 65_536;
 pub(crate) const OK_LINE_ADVANCE_SP_V0: i32 = 786_432;
 const MAX_OK_GROUP_DEPTH_V0: usize = 64;
 const MAX_OK_BRACKET_BYTES_V0: usize = 256;
+const MAX_OK_MATH_SCAN_TOKENS_V0: usize = 4096;
 
 enum ListEnvV0 {
     Itemize,
@@ -339,6 +340,50 @@ fn consume_optional_simple_bracket_span_v0(
     None
 }
 
+fn consume_math_control_span_v0(
+    tokens: &[TokenV0],
+    index: usize,
+    end: usize,
+    close_name: &[u8],
+) -> Option<usize> {
+    let mut cursor = index + 1;
+    let mut scanned = 0usize;
+    while cursor < end {
+        scanned += 1;
+        if scanned > MAX_OK_MATH_SCAN_TOKENS_V0 {
+            return None;
+        }
+        if matches!(tokens.get(cursor), Some(TokenV0::ControlSeq(name)) if name.as_slice() == close_name) {
+            return Some(cursor + 1);
+        }
+        cursor += 1;
+    }
+    None
+}
+
+fn emit_ok_inline_math_marker_v0(body: &mut Vec<u8>, previous_was_space: &mut bool) {
+    body.push(b' ');
+    body.push(b'[');
+    body.push(b'M');
+    body.push(b'A');
+    body.push(b'T');
+    body.push(b'H');
+    body.push(b']');
+    *previous_was_space = false;
+}
+
+fn emit_ok_display_math_marker_v0(body: &mut Vec<u8>, previous_was_space: &mut bool) {
+    body.push(0x0a);
+    body.push(b'[');
+    body.push(b'M');
+    body.push(b'A');
+    body.push(b'T');
+    body.push(b'H');
+    body.push(b']');
+    body.push(0x0a);
+    *previous_was_space = true;
+}
+
 fn consume_ok_body_range_v0(
     tokens: &[TokenV0],
     start: usize,
@@ -401,6 +446,16 @@ fn consume_ok_body_token_v0(
             body.push(0x0a);
             *previous_was_space = true;
             Some(index + 1)
+        }
+        Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"(" => {
+            let next_index = consume_math_control_span_v0(tokens, index, end, b")")?;
+            emit_ok_inline_math_marker_v0(body, previous_was_space);
+            Some(next_index)
+        }
+        Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"[" => {
+            let next_index = consume_math_control_span_v0(tokens, index, end, b"]")?;
+            emit_ok_display_math_marker_v0(body, previous_was_space);
+            Some(next_index)
         }
         Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"footnotemark" => Some(index + 1),
         Some(TokenV0::ControlSeq(name))
