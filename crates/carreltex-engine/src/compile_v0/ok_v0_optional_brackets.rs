@@ -35,44 +35,6 @@ pub(super) fn consume_optional_simple_bracket_span_v0(
     None
 }
 
-pub(super) fn consume_optional_simple_bracket_span_capture_v0(
-    tokens: &[TokenV0],
-    index: usize,
-    end: usize,
-    max_bytes: usize,
-    out: &mut Vec<u8>,
-) -> Option<usize> {
-    let mut cursor = skip_spaces_until(tokens, index, end);
-    if !matches!(tokens.get(cursor), Some(TokenV0::Char(b'['))) {
-        return Some(cursor);
-    }
-    cursor += 1;
-    let mut content_len = 0usize;
-    while cursor < end {
-        match tokens.get(cursor)? {
-            TokenV0::Char(b']') => return Some(cursor + 1),
-            TokenV0::Char(byte) => {
-                content_len += 1;
-                if content_len > max_bytes {
-                    return None;
-                }
-                out.push(*byte);
-                cursor += 1;
-            }
-            TokenV0::Space => {
-                content_len += 1;
-                if content_len > max_bytes {
-                    return None;
-                }
-                out.push(b' ');
-                cursor += 1;
-            }
-            _ => return None,
-        }
-    }
-    None
-}
-
 pub(super) fn consume_optional_digits_bracket_span_v0(
     tokens: &[TokenV0],
     index: usize,

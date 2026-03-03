@@ -122,6 +122,40 @@ export function runOkBibCases(ctx, helpers, baselineStats) {
     );
   }
 
+  if (ctx.mountReset() !== 0) throw new Error('mount_reset before OK bibliography label-fragment case failed');
+  const bibLabelFragmentDocBytes = new TextEncoder().encode(
+    '\\documentclass{article}\\begin{document}\\begin{thebibliography}{9}\\bibitem[\\textbf{X}\\url{Y}]{K}A\\end{thebibliography}\\end{document}',
+  );
+  if (addMountedFile('main.tex', bibLabelFragmentDocBytes, 'ok_bibliography_label_fragment_main') !== 0) {
+    throw new Error('mount_add_file(ok bibliography label-fragment main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) throw new Error('mount_finalize for OK bibliography label-fragment case failed');
+  expectOk(ctx.compileMain(), 'compile_main_v0(ok bibliography label-fragment)');
+  const bibLabelFragmentLogBytes = readCompileLogBytes();
+  if (bibLabelFragmentLogBytes.length !== 0) {
+    throw new Error(
+      `compile_main(ok bibliography label-fragment) expected empty log, got ${bibLabelFragmentLogBytes.length} bytes`,
+    );
+  }
+  assertEventsMatchLogAndStats(
+    bibLabelFragmentLogBytes,
+    { char_count: baselineStats.char_count + 37 },
+    'compile_main(ok bibliography label-fragment)',
+  );
+  const bibLabelFragmentXdvBytes = readMainXdvArtifactBytes('compile_main(ok bibliography label-fragment)');
+  if (bibLabelFragmentXdvBytes.length === 0) {
+    throw new Error('compile_main(ok bibliography label-fragment) main.xdv expected non-empty bytes');
+  }
+  const bibLabelFragmentMovement = countMovementOpsInTextPages(
+    bibLabelFragmentXdvBytes,
+    'compile_main(ok bibliography label-fragment)',
+  );
+  if (bibLabelFragmentMovement.right3PositiveTotal !== 458752) {
+    throw new Error(
+      `compile_main(ok bibliography label-fragment) expected right3PositiveTotal=458752, got ${bibLabelFragmentMovement.right3PositiveTotal}`,
+    );
+  }
+
   if (ctx.mountReset() !== 0) throw new Error('mount_reset before OK bibliography newblock case failed');
   const bibNewblockDocBytes = new TextEncoder().encode(
     '\\documentclass{article}\\begin{document}\\begin{thebibliography}{9}\\bibitem{X}A\\newblock B\\end{thebibliography}\\end{document}',
@@ -175,4 +209,14 @@ export function runOkBibCases(ctx, helpers, baselineStats) {
   }
   if (ctx.mountFinalize() !== 0) throw new Error('mount_finalize for newblock outside bibliography invalid case failed');
   expectNotImplemented(ctx.compileMain(), 'compile_main_v0(ok newblock outside bibliography)');
+
+  if (ctx.mountReset() !== 0) throw new Error('mount_reset before bibliography label-fragment begin invalid case failed');
+  const bibLabelBeginInvalidDocBytes = new TextEncoder().encode(
+    '\\documentclass{article}\\begin{document}\\begin{thebibliography}{9}\\bibitem[\\begin{itemize}\\item X\\end{itemize}]{K}A\\end{thebibliography}\\end{document}',
+  );
+  if (addMountedFile('main.tex', bibLabelBeginInvalidDocBytes, 'ok_bibliography_label_begin_invalid_main') !== 0) {
+    throw new Error('mount_add_file(ok bibliography label-fragment begin invalid main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) throw new Error('mount_finalize for bibliography label-fragment begin invalid case failed');
+  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(ok bibliography label-fragment begin invalid)');
 }
