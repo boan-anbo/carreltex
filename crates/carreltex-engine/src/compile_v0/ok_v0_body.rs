@@ -750,7 +750,22 @@ pub(super) fn consume_ok_body_token_v0(
         Some(TokenV0::ControlSeq(name))
             if !allow_nested_groups && name.as_slice() == b"item" =>
         {
-            emit_list_item_v0(list_env, body, previous_was_space).map(|()| index + 1)
+            let (after_label, label) = consume_optional_bibitem_label_fragment_v0(
+                tokens,
+                index + 1,
+                end,
+                super::MAX_OK_ITEM_LABEL_TOKENS_V0,
+                super::MAX_OK_GROUP_DEPTH_V0,
+            )?;
+            emit_list_item_v0(list_env, body, previous_was_space)?;
+            if let Some(label_bytes) = label {
+                body.push(b'[');
+                body.extend_from_slice(&label_bytes);
+                body.push(b']');
+                body.push(b' ');
+                *previous_was_space = false;
+            }
+            Some(after_label)
         }
         Some(TokenV0::ControlSeq(name))
             if !allow_nested_groups && name.as_slice() == b"bibitem" =>
