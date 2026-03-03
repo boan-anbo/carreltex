@@ -295,6 +295,26 @@ fn consume_ok_body_token_v0(
             *previous_was_space = true;
             Some(index + 1)
         }
+        Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"footnotemark" => Some(index + 1),
+        Some(TokenV0::ControlSeq(name))
+            if name.as_slice() == b"footnote" || name.as_slice() == b"footnotetext" =>
+        {
+            let mut footnote_text = Vec::new();
+            let mut footnote_previous_was_space = false;
+            let next_index = consume_ok_group_fragment_v0(
+                tokens,
+                index + 1,
+                end,
+                &mut footnote_text,
+                &mut footnote_previous_was_space,
+            )?;
+            body.push(b' ');
+            body.push(b'[');
+            body.extend_from_slice(&footnote_text);
+            body.push(b']');
+            *previous_was_space = false;
+            Some(next_index)
+        }
         Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"href" => {
             let mut scratch_body = Vec::new();
             let mut scratch_previous_was_space = *previous_was_space;
