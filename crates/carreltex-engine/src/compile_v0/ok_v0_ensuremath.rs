@@ -22,7 +22,7 @@ pub(super) fn consume_math_control_span_v0(
     None
 }
 
-pub(super) fn consume_ensuremath_group_span_v0(
+pub(super) fn consume_inline_math_group_span_v0(
     tokens: &[TokenV0],
     index: usize,
     end: usize,
