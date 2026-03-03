@@ -2,6 +2,7 @@ import { runOkBibCases } from './cases_v0_ok_bib.mjs';
 import { runOkBodyControlCases } from './cases_v0_ok_body_controls.mjs';
 import { runOkCiteCases } from './cases_v0_ok_cites.mjs';
 import { runOkColorCases } from './cases_v0_ok_colors.mjs';
+import { runOkDollarMathCases } from './cases_v0_ok_dollar_math.mjs';
 import { runOkEnvCases } from './cases_v0_ok_envs.mjs';
 import { runOkEnvCiteCases } from './cases_v0_ok_env_cites.mjs';
 import { runOkEnvLabelCases } from './cases_v0_ok_env_labels.mjs';
@@ -743,6 +744,7 @@ export function runOkEmptyDocCases(ctx, helpers) {
   runOkEnvRefCases(ctx, okBodyHelpers, stats);
   runOkEnvCiteCases(ctx, okBodyHelpers, stats);
   runOkCiteCases(ctx, okBodyHelpers, stats);
+  runOkDollarMathCases(ctx, okBodyHelpers, stats);
   runOkColorCases(ctx, okBodyHelpers, stats);
   runOkFloatCases(ctx, okBodyHelpers, stats);
   runOkFootnoteCases(ctx, okBodyHelpers, stats);
