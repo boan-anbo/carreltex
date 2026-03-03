@@ -53,7 +53,8 @@ use carreltex_core::{
     CompileStatus, Mount, DEFAULT_COMPILE_MAIN_MAX_LOG_BYTES_V0, MAX_LOG_BYTES_V0,
 };
 use carreltex_xdv::{
-    plan_layout_v0, validate_dvi_v2_text_page_with_layout_v0, write_dvi_v2_text_page_from_layout_v0,
+    plan_layout_v0, validate_dvi_v2_text_page_matches_layout_v0,
+    validate_dvi_v2_text_page_with_layout_v0, write_dvi_v2_text_page_from_layout_v0,
     DEFAULT_MAX_LINES_PER_PAGE_V0, DEFAULT_MAX_LINE_GLYPHS_V0,
 };
 use input_expand_v0::expand_inputs_v0;
@@ -215,6 +216,16 @@ pub fn compile_request_v0(mount: &mut Mount, req: &CompileRequestV0) -> CompileR
             if !validate_dvi_v2_text_page_with_layout_v0(
                 &xdv_bytes,
                 glyph_advance_sp,
+                line_advance_sp,
+            ) {
+                return invalid_result_v0(
+                    req.max_log_bytes,
+                    InvalidInputReasonV0::StatsBuildFailed,
+                );
+            }
+            if !validate_dvi_v2_text_page_matches_layout_v0(
+                &xdv_bytes,
+                &layout_plan,
                 line_advance_sp,
             ) {
                 return invalid_result_v0(

@@ -1,7 +1,8 @@
 use super::{
     count_dvi_v2_text_movements_v0, count_dvi_v2_text_pages_v0,
     count_dvi_v2_text_pages_with_advance_v0, validate_dvi_v2_empty_page_v0,
-    plan_layout_v0, recompute_line_width_sp_v0, sum_dvi_v2_positive_right3_amounts_with_layout_v0,
+    parse_dvi_v2_text_page_to_layout_v0, plan_layout_v0, recompute_line_width_sp_v0,
+    sum_dvi_v2_positive_right3_amounts_with_layout_v0, validate_dvi_v2_text_page_matches_layout_v0,
     validate_dvi_v2_text_page_v0, validate_dvi_v2_text_page_with_layout_v0,
     write_dvi_v2_empty_page_v0, write_dvi_v2_text_page_v0,
     write_dvi_v2_text_page_with_advance_v0, write_dvi_v2_text_page_with_layout_and_wrap_v0,
@@ -133,6 +134,29 @@ fn planner_propagates_wi_dot_glyph_advances_and_line_width() {
 }
 
 #[test]
+fn parse_roundtrips_writer_layout_for_wrap_and_paging() {
+    let text = b"word word word word word word word word word word";
+    let layout = plan_layout_v0(text, 65_536, 786_432, 10, 1).expect("layout plan");
+    let bytes = write_dvi_v2_text_page_with_layout_wrap_and_paging_v0(text, 65_536, 786_432, 10, 1)
+        .expect("writer output");
+    let parsed = parse_dvi_v2_text_page_to_layout_v0(&bytes, 786_432).expect("parsed layout");
+    assert_eq!(parsed, layout);
+    assert!(validate_dvi_v2_text_page_matches_layout_v0(&bytes, &layout, 786_432));
+}
+
+#[test]
+fn parse_roundtrips_for_wi_dot_metrics() {
+    let layout = plan_layout_v0(b"Wi.", 65_536, 786_432, 80, 200).expect("layout plan");
+    let bytes =
+        write_dvi_v2_text_page_with_layout_v0(b"Wi.", 65_536, 786_432).expect("writer output");
+    let parsed = parse_dvi_v2_text_page_to_layout_v0(&bytes, 786_432).expect("parsed layout");
+    assert_eq!(parsed, layout);
+    assert_eq!(parsed.pages[0].lines[0].glyphs[0].advance_sp, 98_304);
+    assert_eq!(parsed.pages[0].lines[0].glyphs[1].advance_sp, 32_768);
+    assert_eq!(parsed.pages[0].lines[0].glyphs[2].advance_sp, 32_768);
+}
+
+#[test]
 fn text_writer_wraps_long_line_with_down3() {
     let mut line = Vec::<u8>::new();
     for _ in 0..50 {
@@ -255,6 +279,7 @@ fn validator_rejects_missing_width_right3_after_glyph() {
     bytes[right_index + 2] = 0x00;
     bytes[right_index + 3] = 0x00;
     assert!(!validate_dvi_v2_text_page_v0(&bytes));
+    assert!(parse_dvi_v2_text_page_to_layout_v0(&bytes, 786_432).is_none());
 }
 
 #[test]
