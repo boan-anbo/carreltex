@@ -140,6 +140,8 @@ fn is_supported_ok_wrapper_command_v0(name: &[u8]) -> bool {
             | b"textsl"
             | b"textmd"
             | b"textup"
+            | b"textsuperscript"
+            | b"textsubscript"
     )
 }
 
