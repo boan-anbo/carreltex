@@ -286,7 +286,7 @@ pub(super) fn consume_optional_bibitem_label_fragment_v0(
                     content_start,
                     cursor,
                     max_group_depth,
-                    false,
+                    true,
                     &mut rendered,
                     &mut previous_was_space,
                 )?;
