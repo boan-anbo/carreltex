@@ -3,11 +3,14 @@ pub(crate) const MAX_OK_TEXT_BYTES_V0: usize = 64 * 1024;
 pub(crate) const OK_GLYPH_ADVANCE_SP_V0: i32 = 65_536;
 pub(crate) const OK_LINE_ADVANCE_SP_V0: i32 = 786_432;
 const MAX_OK_GROUP_DEPTH_V0: usize = 64;
+const MAX_OK_BRACKET_BYTES_V0: usize = 256;
 
 enum ListEnvV0 {
     Itemize,
     Enumerate { next: u32 },
     Thebibliography,
+    Figure,
+    Table,
 }
 
 fn skip_spaces(tokens: &[TokenV0], mut index: usize) -> usize {
@@ -209,6 +212,7 @@ fn is_supported_ok_style_declaration_v0(name: &[u8]) -> bool {
             | b"sffamily"
             | b"ttfamily"
             | b"em"
+            | b"centering"
     )
 }
 
@@ -307,6 +311,34 @@ fn consume_balanced_group_bounds_v0(
     None
 }
 
+fn consume_optional_simple_bracket_span_v0(
+    tokens: &[TokenV0],
+    index: usize,
+    end: usize,
+    max_bytes: usize,
+) -> Option<usize> {
+    let mut cursor = skip_spaces_until(tokens, index, end);
+    if !matches!(tokens.get(cursor), Some(TokenV0::Char(b'['))) {
+        return Some(cursor);
+    }
+    cursor += 1;
+    let mut content_len = 0usize;
+    while cursor < end {
+        match tokens.get(cursor)? {
+            TokenV0::Char(b']') => return Some(cursor + 1),
+            TokenV0::Char(_) | TokenV0::Space => {
+                content_len += 1;
+                if content_len > max_bytes {
+                    return None;
+                }
+                cursor += 1;
+            }
+            _ => return None,
+        }
+    }
+    None
+}
+
 fn consume_ok_body_range_v0(
     tokens: &[TokenV0],
     start: usize,
@@ -392,6 +424,46 @@ fn consume_ok_body_token_v0(
         }
         Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"label" => {
             consume_char_space_nested_group_v0(tokens, index + 1, end)
+        }
+        Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"includegraphics" => {
+            let mut cursor =
+                consume_optional_simple_bracket_span_v0(tokens, index + 1, end, MAX_OK_BRACKET_BYTES_V0)?;
+            cursor = consume_char_space_nested_group_non_empty_v0(tokens, cursor, end)?;
+            body.push(b' ');
+            body.push(b'[');
+            body.push(b'I');
+            body.push(b'M');
+            body.push(b'G');
+            body.push(b']');
+            *previous_was_space = false;
+            Some(cursor)
+        }
+        Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"caption" => {
+            let mut cursor = skip_spaces_until(tokens, index + 1, end);
+            if matches!(tokens.get(cursor), Some(TokenV0::Char(b'['))) {
+                return None;
+            }
+            if matches!(tokens.get(cursor), Some(TokenV0::Char(b'*'))) {
+                cursor += 1;
+                cursor = skip_spaces_until(tokens, cursor, end);
+            }
+            if matches!(tokens.get(cursor), Some(TokenV0::Char(b'['))) {
+                return None;
+            }
+            let mut caption_text = Vec::new();
+            let mut caption_previous_was_space = false;
+            cursor = consume_ok_group_fragment_v0(
+                tokens,
+                cursor,
+                end,
+                &mut caption_text,
+                &mut caption_previous_was_space,
+            )?;
+            body.push(0x0a);
+            body.extend_from_slice(&caption_text);
+            body.push(0x0a);
+            *previous_was_space = true;
+            Some(cursor)
         }
         Some(TokenV0::ControlSeq(name))
             if ok_marker_command_v0(name.as_slice()).is_some() =>
@@ -500,6 +572,26 @@ fn consume_ok_body_token_v0(
                 *list_env = Some(ListEnvV0::Enumerate { next: 1 });
                 return Some(next_index);
             }
+            if let Some(begin_env_end) = consume_group_literal(tokens, cursor, b"figure") {
+                let next_index = consume_optional_simple_bracket_span_v0(
+                    tokens,
+                    begin_env_end,
+                    end,
+                    MAX_OK_BRACKET_BYTES_V0,
+                )?;
+                *list_env = Some(ListEnvV0::Figure);
+                return Some(next_index);
+            }
+            if let Some(begin_env_end) = consume_group_literal(tokens, cursor, b"table") {
+                let next_index = consume_optional_simple_bracket_span_v0(
+                    tokens,
+                    begin_env_end,
+                    end,
+                    MAX_OK_BRACKET_BYTES_V0,
+                )?;
+                *list_env = Some(ListEnvV0::Table);
+                return Some(next_index);
+            }
             if let Some(begin_env_end) = consume_group_literal(tokens, cursor, b"thebibliography") {
                 let next_index =
                     consume_char_space_nested_group_non_empty_v0(tokens, begin_env_end, end)?;
@@ -534,6 +626,16 @@ fn consume_ok_body_token_v0(
                     *list_env = None;
                     Some(next_index)
                 }
+                Some(ListEnvV0::Figure) => {
+                    let next_index = consume_group_literal(tokens, cursor, b"figure")?;
+                    *list_env = None;
+                    Some(next_index)
+                }
+                Some(ListEnvV0::Table) => {
+                    let next_index = consume_group_literal(tokens, cursor, b"table")?;
+                    *list_env = None;
+                    Some(next_index)
+                }
                 None => None,
             }
         }
@@ -560,6 +662,8 @@ fn consume_ok_body_token_v0(
                     Some(index + 1)
                 }
                 Some(ListEnvV0::Thebibliography) => None,
+                Some(ListEnvV0::Figure) => None,
+                Some(ListEnvV0::Table) => None,
                 None => None,
             }
         }
