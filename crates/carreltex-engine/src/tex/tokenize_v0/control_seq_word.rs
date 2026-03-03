@@ -2,6 +2,45 @@ use super::super::caret::decode_caret_hex_v0;
 use super::super::whitespace::{consume_whitespace_run_v0, is_whitespace_v0};
 use super::{ParsedControlSeqV0, TokenV0, TokenizeErrorV0};
 
+const MAX_VERB_BYTES_V0: usize = 4096;
+
+fn parse_verb_control_word_v0(
+    input: &[u8],
+    index: usize,
+) -> Result<ParsedControlSeqV0, TokenizeErrorV0> {
+    if index >= input.len() {
+        return Err(TokenizeErrorV0::VerbNotSupported);
+    }
+    let delimiter = input[index];
+    if delimiter == b'*' {
+        return Err(TokenizeErrorV0::VerbNotSupported);
+    }
+    if !delimiter.is_ascii_graphic() {
+        return Err(TokenizeErrorV0::VerbNotSupported);
+    }
+    let mut payload_index = index + 1;
+    let mut payload = Vec::new();
+    while payload_index < input.len() {
+        let byte = input[payload_index];
+        if byte == delimiter {
+            let tokens = payload.into_iter().map(TokenV0::Char).collect();
+            return Ok(ParsedControlSeqV0 {
+                tokens,
+                next_index: payload_index + 1,
+            });
+        }
+        if byte == 0 || byte == b'\r' || byte == b'\n' {
+            return Err(TokenizeErrorV0::VerbNotSupported);
+        }
+        if payload.len() >= MAX_VERB_BYTES_V0 {
+            return Err(TokenizeErrorV0::VerbNotSupported);
+        }
+        payload.push(byte);
+        payload_index += 1;
+    }
+    Err(TokenizeErrorV0::VerbNotSupported)
+}
+
 pub(super) fn parse_control_word_v0(
     input: &[u8],
     first_byte: u8,
@@ -20,11 +59,11 @@ pub(super) fn parse_control_word_v0(
         control_word.push(word_byte);
         index = following_index;
     }
-    if control_word.as_slice() == b"verb" {
-        return Err(TokenizeErrorV0::InvalidInput);
-    }
     if !control_word.iter().all(|byte| byte.is_ascii()) {
         return Err(TokenizeErrorV0::ControlSeqNonAscii);
+    }
+    if control_word.as_slice() == b"verb" {
+        return parse_verb_control_word_v0(input, index);
     }
     if index < input.len() {
         let (space_probe, _) = decode_caret_hex_v0(input, index)?;
