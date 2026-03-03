@@ -41,7 +41,7 @@ pub(super) fn parse_control_symbol_v0(
     }
     if byte == b'$' {
         return Ok(ParsedControlSeqV0 {
-            tokens: vec![TokenV0::Char(b'$')],
+            tokens: vec![TokenV0::ControlSeq(vec![b'$'])],
             next_index,
         });
     }

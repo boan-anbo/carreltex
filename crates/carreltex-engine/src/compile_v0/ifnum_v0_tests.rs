@@ -311,7 +311,7 @@ fn control_symbol_hash_is_counted_as_literal_char() {
 }
 
 #[test]
-fn control_symbol_dollar_is_counted_as_literal_char() {
+fn control_symbol_dollar_keeps_literal_output_with_token_level_char_count() {
     let baseline = hello_baseline_char_count();
     let mut mount = Mount::default();
     let main = b"\\documentclass{article}\n\\begin{document}\nHello.\\$XYZ\n\\end{document}\n";
@@ -319,7 +319,7 @@ fn control_symbol_dollar_is_counted_as_literal_char() {
     let result = compile_request_v0(&mut mount, &valid_request());
     assert_eq!(result.status, CompileStatus::Ok);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
-    assert_eq!(char_count, baseline + 4);
+    assert_eq!(char_count, baseline + 3);
 }
 
 #[test]

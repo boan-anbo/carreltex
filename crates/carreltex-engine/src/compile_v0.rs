@@ -5,6 +5,8 @@ mod ok_v0_cite_tests;
 #[cfg(test)]
 mod ok_v0_dollar_math_tests;
 #[cfg(test)]
+mod ok_v0_inline_dollar_math_tests;
+#[cfg(test)]
 mod edef_v0_tests;
 mod ifnum_v0;
 #[cfg(test)]

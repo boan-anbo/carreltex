@@ -27,6 +27,8 @@ mod whitespace;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
+mod tests_control_symbol_dollar;
+#[cfg(test)]
 mod tests_newline;
 #[cfg(test)]
 mod tests_textword_144;
