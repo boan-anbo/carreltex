@@ -98,3 +98,20 @@ fn cite_outside_env_keeps_generic_marker_ok() {
     .expect("sum parser should parse");
     assert_eq!(total, 557_056);
 }
+
+#[test]
+fn equation_cite_with_optional_notes_keeps_env_marker_totals_ok() {
+    let mut mount = Mount::default();
+    let main = br"\documentclass{article}\begin{document}A\begin{equation}x\cite[see][p.1]{r}\end{equation}B\end{document}";
+    assert!(mount.add_file(b"main.tex", main).is_ok());
+    let result = compile_request_v0(&mut mount, &valid_request());
+    assert_eq!(result.status, CompileStatus::Ok);
+    assert!(validate_dvi_v2_text_page_v0(&result.main_xdv_bytes));
+    let total = sum_dvi_v2_positive_right3_amounts_with_layout_v0(
+        &result.main_xdv_bytes,
+        65_536,
+        786_432,
+    )
+    .expect("sum parser should parse");
+    assert_eq!(total, 950_272);
+}
