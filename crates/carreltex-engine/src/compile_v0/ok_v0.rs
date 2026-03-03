@@ -338,6 +338,24 @@ fn consume_ok_body_token_v0(
             consume_ok_group_fragment_discard_v0(tokens, index + 1, end)
         }
         Some(TokenV0::ControlSeq(name))
+            if name.as_slice() == b"enquote" || name.as_slice() == b"quote" =>
+        {
+            let mut quote_text = Vec::new();
+            let mut quote_previous_was_space = false;
+            let next_index = consume_ok_group_fragment_v0(
+                tokens,
+                index + 1,
+                end,
+                &mut quote_text,
+                &mut quote_previous_was_space,
+            )?;
+            body.push(b'"');
+            body.extend_from_slice(&quote_text);
+            body.push(b'"');
+            *previous_was_space = false;
+            Some(next_index)
+        }
+        Some(TokenV0::ControlSeq(name))
             if is_supported_ok_wrapper_command_v0(name.as_slice()) =>
         {
             let mut cursor = skip_spaces_until(tokens, index + 1, end);
