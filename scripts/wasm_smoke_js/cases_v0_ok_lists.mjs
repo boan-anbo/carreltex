@@ -86,6 +86,31 @@ export function runOkListCases(ctx, helpers, baselineStats) {
     );
   }
 
+  if (ctx.mountReset() !== 0) throw new Error('mount_reset before item optional-label OK case failed');
+  const itemOptionalLabelDocBytes = new TextEncoder().encode(
+    '\\documentclass{article}\\begin{document}\\begin{itemize}\\item[ZZ] A\\end{itemize}\\end{document}',
+  );
+  if (addMountedFile('main.tex', itemOptionalLabelDocBytes, 'ok_item_optional_label_main') !== 0) {
+    throw new Error('mount_add_file(ok item optional-label main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) throw new Error('mount_finalize for item optional-label OK case failed');
+  expectOk(ctx.compileMain(), 'compile_main_v0(ok item optional-label)');
+  const itemOptionalLabelLogBytes = readCompileLogBytes();
+  if (itemOptionalLabelLogBytes.length !== 0) {
+    throw new Error(`compile_main(ok item optional-label) expected empty log, got ${itemOptionalLabelLogBytes.length} bytes`);
+  }
+  assertEventsMatchLogAndStats(itemOptionalLabelLogBytes, { char_count: baselineStats.char_count + 19 }, 'compile_main(ok item optional-label)');
+  const itemOptionalLabelXdvBytes = readMainXdvArtifactBytes('compile_main(ok item optional-label)');
+  if (itemOptionalLabelXdvBytes.length === 0) {
+    throw new Error('compile_main(ok item optional-label) main.xdv expected non-empty bytes');
+  }
+  const itemOptionalLabelMovement = countMovementOpsInTextPages(itemOptionalLabelXdvBytes, 'compile_main(ok item optional-label)');
+  if (itemOptionalLabelMovement.right3PositiveTotal !== 491520) {
+    throw new Error(
+      `compile_main(ok item optional-label) expected right3PositiveTotal=491520, got ${itemOptionalLabelMovement.right3PositiveTotal}`,
+    );
+  }
+
   if (ctx.mountReset() !== 0) throw new Error('mount_reset before item outside list invalid case failed');
   const itemOutsideDocBytes = new TextEncoder().encode(
     '\\documentclass{article}\\begin{document}\\item A\\end{document}',
@@ -95,4 +120,14 @@ export function runOkListCases(ctx, helpers, baselineStats) {
   }
   if (ctx.mountFinalize() !== 0) throw new Error('mount_finalize for item outside list invalid case failed');
   expectNotImplemented(ctx.compileMain(), 'compile_main_v0(ok item outside list)');
+
+  if (ctx.mountReset() !== 0) throw new Error('mount_reset before item optional-label unclosed invalid case failed');
+  const itemOptionalLabelUnclosedDocBytes = new TextEncoder().encode(
+    '\\documentclass{article}\\begin{document}\\begin{itemize}\\item[ZZ A\\end{itemize}\\end{document}',
+  );
+  if (addMountedFile('main.tex', itemOptionalLabelUnclosedDocBytes, 'ok_item_optional_label_unclosed_main') !== 0) {
+    throw new Error('mount_add_file(ok item optional-label unclosed main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) throw new Error('mount_finalize for item optional-label unclosed invalid case failed');
+  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(ok item optional-label unclosed)');
 }

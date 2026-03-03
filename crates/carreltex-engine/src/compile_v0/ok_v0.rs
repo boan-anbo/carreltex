@@ -35,6 +35,7 @@ const MAX_OK_HEADING_SHORT_TOKENS_V0: usize = 2048;
 const MAX_OK_CITE_NOTE_TOKENS_V0: usize = 2048;
 const MAX_OK_REF_NOTE_TOKENS_V0: usize = 2048;
 const MAX_OK_BIBLABEL_TOKENS_V0: usize = 256;
+const MAX_OK_ITEM_LABEL_TOKENS_V0: usize = 256;
 
 use ok_v0_body::consume_char_space_nested_group_v0;
 use ok_v0_optional_brackets::consume_optional_nested_bracket_span_v0;
