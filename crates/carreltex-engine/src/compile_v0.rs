@@ -48,6 +48,8 @@ mod ok_v0_preamble_config_tests;
 #[cfg(test)]
 mod ok_v0_preamble_color_decls_tests;
 #[cfg(test)]
+mod ok_v0_preamble_cite_decls_tests;
+#[cfg(test)]
 mod ok_v0_env_tests;
 #[cfg(test)]
 mod ok_v0_float_tests;
