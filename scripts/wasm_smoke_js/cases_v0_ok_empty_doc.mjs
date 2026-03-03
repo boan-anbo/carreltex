@@ -1,5 +1,6 @@
 import { runOkBodyControlCases } from './cases_v0_ok_body_controls.mjs';
 import { runOkColorCases } from './cases_v0_ok_colors.mjs';
+import { runOkFootnoteCases } from './cases_v0_ok_footnotes.mjs';
 import { runOkLinkCases } from './cases_v0_ok_links.mjs';
 import { runOkListCases } from './cases_v0_ok_lists.mjs';
 import { runOkWrapperCases } from './cases_v0_ok_wrappers.mjs';
@@ -744,6 +745,19 @@ export function runOkEmptyDocCases(ctx, helpers) {
     stats,
   );
   runOkColorCases(
+    ctx,
+    {
+      addMountedFile,
+      expectOk,
+      expectNotImplemented,
+      readCompileLogBytes,
+      assertEventsMatchLogAndStats,
+      readMainXdvArtifactBytes,
+      countMovementOpsInTextPages,
+    },
+    stats,
+  );
+  runOkFootnoteCases(
     ctx,
     {
       addMountedFile,
