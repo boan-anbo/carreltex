@@ -36,6 +36,8 @@ mod ok_v0_noop_spacing_tests;
 #[cfg(test)]
 mod ok_v0_noop_break_tests;
 #[cfg(test)]
+mod ok_v0_noop_break_args_tests;
+#[cfg(test)]
 mod ok_v0_env_tests;
 #[cfg(test)]
 mod ok_v0_float_tests;
