@@ -8,7 +8,6 @@ export function runOkEmptyDocCases(ctx, helpers) {
     readMainXdvArtifactBytes,
     callWithBytes,
   } = helpers;
-
   const countPagesInDviV2 = (bytes, label) => {
     let pageCount = 0;
     for (const byte of bytes) {
@@ -21,7 +20,6 @@ export function runOkEmptyDocCases(ctx, helpers) {
     }
     return pageCount;
   };
-
   const countMovementOpsInTextPages = (bytes, label) => {
     const DVI_PRE = 247;
     const DVI_BOP = 139;
@@ -83,7 +81,6 @@ export function runOkEmptyDocCases(ctx, helpers) {
     }
     return { right3, down3, right3PositiveTotal, right3PositiveAmounts };
   };
-
   const runCompileRequestOkCase = (
     maxLineGlyphs,
     label,
@@ -126,11 +123,9 @@ export function runOkEmptyDocCases(ctx, helpers) {
     expectOk(ctx.compileRun(), `${label} compile_run_v0`);
     return readMainXdvArtifactBytes(`${label} compile_run_v0`);
   };
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before OK empty doc case failed');
   }
-
   const strictEmptyDocBytes = new TextEncoder().encode('\\documentclass{article}\n\\begin{document}\n\\end{document}\n');
   if (addMountedFile('main.tex', strictEmptyDocBytes, 'ok_empty_doc_main') !== 0) {
     throw new Error('mount_add_file(ok empty doc main.tex) failed');
@@ -138,7 +133,6 @@ export function runOkEmptyDocCases(ctx, helpers) {
   if (ctx.mountFinalize() !== 0) {
     throw new Error('mount_finalize for OK empty doc case failed');
   }
-
   expectOk(ctx.compileMain(), 'compile_main_v0(ok empty doc)');
   const report = readCompileReportJson();
   if (report.status !== 'OK') {
@@ -147,7 +141,6 @@ export function runOkEmptyDocCases(ctx, helpers) {
   if (!Array.isArray(report.missing_components) || report.missing_components.length !== 0) {
     throw new Error('compile_main(ok empty doc) missing_components expected empty array');
   }
-
   const logBytes = readCompileLogBytes();
   if (logBytes.length !== 0) {
     throw new Error(`compile_main(ok empty doc) expected empty log, got ${logBytes.length} bytes`);
@@ -156,7 +149,6 @@ export function runOkEmptyDocCases(ctx, helpers) {
   if (!(typeof stats.token_count === 'number' && stats.token_count > 0)) {
     throw new Error('compile_main(ok empty doc) token_count expected >0');
   }
-
   const xdvBytes = readMainXdvArtifactBytes('compile_main(ok empty doc)');
   if (xdvBytes[0] !== 247) {
     throw new Error(`compile_main(ok empty doc) main.xdv first byte expected 247, got ${xdvBytes[0]}`);
@@ -168,11 +160,9 @@ export function runOkEmptyDocCases(ctx, helpers) {
   if (trailerCount < 4) {
     throw new Error(`compile_main(ok empty doc) trailer byte count expected >=4, got ${trailerCount}`);
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before OK text doc case failed');
   }
-
   const strictTextDocBytes = new TextEncoder().encode('\\documentclass{article}\n\\begin{document}\nXYZ\n\\end{document}\n');
   if (addMountedFile('main.tex', strictTextDocBytes, 'ok_text_doc_main') !== 0) {
     throw new Error('mount_add_file(ok text doc main.tex) failed');
@@ -180,7 +170,6 @@ export function runOkEmptyDocCases(ctx, helpers) {
   if (ctx.mountFinalize() !== 0) {
     throw new Error('mount_finalize for OK text doc case failed');
   }
-
   expectOk(ctx.compileMain(), 'compile_main_v0(ok text doc)');
   const textReport = readCompileReportJson();
   if (textReport.status !== 'OK') {
@@ -214,11 +203,9 @@ export function runOkEmptyDocCases(ctx, helpers) {
       `compile_main(ok text doc) expected positive right3 total>=${3 * 65536}, got ${textMovement.right3PositiveTotal}`,
     );
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before OK printable text doc case failed');
   }
-
   const printableTextDocBytes = new TextEncoder().encode('\\documentclass{article}\n\\begin{document}\nHello, world! 123\n\\end{document}\n');
   if (addMountedFile('main.tex', printableTextDocBytes, 'ok_printable_text_doc_main') !== 0) {
     throw new Error('mount_add_file(ok printable text doc main.tex) failed');
@@ -226,7 +213,6 @@ export function runOkEmptyDocCases(ctx, helpers) {
   if (ctx.mountFinalize() !== 0) {
     throw new Error('mount_finalize for OK printable text doc case failed');
   }
-
   expectOk(ctx.compileMain(), 'compile_main_v0(ok printable text doc)');
   const printableReport = readCompileReportJson();
   if (printableReport.status !== 'OK') {
@@ -258,11 +244,9 @@ export function runOkEmptyDocCases(ctx, helpers) {
   if (printableMovement.right3 < 15) {
     throw new Error(`compile_main(ok printable text doc) expected right3>=15, got ${printableMovement.right3}`);
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before OK whitespace text doc case failed');
   }
-
   const whitespaceTextDocBytes = new TextEncoder().encode('\\documentclass{article}\n\\begin{document}\nA  \n\nB\n\\end{document}\n');
   if (addMountedFile('main.tex', whitespaceTextDocBytes, 'ok_whitespace_text_doc_main') !== 0) {
     throw new Error('mount_add_file(ok whitespace text doc main.tex) failed');
@@ -270,7 +254,6 @@ export function runOkEmptyDocCases(ctx, helpers) {
   if (ctx.mountFinalize() !== 0) {
     throw new Error('mount_finalize for OK whitespace text doc case failed');
   }
-
   expectOk(ctx.compileMain(), 'compile_main_v0(ok whitespace text doc)');
   const whitespaceReport = readCompileReportJson();
   if (whitespaceReport.status !== 'OK') {
@@ -292,11 +275,9 @@ export function runOkEmptyDocCases(ctx, helpers) {
   if (whitespaceXdvBytes.length === 0) {
     throw new Error('compile_main(ok whitespace text doc) main.xdv expected non-empty bytes');
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before OK tilde text doc case failed');
   }
-
   const tildeTextDocBytes = new TextEncoder().encode('\\documentclass{article}\n\\begin{document}\n~\n\\end{document}\n');
   if (addMountedFile('main.tex', tildeTextDocBytes, 'ok_tilde_text_doc_main') !== 0) {
     throw new Error('mount_add_file(ok tilde text doc main.tex) failed');
@@ -304,7 +285,6 @@ export function runOkEmptyDocCases(ctx, helpers) {
   if (ctx.mountFinalize() !== 0) {
     throw new Error('mount_finalize for OK tilde text doc case failed');
   }
-
   expectOk(ctx.compileMain(), 'compile_main_v0(ok tilde text doc)');
   const tildeReport = readCompileReportJson();
   if (tildeReport.status !== 'OK') {
@@ -326,7 +306,6 @@ export function runOkEmptyDocCases(ctx, helpers) {
   if (tildeXdvBytes.length === 0) {
     throw new Error('compile_main(ok tilde text doc) main.xdv expected non-empty bytes');
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before OK backslash text doc case failed');
   }
@@ -360,7 +339,6 @@ export function runOkEmptyDocCases(ctx, helpers) {
   if (backslashXdvBytes.length === 0) {
     throw new Error('compile_main(ok backslash text doc) main.xdv expected non-empty bytes');
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before OK macro-expanded text doc case failed');
   }
@@ -394,7 +372,6 @@ export function runOkEmptyDocCases(ctx, helpers) {
   if (macroExpandedXdvBytes.length === 0) {
     throw new Error('compile_main(ok macro-expanded text doc) main.xdv expected non-empty bytes');
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before OK usepackage preamble baseline case failed');
   }
@@ -426,7 +403,6 @@ export function runOkEmptyDocCases(ctx, helpers) {
     'compile_main(ok usepackage preamble baseline)',
   );
   readMainXdvArtifactBytes('compile_main(ok usepackage preamble baseline)');
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before OK usepackage preamble text doc case failed');
   }
@@ -469,7 +445,6 @@ export function runOkEmptyDocCases(ctx, helpers) {
   if (usepackagePreambleXdvBytes.length === 0) {
     throw new Error('compile_main(ok usepackage preamble text doc) main.xdv expected non-empty bytes');
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before OK usepackage options preamble baseline case failed');
   }
@@ -501,7 +476,6 @@ export function runOkEmptyDocCases(ctx, helpers) {
     'compile_main(ok usepackage options preamble baseline)',
   );
   readMainXdvArtifactBytes('compile_main(ok usepackage options preamble baseline)');
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before OK usepackage options preamble text doc case failed');
   }
@@ -552,7 +526,6 @@ export function runOkEmptyDocCases(ctx, helpers) {
       'compile_main(ok usepackage options preamble text doc) main.xdv expected non-empty bytes',
     );
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before OK documentclass options baseline case failed');
   }
@@ -584,7 +557,6 @@ export function runOkEmptyDocCases(ctx, helpers) {
     'compile_main(ok documentclass options baseline)',
   );
   readMainXdvArtifactBytes('compile_main(ok documentclass options baseline)');
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before OK documentclass options text doc case failed');
   }
@@ -633,7 +605,6 @@ export function runOkEmptyDocCases(ctx, helpers) {
   if (documentclassOptionsTextXdvBytes.length === 0) {
     throw new Error('compile_main(ok documentclass options text doc) main.xdv expected non-empty bytes');
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before OK title/author/date baseline case failed');
   }
@@ -665,7 +636,6 @@ export function runOkEmptyDocCases(ctx, helpers) {
     'compile_main(ok title/author/date baseline)',
   );
   readMainXdvArtifactBytes('compile_main(ok title/author/date baseline)');
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before OK title/author/date text doc case failed');
   }
@@ -703,11 +673,42 @@ export function runOkEmptyDocCases(ctx, helpers) {
   if (metaPreambleTextXdvBytes.length === 0) {
     throw new Error('compile_main(ok title/author/date text doc) main.xdv expected non-empty bytes');
   }
-
+  if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before OK maketitle text doc case failed');
+  }
+  const maketitleTextDocBytes = new TextEncoder().encode(
+    '\\documentclass{article}\n\\title{T}\n\\author{A}\n\\date{D}\n\\begin{document}\n\\maketitle\nXYZ\n\\end{document}\n',
+  );
+  if (addMountedFile('main.tex', maketitleTextDocBytes, 'ok_maketitle_text_doc_main') !== 0) {
+    throw new Error('mount_add_file(ok maketitle text doc main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) {
+    throw new Error('mount_finalize for OK maketitle text doc case failed');
+  }
+  expectOk(ctx.compileMain(), 'compile_main_v0(ok maketitle text doc)');
+  const maketitleTextReport = readCompileReportJson();
+  if (maketitleTextReport.status !== 'OK') {
+    throw new Error(`compile_main(ok maketitle text doc) report.status expected OK, got ${maketitleTextReport.status}`);
+  }
+  const maketitleTextLogBytes = readCompileLogBytes();
+  if (maketitleTextLogBytes.length !== 0) {
+    throw new Error(`compile_main(ok maketitle text doc) expected empty log, got ${maketitleTextLogBytes.length} bytes`);
+  }
+  const maketitleTextStats = assertEventsMatchLogAndStats(
+    maketitleTextLogBytes,
+    { char_count: metaPreambleBaselineStats.char_count + 3 },
+    'compile_main(ok maketitle text doc)',
+  );
+  if (!(typeof maketitleTextStats.token_count === 'number' && maketitleTextStats.token_count > 0)) {
+    throw new Error('compile_main(ok maketitle text doc) token_count expected >0');
+  }
+  const maketitleTextXdvBytes = readMainXdvArtifactBytes('compile_main(ok maketitle text doc)');
+  if (maketitleTextXdvBytes.length === 0) {
+    throw new Error('compile_main(ok maketitle text doc) main.xdv expected non-empty bytes');
+  }
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before OK pagebreak text doc case failed');
   }
-
   const pagebreakTextDocBytes = new TextEncoder().encode(
     '\\documentclass{article}\n\\begin{document}\nAB\\pagebreak CD\n\\end{document}\n',
   );
@@ -717,7 +718,6 @@ export function runOkEmptyDocCases(ctx, helpers) {
   if (ctx.mountFinalize() !== 0) {
     throw new Error('mount_finalize for OK pagebreak text doc case failed');
   }
-
   expectOk(ctx.compileMain(), 'compile_main_v0(ok pagebreak text doc)');
   const pagebreakReport = readCompileReportJson();
   if (pagebreakReport.status !== 'OK') {
@@ -743,7 +743,6 @@ export function runOkEmptyDocCases(ctx, helpers) {
   if (pagebreakMovement.right3 < 1) {
     throw new Error('compile_main(ok pagebreak text doc) expected at least one RIGHT3 opcode');
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before OK width metrics text doc case failed');
   }
@@ -777,11 +776,9 @@ export function runOkEmptyDocCases(ctx, helpers) {
       );
     }
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before OK newline text doc case failed');
   }
-
   const newlineTextDocBytes = new TextEncoder().encode(
     '\\documentclass{article}\\begin{document}A\\newline B\\end{document}',
   );
@@ -791,7 +788,6 @@ export function runOkEmptyDocCases(ctx, helpers) {
   if (ctx.mountFinalize() !== 0) {
     throw new Error('mount_finalize for OK newline text doc case failed');
   }
-
   expectOk(ctx.compileMain(), 'compile_main_v0(ok newline text doc)');
   const newlineReport = readCompileReportJson();
   if (newlineReport.status !== 'OK') {
@@ -821,11 +817,9 @@ export function runOkEmptyDocCases(ctx, helpers) {
   if (newlineMovement.down3 !== 1) {
     throw new Error(`compile_main(ok newline text doc) expected exactly one DOWN3 opcode, got ${newlineMovement.down3}`);
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before OK wrapped text doc case failed');
   }
-
   const wrappedTextBody = 'A'.repeat(81);
   const wrappedTextDocBytes = new TextEncoder().encode(
     `\\documentclass{article}\\begin{document}${wrappedTextBody}\\end{document}`,
@@ -836,7 +830,6 @@ export function runOkEmptyDocCases(ctx, helpers) {
   if (ctx.mountFinalize() !== 0) {
     throw new Error('mount_finalize for OK wrapped text doc case failed');
   }
-
   expectOk(ctx.compileMain(), 'compile_main_v0(ok wrapped text doc)');
   const wrappedReport = readCompileReportJson();
   if (wrappedReport.status !== 'OK') {
@@ -863,7 +856,6 @@ export function runOkEmptyDocCases(ctx, helpers) {
   if (wrappedMovement.down3 < 1) {
     throw new Error('compile_main(ok wrapped text doc) expected at least one DOWN3 opcode from auto-wrap');
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before OK request max_line_glyphs case failed');
   }
@@ -876,7 +868,6 @@ export function runOkEmptyDocCases(ctx, helpers) {
   if (ctx.mountFinalize() !== 0) {
     throw new Error('mount_finalize for OK request wrap case failed');
   }
-
   const xdvCap80 = runCompileRequestOkCase(80, 'ok_request_wrap_cap_80');
   const xdvCap10 = runCompileRequestOkCase(10, 'ok_request_wrap_cap_10');
   const movement80 = countMovementOpsInTextPages(xdvCap80, 'ok_request_wrap_cap_80');
@@ -886,7 +877,6 @@ export function runOkEmptyDocCases(ctx, helpers) {
       `ok request wrap cap expected down3(10) > down3(80), got ${movement10.down3} <= ${movement80.down3}`,
     );
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before OK request max_line_glyphs=1 case failed');
   }
@@ -904,14 +894,12 @@ export function runOkEmptyDocCases(ctx, helpers) {
   if (movementCapOne.down3 !== 1) {
     throw new Error(`ok request wrap cap one expected down3=1, got ${movementCapOne.down3}`);
   }
-
   if (ctx.compileRequestSetOkMaxLineGlyphs(0) === 0) {
     throw new Error('compile_request_set_ok_max_line_glyphs_v0(0) expected failure');
   }
   if (ctx.compileRequestSetOkMaxLineGlyphs(257) === 0) {
     throw new Error('compile_request_set_ok_max_line_glyphs_v0(257) expected failure');
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before OK request layout controls case failed');
   }
@@ -941,7 +929,6 @@ export function runOkEmptyDocCases(ctx, helpers) {
       `ok request layout controls repeat expected page count=${layoutPages}, got ${repeatPages}`,
     );
   }
-
   if (ctx.compileRequestSetOkMaxLinesPerPage(0) === 0) {
     throw new Error('compile_request_set_ok_max_lines_per_page_v0(0) expected failure');
   }
@@ -960,7 +947,6 @@ export function runOkEmptyDocCases(ctx, helpers) {
   if (ctx.compileRequestSetOkGlyphAdvanceSp(8388608) === 0) {
     throw new Error('compile_request_set_ok_glyph_advance_sp_v0(8388608) expected failure');
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before OK glyph advance one case failed');
   }
