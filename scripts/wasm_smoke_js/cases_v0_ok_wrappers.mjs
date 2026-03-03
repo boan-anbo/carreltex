@@ -61,6 +61,21 @@ export function runOkWrapperCases(ctx, helpers, baselineStats) {
   if (headingMovement.down3 < 1) throw new Error(`compile_main(ok heading text doc) expected down3>=1, got ${headingMovement.down3}`);
   if (headingMovement.right3PositiveTotal !== (4 * 65536)) throw new Error(`compile_main(ok heading text doc) expected right3PositiveTotal=${4 * 65536}, got ${headingMovement.right3PositiveTotal}`);
 
+  if (ctx.mountReset() !== 0) throw new Error('mount_reset before OK maketitle emit case failed');
+  const maketitleDocBytes = new TextEncoder().encode(
+    '\\documentclass{article}\\title{T}\\author{A}\\date{D}\\begin{document}\\maketitle\\end{document}',
+  );
+  if (addMountedFile('main.tex', maketitleDocBytes, 'ok_maketitle_emit_main') !== 0) throw new Error('mount_add_file(ok maketitle emit main.tex) failed');
+  if (ctx.mountFinalize() !== 0) throw new Error('mount_finalize for OK maketitle emit case failed');
+  expectOk(ctx.compileMain(), 'compile_main_v0(ok maketitle emit)');
+  const maketitleLogBytes = readCompileLogBytes();
+  if (maketitleLogBytes.length !== 0) throw new Error(`compile_main(ok maketitle emit) expected empty log, got ${maketitleLogBytes.length} bytes`);
+  assertEventsMatchLogAndStats(maketitleLogBytes, { char_count: baselineStats.char_count + 3 }, 'compile_main(ok maketitle emit)');
+  const maketitleXdvBytes = readMainXdvArtifactBytes('compile_main(ok maketitle emit)');
+  if (maketitleXdvBytes.length === 0) throw new Error('compile_main(ok maketitle emit) main.xdv expected non-empty bytes');
+  const maketitleMovement = countMovementOpsInTextPages(maketitleXdvBytes, 'compile_main(ok maketitle emit)');
+  if (maketitleMovement.right3PositiveTotal !== (3 * 65536)) throw new Error(`compile_main(ok maketitle emit) expected right3PositiveTotal=${3 * 65536}, got ${maketitleMovement.right3PositiveTotal}`);
+
   if (ctx.mountReset() !== 0) throw new Error('mount_reset before wrapper missing-group invalid case failed');
   const invalidWrapperDocBytes = new TextEncoder().encode('\\documentclass{article}\\begin{document}\\textbf XYZ\\end{document}');
   if (addMountedFile('main.tex', invalidWrapperDocBytes, 'ok_wrapper_missing_group_main') !== 0) throw new Error('mount_add_file(ok wrapper missing-group main.tex) failed');
@@ -84,4 +99,12 @@ export function runOkWrapperCases(ctx, helpers, baselineStats) {
   if (addMountedFile('main.tex', invalidMboxDocBytes, 'ok_mbox_missing_group_main') !== 0) throw new Error('mount_add_file(ok mbox missing-group main.tex) failed');
   if (ctx.mountFinalize() !== 0) throw new Error('mount_finalize for mbox missing-group invalid case failed');
   expectNotImplemented(ctx.compileMain(), 'compile_main_v0(ok mbox missing-group)');
+
+  if (ctx.mountReset() !== 0) throw new Error('mount_reset before title missing-group invalid case failed');
+  const invalidTitleDocBytes = new TextEncoder().encode(
+    '\\documentclass{article}\\title X\\begin{document}\\maketitle\\end{document}',
+  );
+  if (addMountedFile('main.tex', invalidTitleDocBytes, 'ok_title_missing_group_main') !== 0) throw new Error('mount_add_file(ok title missing-group main.tex) failed');
+  if (ctx.mountFinalize() !== 0) throw new Error('mount_finalize for title missing-group invalid case failed');
+  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(ok title missing-group)');
 }

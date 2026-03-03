@@ -3,9 +3,10 @@ use crate::tex::tokenize_v0::TokenV0;
 use super::ok_v0_body::{
     consume_bracket_options_non_empty, consume_char_space_group_non_empty,
     consume_char_space_nested_group_non_empty_v0, consume_group_literal, consume_ok_body_token_v0,
-    skip_spaces,
+    consume_ok_group_fragment_v0, skip_spaces,
 };
 use super::ok_v0_lists::ListStateV0;
+use super::ok_v0_title_state::OkTitleStateV0;
 
 fn consume_usepackage_preamble_command(tokens: &[TokenV0], mut index: usize) -> Option<usize> {
     if !matches!(
@@ -32,17 +33,29 @@ fn is_supported_bibliography_preamble_command(name: &[u8]) -> bool {
     matches!(name, b"bibliographystyle" | b"bibliography")
 }
 
-fn consume_meta_preamble_command(tokens: &[TokenV0], mut index: usize) -> Option<usize> {
-    if !matches!(
-        tokens.get(index),
-        Some(TokenV0::ControlSeq(name)) if is_supported_meta_preamble_command(name.as_slice())
-    ) {
-        return None;
-    }
-    index += 1;
-    index = skip_spaces(tokens, index);
-    index = consume_char_space_group_non_empty(tokens, index)?;
-    Some(skip_spaces(tokens, index))
+fn consume_meta_preamble_command(
+    tokens: &[TokenV0],
+    index: usize,
+    title_state: &mut OkTitleStateV0,
+) -> Option<usize> {
+    let name = match tokens.get(index) {
+        Some(TokenV0::ControlSeq(name)) if is_supported_meta_preamble_command(name.as_slice()) => {
+            name.as_slice()
+        }
+        _ => return None,
+    };
+    let mut fragment = Vec::new();
+    let mut fragment_previous_was_space = false;
+    let next_index = consume_ok_group_fragment_v0(
+        tokens,
+        index + 1,
+        tokens.len(),
+        title_state,
+        &mut fragment,
+        &mut fragment_previous_was_space,
+    )?;
+    title_state.set_field(name, fragment);
+    Some(skip_spaces(tokens, next_index))
 }
 
 fn consume_bibliography_preamble_command(tokens: &[TokenV0], mut index: usize) -> Option<usize> {
@@ -73,6 +86,7 @@ pub(crate) fn extract_strict_ok_text_body_v0(tokens: &[TokenV0]) -> Option<Vec<u
     index = skip_spaces(tokens, index);
     index = consume_group_literal(tokens, index, b"article")?;
     index = skip_spaces(tokens, index);
+    let mut title_state = OkTitleStateV0::default();
     loop {
         match tokens.get(index) {
             Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"usepackage" => {
@@ -80,7 +94,7 @@ pub(crate) fn extract_strict_ok_text_body_v0(tokens: &[TokenV0]) -> Option<Vec<u
                 continue;
             }
             Some(TokenV0::ControlSeq(name)) if is_supported_meta_preamble_command(name.as_slice()) => {
-                index = consume_meta_preamble_command(tokens, index)?;
+                index = consume_meta_preamble_command(tokens, index, &mut title_state)?;
                 continue;
             }
             Some(TokenV0::ControlSeq(name))
@@ -123,6 +137,7 @@ pub(crate) fn extract_strict_ok_text_body_v0(tokens: &[TokenV0]) -> Option<Vec<u
             index,
             tokens.len(),
             false,
+            &mut title_state,
             &mut list_env,
             &mut body,
             &mut previous_was_space,
@@ -147,4 +162,3 @@ pub(crate) fn extract_strict_ok_text_body_v0(tokens: &[TokenV0]) -> Option<Vec<u
     }
     Some(body)
 }
-
