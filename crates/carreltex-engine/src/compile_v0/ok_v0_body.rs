@@ -194,7 +194,7 @@ fn is_supported_ok_heading_command_v0(name: &[u8]) -> bool {
     )
 }
 
-fn is_supported_ok_style_declaration_v0(name: &[u8]) -> bool {
+pub(super) fn is_supported_ok_style_declaration_v0(name: &[u8]) -> bool {
     matches!(
         name,
         b"bfseries"
