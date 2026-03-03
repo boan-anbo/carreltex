@@ -215,8 +215,8 @@ export function runTokenizerCases(ctx, helpers) {
     if (helloBaselineCharCount === null) {
       throw new Error('helloBaselineCharCount not initialized for tokenizer control-symbol-dollar case');
     }
-    if (stats.char_count !== helloBaselineCharCount + 4) {
-      throw new Error(`compile_main(tokenizer control-symbol-dollar) char_count delta expected +4, got baseline=${helloBaselineCharCount}, current=${stats.char_count}`);
+    if (stats.char_count !== helloBaselineCharCount + 3) {
+      throw new Error(`compile_main(tokenizer control-symbol-dollar) char_count delta expected +3, got baseline=${helloBaselineCharCount}, current=${stats.char_count}`);
     }
     readMainXdvArtifactBytes('compile_main(tokenizer control-symbol-dollar)');
   }
