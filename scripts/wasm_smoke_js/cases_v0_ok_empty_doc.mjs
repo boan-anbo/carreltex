@@ -1,3 +1,4 @@
+import { runOkBibCases } from './cases_v0_ok_bib.mjs';
 import { runOkBodyControlCases } from './cases_v0_ok_body_controls.mjs';
 import { runOkCiteCases } from './cases_v0_ok_cites.mjs';
 import { runOkColorCases } from './cases_v0_ok_colors.mjs';
@@ -725,6 +726,7 @@ export function runOkEmptyDocCases(ctx, helpers) {
   runOkColorCases(ctx, okBodyHelpers, stats);
   runOkFootnoteCases(ctx, okBodyHelpers, stats);
   runOkQuoteCases(ctx, okBodyHelpers, stats);
+  runOkBibCases(ctx, okBodyHelpers, stats);
   runOkRefCases(ctx, okBodyHelpers, stats);
   runOkScriptCases(ctx, okBodyHelpers, stats);
   if (ctx.mountReset() !== 0) {
