@@ -36,6 +36,6 @@ const MAX_OK_CITE_NOTE_TOKENS_V0: usize = 2048;
 const MAX_OK_REF_NOTE_TOKENS_V0: usize = 2048;
 const MAX_OK_BIBLABEL_TOKENS_V0: usize = 256;
 
-pub(super) use ok_v0_body::consume_char_space_nested_group_v0;
+use ok_v0_body::consume_char_space_nested_group_v0;
+use ok_v0_optional_brackets::consume_optional_nested_bracket_span_v0;
 pub(crate) use ok_v0_extract::extract_strict_ok_text_body_v0;
-
