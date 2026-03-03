@@ -1,9 +1,11 @@
 import { runOkBodyControlCases } from './cases_v0_ok_body_controls.mjs';
+import { runOkWrapperCases } from './cases_v0_ok_wrappers.mjs';
 
 export function runOkEmptyDocCases(ctx, helpers) {
   const {
     addMountedFile,
     expectOk,
+    expectNotImplemented,
     readCompileReportJson,
     readCompileLogBytes,
     assertEventsMatchLogAndStats,
@@ -695,6 +697,19 @@ export function runOkEmptyDocCases(ctx, helpers) {
       assertEventsMatchLogAndStats,
       readMainXdvArtifactBytes,
       countPagesInDviV2,
+      countMovementOpsInTextPages,
+    },
+    stats,
+  );
+  runOkWrapperCases(
+    ctx,
+    {
+      addMountedFile,
+      expectOk,
+      expectNotImplemented,
+      readCompileLogBytes,
+      assertEventsMatchLogAndStats,
+      readMainXdvArtifactBytes,
       countMovementOpsInTextPages,
     },
     stats,
