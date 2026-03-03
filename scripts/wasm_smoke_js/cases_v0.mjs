@@ -8,6 +8,7 @@ import { runXdefNoexpandCases } from './cases_v0_xdef_noexpand.mjs';
 import { runIfnumCases } from './cases_v0_ifnum.mjs';
 import { runIfxCases } from './cases_v0_ifx.mjs';
 import { runTokenizerCases } from './cases_v0_tokenizer.mjs';
+import { runTokenizerVerbCases } from './cases_v0_tokenizer_verb.mjs';
 import { runTokenizerTextwordLeaf133Cases } from './cases_v0_tokenizer_textword_133.mjs';
 import { runTokenizerTextwordLeaf134Cases } from './cases_v0_tokenizer_textword_134.mjs';
 import { runTokenizerTextwordLeaf135Cases } from './cases_v0_tokenizer_textword_135.mjs';
@@ -390,6 +391,7 @@ export function runCasesV0(ctx, mem, helpers) {
   runIfnumCases(ctx, { addMountedFile, expectInvalid, expectOk, readCompileLogBytes, readMainXdvArtifactBytes, assertEventsMatchLogAndStats, assertNoEvents });
   runIfxCases(ctx, { addMountedFile, expectInvalid, expectOk, readCompileLogBytes, readMainXdvArtifactBytes, assertEventsMatchLogAndStats, assertNoEvents });
   runTokenizerCases(ctx, { addMountedFile, expectInvalid, expectOk, expectNotImplemented, readCompileLogBytes, assertEventsMatchLogAndStats, readMainXdvArtifactBytes, assertMainXdvArtifactEmpty, assertNoEvents });
+  runTokenizerVerbCases(ctx, { addMountedFile, expectInvalid, expectOk, readCompileLogBytes, assertEventsMatchLogAndStats, readMainXdvArtifactBytes, assertMainXdvArtifactEmpty, assertNoEvents });
   runTokenizerTextwordLeaf133Cases(ctx, { addMountedFile, expectOk, readCompileLogBytes, assertEventsMatchLogAndStats, readMainXdvArtifactBytes });
   runTokenizerTextwordLeaf134Cases(ctx, { addMountedFile, expectOk, readCompileLogBytes, assertEventsMatchLogAndStats, readMainXdvArtifactBytes });
   runTokenizerTextwordLeaf135Cases(ctx, { addMountedFile, expectOk, readCompileLogBytes, assertEventsMatchLogAndStats, readMainXdvArtifactBytes });
@@ -510,24 +512,24 @@ export function runCasesV0(ctx, mem, helpers) {
   }
 
   if (ctx.mountReset() !== 0) {
-    throw new Error('mount_reset before verb compile check failed');
+    throw new Error('mount_reset before malformed verb compile check failed');
   }
-  const verbMainBytes = new TextEncoder().encode('\\verb|x|\n');
-  if (addMountedFile('main.tex', verbMainBytes, 'invalid_verb_main') !== 0) {
-    throw new Error('mount_add_file(verb main.tex) failed');
+  const malformedVerbMainBytes = new TextEncoder().encode('\\verb|x\n');
+  if (addMountedFile('main.tex', malformedVerbMainBytes, 'invalid_verb_main') !== 0) {
+    throw new Error('mount_add_file(malformed verb main.tex) failed');
   }
-  const verbFinalizeCode = ctx.mountFinalize();
-  if (verbFinalizeCode !== 0 && verbFinalizeCode !== 1) {
-    throw new Error(`mount_finalize(verb main.tex) unexpected code=${verbFinalizeCode}`);
+  const malformedVerbFinalizeCode = ctx.mountFinalize();
+  if (malformedVerbFinalizeCode !== 0 && malformedVerbFinalizeCode !== 1) {
+    throw new Error(`mount_finalize(malformed verb main.tex) unexpected code=${malformedVerbFinalizeCode}`);
   }
-  expectInvalid(ctx.compileMain(), 'compile_main_v0(verb main.tex)');
+  expectInvalid(ctx.compileMain(), 'compile_main_v0(malformed verb main.tex)');
   {
     const logBytes = readCompileLogBytes();
     const logText = new TextDecoder().decode(logBytes);
-    if (!logText.startsWith('INVALID_INPUT:') || !logText.includes('tokenize_failed')) {
-      throw new Error(`compile_main verb log mismatch: ${logText}`);
+    if (!logText.startsWith('INVALID_INPUT:') || !logText.includes('tokenizer_verb_not_supported')) {
+      throw new Error(`compile_main malformed verb log mismatch: ${logText}`);
     }
-    assertNoEvents('compile_main_v0(verb main.tex)');
+    assertNoEvents('compile_main_v0(malformed verb main.tex)');
   }
 
   if (ctx.mountReset() !== 0) {

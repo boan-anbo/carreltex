@@ -6,6 +6,7 @@ pub(crate) enum InvalidInputReasonV0 {
     TokenizeFailed,
     TokenizerCaretNotSupported,
     TokenizerAccentNotSupported,
+    TokenizerVerbNotSupported,
     TokenizerControlSeqNonAscii,
     StatsBuildFailed,
     InputValidationFailed,
@@ -58,6 +59,9 @@ pub(crate) fn invalid_log_bytes_v0(reason: InvalidInputReasonV0) -> &'static [u8
         }
         InvalidInputReasonV0::TokenizerAccentNotSupported => {
             b"INVALID_INPUT: tokenizer_accent_not_supported"
+        }
+        InvalidInputReasonV0::TokenizerVerbNotSupported => {
+            b"INVALID_INPUT: tokenizer_verb_not_supported"
         }
         InvalidInputReasonV0::TokenizerControlSeqNonAscii => {
             b"INVALID_INPUT: tokenizer_control_seq_non_ascii"
