@@ -419,6 +419,7 @@ pub(super) fn consume_ok_body_token_v0(
             }
             Some(index + 1)
         }
+        Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"protect" => Some(index + 1),
         Some(TokenV0::ControlSeq(name))
             if name.as_slice() == b"title" || name.as_slice() == b"author" || name.as_slice() == b"date" =>
         {
@@ -434,6 +435,25 @@ pub(super) fn consume_ok_body_token_v0(
             )?;
             title_state.set_field(name.as_slice(), fragment);
             Some(next_index)
+        }
+        Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"thanks" => {
+            consume_ok_group_fragment_discard_v0(tokens, index + 1, end, title_state)
+        }
+        Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"and" => {
+            body.push(0x0a);
+            *previous_was_space = true;
+            Some(index + 1)
+        }
+        Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"texorpdfstring" => {
+            let first_arg_end = consume_ok_group_fragment_v0(
+                tokens,
+                index + 1,
+                end,
+                title_state,
+                body,
+                previous_was_space,
+            )?;
+            consume_ok_group_fragment_discard_v0(tokens, first_arg_end, end, title_state)
         }
         Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"noindent" => Some(index + 1),
         Some(TokenV0::ControlSeq(name))
