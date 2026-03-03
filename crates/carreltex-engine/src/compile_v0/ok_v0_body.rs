@@ -606,6 +606,47 @@ pub(super) fn consume_ok_body_token_v0(
             Some(next_index)
         }
         Some(TokenV0::ControlSeq(name))
+            if name.as_slice() == b"mbox" || name.as_slice() == b"fbox" =>
+        {
+            consume_ok_group_fragment_v0(tokens, index + 1, end, body, previous_was_space)
+        }
+        Some(TokenV0::ControlSeq(name))
+            if name.as_slice() == b"makebox" || name.as_slice() == b"framebox" =>
+        {
+            let mut cursor = skip_spaces_until(tokens, index + 1, end);
+            cursor = consume_optional_simple_bracket_span_v0(
+                tokens,
+                cursor,
+                end,
+                super::MAX_OK_BRACKET_BYTES_V0,
+            )?;
+            cursor = consume_optional_simple_bracket_span_v0(
+                tokens,
+                cursor,
+                end,
+                super::MAX_OK_BRACKET_BYTES_V0,
+            )?;
+            consume_ok_group_fragment_v0(tokens, cursor, end, body, previous_was_space)
+        }
+        Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"hbox" => {
+            let (inner_start, inner_end, next_index) = consume_balanced_group_bounds_v0(
+                tokens,
+                index + 1,
+                super::MAX_OK_GROUP_DEPTH_V0,
+                end,
+            )?;
+            consume_ok_body_range_v0(
+                tokens,
+                inner_start,
+                inner_end,
+                true,
+                list_env,
+                body,
+                previous_was_space,
+            )?;
+            Some(next_index)
+        }
+        Some(TokenV0::ControlSeq(name))
             if is_supported_ok_wrapper_command_v0(name.as_slice()) =>
         {
             let mut cursor = skip_spaces_until(tokens, index + 1, end);
