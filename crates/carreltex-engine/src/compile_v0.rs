@@ -38,6 +38,8 @@ mod ok_v0_footnote_tests;
 #[cfg(test)]
 mod ok_v0_ensuremath_tests;
 #[cfg(test)]
+mod ok_v0_text_math_tests;
+#[cfg(test)]
 mod ok_v0_heading_optional_args_tests;
 #[cfg(test)]
 mod ok_v0_linebreak_tests;
