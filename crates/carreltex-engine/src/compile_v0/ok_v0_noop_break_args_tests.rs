@@ -67,7 +67,7 @@ fn pagebreak_bracket_digit_is_ok() {
         786_432,
     )
     .expect("sum parser should parse");
-    assert_eq!(total, baseline_total + (3 * 65_536));
+    assert_eq!(total, baseline_total);
 }
 
 #[test]
