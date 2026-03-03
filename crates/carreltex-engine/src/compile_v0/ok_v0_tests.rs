@@ -3,6 +3,7 @@ use carreltex_core::{CompileRequestV0, CompileStatus, Mount};
 use carreltex_xdv::{
     count_dvi_v2_text_movements_v0, count_dvi_v2_text_pages_v0,
     sum_dvi_v2_positive_right3_amounts_with_layout_v0, validate_dvi_v2_text_page_v0,
+    validate_dvi_v2_text_page_with_layout_v0,
 };
 
 fn valid_request() -> CompileRequestV0 {
@@ -222,6 +223,25 @@ fn ok_wi_dot_uses_scaled_per_glyph_widths() {
 }
 
 #[test]
+fn ok_glyph_advance_one_remains_ok_for_half_em_glyphs() {
+    let mut mount = Mount::default();
+    let main = b"\\documentclass{article}\\begin{document}i.\\end{document}";
+    assert!(mount.add_file(b"main.tex", main).is_ok());
+    let mut request = valid_request();
+    request.ok_glyph_advance_sp_v0 = Some(1);
+    let result = compile_request_v0(&mut mount, &request);
+    assert_eq!(result.status, CompileStatus::Ok);
+    assert!(validate_dvi_v2_text_page_with_layout_v0(
+        &result.main_xdv_bytes,
+        1,
+        786_432,
+    ));
+    let total = sum_dvi_v2_positive_right3_amounts_with_layout_v0(&result.main_xdv_bytes, 1, 786_432)
+        .expect("sum parser should parse");
+    assert_eq!(total, 2);
+}
+
+#[test]
 fn ok_long_text_without_newline_wraps_automatically() {
     let mut mount = Mount::default();
     let long_body = "A".repeat(81);
@@ -346,6 +366,23 @@ fn request_max_lines_per_page_one_splits_wrapped_output_into_multiple_pages() {
     request.ok_max_lines_per_page_v0 = Some(1);
     let result = compile_request_v0(&mut mount, &request);
     assert_eq!(result.status, CompileStatus::Ok);
+    assert!(validate_dvi_v2_text_page_v0(&result.main_xdv_bytes));
+    let pages = count_dvi_v2_text_pages_v0(&result.main_xdv_bytes).expect("page count");
+    assert!(pages >= 2);
+}
+
+#[test]
+fn ok_layout_plan_wrapped_and_paged_output_is_valid() {
+    let mut mount = Mount::default();
+    let main =
+        b"\\documentclass{article}\\begin{document}word word word word word word word word word word\\end{document}";
+    assert!(mount.add_file(b"main.tex", main).is_ok());
+    let mut request = valid_request();
+    request.ok_max_line_glyphs_v0 = Some(10);
+    request.ok_max_lines_per_page_v0 = Some(1);
+    let result = compile_request_v0(&mut mount, &request);
+    assert_eq!(result.status, CompileStatus::Ok);
+    assert!(!result.main_xdv_bytes.is_empty());
     assert!(validate_dvi_v2_text_page_v0(&result.main_xdv_bytes));
     let pages = count_dvi_v2_text_pages_v0(&result.main_xdv_bytes).expect("page count");
     assert!(pages >= 2);
