@@ -12,7 +12,7 @@ use ok_v0_optional_brackets::{
     consume_optional_digits_bracket_span_v0, consume_optional_heading_short_title_v0,
     consume_optional_nested_bracket_span_v0, consume_optional_simple_bracket_span_v0,
 };
-use ok_v0_dollar_math::consume_display_math_dollar_span_v0;
+use ok_v0_dollar_math::{consume_display_math_dollar_span_v0, consume_inline_math_dollar_span_v0};
 use ok_v0_env_support::{
     consume_named_environment_span_v0, is_supported_display_math_env_v0,
     is_supported_ok_block_env_v0, is_supported_ok_table_stub_env_v0, ok_thm_stub_marker_v0,
@@ -35,21 +35,18 @@ enum ListEnvV0 {
     Figure,
     Table,
 }
-
 fn skip_spaces(tokens: &[TokenV0], mut index: usize) -> usize {
     while matches!(tokens.get(index), Some(TokenV0::Space)) {
         index += 1;
     }
     index
 }
-
 fn skip_spaces_until(tokens: &[TokenV0], mut index: usize, end_limit: usize) -> usize {
     while index < end_limit && matches!(tokens.get(index), Some(TokenV0::Space)) {
         index += 1;
     }
     index
 }
-
 fn consume_group_literal(tokens: &[TokenV0], mut index: usize, literal: &[u8]) -> Option<usize> {
     if !matches!(tokens.get(index), Some(TokenV0::BeginGroup)) {
         return None;
@@ -66,7 +63,6 @@ fn consume_group_literal(tokens: &[TokenV0], mut index: usize, literal: &[u8]) -
     }
     Some(index + 1)
 }
-
 fn consume_char_space_group_non_empty(tokens: &[TokenV0], mut index: usize) -> Option<usize> {
     if !matches!(tokens.get(index), Some(TokenV0::BeginGroup)) {
         return None;
@@ -90,7 +86,6 @@ fn consume_char_space_group_non_empty(tokens: &[TokenV0], mut index: usize) -> O
         }
     }
 }
-
 fn consume_bracket_options_non_empty(tokens: &[TokenV0], mut index: usize) -> Option<usize> {
     if !matches!(tokens.get(index), Some(TokenV0::Char(b'['))) {
         return None;
@@ -491,6 +486,21 @@ fn consume_ok_body_token_v0(
             emit_ok_display_math_marker_v0(body, previous_was_space);
             Some(next_index)
         }
+        Some(TokenV0::Char(b'$'))
+            if matches!(
+                tokens.get(index + 1),
+                Some(TokenV0::Char(next))
+                    if next.is_ascii_lowercase()
+            ) => consume_inline_math_dollar_span_v0(
+            tokens,
+            index,
+            end,
+            MAX_OK_DOLLAR_MATH_TOKENS_V0,
+        )
+        .map(|next_index| {
+            emit_ok_inline_math_marker_v0(body, previous_was_space);
+            next_index
+        }),
         Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"footnotemark" => {
             consume_optional_digits_bracket_span_v0(tokens, index + 1, end, 32)
         }
