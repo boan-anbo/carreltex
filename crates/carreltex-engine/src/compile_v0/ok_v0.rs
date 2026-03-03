@@ -3,7 +3,13 @@ use crate::tex::tokenize_v0::TokenV0;
 mod ok_v0_env_support;
 #[path = "ok_v0_env_refs.rs"]
 mod ok_v0_env_refs;
+#[path = "ok_v0_optional_brackets.rs"]
+mod ok_v0_optional_brackets;
 use ok_v0_env_refs::{emit_ok_markers_in_env_v0, OkEnvMarkersV0};
+use ok_v0_optional_brackets::{
+    consume_optional_digits_bracket_span_v0, consume_optional_heading_short_title_v0,
+    consume_optional_simple_bracket_span_v0,
+};
 use ok_v0_env_support::{
     consume_named_environment_span_v0, is_supported_display_math_env_v0,
     is_supported_ok_block_env_v0, is_supported_ok_table_stub_env_v0, ok_thm_stub_marker_v0,
@@ -325,69 +331,6 @@ fn consume_balanced_group_bounds_v0(
     None
 }
 
-fn consume_optional_simple_bracket_span_v0(
-    tokens: &[TokenV0],
-    index: usize,
-    end: usize,
-    max_bytes: usize,
-) -> Option<usize> {
-    let mut cursor = skip_spaces_until(tokens, index, end);
-    if !matches!(tokens.get(cursor), Some(TokenV0::Char(b'['))) {
-        return Some(cursor);
-    }
-    cursor += 1;
-    let mut content_len = 0usize;
-    while cursor < end {
-        match tokens.get(cursor)? {
-            TokenV0::Char(b']') => return Some(cursor + 1),
-            TokenV0::Char(_) | TokenV0::Space => {
-                content_len += 1;
-                if content_len > max_bytes {
-                    return None;
-                }
-                cursor += 1;
-            }
-            _ => return None,
-        }
-    }
-    None
-}
-
-fn consume_optional_heading_short_title_v0(tokens: &[TokenV0], index: usize, end: usize) -> Option<usize> {
-    let mut cursor = skip_spaces_until(tokens, index, end);
-    if !matches!(tokens.get(cursor), Some(TokenV0::Char(b'['))) {
-        return Some(cursor);
-    }
-    cursor += 1;
-    let mut scanned = 0usize;
-    let mut group_depth = 0usize;
-    while cursor < end {
-        scanned += 1;
-        if scanned > MAX_OK_HEADING_SHORT_TOKENS_V0 {
-            return None;
-        }
-        match tokens.get(cursor)? {
-            TokenV0::ControlSeq(name) if name.as_slice() == b"begin" => return None,
-            TokenV0::BeginGroup => {
-                group_depth += 1;
-                if group_depth > MAX_OK_GROUP_DEPTH_V0 {
-                    return None;
-                }
-            }
-            TokenV0::EndGroup => {
-                if group_depth == 0 {
-                    return None;
-                }
-                group_depth -= 1;
-            }
-            TokenV0::Char(b']') if group_depth == 0 => return Some(cursor + 1),
-            _ => {}
-        }
-        cursor += 1;
-    }
-    None
-}
-
 fn consume_math_control_span_v0(
     tokens: &[TokenV0],
     index: usize,
@@ -528,15 +471,18 @@ fn consume_ok_body_token_v0(
             emit_ok_display_math_marker_v0(body, previous_was_space);
             Some(next_index)
         }
-        Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"footnotemark" => Some(index + 1),
+        Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"footnotemark" => {
+            consume_optional_digits_bracket_span_v0(tokens, index + 1, end, 32)
+        }
         Some(TokenV0::ControlSeq(name))
             if name.as_slice() == b"footnote" || name.as_slice() == b"footnotetext" =>
         {
+            let arg_start = consume_optional_digits_bracket_span_v0(tokens, index + 1, end, 32)?;
             let mut footnote_text = Vec::new();
             let mut footnote_previous_was_space = false;
             let next_index = consume_ok_group_fragment_v0(
                 tokens,
-                index + 1,
+                arg_start,
                 end,
                 &mut footnote_text,
                 &mut footnote_previous_was_space,
@@ -566,16 +512,10 @@ fn consume_ok_body_token_v0(
         }
         Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"caption" => {
             let mut cursor = skip_spaces_until(tokens, index + 1, end);
-            if matches!(tokens.get(cursor), Some(TokenV0::Char(b'['))) {
-                return None;
-            }
             if matches!(tokens.get(cursor), Some(TokenV0::Char(b'*'))) {
                 cursor += 1;
-                cursor = skip_spaces_until(tokens, cursor, end);
             }
-            if matches!(tokens.get(cursor), Some(TokenV0::Char(b'['))) {
-                return None;
-            }
+            cursor = consume_optional_simple_bracket_span_v0(tokens, cursor, end, MAX_OK_BRACKET_BYTES_V0)?;
             let mut caption_text = Vec::new();
             let mut caption_previous_was_space = false;
             cursor = consume_ok_group_fragment_v0(
@@ -668,7 +608,13 @@ fn consume_ok_body_token_v0(
             if matches!(tokens.get(cursor), Some(TokenV0::Char(b'*'))) {
                 cursor += 1;
             }
-            cursor = consume_optional_heading_short_title_v0(tokens, cursor, end)?;
+            cursor = consume_optional_heading_short_title_v0(
+                tokens,
+                cursor,
+                end,
+                MAX_OK_HEADING_SHORT_TOKENS_V0,
+                MAX_OK_GROUP_DEPTH_V0,
+            )?;
             cursor = skip_spaces_until(tokens, cursor, end);
             let (inner_start, inner_end, next_index) =
                 consume_balanced_group_bounds_v0(tokens, cursor, MAX_OK_GROUP_DEPTH_V0, end)?;

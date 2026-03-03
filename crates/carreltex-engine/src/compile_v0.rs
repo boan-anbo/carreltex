@@ -58,6 +58,8 @@ mod ok_v0_cite_in_env_tests;
 #[cfg(test)]
 mod ok_v0_tests;
 #[cfg(test)]
+mod ok_v0_optional_bracket_args_tests;
+#[cfg(test)]
 mod providecommand_v0_tests;
 mod stats_v0;
 mod tokenize_reason_v0;
