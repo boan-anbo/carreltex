@@ -8,7 +8,7 @@ mod ok_v0_optional_brackets;
 use ok_v0_env_refs::{emit_ok_markers_in_env_v0, OkEnvMarkersV0};
 use ok_v0_optional_brackets::{
     consume_optional_digits_bracket_span_v0, consume_optional_heading_short_title_v0,
-    consume_optional_simple_bracket_span_v0,
+    consume_optional_nested_bracket_span_v0, consume_optional_simple_bracket_span_v0,
 };
 use ok_v0_env_support::{
     consume_named_environment_span_v0, is_supported_display_math_env_v0,
@@ -22,6 +22,7 @@ const MAX_OK_BRACKET_BYTES_V0: usize = 256;
 const MAX_OK_MATH_SCAN_TOKENS_V0: usize = 4096;
 const MAX_OK_MATH_ENV_TOKENS_V0: usize = 4096;
 const MAX_OK_HEADING_SHORT_TOKENS_V0: usize = 2048;
+const MAX_OK_CITE_NOTE_TOKENS_V0: usize = 2048;
 enum ListEnvV0 {
     Itemize,
     Enumerate { next: u32 },
@@ -244,6 +245,10 @@ fn ok_marker_command_v0(name: &[u8]) -> Option<&'static [u8]> {
         b"eqref" => Some(b"EQREF"),
         _ => None,
     }
+}
+
+fn is_cite_marker_command_v0(name: &[u8]) -> bool {
+    matches!(name, b"cite" | b"citet" | b"citep")
 }
 
 fn consume_ok_group_fragment_v0(
@@ -535,7 +540,24 @@ fn consume_ok_body_token_v0(
             if ok_marker_command_v0(name.as_slice()).is_some() =>
         {
             let marker = ok_marker_command_v0(name.as_slice())?;
-            let next_index = consume_char_space_nested_group_v0(tokens, index + 1, end)?;
+            let mut arg_start = index + 1;
+            if is_cite_marker_command_v0(name.as_slice()) {
+                arg_start = consume_optional_nested_bracket_span_v0(
+                    tokens,
+                    arg_start,
+                    end,
+                    MAX_OK_CITE_NOTE_TOKENS_V0,
+                    MAX_OK_GROUP_DEPTH_V0,
+                )?;
+                arg_start = consume_optional_nested_bracket_span_v0(
+                    tokens,
+                    arg_start,
+                    end,
+                    MAX_OK_CITE_NOTE_TOKENS_V0,
+                    MAX_OK_GROUP_DEPTH_V0,
+                )?;
+            }
+            let next_index = consume_char_space_nested_group_v0(tokens, arg_start, end)?;
             body.push(b' ');
             body.push(b'[');
             body.extend_from_slice(marker);
