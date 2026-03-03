@@ -88,6 +88,40 @@ export function runOkBibCases(ctx, helpers, baselineStats) {
     throw new Error('compile_main(ok bibliography preamble) main.xdv expected non-empty bytes');
   }
 
+  if (ctx.mountReset() !== 0) throw new Error('mount_reset before OK bibliography optional-bibitem case failed');
+  const bibOptionalDocBytes = new TextEncoder().encode(
+    '\\documentclass{article}\\begin{document}\\begin{thebibliography}{9}\\bibitem[X]{Y}A\\end{thebibliography}\\end{document}',
+  );
+  if (addMountedFile('main.tex', bibOptionalDocBytes, 'ok_bibliography_optional_bibitem_main') !== 0) {
+    throw new Error('mount_add_file(ok bibliography optional-bibitem main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) throw new Error('mount_finalize for OK bibliography optional-bibitem case failed');
+  expectOk(ctx.compileMain(), 'compile_main_v0(ok bibliography optional-bibitem)');
+  const bibOptionalLogBytes = readCompileLogBytes();
+  if (bibOptionalLogBytes.length !== 0) {
+    throw new Error(
+      `compile_main(ok bibliography optional-bibitem) expected empty log, got ${bibOptionalLogBytes.length} bytes`,
+    );
+  }
+  assertEventsMatchLogAndStats(
+    bibOptionalLogBytes,
+    { char_count: baselineStats.char_count + 36 },
+    'compile_main(ok bibliography optional-bibitem)',
+  );
+  const bibOptionalXdvBytes = readMainXdvArtifactBytes('compile_main(ok bibliography optional-bibitem)');
+  if (bibOptionalXdvBytes.length === 0) {
+    throw new Error('compile_main(ok bibliography optional-bibitem) main.xdv expected non-empty bytes');
+  }
+  const bibOptionalMovement = countMovementOpsInTextPages(
+    bibOptionalXdvBytes,
+    'compile_main(ok bibliography optional-bibitem)',
+  );
+  if (bibOptionalMovement.right3PositiveTotal !== 163840) {
+    throw new Error(
+      `compile_main(ok bibliography optional-bibitem) expected right3PositiveTotal=163840, got ${bibOptionalMovement.right3PositiveTotal}`,
+    );
+  }
+
   if (ctx.mountReset() !== 0) throw new Error('mount_reset before bibitem outside env invalid case failed');
   const bibitemOutsideEnvDocBytes = new TextEncoder().encode(
     '\\documentclass{article}\\begin{document}\\bibitem{X}A\\end{document}',
