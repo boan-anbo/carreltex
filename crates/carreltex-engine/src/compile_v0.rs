@@ -168,13 +168,7 @@ pub fn compile_request_v0(mount: &mut Mount, req: &CompileRequestV0) -> CompileR
     if tex_stats_json.is_empty() {
         return invalid_result_v0(req.max_log_bytes, InvalidInputReasonV0::StatsBuildFailed);
     }
-    let ok_text_bytes = match (
-        extract_strict_ok_text_body_v0(&expanded_tokens),
-        extract_strict_ok_text_body_v0(&macro_expanded_tokens),
-    ) {
-        (Some(pre_macro), Some(post_macro)) if pre_macro == post_macro => Some(post_macro),
-        _ => None,
-    };
+    let ok_text_bytes = extract_strict_ok_text_body_v0(&macro_expanded_tokens);
 
     if let Some(ok_text_bytes) = ok_text_bytes {
         if ok_text_bytes.len() <= MAX_OK_TEXT_BYTES_V0 {

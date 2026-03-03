@@ -3,10 +3,9 @@ export function runProvidecommandCases(ctx, helpers) {
     addMountedFile,
     expectInvalid,
     expectOk,
-    expectNotImplemented,
     readCompileLogBytes,
+    readMainXdvArtifactBytes,
     assertEventsMatchLogAndStats,
-    assertMainXdvArtifactEmpty,
     assertNoEvents,
   } = helpers;
 
@@ -38,9 +37,12 @@ export function runProvidecommandCases(ctx, helpers) {
   if (ctx.mountFinalize() !== 0) {
     throw new Error('mount_finalize for providecommand define case failed');
   }
-  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(macro providecommand define)');
+  expectOk(ctx.compileMain(), 'compile_main_v0(macro providecommand define)');
   {
     const logBytes = readCompileLogBytes();
+    if (logBytes.length !== 0) {
+      throw new Error(`compile_main(macro providecommand define) expected empty log, got ${logBytes.length} bytes`);
+    }
     const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(macro providecommand define)');
     if (baselineCharCount === null) {
       throw new Error('baselineCharCount not initialized for providecommand define');
@@ -48,7 +50,7 @@ export function runProvidecommandCases(ctx, helpers) {
     if (stats.char_count !== baselineCharCount + 3) {
       throw new Error(`compile_main(macro providecommand define) char_count delta expected +3, got baseline=${baselineCharCount}, current=${stats.char_count}`);
     }
-    assertMainXdvArtifactEmpty('compile_main(macro providecommand define)');
+    readMainXdvArtifactBytes('compile_main(macro providecommand define)');
   }
 
   if (ctx.mountReset() !== 0) {
@@ -61,9 +63,12 @@ export function runProvidecommandCases(ctx, helpers) {
   if (ctx.mountFinalize() !== 0) {
     throw new Error('mount_finalize for providecommand no-op case failed');
   }
-  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(macro providecommand no-op)');
+  expectOk(ctx.compileMain(), 'compile_main_v0(macro providecommand no-op)');
   {
     const logBytes = readCompileLogBytes();
+    if (logBytes.length !== 0) {
+      throw new Error(`compile_main(macro providecommand no-op) expected empty log, got ${logBytes.length} bytes`);
+    }
     const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(macro providecommand no-op)');
     if (baselineCharCount === null) {
       throw new Error('baselineCharCount not initialized for providecommand no-op');
@@ -71,7 +76,7 @@ export function runProvidecommandCases(ctx, helpers) {
     if (stats.char_count !== baselineCharCount + 1) {
       throw new Error(`compile_main(macro providecommand no-op) char_count delta expected +1, got baseline=${baselineCharCount}, current=${stats.char_count}`);
     }
-    assertMainXdvArtifactEmpty('compile_main(macro providecommand no-op)');
+    readMainXdvArtifactBytes('compile_main(macro providecommand no-op)');
   }
 
   if (ctx.mountReset() !== 0) {
@@ -84,9 +89,12 @@ export function runProvidecommandCases(ctx, helpers) {
   if (ctx.mountFinalize() !== 0) {
     throw new Error('mount_finalize for providecommand single-param case failed');
   }
-  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(macro providecommand single-param)');
+  expectOk(ctx.compileMain(), 'compile_main_v0(macro providecommand single-param)');
   {
     const logBytes = readCompileLogBytes();
+    if (logBytes.length !== 0) {
+      throw new Error(`compile_main(macro providecommand single-param) expected empty log, got ${logBytes.length} bytes`);
+    }
     const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(macro providecommand single-param)');
     if (baselineCharCount === null) {
       throw new Error('baselineCharCount not initialized for providecommand single-param');
@@ -94,7 +102,7 @@ export function runProvidecommandCases(ctx, helpers) {
     if (stats.char_count !== baselineCharCount + 1) {
       throw new Error(`compile_main(macro providecommand single-param) char_count delta expected +1, got baseline=${baselineCharCount}, current=${stats.char_count}`);
     }
-    assertMainXdvArtifactEmpty('compile_main(macro providecommand single-param)');
+    readMainXdvArtifactBytes('compile_main(macro providecommand single-param)');
   }
 
   if (ctx.mountReset() !== 0) {

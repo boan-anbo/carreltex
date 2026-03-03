@@ -328,6 +328,74 @@ export function runOkEmptyDocCases(ctx, helpers) {
   }
 
   if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before OK backslash text doc case failed');
+  }
+  const backslashTextDocBytes = new TextEncoder().encode(
+    '\\documentclass{article}\n\\begin{document}\nA\\textbackslash B\n\\end{document}\n',
+  );
+  if (addMountedFile('main.tex', backslashTextDocBytes, 'ok_backslash_text_doc_main') !== 0) {
+    throw new Error('mount_add_file(ok backslash text doc main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) {
+    throw new Error('mount_finalize for OK backslash text doc case failed');
+  }
+  expectOk(ctx.compileMain(), 'compile_main_v0(ok backslash text doc)');
+  const backslashReport = readCompileReportJson();
+  if (backslashReport.status !== 'OK') {
+    throw new Error(`compile_main(ok backslash text doc) report.status expected OK, got ${backslashReport.status}`);
+  }
+  const backslashLogBytes = readCompileLogBytes();
+  if (backslashLogBytes.length !== 0) {
+    throw new Error(`compile_main(ok backslash text doc) expected empty log, got ${backslashLogBytes.length} bytes`);
+  }
+  const backslashStats = assertEventsMatchLogAndStats(
+    backslashLogBytes,
+    { char_count: stats.char_count + 3 },
+    'compile_main(ok backslash text doc)',
+  );
+  if (!(typeof backslashStats.token_count === 'number' && backslashStats.token_count > 0)) {
+    throw new Error('compile_main(ok backslash text doc) token_count expected >0');
+  }
+  const backslashXdvBytes = readMainXdvArtifactBytes('compile_main(ok backslash text doc)');
+  if (backslashXdvBytes.length === 0) {
+    throw new Error('compile_main(ok backslash text doc) main.xdv expected non-empty bytes');
+  }
+
+  if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before OK macro-expanded text doc case failed');
+  }
+  const macroExpandedTextDocBytes = new TextEncoder().encode(
+    '\\documentclass{article}\\begin{document}\\def\\foo{XYZ}\\foo\\end{document}',
+  );
+  if (addMountedFile('main.tex', macroExpandedTextDocBytes, 'ok_macro_expanded_text_doc_main') !== 0) {
+    throw new Error('mount_add_file(ok macro-expanded text doc main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) {
+    throw new Error('mount_finalize for OK macro-expanded text doc case failed');
+  }
+  expectOk(ctx.compileMain(), 'compile_main_v0(ok macro-expanded text doc)');
+  const macroExpandedReport = readCompileReportJson();
+  if (macroExpandedReport.status !== 'OK') {
+    throw new Error(`compile_main(ok macro-expanded text doc) report.status expected OK, got ${macroExpandedReport.status}`);
+  }
+  const macroExpandedLogBytes = readCompileLogBytes();
+  if (macroExpandedLogBytes.length !== 0) {
+    throw new Error(`compile_main(ok macro-expanded text doc) expected empty log, got ${macroExpandedLogBytes.length} bytes`);
+  }
+  const macroExpandedStats = assertEventsMatchLogAndStats(
+    macroExpandedLogBytes,
+    { char_count: stats.char_count + 3 },
+    'compile_main(ok macro-expanded text doc)',
+  );
+  if (!(typeof macroExpandedStats.token_count === 'number' && macroExpandedStats.token_count > 0)) {
+    throw new Error('compile_main(ok macro-expanded text doc) token_count expected >0');
+  }
+  const macroExpandedXdvBytes = readMainXdvArtifactBytes('compile_main(ok macro-expanded text doc)');
+  if (macroExpandedXdvBytes.length === 0) {
+    throw new Error('compile_main(ok macro-expanded text doc) main.xdv expected non-empty bytes');
+  }
+
+  if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before OK pagebreak text doc case failed');
   }
 
