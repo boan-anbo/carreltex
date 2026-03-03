@@ -194,6 +194,12 @@ export function runOkNoopCases(ctx, helpers) {
   runNoopCase('\\refstepcounter{equation}', 'ok_noop_refstepcounter');
   runNoopCase('\\setlength{\\parskip}{1em}', 'ok_noop_setlength');
   runNoopCase('\\addtolength{\\parindent}{2em}', 'ok_noop_addtolength');
+  runNoopCase('\\small\\!', 'ok_noop_small');
+  runNoopCase('\\Huge\\!', 'ok_noop_huge');
+  runNoopCase('\\raggedright\\!', 'ok_noop_raggedright');
+  runNoopCase('\\fontsize{10}{12}\\selectfont\\!', 'ok_noop_fontsize_selectfont');
+  runNoopCase('\\linespread{1.2}\\!', 'ok_noop_linespread');
+  runNoopCase('\\setstretch{1.1}\\!', 'ok_noop_setstretch');
 
   if (ctx.mountReset() !== 0) throw new Error('mount_reset before noop missing-arg invalid case failed');
   const missingArgDocBytes = new TextEncoder().encode(
@@ -282,4 +288,28 @@ export function runOkNoopCases(ctx, helpers) {
     throw new Error('mount_finalize for noop setlength bad-register invalid case failed');
   }
   expectNotImplemented(ctx.compileMain(), 'compile_main_v0(ok noop setlength bad-register invalid)');
+
+  if (ctx.mountReset() !== 0) throw new Error('mount_reset before noop fontsize missing-group invalid case failed');
+  const fontsizeMissingGroupDocBytes = new TextEncoder().encode(
+    '\\documentclass{article}\\begin{document}Hello\\fontsize{10}X\\end{document}',
+  );
+  if (addMountedFile('main.tex', fontsizeMissingGroupDocBytes, 'ok_noop_fontsize_missing_group_main') !== 0) {
+    throw new Error('mount_add_file(noop fontsize missing-group main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) {
+    throw new Error('mount_finalize for noop fontsize missing-group invalid case failed');
+  }
+  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(ok noop fontsize missing-group invalid)');
+
+  if (ctx.mountReset() !== 0) throw new Error('mount_reset before noop linespread missing-group invalid case failed');
+  const linespreadMissingGroupDocBytes = new TextEncoder().encode(
+    '\\documentclass{article}\\begin{document}Hello\\linespread X\\end{document}',
+  );
+  if (addMountedFile('main.tex', linespreadMissingGroupDocBytes, 'ok_noop_linespread_missing_group_main') !== 0) {
+    throw new Error('mount_add_file(noop linespread missing-group main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) {
+    throw new Error('mount_finalize for noop linespread missing-group invalid case failed');
+  }
+  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(ok noop linespread missing-group invalid)');
 }
