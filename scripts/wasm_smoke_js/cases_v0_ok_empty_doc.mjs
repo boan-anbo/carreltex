@@ -396,6 +396,164 @@ export function runOkEmptyDocCases(ctx, helpers) {
   }
 
   if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before OK usepackage preamble baseline case failed');
+  }
+  const usepackagePreambleBaselineDocBytes = new TextEncoder().encode(
+    '\\documentclass{article}\n\\usepackage{amsmath}\n\\begin{document}\n\n\\end{document}\n',
+  );
+  if (
+    addMountedFile(
+      'main.tex',
+      usepackagePreambleBaselineDocBytes,
+      'ok_usepackage_preamble_baseline_main',
+    ) !== 0
+  ) {
+    throw new Error('mount_add_file(ok usepackage preamble baseline main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) {
+    throw new Error('mount_finalize for OK usepackage preamble baseline case failed');
+  }
+  expectOk(ctx.compileMain(), 'compile_main_v0(ok usepackage preamble baseline)');
+  const usepackagePreambleBaselineLogBytes = readCompileLogBytes();
+  if (usepackagePreambleBaselineLogBytes.length !== 0) {
+    throw new Error(
+      `compile_main(ok usepackage preamble baseline) expected empty log, got ${usepackagePreambleBaselineLogBytes.length} bytes`,
+    );
+  }
+  const usepackagePreambleBaselineStats = assertEventsMatchLogAndStats(
+    usepackagePreambleBaselineLogBytes,
+    {},
+    'compile_main(ok usepackage preamble baseline)',
+  );
+  readMainXdvArtifactBytes('compile_main(ok usepackage preamble baseline)');
+
+  if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before OK usepackage preamble text doc case failed');
+  }
+  const usepackagePreambleTextDocBytes = new TextEncoder().encode(
+    '\\documentclass{article}\n\\usepackage{amsmath}\n\\begin{document}\nXYZ\n\\end{document}\n',
+  );
+  if (
+    addMountedFile('main.tex', usepackagePreambleTextDocBytes, 'ok_usepackage_preamble_text_doc_main')
+    !== 0
+  ) {
+    throw new Error('mount_add_file(ok usepackage preamble text doc main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) {
+    throw new Error('mount_finalize for OK usepackage preamble text doc case failed');
+  }
+  expectOk(ctx.compileMain(), 'compile_main_v0(ok usepackage preamble text doc)');
+  const usepackagePreambleReport = readCompileReportJson();
+  if (usepackagePreambleReport.status !== 'OK') {
+    throw new Error(
+      `compile_main(ok usepackage preamble text doc) report.status expected OK, got ${usepackagePreambleReport.status}`,
+    );
+  }
+  const usepackagePreambleLogBytes = readCompileLogBytes();
+  if (usepackagePreambleLogBytes.length !== 0) {
+    throw new Error(
+      `compile_main(ok usepackage preamble text doc) expected empty log, got ${usepackagePreambleLogBytes.length} bytes`,
+    );
+  }
+  const usepackagePreambleStats = assertEventsMatchLogAndStats(
+    usepackagePreambleLogBytes,
+    { char_count: usepackagePreambleBaselineStats.char_count + 3 },
+    'compile_main(ok usepackage preamble text doc)',
+  );
+  if (!(typeof usepackagePreambleStats.token_count === 'number' && usepackagePreambleStats.token_count > 0)) {
+    throw new Error('compile_main(ok usepackage preamble text doc) token_count expected >0');
+  }
+  const usepackagePreambleXdvBytes = readMainXdvArtifactBytes(
+    'compile_main(ok usepackage preamble text doc)',
+  );
+  if (usepackagePreambleXdvBytes.length === 0) {
+    throw new Error('compile_main(ok usepackage preamble text doc) main.xdv expected non-empty bytes');
+  }
+
+  if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before OK usepackage options preamble baseline case failed');
+  }
+  const usepackageOptionsPreambleBaselineDocBytes = new TextEncoder().encode(
+    '\\documentclass{article}\n\\usepackage[utf8]{inputenc}\n\\begin{document}\n\n\\end{document}\n',
+  );
+  if (
+    addMountedFile(
+      'main.tex',
+      usepackageOptionsPreambleBaselineDocBytes,
+      'ok_usepackage_options_preamble_baseline_main',
+    ) !== 0
+  ) {
+    throw new Error('mount_add_file(ok usepackage options preamble baseline main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) {
+    throw new Error('mount_finalize for OK usepackage options preamble baseline case failed');
+  }
+  expectOk(ctx.compileMain(), 'compile_main_v0(ok usepackage options preamble baseline)');
+  const usepackageOptionsPreambleBaselineLogBytes = readCompileLogBytes();
+  if (usepackageOptionsPreambleBaselineLogBytes.length !== 0) {
+    throw new Error(
+      `compile_main(ok usepackage options preamble baseline) expected empty log, got ${usepackageOptionsPreambleBaselineLogBytes.length} bytes`,
+    );
+  }
+  const usepackageOptionsPreambleBaselineStats = assertEventsMatchLogAndStats(
+    usepackageOptionsPreambleBaselineLogBytes,
+    {},
+    'compile_main(ok usepackage options preamble baseline)',
+  );
+  readMainXdvArtifactBytes('compile_main(ok usepackage options preamble baseline)');
+
+  if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before OK usepackage options preamble text doc case failed');
+  }
+  const usepackageOptionsPreambleTextDocBytes = new TextEncoder().encode(
+    '\\documentclass{article}\n\\usepackage[utf8]{inputenc}\n\\begin{document}\nXYZ\n\\end{document}\n',
+  );
+  if (
+    addMountedFile(
+      'main.tex',
+      usepackageOptionsPreambleTextDocBytes,
+      'ok_usepackage_options_preamble_text_doc_main',
+    ) !== 0
+  ) {
+    throw new Error('mount_add_file(ok usepackage options preamble text doc main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) {
+    throw new Error('mount_finalize for OK usepackage options preamble text doc case failed');
+  }
+  expectOk(ctx.compileMain(), 'compile_main_v0(ok usepackage options preamble text doc)');
+  const usepackageOptionsPreambleReport = readCompileReportJson();
+  if (usepackageOptionsPreambleReport.status !== 'OK') {
+    throw new Error(
+      `compile_main(ok usepackage options preamble text doc) report.status expected OK, got ${usepackageOptionsPreambleReport.status}`,
+    );
+  }
+  const usepackageOptionsPreambleLogBytes = readCompileLogBytes();
+  if (usepackageOptionsPreambleLogBytes.length !== 0) {
+    throw new Error(
+      `compile_main(ok usepackage options preamble text doc) expected empty log, got ${usepackageOptionsPreambleLogBytes.length} bytes`,
+    );
+  }
+  const usepackageOptionsPreambleStats = assertEventsMatchLogAndStats(
+    usepackageOptionsPreambleLogBytes,
+    { char_count: usepackageOptionsPreambleBaselineStats.char_count + 3 },
+    'compile_main(ok usepackage options preamble text doc)',
+  );
+  if (
+    !(typeof usepackageOptionsPreambleStats.token_count === 'number'
+      && usepackageOptionsPreambleStats.token_count > 0)
+  ) {
+    throw new Error('compile_main(ok usepackage options preamble text doc) token_count expected >0');
+  }
+  const usepackageOptionsPreambleXdvBytes = readMainXdvArtifactBytes(
+    'compile_main(ok usepackage options preamble text doc)',
+  );
+  if (usepackageOptionsPreambleXdvBytes.length === 0) {
+    throw new Error(
+      'compile_main(ok usepackage options preamble text doc) main.xdv expected non-empty bytes',
+    );
+  }
+
+  if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before OK pagebreak text doc case failed');
   }
 
