@@ -112,7 +112,7 @@ export function runOkNoopCases(ctx, helpers) {
     }
   };
 
-  const runBreakNoopCase = (commandSource, tag) => {
+  const runBreakNoopCase = (commandSource, tag, expectedCharDelta = 0) => {
     if (ctx.mountReset() !== 0) throw new Error(`mount_reset before ${tag} baseline failed`);
     const baselineDocBytes = new TextEncoder().encode(
       '\\documentclass{article}\\begin{document}HelloWorld\\end{document}',
@@ -149,7 +149,7 @@ export function runOkNoopCases(ctx, helpers) {
     }
     assertEventsMatchLogAndStats(
       logBytes,
-      { char_count: baselineStats.char_count },
+      { char_count: baselineStats.char_count + expectedCharDelta },
       `compile_main(${tag})`,
     );
     const xdvBytes = readMainXdvArtifactBytes(`compile_main(${tag})`);
@@ -173,8 +173,17 @@ export function runOkNoopCases(ctx, helpers) {
   runBreakNoopCase('\\newpage', 'ok_noop_newpage');
   runBreakNoopCase('\\clearpage', 'ok_noop_clearpage');
   runBreakNoopCase('\\nopagebreak', 'ok_noop_nopagebreak');
+  runBreakNoopCase('\\nopagebreak[2]', 'ok_noop_nopagebreak_bracket', 3);
   runBreakNoopCase('\\linebreak', 'ok_noop_linebreak');
+  runBreakNoopCase('\\linebreak[3]', 'ok_noop_linebreak_bracket', 3);
   runBreakNoopCase('\\nolinebreak', 'ok_noop_nolinebreak');
+  runBreakNoopCase('\\nolinebreak[4]', 'ok_noop_nolinebreak_bracket', 3);
+  runBreakNoopCase('\\pagebreak[1]', 'ok_noop_pagebreak_bracket', 4);
+  runBreakNoopCase('\\goodbreak', 'ok_noop_goodbreak');
+  runBreakNoopCase('\\filbreak', 'ok_noop_filbreak');
+  runBreakNoopCase('\\samepage', 'ok_noop_samepage');
+  runBreakNoopCase('\\nobreak', 'ok_noop_nobreak');
+  runBreakNoopCase('\\break', 'ok_noop_break');
   runNoopCase('\\vspace{1em}', 'ok_noop_vspace');
   runNoopCase('\\vspace*{1em}', 'ok_noop_vspace_star');
   runNoopCase('\\hspace{1em}', 'ok_noop_hspace');
@@ -219,4 +228,16 @@ export function runOkNoopCases(ctx, helpers) {
   }
   if (ctx.mountFinalize() !== 0) throw new Error('mount_finalize for noop newpage-group invalid case failed');
   expectNotImplemented(ctx.compileMain(), 'compile_main_v0(ok noop newpage-group invalid)');
+
+  if (ctx.mountReset() !== 0) throw new Error('mount_reset before noop linebreak bad-bracket invalid case failed');
+  const linebreakBadBracketDocBytes = new TextEncoder().encode(
+    '\\documentclass{article}\\begin{document}\\linebreak[ab]\\end{document}',
+  );
+  if (addMountedFile('main.tex', linebreakBadBracketDocBytes, 'ok_noop_linebreak_bad_bracket_main') !== 0) {
+    throw new Error('mount_add_file(noop linebreak bad-bracket main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) {
+    throw new Error('mount_finalize for noop linebreak bad-bracket invalid case failed');
+  }
+  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(ok noop linebreak bad-bracket invalid)');
 }

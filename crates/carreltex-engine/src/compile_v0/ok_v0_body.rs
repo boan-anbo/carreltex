@@ -95,6 +95,44 @@ pub(super) fn consume_bracket_options_non_empty(tokens: &[TokenV0], mut index: u
     }
 }
 
+fn consume_immediate_optional_digits_bracket_span_v0(
+    tokens: &[TokenV0],
+    index: usize,
+    end: usize,
+    max_bytes: usize,
+) -> Option<usize> {
+    let mut cursor = index;
+    if !matches!(tokens.get(cursor), Some(TokenV0::Char(b'['))) {
+        return Some(cursor);
+    }
+    cursor += 1;
+    let mut content_len = 0usize;
+    let mut has_digit = false;
+    while cursor < end {
+        match tokens.get(cursor)? {
+            TokenV0::Char(b']') if has_digit => return Some(cursor + 1),
+            TokenV0::Char(b']') => return None,
+            TokenV0::Space => {
+                content_len += 1;
+                if content_len > max_bytes {
+                    return None;
+                }
+                cursor += 1;
+            }
+            TokenV0::Char(byte) if byte.is_ascii_digit() => {
+                content_len += 1;
+                if content_len > max_bytes {
+                    return None;
+                }
+                has_digit = true;
+                cursor += 1;
+            }
+            _ => return None,
+        }
+    }
+    None
+}
+
 pub(super) fn consume_char_space_nested_group_non_empty_v0(
     tokens: &[TokenV0],
     index: usize,
@@ -811,9 +849,11 @@ pub(super) fn consume_ok_body_token_v0(
             Some(next_index)
         }
         Some(TokenV0::Char(0x0c)) => {
+            let next_index =
+                consume_immediate_optional_digits_bracket_span_v0(tokens, index + 1, end, 8)?;
             body.push(0x0c);
             *previous_was_space = false;
-            Some(index + 1)
+            Some(next_index)
         }
         Some(TokenV0::Char(0x0a)) => {
             body.push(0x0a);
