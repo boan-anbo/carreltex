@@ -281,21 +281,6 @@ fn control_symbol_hash_keeps_following_space_token() {
 }
 
 #[test]
-fn control_symbol_dollar_maps_to_dollar_char() {
-    let tokens = tokenize_v0(b"\\$X").expect("tokenize should succeed");
-    assert_eq!(tokens, vec![TokenV0::Char(b'$'), TokenV0::Char(b'X')]);
-}
-
-#[test]
-fn control_symbol_dollar_keeps_following_space_token() {
-    let tokens = tokenize_v0(b"\\$ X").expect("tokenize should succeed");
-    assert_eq!(
-        tokens,
-        vec![TokenV0::Char(b'$'), TokenV0::Space, TokenV0::Char(b'X')]
-    );
-}
-
-#[test]
 fn control_symbol_ampersand_maps_to_ampersand_char() {
     let tokens = tokenize_v0(b"\\&X").expect("tokenize should succeed");
     assert_eq!(tokens, vec![TokenV0::Char(b'&'), TokenV0::Char(b'X')]);

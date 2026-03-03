@@ -63,6 +63,28 @@ fn inline_dollar_math_emits_inline_marker_ok() {
 }
 
 #[test]
+fn inline_dollar_math_numeric_payload_emits_inline_marker_ok() {
+    let baseline = baseline_char_count();
+    let mut mount = Mount::default();
+    let main = b"\\documentclass{article}\\begin{document}A$1$B\\end{document}";
+    assert!(mount.add_file(b"main.tex", main).is_ok());
+    let result = compile_request_v0(&mut mount, &valid_request());
+    assert_eq!(result.status, CompileStatus::Ok);
+    assert!(validate_dvi_v2_text_page_v0(&result.main_xdv_bytes));
+    let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
+    assert_eq!(char_count, baseline + 5);
+    let movement = count_dvi_v2_text_movements_v0(&result.main_xdv_bytes).expect("movement summary");
+    assert_eq!(movement.0, 9);
+    let total = sum_dvi_v2_positive_right3_amounts_with_layout_v0(
+        &result.main_xdv_bytes,
+        65_536,
+        786_432,
+    )
+    .expect("sum parser should parse");
+    assert_eq!(total, 557_056);
+}
+
+#[test]
 fn unclosed_inline_dollar_math_not_implemented() {
     let mut mount = Mount::default();
     let main = b"\\documentclass{article}\\begin{document}A$xB\\end{document}";
