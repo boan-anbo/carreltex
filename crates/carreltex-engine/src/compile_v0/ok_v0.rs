@@ -27,6 +27,71 @@ fn consume_group_literal(tokens: &[TokenV0], mut index: usize, literal: &[u8]) -
     Some(index + 1)
 }
 
+fn consume_char_space_group_non_empty(tokens: &[TokenV0], mut index: usize) -> Option<usize> {
+    if !matches!(tokens.get(index), Some(TokenV0::BeginGroup)) {
+        return None;
+    }
+    index += 1;
+    let mut has_non_space_char = false;
+    loop {
+        match tokens.get(index) {
+            Some(TokenV0::EndGroup) if has_non_space_char => return Some(index + 1),
+            Some(TokenV0::EndGroup) => return None,
+            Some(TokenV0::Space) => {
+                index += 1;
+            }
+            Some(TokenV0::Char(byte)) => {
+                if *byte != b' ' {
+                    has_non_space_char = true;
+                }
+                index += 1;
+            }
+            _ => return None,
+        }
+    }
+}
+
+fn consume_bracket_options_non_empty(tokens: &[TokenV0], mut index: usize) -> Option<usize> {
+    if !matches!(tokens.get(index), Some(TokenV0::Char(b'['))) {
+        return None;
+    }
+    index += 1;
+    let mut has_non_space_char = false;
+    loop {
+        match tokens.get(index) {
+            Some(TokenV0::Char(b']')) if has_non_space_char => return Some(index + 1),
+            Some(TokenV0::Char(b']')) => return None,
+            Some(TokenV0::Space) => {
+                index += 1;
+            }
+            Some(TokenV0::Char(byte)) => {
+                if *byte != b' ' {
+                    has_non_space_char = true;
+                }
+                index += 1;
+            }
+            _ => return None,
+        }
+    }
+}
+
+fn consume_usepackage_preamble_command(tokens: &[TokenV0], mut index: usize) -> Option<usize> {
+    if !matches!(
+        tokens.get(index),
+        Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"usepackage"
+    ) {
+        return None;
+    }
+    index += 1;
+    index = skip_spaces(tokens, index);
+    if matches!(tokens.get(index), Some(TokenV0::Char(b'['))) {
+        index = consume_bracket_options_non_empty(tokens, index)?;
+        index = skip_spaces(tokens, index);
+    }
+    index = consume_char_space_group_non_empty(tokens, index)?;
+    Some(skip_spaces(tokens, index))
+}
+
 fn is_supported_ok_char_v0(byte: u8) -> bool {
     (0x20..=0x7e).contains(&byte)
 }
@@ -42,6 +107,12 @@ pub(crate) fn extract_strict_ok_text_body_v0(tokens: &[TokenV0]) -> Option<Vec<u
     index += 1;
     index = consume_group_literal(tokens, index, b"article")?;
     index = skip_spaces(tokens, index);
+    while matches!(
+        tokens.get(index),
+        Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"usepackage"
+    ) {
+        index = consume_usepackage_preamble_command(tokens, index)?;
+    }
 
     if !matches!(
         tokens.get(index),
