@@ -391,22 +391,6 @@ fn emit_ok_display_math_marker_v0(body: &mut Vec<u8>, previous_was_space: &mut b
     *previous_was_space = true;
 }
 
-fn emit_ok_verbatim_marker_v0(body: &mut Vec<u8>, previous_was_space: &mut bool) {
-    body.push(0x0a);
-    body.push(b'[');
-    body.push(b'V');
-    body.push(b'E');
-    body.push(b'R');
-    body.push(b'B');
-    body.push(b'A');
-    body.push(b'T');
-    body.push(b'I');
-    body.push(b'M');
-    body.push(b']');
-    body.push(0x0a);
-    *previous_was_space = true;
-}
-
 fn emit_ok_block_marker_v0(body: &mut Vec<u8>, marker: &[u8], previous_was_space: &mut bool) {
     body.push(0x0a);
     body.push(b'[');
@@ -416,11 +400,13 @@ fn emit_ok_block_marker_v0(body: &mut Vec<u8>, marker: &[u8], previous_was_space
     *previous_was_space = true;
 }
 
-fn emit_ok_label_markers_in_env_v0(
+fn emit_ok_markers_in_env_v0(
     tokens: &[TokenV0],
     start: usize,
     end: usize,
     label_marker: &[u8],
+    ref_marker: &[u8],
+    include_eqref: bool,
     body: &mut Vec<u8>,
     previous_was_space: &mut bool,
 ) -> Option<()> {
@@ -432,6 +418,18 @@ fn emit_ok_label_markers_in_env_v0(
                 body.push(b' ');
                 body.push(b'[');
                 body.extend_from_slice(label_marker);
+                body.push(b']');
+                *previous_was_space = false;
+            }
+            TokenV0::ControlSeq(name)
+                if name.as_slice() == b"ref"
+                    || name.as_slice() == b"autoref"
+                    || (include_eqref && name.as_slice() == b"eqref") =>
+            {
+                index = consume_char_space_nested_group_v0(tokens, index + 1, end)?;
+                body.push(b' ');
+                body.push(b'[');
+                body.extend_from_slice(ref_marker);
                 body.push(b']');
                 *previous_was_space = false;
             }
@@ -698,7 +696,7 @@ fn consume_ok_body_token_v0(
             {
                 if is_supported_ok_block_env_v0(&env_name) {
                     if env_name.as_slice() == b"verbatim" {
-                        emit_ok_verbatim_marker_v0(body, previous_was_space);
+                        emit_ok_block_marker_v0(body, b"VERBATIM", previous_was_space);
                         return Some(next_index);
                     }
                     let mut inner_list_env = None;
@@ -726,11 +724,13 @@ fn consume_ok_body_token_v0(
                 }
                 if let Some(marker) = ok_thm_stub_marker_v0(&env_name) {
                     emit_ok_block_marker_v0(body, marker, previous_was_space);
-                    emit_ok_label_markers_in_env_v0(
+                    emit_ok_markers_in_env_v0(
                         tokens,
                         inner_start,
                         inner_end,
                         b"LBL",
+                        b"THMREF",
+                        false,
                         body,
                         previous_was_space,
                     )?;
@@ -741,11 +741,13 @@ fn consume_ok_body_token_v0(
                         return None;
                     }
                     emit_ok_display_math_marker_v0(body, previous_was_space);
-                    emit_ok_label_markers_in_env_v0(
+                    emit_ok_markers_in_env_v0(
                         tokens,
                         inner_start,
                         inner_end,
                         b"EQ",
+                        b"EQREF",
+                        true,
                         body,
                         previous_was_space,
                     )?;
