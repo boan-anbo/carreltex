@@ -11,15 +11,17 @@ mod ok_v0_dollar_math;
 mod ok_v0_ensuremath;
 #[path = "ok_v0_lists.rs"]
 mod ok_v0_lists;
+#[path = "ok_v0_biblabel.rs"]
+mod ok_v0_biblabel;
 use ok_v0_env_refs::{emit_ok_markers_in_env_v0, OkEnvMarkersV0};
 use ok_v0_optional_brackets::{
-    consume_optional_simple_bracket_span_capture_v0,
     consume_optional_digits_bracket_span_v0, consume_optional_heading_short_title_v0,
     consume_optional_nested_bracket_span_v0, consume_optional_simple_bracket_span_v0,
 };
 use ok_v0_dollar_math::{consume_display_math_dollar_span_v0, consume_inline_math_dollar_span_v0};
 use ok_v0_ensuremath::{consume_inline_math_group_span_v0, consume_math_control_span_v0};
 use ok_v0_lists::{begin_list_v0, emit_list_item_v0, end_list_v0, list_stack_active_v0, ListStateV0};
+use ok_v0_biblabel::consume_optional_bibitem_label_fragment_v0;
 use ok_v0_env_support::{
     consume_named_environment_span_v0, is_supported_display_math_env_v0,
     is_supported_ok_block_env_v0, is_supported_ok_table_stub_env_v0, ok_thm_stub_marker_v0,
@@ -36,6 +38,7 @@ const MAX_OK_ENSUREMATH_TOKENS_V0: usize = 4096;
 const MAX_OK_HEADING_SHORT_TOKENS_V0: usize = 2048;
 const MAX_OK_CITE_NOTE_TOKENS_V0: usize = 2048;
 const MAX_OK_REF_NOTE_TOKENS_V0: usize = 2048;
+const MAX_OK_BIBLABEL_TOKENS_V0: usize = 256;
 fn skip_spaces(tokens: &[TokenV0], mut index: usize) -> usize {
     while matches!(tokens.get(index), Some(TokenV0::Space)) {
         index += 1;
@@ -827,28 +830,21 @@ fn consume_ok_body_token_v0(
         {
             match list_env {
                 Some(ListStateV0::Thebibliography) => {
-                    let mut label = Vec::new();
-                    let label_start = skip_spaces_until(tokens, index + 1, end);
-                    let has_label =
-                        matches!(tokens.get(label_start), Some(TokenV0::Char(b'[')));
-                    let after_optional = consume_optional_simple_bracket_span_capture_v0(
+                    let (after_optional, label) = consume_optional_bibitem_label_fragment_v0(
                         tokens,
                         index + 1,
                         end,
-                        MAX_OK_BRACKET_BYTES_V0,
-                        &mut label,
+                        MAX_OK_BIBLABEL_TOKENS_V0,
+                        MAX_OK_GROUP_DEPTH_V0,
                     )?;
                     let next_index =
                         consume_char_space_nested_group_non_empty_v0(tokens, after_optional, end)?;
                     body.push(0x0a);
                     body.push(b'-');
                     body.push(b' ');
-                    if has_label {
-                        if !label.iter().all(|byte| is_supported_ok_char_v0(*byte)) {
-                            return None;
-                        }
+                    if let Some(label_bytes) = label {
                         body.push(b'[');
-                        body.extend_from_slice(&label);
+                        body.extend_from_slice(&label_bytes);
                         body.push(b']');
                         body.push(b' ');
                     }
