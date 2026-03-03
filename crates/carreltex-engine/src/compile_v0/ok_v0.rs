@@ -184,7 +184,7 @@ pub(crate) fn extract_strict_ok_text_body_v0(tokens: &[TokenV0]) -> Option<Vec<u
             }
             Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"newline" => {
                 body.push(0x0a);
-                previous_was_space = false;
+                previous_was_space = true;
                 index += 1;
             }
             Some(TokenV0::Char(0x0c)) => {
@@ -194,7 +194,7 @@ pub(crate) fn extract_strict_ok_text_body_v0(tokens: &[TokenV0]) -> Option<Vec<u
             }
             Some(TokenV0::Char(0x0a)) => {
                 body.push(0x0a);
-                previous_was_space = false;
+                previous_was_space = true;
                 index += 1;
             }
             Some(TokenV0::Char(byte)) if is_supported_ok_char_v0(*byte) => {
