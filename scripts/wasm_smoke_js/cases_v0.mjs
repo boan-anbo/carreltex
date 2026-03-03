@@ -4,6 +4,7 @@ import { runEdefCases } from './cases_v0_edef.mjs';
 import { runNewcommandCases } from './cases_v0_newcommand.mjs';
 import { runProvidecommandCases } from './cases_v0_providecommand.mjs';
 import { runOkEmptyDocCases } from './cases_v0_ok_empty_doc.mjs';
+import { runOkNoopCases } from './cases_v0_ok_noops.mjs';
 import { runXdefNoexpandCases } from './cases_v0_xdef_noexpand.mjs';
 import { runIfnumCases } from './cases_v0_ifnum.mjs';
 import { runIfxCases } from './cases_v0_ifx.mjs';
@@ -387,6 +388,7 @@ export function runCasesV0(ctx, mem, helpers) {
   runNewcommandCases(ctx, { addMountedFile, expectInvalid, expectOk, readCompileLogBytes, readMainXdvArtifactBytes, assertEventsMatchLogAndStats, assertNoEvents });
   runProvidecommandCases(ctx, { addMountedFile, expectInvalid, expectOk, readCompileLogBytes, readMainXdvArtifactBytes, assertEventsMatchLogAndStats, assertNoEvents });
   runOkEmptyDocCases(ctx, { addMountedFile, expectOk, expectNotImplemented, readCompileReportJson, readCompileLogBytes, assertEventsMatchLogAndStats, readMainXdvArtifactBytes, callWithBytes: mem.callWithBytes });
+  runOkNoopCases(ctx, { addMountedFile, expectOk, expectNotImplemented, readCompileLogBytes, assertEventsMatchLogAndStats, readMainXdvArtifactBytes });
   runXdefNoexpandCases(ctx, { addMountedFile, expectInvalid, expectOk, expectNotImplemented, readCompileLogBytes, readMainXdvArtifactBytes, assertEventsMatchLogAndStats, assertMainXdvArtifactEmpty, assertNoEvents });
   runIfnumCases(ctx, { addMountedFile, expectInvalid, expectOk, readCompileLogBytes, readMainXdvArtifactBytes, assertEventsMatchLogAndStats, assertNoEvents });
   runIfxCases(ctx, { addMountedFile, expectInvalid, expectOk, readCompileLogBytes, readMainXdvArtifactBytes, assertEventsMatchLogAndStats, assertNoEvents });
