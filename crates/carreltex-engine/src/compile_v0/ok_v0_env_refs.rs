@@ -2,6 +2,9 @@ use crate::tex::tokenize_v0::TokenV0;
 use super::{
     consume_char_space_nested_group_v0, consume_optional_nested_bracket_span_v0,
 };
+use super::ok_v0_markers::{
+    is_cite_marker_command_v0, is_ref_marker_command_v0,
+};
 
 const MAX_OK_CITE_NOTE_TOKENS_V0: usize = 2048;
 const MAX_OK_REF_NOTE_TOKENS_V0: usize = 2048;
@@ -19,7 +22,7 @@ fn marker_for_env_command_v0(name: &[u8], env_markers: OkEnvMarkersV0) -> Option
             OkEnvMarkersV0::EquationFamily => Some(b"EQ"),
             OkEnvMarkersV0::TheoremFamily => Some(b"LBL"),
         },
-        b"cite" | b"citet" | b"citep" => Some(b"CITE"),
+        _ if is_cite_marker_command_v0(name) => Some(b"CITE"),
         b"ref" | b"autoref" => match env_markers {
             OkEnvMarkersV0::EquationFamily => Some(b"EQREF"),
             OkEnvMarkersV0::TheoremFamily => Some(b"THMREF"),
@@ -32,14 +35,6 @@ fn marker_for_env_command_v0(name: &[u8], env_markers: OkEnvMarkersV0) -> Option
         b"pageref" => Some(b"PAGEREF"),
         _ => None,
     }
-}
-
-fn is_cite_marker_command_v0(name: &[u8]) -> bool {
-    matches!(name, b"cite" | b"citet" | b"citep")
-}
-
-fn is_ref_marker_command_v0(name: &[u8]) -> bool {
-    matches!(name, b"ref" | b"autoref" | b"eqref" | b"pageref" | b"cref" | b"Cref")
 }
 
 fn emit_marker_v0(marker: &[u8], body: &mut Vec<u8>, previous_was_space: &mut bool) {
@@ -65,6 +60,14 @@ pub(super) fn emit_ok_markers_in_env_v0(
             TokenV0::ControlSeq(name) => {
                 if let Some(marker) = marker_for_env_command_v0(name.as_slice(), env_markers) {
                     let mut arg_start = index + 1;
+                    if is_cite_marker_command_v0(name.as_slice()) {
+                        while matches!(tokens.get(arg_start), Some(TokenV0::Space)) {
+                            arg_start += 1;
+                        }
+                        if matches!(tokens.get(arg_start), Some(TokenV0::Char(b'*'))) {
+                            arg_start += 1;
+                        }
+                    }
                     if is_cite_marker_command_v0(name.as_slice())
                         || is_ref_marker_command_v0(name.as_slice())
                     {

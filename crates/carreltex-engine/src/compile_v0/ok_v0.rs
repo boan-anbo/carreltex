@@ -13,6 +13,8 @@ mod ok_v0_ensuremath;
 mod ok_v0_lists;
 #[path = "ok_v0_biblabel.rs"]
 mod ok_v0_biblabel;
+#[path = "ok_v0_markers.rs"]
+mod ok_v0_markers;
 use ok_v0_env_refs::{emit_ok_markers_in_env_v0, OkEnvMarkersV0};
 use ok_v0_optional_brackets::{
     consume_optional_digits_bracket_span_v0, consume_optional_heading_short_title_v0,
@@ -22,6 +24,7 @@ use ok_v0_dollar_math::{consume_display_math_dollar_span_v0, consume_inline_math
 use ok_v0_ensuremath::{consume_inline_math_group_span_v0, consume_math_control_span_v0};
 use ok_v0_lists::{begin_list_v0, emit_list_item_v0, end_list_v0, list_stack_active_v0, ListStateV0};
 use ok_v0_biblabel::consume_optional_bibitem_label_fragment_v0;
+use ok_v0_markers::{is_cite_marker_command_v0, is_ref_marker_command_v0, ok_marker_command_v0};
 use ok_v0_env_support::{
     consume_named_environment_span_v0, is_supported_display_math_env_v0,
     is_supported_ok_block_env_v0, is_supported_ok_table_stub_env_v0, ok_thm_stub_marker_v0,
@@ -234,24 +237,6 @@ fn is_supported_ok_style_declaration_v0(name: &[u8]) -> bool {
             | b"em"
             | b"centering"
     )
-}
-
-fn ok_marker_command_v0(name: &[u8]) -> Option<&'static [u8]> {
-    match name {
-        b"cite" | b"citet" | b"citep" => Some(b"CITE"),
-        b"ref" | b"autoref" | b"cref" | b"Cref" => Some(b"REF"),
-        b"pageref" => Some(b"PAGEREF"),
-        b"eqref" => Some(b"EQREF"),
-        _ => None,
-    }
-}
-
-fn is_cite_marker_command_v0(name: &[u8]) -> bool {
-    matches!(name, b"cite" | b"citet" | b"citep")
-}
-
-fn is_ref_marker_command_v0(name: &[u8]) -> bool {
-    matches!(name, b"ref" | b"autoref" | b"eqref" | b"pageref" | b"cref" | b"Cref")
 }
 
 fn consume_ok_group_fragment_v0(
@@ -569,9 +554,13 @@ fn consume_ok_body_token_v0(
         {
             let marker = ok_marker_command_v0(name.as_slice())?;
             let mut arg_start = index + 1;
-            if is_cite_marker_command_v0(name.as_slice())
-                || is_ref_marker_command_v0(name.as_slice())
-            {
+            if is_cite_marker_command_v0(name.as_slice()) {
+                arg_start = skip_spaces_until(tokens, arg_start, end);
+                if matches!(tokens.get(arg_start), Some(TokenV0::Char(b'*'))) {
+                    arg_start += 1;
+                }
+            }
+            if is_cite_marker_command_v0(name.as_slice()) || is_ref_marker_command_v0(name.as_slice()) {
                 let max_note_tokens = if is_cite_marker_command_v0(name.as_slice()) {
                     MAX_OK_CITE_NOTE_TOKENS_V0
                 } else {
