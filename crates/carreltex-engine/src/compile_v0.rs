@@ -26,6 +26,8 @@ mod ok_v0_footnote_tests;
 #[cfg(test)]
 mod ok_v0_quote_tests;
 #[cfg(test)]
+mod ok_v0_scripts_tests;
+#[cfg(test)]
 mod ok_v0_tests;
 #[cfg(test)]
 mod providecommand_v0_tests;

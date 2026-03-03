@@ -4,6 +4,7 @@ import { runOkFootnoteCases } from './cases_v0_ok_footnotes.mjs';
 import { runOkLinkCases } from './cases_v0_ok_links.mjs';
 import { runOkListCases } from './cases_v0_ok_lists.mjs';
 import { runOkQuoteCases } from './cases_v0_ok_quotes.mjs';
+import { runOkScriptCases } from './cases_v0_ok_scripts.mjs';
 import { runOkWrapperCases } from './cases_v0_ok_wrappers.mjs';
 
 export function runOkEmptyDocCases(ctx, helpers) {
@@ -721,6 +722,7 @@ export function runOkEmptyDocCases(ctx, helpers) {
   runOkColorCases(ctx, okBodyHelpers, stats);
   runOkFootnoteCases(ctx, okBodyHelpers, stats);
   runOkQuoteCases(ctx, okBodyHelpers, stats);
+  runOkScriptCases(ctx, okBodyHelpers, stats);
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before OK pagebreak text doc case failed');
   }
