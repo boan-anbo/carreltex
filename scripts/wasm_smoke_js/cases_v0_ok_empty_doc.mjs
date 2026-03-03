@@ -553,6 +553,17 @@ export function runOkEmptyDocCases(ctx, helpers) {
   if (layoutPages < 2) {
     throw new Error(`ok request layout controls expected pages >= 2, got ${layoutPages}`);
   }
+  const xdvLayoutControlsRepeat = runCompileRequestOkCase(
+    10,
+    'ok_request_layout_controls_repeat',
+    { maxLinesPerPage: 1, lineAdvanceSp: 786432, glyphAdvanceSp: 65536 },
+  );
+  const repeatPages = countPagesInDviV2(xdvLayoutControlsRepeat, 'ok_request_layout_controls_repeat');
+  if (repeatPages !== layoutPages) {
+    throw new Error(
+      `ok request layout controls repeat expected page count=${layoutPages}, got ${repeatPages}`,
+    );
+  }
 
   if (ctx.compileRequestSetOkMaxLinesPerPage(0) === 0) {
     throw new Error('compile_request_set_ok_max_lines_per_page_v0(0) expected failure');
@@ -571,5 +582,32 @@ export function runOkEmptyDocCases(ctx, helpers) {
   }
   if (ctx.compileRequestSetOkGlyphAdvanceSp(8388608) === 0) {
     throw new Error('compile_request_set_ok_glyph_advance_sp_v0(8388608) expected failure');
+  }
+
+  if (ctx.mountReset() !== 0) {
+    throw new Error('mount_reset before OK glyph advance one case failed');
+  }
+  const glyphAdvanceOneMain = new TextEncoder().encode(
+    '\\documentclass{article}\\begin{document}i.\\end{document}',
+  );
+  if (addMountedFile('main.tex', glyphAdvanceOneMain, 'ok_glyph_advance_one_main') !== 0) {
+    throw new Error('mount_add_file(ok glyph advance one main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) {
+    throw new Error('mount_finalize for OK glyph advance one case failed');
+  }
+  const xdvGlyphAdvanceOne = runCompileRequestOkCase(
+    80,
+    'ok_glyph_advance_one',
+    { glyphAdvanceSp: 1 },
+  );
+  const movementGlyphAdvanceOne = countMovementOpsInTextPages(
+    xdvGlyphAdvanceOne,
+    'ok_glyph_advance_one',
+  );
+  if (movementGlyphAdvanceOne.right3PositiveTotal !== 2) {
+    throw new Error(
+      `ok glyph advance one expected positive right3 total=2, got ${movementGlyphAdvanceOne.right3PositiveTotal}`,
+    );
   }
 }
