@@ -69,6 +69,102 @@ export function runOkEnvRefCases(ctx, helpers, baselineStats) {
     );
   }
 
+  if (ctx.mountReset() !== 0) throw new Error('mount_reset before OK equation cref case failed');
+  const equationCrefDocBytes = new TextEncoder().encode(
+    '\\documentclass{article}\\begin{document}A\\begin{equation}x\\cref{r}\\end{equation}B\\end{document}',
+  );
+  if (addMountedFile('main.tex', equationCrefDocBytes, 'ok_env_cref_equation_main') !== 0) {
+    throw new Error('mount_add_file(ok equation cref main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) throw new Error('mount_finalize for OK equation cref case failed');
+  expectOk(ctx.compileMain(), 'compile_main_v0(ok equation cref)');
+  const equationCrefLogBytes = readCompileLogBytes();
+  if (equationCrefLogBytes.length !== 0) {
+    throw new Error(`compile_main(ok equation cref) expected empty log, got ${equationCrefLogBytes.length} bytes`);
+  }
+  assertEventsMatchLogAndStats(
+    equationCrefLogBytes,
+    { char_count: baselineStats.char_count + 20 },
+    'compile_main(ok equation cref)',
+  );
+  const equationCrefXdvBytes = readMainXdvArtifactBytes('compile_main(ok equation cref)');
+  if (equationCrefXdvBytes.length === 0) {
+    throw new Error('compile_main(ok equation cref) main.xdv expected non-empty bytes');
+  }
+  const equationCrefMovement = countMovementOpsInTextPages(
+    equationCrefXdvBytes,
+    'compile_main(ok equation cref)',
+  );
+  if (equationCrefMovement.right3PositiveTotal !== 1015808) {
+    throw new Error(
+      `compile_main(ok equation cref) expected right3PositiveTotal=1015808, got ${equationCrefMovement.right3PositiveTotal}`,
+    );
+  }
+
+  if (ctx.mountReset() !== 0) throw new Error('mount_reset before OK theorem Cref case failed');
+  const theoremCrefDocBytes = new TextEncoder().encode(
+    '\\documentclass{article}\\begin{document}A\\begin{theorem}x\\Cref{r}\\end{theorem}B\\end{document}',
+  );
+  if (addMountedFile('main.tex', theoremCrefDocBytes, 'ok_env_cref_theorem_main') !== 0) {
+    throw new Error('mount_add_file(ok theorem Cref main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) throw new Error('mount_finalize for OK theorem Cref case failed');
+  expectOk(ctx.compileMain(), 'compile_main_v0(ok theorem Cref)');
+  const theoremCrefLogBytes = readCompileLogBytes();
+  if (theoremCrefLogBytes.length !== 0) {
+    throw new Error(`compile_main(ok theorem Cref) expected empty log, got ${theoremCrefLogBytes.length} bytes`);
+  }
+  assertEventsMatchLogAndStats(
+    theoremCrefLogBytes,
+    { char_count: baselineStats.char_count + 18 },
+    'compile_main(ok theorem Cref)',
+  );
+  const theoremCrefXdvBytes = readMainXdvArtifactBytes('compile_main(ok theorem Cref)');
+  if (theoremCrefXdvBytes.length === 0) {
+    throw new Error('compile_main(ok theorem Cref) main.xdv expected non-empty bytes');
+  }
+  const theoremCrefMovement = countMovementOpsInTextPages(
+    theoremCrefXdvBytes,
+    'compile_main(ok theorem Cref)',
+  );
+  if (theoremCrefMovement.right3PositiveTotal !== 1015808) {
+    throw new Error(
+      `compile_main(ok theorem Cref) expected right3PositiveTotal=1015808, got ${theoremCrefMovement.right3PositiveTotal}`,
+    );
+  }
+
+  if (ctx.mountReset() !== 0) throw new Error('mount_reset before OK equation pageref case failed');
+  const equationPagerefDocBytes = new TextEncoder().encode(
+    '\\documentclass{article}\\begin{document}A\\begin{equation}x\\pageref{r}\\end{equation}B\\end{document}',
+  );
+  if (addMountedFile('main.tex', equationPagerefDocBytes, 'ok_env_pageref_equation_main') !== 0) {
+    throw new Error('mount_add_file(ok equation pageref main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) throw new Error('mount_finalize for OK equation pageref case failed');
+  expectOk(ctx.compileMain(), 'compile_main_v0(ok equation pageref)');
+  const equationPagerefLogBytes = readCompileLogBytes();
+  if (equationPagerefLogBytes.length !== 0) {
+    throw new Error(`compile_main(ok equation pageref) expected empty log, got ${equationPagerefLogBytes.length} bytes`);
+  }
+  assertEventsMatchLogAndStats(
+    equationPagerefLogBytes,
+    { char_count: baselineStats.char_count + 20 },
+    'compile_main(ok equation pageref)',
+  );
+  const equationPagerefXdvBytes = readMainXdvArtifactBytes('compile_main(ok equation pageref)');
+  if (equationPagerefXdvBytes.length === 0) {
+    throw new Error('compile_main(ok equation pageref) main.xdv expected non-empty bytes');
+  }
+  const equationPagerefMovement = countMovementOpsInTextPages(
+    equationPagerefXdvBytes,
+    'compile_main(ok equation pageref)',
+  );
+  if (equationPagerefMovement.right3PositiveTotal !== 1146880) {
+    throw new Error(
+      `compile_main(ok equation pageref) expected right3PositiveTotal=1146880, got ${equationPagerefMovement.right3PositiveTotal}`,
+    );
+  }
+
   if (ctx.mountReset() !== 0) throw new Error('mount_reset before OK top-level ref case failed');
   const refOutsideEnvDocBytes = new TextEncoder().encode(
     '\\documentclass{article}\\begin{document}A\\ref{r}B\\end{document}',
@@ -98,6 +194,38 @@ export function runOkEnvRefCases(ctx, helpers, baselineStats) {
   if (refOutsideMovement.right3PositiveTotal !== 491520) {
     throw new Error(
       `compile_main(ok top-level ref) expected right3PositiveTotal=491520, got ${refOutsideMovement.right3PositiveTotal}`,
+    );
+  }
+
+  if (ctx.mountReset() !== 0) throw new Error('mount_reset before OK top-level pageref case failed');
+  const pagerefOutsideEnvDocBytes = new TextEncoder().encode(
+    '\\documentclass{article}\\begin{document}A\\pageref{r}B\\end{document}',
+  );
+  if (addMountedFile('main.tex', pagerefOutsideEnvDocBytes, 'ok_env_ref_pageref_outside_main') !== 0) {
+    throw new Error('mount_add_file(ok top-level pageref main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) throw new Error('mount_finalize for OK top-level pageref case failed');
+  expectOk(ctx.compileMain(), 'compile_main_v0(ok top-level pageref)');
+  const pagerefOutsideLogBytes = readCompileLogBytes();
+  if (pagerefOutsideLogBytes.length !== 0) {
+    throw new Error(`compile_main(ok top-level pageref) expected empty log, got ${pagerefOutsideLogBytes.length} bytes`);
+  }
+  assertEventsMatchLogAndStats(
+    pagerefOutsideLogBytes,
+    { char_count: baselineStats.char_count + 3 },
+    'compile_main(ok top-level pageref)',
+  );
+  const pagerefOutsideXdvBytes = readMainXdvArtifactBytes('compile_main(ok top-level pageref)');
+  if (pagerefOutsideXdvBytes.length === 0) {
+    throw new Error('compile_main(ok top-level pageref) main.xdv expected non-empty bytes');
+  }
+  const pagerefOutsideMovement = countMovementOpsInTextPages(
+    pagerefOutsideXdvBytes,
+    'compile_main(ok top-level pageref)',
+  );
+  if (pagerefOutsideMovement.right3PositiveTotal !== 753664) {
+    throw new Error(
+      `compile_main(ok top-level pageref) expected right3PositiveTotal=753664, got ${pagerefOutsideMovement.right3PositiveTotal}`,
     );
   }
 }

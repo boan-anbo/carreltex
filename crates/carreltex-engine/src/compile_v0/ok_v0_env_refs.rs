@@ -18,7 +18,12 @@ fn marker_for_env_command_v0(name: &[u8], env_markers: OkEnvMarkersV0) -> Option
             OkEnvMarkersV0::EquationFamily => Some(b"EQREF"),
             OkEnvMarkersV0::TheoremFamily => Some(b"THMREF"),
         },
+        b"cref" | b"Cref" => match env_markers {
+            OkEnvMarkersV0::EquationFamily => Some(b"EQREF"),
+            OkEnvMarkersV0::TheoremFamily => Some(b"THMREF"),
+        },
         b"eqref" if matches!(env_markers, OkEnvMarkersV0::EquationFamily) => Some(b"EQREF"),
+        b"pageref" => Some(b"PAGEREF"),
         _ => None,
     }
 }
