@@ -1,6 +1,5 @@
 use crate::tex::tokenize_v0::TokenV0;
 
-const MAX_OK_MATH_ENV_TOKENS_V0: usize = 4096;
 const MAX_OK_ENV_SCAN_TOKENS_V0: usize = 8192;
 
 fn skip_spaces_until(tokens: &[TokenV0], mut index: usize, end_limit: usize) -> usize {
@@ -43,7 +42,7 @@ fn consume_char_only_group_payload_v0(
     None
 }
 
-fn is_supported_display_math_env_v0(name: &[u8]) -> bool {
+pub(super) fn is_supported_display_math_env_v0(name: &[u8]) -> bool {
     matches!(
         name,
         b"equation"
@@ -122,28 +121,4 @@ pub(super) fn consume_named_environment_span_v0(
         }
     }
     None
-}
-
-pub(super) fn consume_display_math_environment_span_v0(
-    tokens: &[TokenV0],
-    begin_index: usize,
-    end_limit: usize,
-) -> Option<usize> {
-    let (env_name, _, _, next_index) =
-        consume_named_environment_span_v0(tokens, begin_index, end_limit)?;
-    if !is_supported_display_math_env_v0(&env_name) {
-        return None;
-    }
-    if tokens[begin_index..next_index]
-        .iter()
-        .filter(|token| matches!(token, TokenV0::ControlSeq(name) if name.as_slice() == b"begin"))
-        .count()
-        > 1
-    {
-        return None;
-    }
-    if next_index - begin_index > MAX_OK_MATH_ENV_TOKENS_V0 {
-        return None;
-    }
-    Some(next_index)
 }

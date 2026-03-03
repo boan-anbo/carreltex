@@ -2,7 +2,7 @@ use crate::tex::tokenize_v0::TokenV0;
 #[path = "ok_v0_env_support.rs"]
 mod ok_v0_env_support;
 use ok_v0_env_support::{
-    consume_display_math_environment_span_v0, consume_named_environment_span_v0,
+    consume_named_environment_span_v0, is_supported_display_math_env_v0,
     is_supported_ok_block_env_v0, is_supported_ok_table_stub_env_v0, ok_thm_stub_marker_v0,
 };
 pub(crate) const MAX_OK_TEXT_BYTES_V0: usize = 64 * 1024;
@@ -11,6 +11,7 @@ pub(crate) const OK_LINE_ADVANCE_SP_V0: i32 = 786_432;
 const MAX_OK_GROUP_DEPTH_V0: usize = 64;
 const MAX_OK_BRACKET_BYTES_V0: usize = 256;
 const MAX_OK_MATH_SCAN_TOKENS_V0: usize = 4096;
+const MAX_OK_MATH_ENV_TOKENS_V0: usize = 4096;
 
 enum ListEnvV0 {
     Itemize,
@@ -406,19 +407,6 @@ fn emit_ok_verbatim_marker_v0(body: &mut Vec<u8>, previous_was_space: &mut bool)
     *previous_was_space = true;
 }
 
-fn emit_ok_table_marker_v0(body: &mut Vec<u8>, previous_was_space: &mut bool) {
-    body.push(0x0a);
-    body.push(b'[');
-    body.push(b'T');
-    body.push(b'A');
-    body.push(b'B');
-    body.push(b'L');
-    body.push(b'E');
-    body.push(b']');
-    body.push(0x0a);
-    *previous_was_space = true;
-}
-
 fn emit_ok_block_marker_v0(body: &mut Vec<u8>, marker: &[u8], previous_was_space: &mut bool) {
     body.push(0x0a);
     body.push(b'[');
@@ -426,6 +414,34 @@ fn emit_ok_block_marker_v0(body: &mut Vec<u8>, marker: &[u8], previous_was_space
     body.push(b']');
     body.push(0x0a);
     *previous_was_space = true;
+}
+
+fn emit_ok_label_markers_in_env_v0(
+    tokens: &[TokenV0],
+    start: usize,
+    end: usize,
+    label_marker: &[u8],
+    body: &mut Vec<u8>,
+    previous_was_space: &mut bool,
+) -> Option<()> {
+    let mut index = start;
+    while index < end {
+        match tokens.get(index)? {
+            TokenV0::ControlSeq(name) if name.as_slice() == b"label" => {
+                index = consume_char_space_nested_group_v0(tokens, index + 1, end)?;
+                body.push(b' ');
+                body.push(b'[');
+                body.extend_from_slice(label_marker);
+                body.push(b']');
+                *previous_was_space = false;
+            }
+            TokenV0::ControlSeq(name) if name.as_slice() == b"begin" => return None,
+            _ => {
+                index += 1;
+            }
+        }
+    }
+    Some(())
 }
 
 fn consume_ok_body_range_v0(
@@ -705,17 +721,36 @@ fn consume_ok_body_token_v0(
                     return Some(next_index);
                 }
                 if is_supported_ok_table_stub_env_v0(&env_name) {
-                    emit_ok_table_marker_v0(body, previous_was_space);
+                    emit_ok_block_marker_v0(body, b"TABLE", previous_was_space);
                     return Some(next_index);
                 }
                 if let Some(marker) = ok_thm_stub_marker_v0(&env_name) {
                     emit_ok_block_marker_v0(body, marker, previous_was_space);
+                    emit_ok_label_markers_in_env_v0(
+                        tokens,
+                        inner_start,
+                        inner_end,
+                        b"LBL",
+                        body,
+                        previous_was_space,
+                    )?;
                     return Some(next_index);
                 }
-            }
-            if let Some(next_index) = consume_display_math_environment_span_v0(tokens, index, end) {
-                emit_ok_display_math_marker_v0(body, previous_was_space);
-                return Some(next_index);
+                if is_supported_display_math_env_v0(&env_name) {
+                    if next_index - index > MAX_OK_MATH_ENV_TOKENS_V0 {
+                        return None;
+                    }
+                    emit_ok_display_math_marker_v0(body, previous_was_space);
+                    emit_ok_label_markers_in_env_v0(
+                        tokens,
+                        inner_start,
+                        inner_end,
+                        b"EQ",
+                        body,
+                        previous_was_space,
+                    )?;
+                    return Some(next_index);
+                }
             }
             if let Some(next_index) = consume_group_literal(tokens, cursor, b"itemize") {
                 *list_env = Some(ListEnvV0::Itemize);
