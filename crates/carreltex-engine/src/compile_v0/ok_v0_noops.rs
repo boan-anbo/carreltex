@@ -176,6 +176,20 @@ pub(super) fn is_ok_noop_command_v0(name: &[u8]) -> bool {
             | b"samepage"
             | b"nobreak"
             | b"break"
+            | b"tiny"
+            | b"scriptsize"
+            | b"footnotesize"
+            | b"small"
+            | b"normalsize"
+            | b"large"
+            | b"Large"
+            | b"LARGE"
+            | b"huge"
+            | b"Huge"
+            | b"normalfont"
+            | b"selectfont"
+            | b"raggedright"
+            | b"raggedleft"
             | b"vspace"
             | b"hspace"
             | b"setcounter"
@@ -184,6 +198,9 @@ pub(super) fn is_ok_noop_command_v0(name: &[u8]) -> bool {
             | b"refstepcounter"
             | b"setlength"
             | b"addtolength"
+            | b"fontsize"
+            | b"linespread"
+            | b"setstretch"
     )
 }
 
@@ -206,7 +223,21 @@ pub(super) fn consume_ok_noop_command_v0(
         | b"filbreak"
         | b"samepage"
         | b"nobreak"
-        | b"break" => Some(index + 1),
+        | b"break"
+        | b"tiny"
+        | b"scriptsize"
+        | b"footnotesize"
+        | b"small"
+        | b"normalsize"
+        | b"large"
+        | b"Large"
+        | b"LARGE"
+        | b"huge"
+        | b"Huge"
+        | b"normalfont"
+        | b"selectfont"
+        | b"raggedright"
+        | b"raggedleft" => Some(index + 1),
         b"pagebreak" | b"nopagebreak" | b"linebreak" | b"nolinebreak" => {
             consume_optional_digits_bracket_span_v0(tokens, index + 1, end, 8)
         }
@@ -243,6 +274,13 @@ pub(super) fn consume_ok_noop_command_v0(
         b"setlength" | b"addtolength" => {
             let next = consume_length_register_group_v0(tokens, index + 1, end)?;
             consume_length_expr_group_v0(tokens, next, end)
+        }
+        b"fontsize" => {
+            let next = consume_length_expr_group_v0(tokens, index + 1, end)?;
+            consume_length_expr_group_v0(tokens, next, end)
+        }
+        b"linespread" | b"setstretch" => {
+            consume_length_expr_group_v0(tokens, index + 1, end)
         }
         _ => None,
     }
