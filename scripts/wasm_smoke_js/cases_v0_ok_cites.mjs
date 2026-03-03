@@ -87,6 +87,58 @@ export function runOkCiteCases(ctx, helpers, baselineStats) {
     throw new Error(`compile_main(ok cite two-note) expected right3PositiveTotal=557056, got ${citeTwoNoteMovement.right3PositiveTotal}`);
   }
 
+  if (ctx.mountReset() !== 0) throw new Error('mount_reset before OK citep-star case failed');
+  const citepStarDocBytes = new TextEncoder().encode(
+    '\\documentclass{article}\\begin{document}A\\citep*{X}B\\end{document}',
+  );
+  if (addMountedFile('main.tex', citepStarDocBytes, 'ok_citep_star_main') !== 0) {
+    throw new Error('mount_add_file(ok citep-star main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) throw new Error('mount_finalize for OK citep-star case failed');
+  expectOk(ctx.compileMain(), 'compile_main_v0(ok citep-star)');
+  const citepStarLogBytes = readCompileLogBytes();
+  if (citepStarLogBytes.length !== 0) {
+    throw new Error(`compile_main(ok citep-star) expected empty log, got ${citepStarLogBytes.length} bytes`);
+  }
+  assertEventsMatchLogAndStats(citepStarLogBytes, { char_count: baselineStats.char_count + 4 }, 'compile_main(ok citep-star)');
+  const citepStarXdvBytes = readMainXdvArtifactBytes('compile_main(ok citep-star)');
+  if (citepStarXdvBytes.length === 0) {
+    throw new Error('compile_main(ok citep-star) main.xdv expected non-empty bytes');
+  }
+  const citepStarMovement = countMovementOpsInTextPages(citepStarXdvBytes, 'compile_main(ok citep-star)');
+  if (citepStarMovement.right3 !== 9) {
+    throw new Error(`compile_main(ok citep-star) expected right3=9, got ${citepStarMovement.right3}`);
+  }
+  if (citepStarMovement.right3PositiveTotal !== 557056) {
+    throw new Error(`compile_main(ok citep-star) expected right3PositiveTotal=557056, got ${citepStarMovement.right3PositiveTotal}`);
+  }
+
+  if (ctx.mountReset() !== 0) throw new Error('mount_reset before OK parencite case failed');
+  const parenciteDocBytes = new TextEncoder().encode(
+    '\\documentclass{article}\\begin{document}A\\parencite{X}B\\end{document}',
+  );
+  if (addMountedFile('main.tex', parenciteDocBytes, 'ok_parencite_main') !== 0) {
+    throw new Error('mount_add_file(ok parencite main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) throw new Error('mount_finalize for OK parencite case failed');
+  expectOk(ctx.compileMain(), 'compile_main_v0(ok parencite)');
+  const parenciteLogBytes = readCompileLogBytes();
+  if (parenciteLogBytes.length !== 0) {
+    throw new Error(`compile_main(ok parencite) expected empty log, got ${parenciteLogBytes.length} bytes`);
+  }
+  assertEventsMatchLogAndStats(parenciteLogBytes, { char_count: baselineStats.char_count + 3 }, 'compile_main(ok parencite)');
+  const parenciteXdvBytes = readMainXdvArtifactBytes('compile_main(ok parencite)');
+  if (parenciteXdvBytes.length === 0) {
+    throw new Error('compile_main(ok parencite) main.xdv expected non-empty bytes');
+  }
+  const parenciteMovement = countMovementOpsInTextPages(parenciteXdvBytes, 'compile_main(ok parencite)');
+  if (parenciteMovement.right3 !== 9) {
+    throw new Error(`compile_main(ok parencite) expected right3=9, got ${parenciteMovement.right3}`);
+  }
+  if (parenciteMovement.right3PositiveTotal !== 557056) {
+    throw new Error(`compile_main(ok parencite) expected right3PositiveTotal=557056, got ${parenciteMovement.right3PositiveTotal}`);
+  }
+
   if (ctx.mountReset() !== 0) throw new Error('mount_reset before cite missing-arg invalid case failed');
   const citeMissingArgDocBytes = new TextEncoder().encode(
     '\\documentclass{article}\\begin{document}\\cite X\\end{document}',
