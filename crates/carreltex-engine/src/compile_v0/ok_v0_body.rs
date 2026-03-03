@@ -15,6 +15,7 @@ use super::ok_v0_env_support::{
     consume_named_environment_span_v0, is_supported_display_math_env_v0,
     is_supported_ok_block_env_v0, is_supported_ok_table_stub_env_v0, ok_thm_stub_marker_v0,
 };
+use super::ok_v0_title_state::OkTitleStateV0;
 
 pub(super) fn skip_spaces(tokens: &[TokenV0], mut index: usize) -> usize {
     while matches!(tokens.get(index), Some(TokenV0::Space)) {
@@ -210,10 +211,11 @@ fn is_supported_ok_style_declaration_v0(name: &[u8]) -> bool {
     )
 }
 
-fn consume_ok_group_fragment_v0(
+pub(super) fn consume_ok_group_fragment_v0(
     tokens: &[TokenV0],
     index: usize,
     end: usize,
+    title_state: &mut OkTitleStateV0,
     body: &mut Vec<u8>,
     previous_was_space: &mut bool,
 ) -> Option<usize> {
@@ -226,6 +228,7 @@ fn consume_ok_group_fragment_v0(
         inner_start,
         inner_end,
         true,
+        title_state,
         &mut nested_list_env,
         body,
         previous_was_space,
@@ -233,13 +236,19 @@ fn consume_ok_group_fragment_v0(
     Some(next_index)
 }
 
-fn consume_ok_group_fragment_discard_v0(tokens: &[TokenV0], index: usize, end: usize) -> Option<usize> {
+fn consume_ok_group_fragment_discard_v0(
+    tokens: &[TokenV0],
+    index: usize,
+    end: usize,
+    title_state: &mut OkTitleStateV0,
+) -> Option<usize> {
     let mut scratch_body = Vec::new();
     let mut scratch_previous_was_space = false;
     consume_ok_group_fragment_v0(
         tokens,
         index,
         end,
+        title_state,
         &mut scratch_body,
         &mut scratch_previous_was_space,
     )
@@ -332,6 +341,7 @@ fn consume_ok_body_range_v0(
     start: usize,
     end: usize,
     allow_nested_groups: bool,
+    title_state: &mut OkTitleStateV0,
     list_env: &mut Option<ListStateV0>,
     body: &mut Vec<u8>,
     previous_was_space: &mut bool,
@@ -343,6 +353,7 @@ fn consume_ok_body_range_v0(
             index,
             end,
             allow_nested_groups,
+            title_state,
             list_env,
             body,
             previous_was_space,
@@ -356,6 +367,7 @@ pub(super) fn consume_ok_body_token_v0(
     index: usize,
     end: usize,
     allow_nested_groups: bool,
+    title_state: &mut OkTitleStateV0,
     list_env: &mut Option<ListStateV0>,
     body: &mut Vec<u8>,
     previous_was_space: &mut bool,
@@ -388,7 +400,41 @@ pub(super) fn consume_ok_body_token_v0(
             }
             Some(index + 1)
         }
-        Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"maketitle" => Some(index + 1),
+        Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"maketitle" => {
+            if let Some(title) = title_state.title.as_deref() {
+                body.push(0x0a);
+                body.extend_from_slice(title);
+                body.push(0x0a);
+                *previous_was_space = true;
+            }
+            if let Some(author) = title_state.author.as_deref() {
+                body.extend_from_slice(author);
+                body.push(0x0a);
+                *previous_was_space = true;
+            }
+            if let Some(date) = title_state.date.as_deref() {
+                body.extend_from_slice(date);
+                body.push(0x0a);
+                *previous_was_space = true;
+            }
+            Some(index + 1)
+        }
+        Some(TokenV0::ControlSeq(name))
+            if name.as_slice() == b"title" || name.as_slice() == b"author" || name.as_slice() == b"date" =>
+        {
+            let mut fragment = Vec::new();
+            let mut fragment_previous_was_space = false;
+            let next_index = consume_ok_group_fragment_v0(
+                tokens,
+                index + 1,
+                end,
+                title_state,
+                &mut fragment,
+                &mut fragment_previous_was_space,
+            )?;
+            title_state.set_field(name.as_slice(), fragment);
+            Some(next_index)
+        }
         Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"noindent" => Some(index + 1),
         Some(TokenV0::ControlSeq(name))
             if is_supported_ok_style_declaration_v0(name.as_slice()) =>
@@ -473,6 +519,7 @@ pub(super) fn consume_ok_body_token_v0(
                 tokens,
                 arg_start,
                 end,
+                title_state,
                 &mut footnote_text,
                 &mut footnote_previous_was_space,
             )?;
@@ -516,6 +563,7 @@ pub(super) fn consume_ok_body_token_v0(
                 tokens,
                 cursor,
                 end,
+                title_state,
                 &mut caption_text,
                 &mut caption_previous_was_space,
             )?;
@@ -572,20 +620,21 @@ pub(super) fn consume_ok_body_token_v0(
                 tokens,
                 index + 1,
                 end,
+                title_state,
                 &mut scratch_body,
                 &mut scratch_previous_was_space,
             )?;
-            consume_ok_group_fragment_v0(tokens, first_arg_end, end, body, previous_was_space)
+            consume_ok_group_fragment_v0(tokens, first_arg_end, end, title_state, body, previous_was_space)
         }
         Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"url" => {
-            consume_ok_group_fragment_v0(tokens, index + 1, end, body, previous_was_space)
+            consume_ok_group_fragment_v0(tokens, index + 1, end, title_state, body, previous_was_space)
         }
         Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"textcolor" => {
-            let first_arg_end = consume_ok_group_fragment_discard_v0(tokens, index + 1, end)?;
-            consume_ok_group_fragment_v0(tokens, first_arg_end, end, body, previous_was_space)
+            let first_arg_end = consume_ok_group_fragment_discard_v0(tokens, index + 1, end, title_state)?;
+            consume_ok_group_fragment_v0(tokens, first_arg_end, end, title_state, body, previous_was_space)
         }
         Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"color" => {
-            consume_ok_group_fragment_discard_v0(tokens, index + 1, end)
+            consume_ok_group_fragment_discard_v0(tokens, index + 1, end, title_state)
         }
         Some(TokenV0::ControlSeq(name))
             if name.as_slice() == b"enquote" || name.as_slice() == b"quote" =>
@@ -596,6 +645,7 @@ pub(super) fn consume_ok_body_token_v0(
                 tokens,
                 index + 1,
                 end,
+                title_state,
                 &mut quote_text,
                 &mut quote_previous_was_space,
             )?;
@@ -608,7 +658,7 @@ pub(super) fn consume_ok_body_token_v0(
         Some(TokenV0::ControlSeq(name))
             if name.as_slice() == b"mbox" || name.as_slice() == b"fbox" =>
         {
-            consume_ok_group_fragment_v0(tokens, index + 1, end, body, previous_was_space)
+            consume_ok_group_fragment_v0(tokens, index + 1, end, title_state, body, previous_was_space)
         }
         Some(TokenV0::ControlSeq(name))
             if name.as_slice() == b"makebox" || name.as_slice() == b"framebox" =>
@@ -626,7 +676,7 @@ pub(super) fn consume_ok_body_token_v0(
                 end,
                 super::MAX_OK_BRACKET_BYTES_V0,
             )?;
-            consume_ok_group_fragment_v0(tokens, cursor, end, body, previous_was_space)
+            consume_ok_group_fragment_v0(tokens, cursor, end, title_state, body, previous_was_space)
         }
         Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"hbox" => {
             let (inner_start, inner_end, next_index) = consume_balanced_group_bounds_v0(
@@ -640,6 +690,7 @@ pub(super) fn consume_ok_body_token_v0(
                 inner_start,
                 inner_end,
                 true,
+                title_state,
                 list_env,
                 body,
                 previous_was_space,
@@ -657,6 +708,7 @@ pub(super) fn consume_ok_body_token_v0(
                 inner_start,
                 inner_end,
                 true,
+                title_state,
                 list_env,
                 body,
                 previous_was_space,
@@ -688,6 +740,7 @@ pub(super) fn consume_ok_body_token_v0(
                 inner_start,
                 inner_end,
                 true,
+                title_state,
                 list_env,
                 body,
                 previous_was_space,
@@ -723,6 +776,7 @@ pub(super) fn consume_ok_body_token_v0(
                         inner_start,
                         inner_end,
                         false,
+                        title_state,
                         &mut inner_list_env,
                         body,
                         previous_was_space,
@@ -883,6 +937,7 @@ pub(super) fn consume_ok_body_token_v0(
                 inner_start,
                 inner_end,
                 true,
+                title_state,
                 list_env,
                 body,
                 previous_was_space,
