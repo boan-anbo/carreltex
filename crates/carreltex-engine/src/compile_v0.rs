@@ -28,6 +28,8 @@ mod ok_v0_footnote_tests;
 #[cfg(test)]
 mod ok_v0_quote_tests;
 #[cfg(test)]
+mod ok_v0_ref_tests;
+#[cfg(test)]
 mod ok_v0_scripts_tests;
 #[cfg(test)]
 mod ok_v0_tests;
