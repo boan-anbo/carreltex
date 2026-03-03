@@ -61,7 +61,7 @@ fn assert_noop_command_delta_two_chars_ok(command: &[u8]) {
 
 #[test]
 fn phantomsection_is_noop_ok() {
-    assert_noop_command_delta_two_chars_ok(b"\\phantomsection");
+    assert_noop_command_delta_two_chars_ok(b"\\phantomsection ");
 }
 
 #[test]

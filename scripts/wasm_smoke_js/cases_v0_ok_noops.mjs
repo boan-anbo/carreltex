@@ -112,7 +112,7 @@ export function runOkNoopCases(ctx, helpers) {
     }
   };
 
-  runNoopCase('\\phantomsection', 'ok_noop_phantomsection');
+  runNoopCase('\\phantomsection ', 'ok_noop_phantomsection');
   runNoopCase('\\bibliographystyle{plain}', 'ok_noop_bibliographystyle');
   runNoopCase('\\bibliography{refs}', 'ok_noop_bibliography');
   runNoopCase('\\nocite{X,Y}', 'ok_noop_nocite');

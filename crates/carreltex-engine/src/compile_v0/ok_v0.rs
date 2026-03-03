@@ -515,7 +515,7 @@ fn consume_ok_body_token_v0(
             Some(next_index)
         }
         Some(TokenV0::ControlSeq(name))
-            if !allow_nested_groups && ok_v0_noops::is_ok_noop_command_v0(name.as_slice()) =>
+            if ok_v0_noops::is_ok_noop_command_v0(name.as_slice()) =>
         {
             ok_v0_noops::consume_ok_noop_command_v0(tokens, index, end, name.as_slice())
         }
