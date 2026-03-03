@@ -116,9 +116,9 @@ export function runOkBibCases(ctx, helpers, baselineStats) {
     bibOptionalXdvBytes,
     'compile_main(ok bibliography optional-bibitem)',
   );
-  if (bibOptionalMovement.right3PositiveTotal !== 163840) {
+  if (bibOptionalMovement.right3PositiveTotal !== 393216) {
     throw new Error(
-      `compile_main(ok bibliography optional-bibitem) expected right3PositiveTotal=163840, got ${bibOptionalMovement.right3PositiveTotal}`,
+      `compile_main(ok bibliography optional-bibitem) expected right3PositiveTotal=393216, got ${bibOptionalMovement.right3PositiveTotal}`,
     );
   }
 

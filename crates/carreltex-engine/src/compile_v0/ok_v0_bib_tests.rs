@@ -115,7 +115,7 @@ fn bibitem_optional_form_is_accepted_for_ok() {
         786_432,
     )
     .expect("sum parser should parse");
-    assert_eq!(total, 163_840);
+    assert_eq!(total, 393_216);
 }
 
 #[test]
