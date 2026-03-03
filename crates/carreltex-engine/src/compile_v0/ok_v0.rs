@@ -1,6 +1,9 @@
 use crate::tex::tokenize_v0::TokenV0;
 #[path = "ok_v0_env_support.rs"]
 mod ok_v0_env_support;
+#[path = "ok_v0_env_refs.rs"]
+mod ok_v0_env_refs;
+use ok_v0_env_refs::{emit_ok_markers_in_env_v0, OkEnvMarkersV0};
 use ok_v0_env_support::{
     consume_named_environment_span_v0, is_supported_display_math_env_v0,
     is_supported_ok_block_env_v0, is_supported_ok_table_stub_env_v0, ok_thm_stub_marker_v0,
@@ -269,7 +272,7 @@ fn consume_ok_group_fragment_discard_v0(tokens: &[TokenV0], index: usize, end: u
     )
 }
 
-fn consume_char_space_nested_group_v0(tokens: &[TokenV0], index: usize, end: usize) -> Option<usize> {
+pub(super) fn consume_char_space_nested_group_v0(tokens: &[TokenV0], index: usize, end: usize) -> Option<usize> {
     let cursor = skip_spaces_until(tokens, index, end);
     let (_, inner_end, next_index) =
         consume_balanced_group_bounds_v0(tokens, cursor, MAX_OK_GROUP_DEPTH_V0, end)?;
@@ -398,48 +401,6 @@ fn emit_ok_block_marker_v0(body: &mut Vec<u8>, marker: &[u8], previous_was_space
     body.push(b']');
     body.push(0x0a);
     *previous_was_space = true;
-}
-
-fn emit_ok_markers_in_env_v0(
-    tokens: &[TokenV0],
-    start: usize,
-    end: usize,
-    label_marker: &[u8],
-    ref_marker: &[u8],
-    include_eqref: bool,
-    body: &mut Vec<u8>,
-    previous_was_space: &mut bool,
-) -> Option<()> {
-    let mut index = start;
-    while index < end {
-        match tokens.get(index)? {
-            TokenV0::ControlSeq(name) if name.as_slice() == b"label" => {
-                index = consume_char_space_nested_group_v0(tokens, index + 1, end)?;
-                body.push(b' ');
-                body.push(b'[');
-                body.extend_from_slice(label_marker);
-                body.push(b']');
-                *previous_was_space = false;
-            }
-            TokenV0::ControlSeq(name)
-                if name.as_slice() == b"ref"
-                    || name.as_slice() == b"autoref"
-                    || (include_eqref && name.as_slice() == b"eqref") =>
-            {
-                index = consume_char_space_nested_group_v0(tokens, index + 1, end)?;
-                body.push(b' ');
-                body.push(b'[');
-                body.extend_from_slice(ref_marker);
-                body.push(b']');
-                *previous_was_space = false;
-            }
-            TokenV0::ControlSeq(name) if name.as_slice() == b"begin" => return None,
-            _ => {
-                index += 1;
-            }
-        }
-    }
-    Some(())
 }
 
 fn consume_ok_body_range_v0(
@@ -728,9 +689,7 @@ fn consume_ok_body_token_v0(
                         tokens,
                         inner_start,
                         inner_end,
-                        b"LBL",
-                        b"THMREF",
-                        false,
+                        OkEnvMarkersV0::TheoremFamily,
                         body,
                         previous_was_space,
                     )?;
@@ -745,9 +704,7 @@ fn consume_ok_body_token_v0(
                         tokens,
                         inner_start,
                         inner_end,
-                        b"EQ",
-                        b"EQREF",
-                        true,
+                        OkEnvMarkersV0::EquationFamily,
                         body,
                         previous_was_space,
                     )?;
