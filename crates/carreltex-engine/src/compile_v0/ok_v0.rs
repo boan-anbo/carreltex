@@ -13,6 +13,8 @@ mod ok_v0_ensuremath;
 mod ok_v0_lists;
 #[path = "ok_v0_biblabel.rs"]
 mod ok_v0_biblabel;
+#[path = "ok_v0_noops.rs"]
+mod ok_v0_noops;
 #[path = "ok_v0_markers.rs"]
 mod ok_v0_markers;
 use ok_v0_env_refs::{emit_ok_markers_in_env_v0, OkEnvMarkersV0};
@@ -513,11 +515,9 @@ fn consume_ok_body_token_v0(
             Some(next_index)
         }
         Some(TokenV0::ControlSeq(name))
-            if name.as_slice() == b"bibliographystyle"
-                || name.as_slice() == b"bibliography"
-                || name.as_slice() == b"nocite" =>
+            if !allow_nested_groups && ok_v0_noops::is_ok_noop_command_v0(name.as_slice()) =>
         {
-            consume_char_space_nested_group_v0(tokens, index + 1, end)
+            ok_v0_noops::consume_ok_noop_command_v0(tokens, index, end, name.as_slice())
         }
         Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"label" => {
             consume_char_space_nested_group_v0(tokens, index + 1, end)
