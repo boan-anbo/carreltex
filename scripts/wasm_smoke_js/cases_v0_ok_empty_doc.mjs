@@ -3,6 +3,7 @@ import { runOkColorCases } from './cases_v0_ok_colors.mjs';
 import { runOkFootnoteCases } from './cases_v0_ok_footnotes.mjs';
 import { runOkLinkCases } from './cases_v0_ok_links.mjs';
 import { runOkListCases } from './cases_v0_ok_lists.mjs';
+import { runOkQuoteCases } from './cases_v0_ok_quotes.mjs';
 import { runOkWrapperCases } from './cases_v0_ok_wrappers.mjs';
 
 export function runOkEmptyDocCases(ctx, helpers) {
@@ -705,71 +706,21 @@ export function runOkEmptyDocCases(ctx, helpers) {
     },
     stats,
   );
-  runOkWrapperCases(
-    ctx,
-    {
-      addMountedFile,
-      expectOk,
-      expectNotImplemented,
-      readCompileLogBytes,
-      assertEventsMatchLogAndStats,
-      readMainXdvArtifactBytes,
-      countMovementOpsInTextPages,
-    },
-    stats,
-  );
-  runOkListCases(
-    ctx,
-    {
-      addMountedFile,
-      expectOk,
-      expectNotImplemented,
-      readCompileLogBytes,
-      assertEventsMatchLogAndStats,
-      readMainXdvArtifactBytes,
-      countMovementOpsInTextPages,
-    },
-    stats,
-  );
-  runOkLinkCases(
-    ctx,
-    {
-      addMountedFile,
-      expectOk,
-      expectNotImplemented,
-      readCompileLogBytes,
-      assertEventsMatchLogAndStats,
-      readMainXdvArtifactBytes,
-      countMovementOpsInTextPages,
-    },
-    stats,
-  );
-  runOkColorCases(
-    ctx,
-    {
-      addMountedFile,
-      expectOk,
-      expectNotImplemented,
-      readCompileLogBytes,
-      assertEventsMatchLogAndStats,
-      readMainXdvArtifactBytes,
-      countMovementOpsInTextPages,
-    },
-    stats,
-  );
-  runOkFootnoteCases(
-    ctx,
-    {
-      addMountedFile,
-      expectOk,
-      expectNotImplemented,
-      readCompileLogBytes,
-      assertEventsMatchLogAndStats,
-      readMainXdvArtifactBytes,
-      countMovementOpsInTextPages,
-    },
-    stats,
-  );
+  const okBodyHelpers = {
+    addMountedFile,
+    expectOk,
+    expectNotImplemented,
+    readCompileLogBytes,
+    assertEventsMatchLogAndStats,
+    readMainXdvArtifactBytes,
+    countMovementOpsInTextPages,
+  };
+  runOkWrapperCases(ctx, okBodyHelpers, stats);
+  runOkListCases(ctx, okBodyHelpers, stats);
+  runOkLinkCases(ctx, okBodyHelpers, stats);
+  runOkColorCases(ctx, okBodyHelpers, stats);
+  runOkFootnoteCases(ctx, okBodyHelpers, stats);
+  runOkQuoteCases(ctx, okBodyHelpers, stats);
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before OK pagebreak text doc case failed');
   }
