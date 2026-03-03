@@ -113,3 +113,44 @@ pub(super) fn consume_optional_heading_short_title_v0(
     }
     None
 }
+
+pub(super) fn consume_optional_nested_bracket_span_v0(
+    tokens: &[TokenV0],
+    index: usize,
+    end: usize,
+    max_tokens: usize,
+    max_group_depth: usize,
+) -> Option<usize> {
+    let mut cursor = skip_spaces_until(tokens, index, end);
+    if !matches!(tokens.get(cursor), Some(TokenV0::Char(b'['))) {
+        return Some(cursor);
+    }
+    cursor += 1;
+    let mut scanned = 0usize;
+    let mut group_depth = 0usize;
+    while cursor < end {
+        scanned += 1;
+        if scanned > max_tokens {
+            return None;
+        }
+        match tokens.get(cursor)? {
+            TokenV0::ControlSeq(name) if name.as_slice() == b"begin" => return None,
+            TokenV0::BeginGroup => {
+                group_depth += 1;
+                if group_depth > max_group_depth {
+                    return None;
+                }
+            }
+            TokenV0::EndGroup => {
+                if group_depth == 0 {
+                    return None;
+                }
+                group_depth -= 1;
+            }
+            TokenV0::Char(b']') if group_depth == 0 => return Some(cursor + 1),
+            _ => {}
+        }
+        cursor += 1;
+    }
+    None
+}
