@@ -84,7 +84,22 @@ export function runOkTableCases(ctx, helpers, baselineStats) {
     throw new Error('mount_add_file(nested table env invalid main.tex) failed');
   }
   if (ctx.mountFinalize() !== 0) throw new Error('mount_finalize for nested table env invalid case failed');
-  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(nested table env invalid)');
+  expectOk(ctx.compileMain(), 'compile_main_v0(nested table env)');
+  const nestedTableLogBytes = readCompileLogBytes();
+  if (nestedTableLogBytes.length !== 0) {
+    throw new Error(`compile_main(nested table env) expected empty log, got ${nestedTableLogBytes.length} bytes`);
+  }
+  assertEventsMatchLogAndStats(nestedTableLogBytes, {}, 'compile_main(nested table env)');
+  const nestedTableXdvBytes = readMainXdvArtifactBytes('compile_main(nested table env)');
+  if (nestedTableXdvBytes.length === 0) {
+    throw new Error('compile_main(nested table env) main.xdv expected non-empty bytes');
+  }
+  const nestedTableMovement = countMovementOpsInTextPages(nestedTableXdvBytes, 'compile_main(nested table env)');
+  if (nestedTableMovement.right3PositiveTotal !== 458752) {
+    throw new Error(
+      `compile_main(nested table env) expected right3PositiveTotal=458752, got ${nestedTableMovement.right3PositiveTotal}`,
+    );
+  }
 
   if (ctx.mountReset() !== 0) throw new Error('mount_reset before missing end table env invalid case failed');
   const missingEndTableEnvDocBytes = new TextEncoder().encode(

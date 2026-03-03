@@ -81,7 +81,22 @@ export function runOkEnvCases(ctx, helpers, baselineStats) {
     throw new Error('mount_add_file(nested begin env invalid main.tex) failed');
   }
   if (ctx.mountFinalize() !== 0) throw new Error('mount_finalize for nested begin env invalid case failed');
-  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(nested begin env invalid)');
+  expectOk(ctx.compileMain(), 'compile_main_v0(nested begin env)');
+  const nestedBeginLogBytes = readCompileLogBytes();
+  if (nestedBeginLogBytes.length !== 0) {
+    throw new Error(`compile_main(nested begin env) expected empty log, got ${nestedBeginLogBytes.length} bytes`);
+  }
+  assertEventsMatchLogAndStats(nestedBeginLogBytes, {}, 'compile_main(nested begin env)');
+  const nestedBeginXdvBytes = readMainXdvArtifactBytes('compile_main(nested begin env)');
+  if (nestedBeginXdvBytes.length === 0) {
+    throw new Error('compile_main(nested begin env) main.xdv expected non-empty bytes');
+  }
+  const nestedBeginMovement = countMovementOpsInTextPages(nestedBeginXdvBytes, 'compile_main(nested begin env)');
+  if (nestedBeginMovement.right3PositiveTotal !== 65536) {
+    throw new Error(
+      `compile_main(nested begin env) expected right3PositiveTotal=65536, got ${nestedBeginMovement.right3PositiveTotal}`,
+    );
+  }
 
   if (ctx.mountReset() !== 0) throw new Error('mount_reset before missing end env invalid case failed');
   const missingEndDocBytes = new TextEncoder().encode(
