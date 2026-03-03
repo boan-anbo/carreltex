@@ -2,6 +2,17 @@ use crate::tex::tokenize_v0::TokenV0;
 
 use super::consume_char_space_nested_group_v0;
 
+fn skip_spaces_until(tokens: &[TokenV0], mut index: usize, end: usize) -> usize {
+    while index < end {
+        if matches!(tokens.get(index), Some(TokenV0::Space)) {
+            index += 1;
+            continue;
+        }
+        break;
+    }
+    index
+}
+
 pub(super) fn is_ok_noop_command_v0(name: &[u8]) -> bool {
     matches!(
         name,
@@ -15,6 +26,13 @@ pub(super) fn is_ok_noop_command_v0(name: &[u8]) -> bool {
             | b"markright"
             | b"thispagestyle"
             | b"pagestyle"
+            | b"smallskip"
+            | b"medskip"
+            | b"bigskip"
+            | b"hfill"
+            | b"vfill"
+            | b"vspace"
+            | b"hspace"
     )
 }
 
@@ -25,7 +43,17 @@ pub(super) fn consume_ok_noop_command_v0(
     name: &[u8],
 ) -> Option<usize> {
     match name {
-        b"phantomsection" => Some(index + 1),
+        b"phantomsection" | b"smallskip" | b"medskip" | b"bigskip" | b"hfill" | b"vfill" => {
+            Some(index + 1)
+        }
+        b"vspace" | b"hspace" => {
+            let mut cursor = skip_spaces_until(tokens, index + 1, end);
+            if matches!(tokens.get(cursor), Some(TokenV0::Char(b'*'))) {
+                cursor += 1;
+                cursor = skip_spaces_until(tokens, cursor, end);
+            }
+            consume_char_space_nested_group_v0(tokens, cursor, end)
+        }
         b"bibliographystyle"
         | b"bibliography"
         | b"nocite"
