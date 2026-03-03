@@ -122,11 +122,40 @@ fn is_supported_ok_char_v0(byte: u8) -> bool {
 }
 
 fn is_supported_ok_wrapper_command_v0(name: &[u8]) -> bool {
-    matches!(name, b"textbf" | b"textit" | b"emph" | b"texttt" | b"underline")
+    matches!(
+        name,
+        b"textbf"
+            | b"textit"
+            | b"emph"
+            | b"texttt"
+            | b"underline"
+            | b"textrm"
+            | b"textsf"
+            | b"textsc"
+            | b"textsl"
+            | b"textmd"
+            | b"textup"
+    )
 }
 
 fn is_supported_ok_heading_command_v0(name: &[u8]) -> bool {
     matches!(name, b"section" | b"subsection" | b"subsubsection")
+}
+
+fn is_supported_ok_style_declaration_v0(name: &[u8]) -> bool {
+    matches!(
+        name,
+        b"bfseries"
+            | b"mdseries"
+            | b"itshape"
+            | b"slshape"
+            | b"scshape"
+            | b"upshape"
+            | b"rmfamily"
+            | b"sffamily"
+            | b"ttfamily"
+            | b"em"
+    )
 }
 
 fn consume_balanced_group_bounds_v0(
@@ -213,6 +242,11 @@ fn consume_ok_body_token_v0(
         }
         Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"maketitle" => Some(index + 1),
         Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"noindent" => Some(index + 1),
+        Some(TokenV0::ControlSeq(name))
+            if is_supported_ok_style_declaration_v0(name.as_slice()) =>
+        {
+            Some(index + 1)
+        }
         Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"newline" => {
             body.push(0x0a);
             *previous_was_space = true;
