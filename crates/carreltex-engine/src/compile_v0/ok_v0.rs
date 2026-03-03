@@ -480,18 +480,18 @@ fn consume_ok_body_token_v0(
             emit_ok_display_math_marker_v0(body, previous_was_space);
             Some(next_index)
         }
+        Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"$" => {
+            body.push(b'$');
+            *previous_was_space = false;
+            Some(index + 1)
+        }
         Some(TokenV0::Char(b'$')) if matches!(tokens.get(index + 1), Some(TokenV0::Char(b'$'))) => {
             let next_index =
                 consume_display_math_dollar_span_v0(tokens, index, end, MAX_OK_DOLLAR_MATH_TOKENS_V0)?;
             emit_ok_display_math_marker_v0(body, previous_was_space);
             Some(next_index)
         }
-        Some(TokenV0::Char(b'$'))
-            if matches!(
-                tokens.get(index + 1),
-                Some(TokenV0::Char(next))
-                    if next.is_ascii_lowercase()
-            ) => consume_inline_math_dollar_span_v0(
+        Some(TokenV0::Char(b'$')) => consume_inline_math_dollar_span_v0(
             tokens,
             index,
             end,
