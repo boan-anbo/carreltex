@@ -82,6 +82,69 @@ fn theorem_ref_emits_thmref_marker_ok() {
 }
 
 #[test]
+fn equation_cref_emits_eqref_marker_ok() {
+    let baseline = baseline_char_count();
+    let mut mount = Mount::default();
+    let main =
+        br"\documentclass{article}\begin{document}A\begin{equation}x\cref{r}\end{equation}B\end{document}";
+    assert!(mount.add_file(b"main.tex", main).is_ok());
+    let result = compile_request_v0(&mut mount, &valid_request());
+    assert_eq!(result.status, CompileStatus::Ok);
+    assert!(validate_dvi_v2_text_page_v0(&result.main_xdv_bytes));
+    let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
+    assert_eq!(char_count, baseline + 20);
+    let total = sum_dvi_v2_positive_right3_amounts_with_layout_v0(
+        &result.main_xdv_bytes,
+        65_536,
+        786_432,
+    )
+    .expect("sum parser should parse");
+    assert_eq!(total, 1_015_808);
+}
+
+#[test]
+fn theorem_cref_emits_thmref_marker_ok() {
+    let baseline = baseline_char_count();
+    let mut mount = Mount::default();
+    let main =
+        br"\documentclass{article}\begin{document}A\begin{theorem}x\Cref{r}\end{theorem}B\end{document}";
+    assert!(mount.add_file(b"main.tex", main).is_ok());
+    let result = compile_request_v0(&mut mount, &valid_request());
+    assert_eq!(result.status, CompileStatus::Ok);
+    assert!(validate_dvi_v2_text_page_v0(&result.main_xdv_bytes));
+    let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
+    assert_eq!(char_count, baseline + 18);
+    let total = sum_dvi_v2_positive_right3_amounts_with_layout_v0(
+        &result.main_xdv_bytes,
+        65_536,
+        786_432,
+    )
+    .expect("sum parser should parse");
+    assert_eq!(total, 1_015_808);
+}
+
+#[test]
+fn equation_pageref_emits_pageref_marker_ok() {
+    let baseline = baseline_char_count();
+    let mut mount = Mount::default();
+    let main =
+        br"\documentclass{article}\begin{document}A\begin{equation}x\pageref{r}\end{equation}B\end{document}";
+    assert!(mount.add_file(b"main.tex", main).is_ok());
+    let result = compile_request_v0(&mut mount, &valid_request());
+    assert_eq!(result.status, CompileStatus::Ok);
+    assert!(validate_dvi_v2_text_page_v0(&result.main_xdv_bytes));
+    let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
+    assert_eq!(char_count, baseline + 20);
+    let total = sum_dvi_v2_positive_right3_amounts_with_layout_v0(
+        &result.main_xdv_bytes,
+        65_536,
+        786_432,
+    )
+    .expect("sum parser should parse");
+    assert_eq!(total, 1_146_880);
+}
+
+#[test]
 fn ref_outside_env_keeps_generic_marker_ok() {
     let baseline = baseline_char_count();
     let mut mount = Mount::default();
@@ -99,4 +162,24 @@ fn ref_outside_env_keeps_generic_marker_ok() {
     )
     .expect("sum parser should parse");
     assert_eq!(total, 491_520);
+}
+
+#[test]
+fn pageref_outside_env_keeps_pageref_marker_ok() {
+    let baseline = baseline_char_count();
+    let mut mount = Mount::default();
+    let main = br"\documentclass{article}\begin{document}A\pageref{r}B\end{document}";
+    assert!(mount.add_file(b"main.tex", main).is_ok());
+    let result = compile_request_v0(&mut mount, &valid_request());
+    assert_eq!(result.status, CompileStatus::Ok);
+    assert!(validate_dvi_v2_text_page_v0(&result.main_xdv_bytes));
+    let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
+    assert_eq!(char_count, baseline + 3);
+    let total = sum_dvi_v2_positive_right3_amounts_with_layout_v0(
+        &result.main_xdv_bytes,
+        65_536,
+        786_432,
+    )
+    .expect("sum parser should parse");
+    assert_eq!(total, 753_664);
 }
