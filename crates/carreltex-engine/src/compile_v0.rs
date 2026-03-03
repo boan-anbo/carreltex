@@ -30,6 +30,8 @@ mod ok_v0_color_tests;
 #[cfg(test)]
 mod ok_v0_bib_tests;
 #[cfg(test)]
+mod ok_v0_noop_tests;
+#[cfg(test)]
 mod ok_v0_env_tests;
 #[cfg(test)]
 mod ok_v0_float_tests;
