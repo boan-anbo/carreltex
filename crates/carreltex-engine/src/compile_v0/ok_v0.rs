@@ -200,6 +200,22 @@ fn consume_ok_group_fragment_discard_v0(tokens: &[TokenV0], index: usize, end: u
     )
 }
 
+fn consume_char_space_nested_group_v0(tokens: &[TokenV0], index: usize, end: usize) -> Option<usize> {
+    let cursor = skip_spaces_until(tokens, index, end);
+    let (_, inner_end, next_index) =
+        consume_balanced_group_bounds_v0(tokens, cursor, MAX_OK_GROUP_DEPTH_V0, end)?;
+    let mut scan = cursor + 1;
+    while scan < inner_end {
+        match tokens.get(scan)? {
+            TokenV0::Char(_) | TokenV0::Space | TokenV0::BeginGroup | TokenV0::EndGroup => {
+                scan += 1;
+            }
+            _ => return None,
+        }
+    }
+    Some(next_index)
+}
+
 fn consume_balanced_group_bounds_v0(
     tokens: &[TokenV0],
     index: usize,
@@ -313,6 +329,22 @@ fn consume_ok_body_token_v0(
             body.push(b' ');
             body.push(b'[');
             body.extend_from_slice(&footnote_text);
+            body.push(b']');
+            *previous_was_space = false;
+            Some(next_index)
+        }
+        Some(TokenV0::ControlSeq(name))
+            if name.as_slice() == b"cite"
+                || name.as_slice() == b"citet"
+                || name.as_slice() == b"citep" =>
+        {
+            let next_index = consume_char_space_nested_group_v0(tokens, index + 1, end)?;
+            body.push(b' ');
+            body.push(b'[');
+            body.push(b'C');
+            body.push(b'I');
+            body.push(b'T');
+            body.push(b'E');
             body.push(b']');
             *previous_was_space = false;
             Some(next_index)
