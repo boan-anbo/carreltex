@@ -712,9 +712,7 @@ export function runOkEmptyDocCases(ctx, helpers) {
   assertEventsMatchLogAndStats(parControlSeqTextLogBytes, { char_count: stats.char_count + 2 }, 'compile_main(ok par control-seq text doc)');
   const parControlSeqTextXdvBytes = readMainXdvArtifactBytes('compile_main(ok par control-seq text doc)');
   if (parControlSeqTextXdvBytes.length === 0) throw new Error('compile_main(ok par control-seq text doc) main.xdv expected non-empty bytes');
-  if (countMovementOpsInTextPages(parControlSeqTextXdvBytes, 'compile_main(ok par control-seq text doc)').right3 !== 3) {
-    throw new Error('compile_main(ok par control-seq text doc) expected right3=3 for A space B');
-  }
+  if (countMovementOpsInTextPages(parControlSeqTextXdvBytes, 'compile_main(ok par control-seq text doc)').right3 !== 3) throw new Error('compile_main(ok par control-seq text doc) expected right3=3 for A space B');
   if (ctx.mountReset() !== 0) throw new Error('mount_reset before OK noindent text doc case failed');
   const noindentTextDocBytes = new TextEncoder().encode('\\documentclass{article}\\begin{document}\\noindent XYZ\\end{document}');
   if (addMountedFile('main.tex', noindentTextDocBytes, 'ok_noindent_text_doc_main') !== 0) throw new Error('mount_add_file(ok noindent text doc main.tex) failed');
@@ -724,12 +722,22 @@ export function runOkEmptyDocCases(ctx, helpers) {
   if (noindentTextLogBytes.length !== 0) throw new Error(`compile_main(ok noindent text doc) expected empty log, got ${noindentTextLogBytes.length} bytes`);
   assertEventsMatchLogAndStats(noindentTextLogBytes, { char_count: stats.char_count + 3 }, 'compile_main(ok noindent text doc)');
   if (readMainXdvArtifactBytes('compile_main(ok noindent text doc)').length === 0) throw new Error('compile_main(ok noindent text doc) main.xdv expected non-empty bytes');
+  if (ctx.mountReset() !== 0) throw new Error('mount_reset before OK newline control-seq text doc case failed');
+  const newlineControlSeqTextDocBytes = new TextEncoder().encode('\\documentclass{article}\\begin{document}A\\csname newline\\endcsname B\\end{document}');
+  if (addMountedFile('main.tex', newlineControlSeqTextDocBytes, 'ok_newline_control_seq_text_doc_main') !== 0) throw new Error('mount_add_file(ok newline control-seq text doc main.tex) failed');
+  if (ctx.mountFinalize() !== 0) throw new Error('mount_finalize for OK newline control-seq text doc case failed');
+  expectOk(ctx.compileMain(), 'compile_main_v0(ok newline control-seq text doc)');
+  const newlineControlSeqTextLogBytes = readCompileLogBytes();
+  if (newlineControlSeqTextLogBytes.length !== 0) throw new Error(`compile_main(ok newline control-seq text doc) expected empty log, got ${newlineControlSeqTextLogBytes.length} bytes`);
+  assertEventsMatchLogAndStats(newlineControlSeqTextLogBytes, { char_count: stats.char_count + 2 }, 'compile_main(ok newline control-seq text doc)');
+  const newlineControlSeqTextXdvBytes = readMainXdvArtifactBytes('compile_main(ok newline control-seq text doc)');
+  if (newlineControlSeqTextXdvBytes.length === 0) throw new Error('compile_main(ok newline control-seq text doc) main.xdv expected non-empty bytes');
+  if (countMovementOpsInTextPages(newlineControlSeqTextXdvBytes, 'compile_main(ok newline control-seq text doc)').down3 !== 1) throw new Error('compile_main(ok newline control-seq text doc) expected exactly one DOWN3');
+  if (countPagesInDviV2(newlineControlSeqTextXdvBytes, 'compile_main(ok newline control-seq text doc)') !== 1) throw new Error('compile_main(ok newline control-seq text doc) expected one page');
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before OK pagebreak text doc case failed');
   }
-  const pagebreakTextDocBytes = new TextEncoder().encode(
-    '\\documentclass{article}\n\\begin{document}\nAB\\pagebreak CD\n\\end{document}\n',
-  );
+  const pagebreakTextDocBytes = new TextEncoder().encode('\\documentclass{article}\n\\begin{document}\nAB\\pagebreak CD\n\\end{document}\n');
   if (addMountedFile('main.tex', pagebreakTextDocBytes, 'ok_pagebreak_text_doc_main') !== 0) {
     throw new Error('mount_add_file(ok pagebreak text doc main.tex) failed');
   }
@@ -754,10 +762,7 @@ export function runOkEmptyDocCases(ctx, helpers) {
   if (pageCount !== 2) {
     throw new Error(`compile_main(ok pagebreak text doc) expected 2 pages, got ${pageCount}`);
   }
-  const pagebreakMovement = countMovementOpsInTextPages(
-    pagebreakXdvBytes,
-    'compile_main(ok pagebreak text doc)',
-  );
+  const pagebreakMovement = countMovementOpsInTextPages(pagebreakXdvBytes, 'compile_main(ok pagebreak text doc)');
   if (pagebreakMovement.right3 < 1) {
     throw new Error('compile_main(ok pagebreak text doc) expected at least one RIGHT3 opcode');
   }
@@ -783,9 +788,7 @@ export function runOkEmptyDocCases(ctx, helpers) {
   }
   const expectedWiAmounts = [98304, 32768, 32768];
   if (wiMovement.right3PositiveAmounts.length !== expectedWiAmounts.length) {
-    throw new Error(
-      `compile_main(ok width metrics text doc) expected ${expectedWiAmounts.length} positive right3 amounts, got ${wiMovement.right3PositiveAmounts.length}`,
-    );
+    throw new Error(`compile_main(ok width metrics text doc) expected ${expectedWiAmounts.length} positive right3 amounts, got ${wiMovement.right3PositiveAmounts.length}`);
   }
   for (let i = 0; i < expectedWiAmounts.length; i += 1) {
     if (wiMovement.right3PositiveAmounts[i] !== expectedWiAmounts[i]) {
