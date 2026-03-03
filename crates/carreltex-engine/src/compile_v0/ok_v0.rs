@@ -165,6 +165,16 @@ fn is_supported_ok_style_declaration_v0(name: &[u8]) -> bool {
     )
 }
 
+fn ok_marker_command_v0(name: &[u8]) -> Option<&'static [u8]> {
+    match name {
+        b"cite" | b"citet" | b"citep" => Some(b"CITE"),
+        b"ref" | b"autoref" | b"cref" | b"Cref" => Some(b"REF"),
+        b"pageref" => Some(b"PAGEREF"),
+        b"eqref" => Some(b"EQREF"),
+        _ => None,
+    }
+}
+
 fn consume_ok_group_fragment_v0(
     tokens: &[TokenV0],
     index: usize,
@@ -333,18 +343,17 @@ fn consume_ok_body_token_v0(
             *previous_was_space = false;
             Some(next_index)
         }
+        Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"label" => {
+            consume_char_space_nested_group_v0(tokens, index + 1, end)
+        }
         Some(TokenV0::ControlSeq(name))
-            if name.as_slice() == b"cite"
-                || name.as_slice() == b"citet"
-                || name.as_slice() == b"citep" =>
+            if ok_marker_command_v0(name.as_slice()).is_some() =>
         {
+            let marker = ok_marker_command_v0(name.as_slice())?;
             let next_index = consume_char_space_nested_group_v0(tokens, index + 1, end)?;
             body.push(b' ');
             body.push(b'[');
-            body.push(b'C');
-            body.push(b'I');
-            body.push(b'T');
-            body.push(b'E');
+            body.extend_from_slice(marker);
             body.push(b']');
             *previous_was_space = false;
             Some(next_index)
