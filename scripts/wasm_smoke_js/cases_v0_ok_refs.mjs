@@ -35,6 +35,70 @@ export function runOkRefCases(ctx, helpers, baselineStats) {
     );
   }
 
+  if (ctx.mountReset() !== 0) throw new Error('mount_reset before OK ref optional-note text doc case failed');
+  const refOptionalNoteDocBytes = new TextEncoder().encode(
+    '\\documentclass{article}\\begin{document}A\\ref[see]{X}B\\end{document}',
+  );
+  if (addMountedFile('main.tex', refOptionalNoteDocBytes, 'ok_ref_optional_note_text_doc_main') !== 0) {
+    throw new Error('mount_add_file(ok ref optional-note text doc main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) throw new Error('mount_finalize for OK ref optional-note text doc case failed');
+  expectOk(ctx.compileMain(), 'compile_main_v0(ok ref optional-note text doc)');
+  const refOptionalNoteLogBytes = readCompileLogBytes();
+  if (refOptionalNoteLogBytes.length !== 0) {
+    throw new Error(
+      `compile_main(ok ref optional-note text doc) expected empty log, got ${refOptionalNoteLogBytes.length} bytes`,
+    );
+  }
+  assertEventsMatchLogAndStats(
+    refOptionalNoteLogBytes,
+    { char_count: baselineStats.char_count + 8 },
+    'compile_main(ok ref optional-note text doc)',
+  );
+  const refOptionalNoteXdvBytes = readMainXdvArtifactBytes('compile_main(ok ref optional-note text doc)');
+  if (refOptionalNoteXdvBytes.length === 0) {
+    throw new Error('compile_main(ok ref optional-note text doc) main.xdv expected non-empty bytes');
+  }
+  const refOptionalNoteMovement = countMovementOpsInTextPages(
+    refOptionalNoteXdvBytes,
+    'compile_main(ok ref optional-note text doc)',
+  );
+  if (refOptionalNoteMovement.right3PositiveTotal !== 491520) {
+    throw new Error(
+      `compile_main(ok ref optional-note text doc) expected right3PositiveTotal=491520, got ${refOptionalNoteMovement.right3PositiveTotal}`,
+    );
+  }
+
+  if (ctx.mountReset() !== 0) throw new Error('mount_reset before OK eqref optional-note text doc case failed');
+  const eqrefOptionalNotesDocBytes = new TextEncoder().encode(
+    '\\documentclass{article}\\begin{document}A\\eqref[see][p.1]{X}B\\end{document}',
+  );
+  if (addMountedFile('main.tex', eqrefOptionalNotesDocBytes, 'ok_eqref_optional_notes_text_doc_main') !== 0) {
+    throw new Error('mount_add_file(ok eqref optional-notes text doc main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) throw new Error('mount_finalize for OK eqref optional-note text doc case failed');
+  expectOk(ctx.compileMain(), 'compile_main_v0(ok eqref optional-notes text doc)');
+  const eqrefOptionalNotesLogBytes = readCompileLogBytes();
+  if (eqrefOptionalNotesLogBytes.length !== 0) {
+    throw new Error(
+      `compile_main(ok eqref optional-notes text doc) expected empty log, got ${eqrefOptionalNotesLogBytes.length} bytes`,
+    );
+  }
+  assertEventsMatchLogAndStats(eqrefOptionalNotesLogBytes, {}, 'compile_main(ok eqref optional-notes text doc)');
+  const eqrefOptionalNotesXdvBytes = readMainXdvArtifactBytes('compile_main(ok eqref optional-notes text doc)');
+  if (eqrefOptionalNotesXdvBytes.length === 0) {
+    throw new Error('compile_main(ok eqref optional-notes text doc) main.xdv expected non-empty bytes');
+  }
+  const eqrefOptionalNotesMovement = countMovementOpsInTextPages(
+    eqrefOptionalNotesXdvBytes,
+    'compile_main(ok eqref optional-notes text doc)',
+  );
+  if (eqrefOptionalNotesMovement.right3PositiveTotal !== 622592) {
+    throw new Error(
+      `compile_main(ok eqref optional-notes text doc) expected right3PositiveTotal=622592, got ${eqrefOptionalNotesMovement.right3PositiveTotal}`,
+    );
+  }
+
   if (ctx.mountReset() !== 0) throw new Error('mount_reset before OK label text doc case failed');
   const labelTextDocBytes = new TextEncoder().encode(
     '\\documentclass{article}\\begin{document}A\\label{X}B\\end{document}',
@@ -109,4 +173,14 @@ export function runOkRefCases(ctx, helpers, baselineStats) {
   }
   if (ctx.mountFinalize() !== 0) throw new Error('mount_finalize for ref missing-arg invalid case failed');
   expectNotImplemented(ctx.compileMain(), 'compile_main_v0(ok ref missing-arg)');
+
+  if (ctx.mountReset() !== 0) throw new Error('mount_reset before ref unclosed-note invalid case failed');
+  const refUnclosedNoteDocBytes = new TextEncoder().encode(
+    '\\documentclass{article}\\begin{document}\\ref[see{X}\\end{document}',
+  );
+  if (addMountedFile('main.tex', refUnclosedNoteDocBytes, 'ok_ref_unclosed_note_main') !== 0) {
+    throw new Error('mount_add_file(ok ref unclosed-note main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) throw new Error('mount_finalize for ref unclosed-note invalid case failed');
+  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(ok ref unclosed-note)');
 }
