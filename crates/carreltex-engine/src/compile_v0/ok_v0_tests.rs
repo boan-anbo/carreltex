@@ -2,6 +2,7 @@ use super::compile_request_v0;
 use carreltex_core::{CompileRequestV0, CompileStatus, Mount};
 use carreltex_xdv::{
     count_dvi_v2_text_movements_v0, count_dvi_v2_text_pages_v0,
+    plan_layout_v0, validate_dvi_v2_text_page_matches_layout_v0,
     sum_dvi_v2_positive_right3_amounts_with_layout_v0, validate_dvi_v2_text_page_v0,
     validate_dvi_v2_text_page_with_layout_v0,
 };
@@ -386,4 +387,31 @@ fn ok_layout_plan_wrapped_and_paged_output_is_valid() {
     assert!(validate_dvi_v2_text_page_v0(&result.main_xdv_bytes));
     let pages = count_dvi_v2_text_pages_v0(&result.main_xdv_bytes).expect("page count");
     assert!(pages >= 2);
+}
+
+#[test]
+fn ok_output_matches_planned_layout_exactly() {
+    let mut mount = Mount::default();
+    let main = b"\\documentclass{article}\\begin{document}word word word word word word word word word word\\end{document}";
+    assert!(mount.add_file(b"main.tex", main).is_ok());
+    let mut request = valid_request();
+    request.ok_max_line_glyphs_v0 = Some(10);
+    request.ok_max_lines_per_page_v0 = Some(1);
+    request.ok_line_advance_sp_v0 = Some(786_432);
+    request.ok_glyph_advance_sp_v0 = Some(65_536);
+    let result = compile_request_v0(&mut mount, &request);
+    assert_eq!(result.status, CompileStatus::Ok);
+    let planned = plan_layout_v0(
+        b"word word word word word word word word word word",
+        65_536,
+        786_432,
+        10,
+        1,
+    )
+    .expect("layout plan");
+    assert!(validate_dvi_v2_text_page_matches_layout_v0(
+        &result.main_xdv_bytes,
+        &planned,
+        786_432,
+    ));
 }

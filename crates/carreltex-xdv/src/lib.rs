@@ -426,24 +426,18 @@ pub fn validate_dvi_v2_empty_page_v0(bytes: &[u8]) -> bool {
     true
 }
 
-pub fn count_dvi_v2_text_pages_with_layout_v0(
-    bytes: &[u8],
-    glyph_advance_sp: i32,
-    line_advance_sp: i32,
-) -> Option<u16> {
-    count_dvi_v2_text_movements_with_layout_v0(bytes, glyph_advance_sp, line_advance_sp)
-        .map(|(_, _, _, _, page_count)| page_count)
+struct ParsedDviTextLayoutV0 {
+    layout: LayoutPlanV0,
+    right3_count: u32,
+    down3_count: u32,
+    page_count: u16,
 }
 
-pub fn count_dvi_v2_text_movements_with_layout_v0(
+fn parse_dvi_v2_text_page_internal_v0(
     bytes: &[u8],
-    glyph_advance_sp: i32,
     line_advance_sp: i32,
-) -> Option<(u32, u32, u32, u32, u16)> {
-    if glyph_advance_sp <= 0 || line_advance_sp <= 0 {
-        return None;
-    }
-    if bytes.is_empty() || bytes.len() % 4 != 0 {
+) -> Option<ParsedDviTextLayoutV0> {
+    if line_advance_sp <= 0 || bytes.is_empty() || bytes.len() % 4 != 0 {
         return None;
     }
 
@@ -468,14 +462,14 @@ pub fn count_dvi_v2_text_movements_with_layout_v0(
     }
 
     let mut right3_count = 0u32;
-    let w3_count = 0u32;
-    let w0_count = 0u32;
     let mut down3_count = 0u32;
     let mut page_count = 0u16;
     let mut previous_bop_offset: Option<usize> = None;
     let mut last_bop_offset = 0u32;
     let mut max_h = 0u32;
     let mut max_v = 0u32;
+    let mut pages = Vec::<PagePlanV0>::new();
+
     loop {
         let opcode = *bytes.get(index)?;
         if opcode == DVI_POST {
@@ -504,76 +498,112 @@ pub fn count_dvi_v2_text_movements_with_layout_v0(
         if read_u8(bytes, &mut index) != Some(DVI_FNT_NUM_0) {
             return None;
         }
+
+        let mut page_lines = Vec::<LinePlanV0>::new();
+        let mut current_glyphs = Vec::<GlyphPlanV0>::new();
+        let mut current_line_width = 0u32;
         let mut page_h = 0u32;
         let mut page_h_max = 0u32;
         let mut page_v = 0u32;
         let mut expect_width_right_after_char = false;
         let mut expect_down3_after_reset = false;
-        let mut expected_right_after_char = 0i32;
+        let mut pending_byte = 0u8;
+
         while let Some(op) = bytes.get(index).copied() {
             if op == DVI_EOP {
                 if expect_down3_after_reset || expect_width_right_after_char {
+                    return None;
+                }
+                let line = LinePlanV0 {
+                    glyphs: current_glyphs,
+                    width_sp: current_line_width,
+                };
+                if recompute_line_width_sp_v0(&line)? != line.width_sp {
+                    return None;
+                }
+                page_h_max = page_h_max.max(line.width_sp);
+                page_lines.push(line);
+                if page_lines.is_empty() {
                     return None;
                 }
                 index += 1;
                 break;
             }
             if expect_width_right_after_char {
-                if op == DVI_RIGHT3 {
-                    right3_count = right3_count.checked_add(1)?;
-                    index += 1;
-                    let amount = read_i24_be(bytes, &mut index)?;
-                    if amount != expected_right_after_char {
-                        return None;
-                    }
-                    page_h = page_h.checked_add(u32::try_from(amount).ok()?)?;
-                    page_h_max = page_h_max.max(page_h);
-                    expect_width_right_after_char = false;
-                    continue;
-                } else {
+                if op != DVI_RIGHT3 {
                     return None;
                 }
-            } else {
-                if op == DVI_RIGHT3 {
-                    right3_count = right3_count.checked_add(1)?;
-                    index += 1;
-                    let amount = read_i24_be(bytes, &mut index)?;
-                    if amount >= 0 {
-                        return None;
-                    }
-                    let back = u32::try_from(-amount).ok()?;
-                    if back != page_h {
-                        return None;
-                    }
-                    page_h = 0;
-                    expect_down3_after_reset = true;
-                    continue;
-                } else if op == DVI_DOWN3 {
-                    down3_count = down3_count.checked_add(1)?;
-                    index += 1;
-                    if read_i24_be(bytes, &mut index)? != line_advance_sp {
-                        return None;
-                    }
-                    if page_h != 0 {
-                        return None;
-                    }
-                    if expect_down3_after_reset {
-                        expect_down3_after_reset = false;
-                    }
-                    page_v = page_v.checked_add(u32::try_from(line_advance_sp).ok()?)?;
-                    continue;
+                right3_count = right3_count.checked_add(1)?;
+                index += 1;
+                let amount = read_i24_be(bytes, &mut index)?;
+                if amount <= 0 {
+                    return None;
                 }
-                if op > 127 || !is_supported_text_byte_v0(op) {
+                let amount_u32 = u32::try_from(amount).ok()?;
+                current_line_width = current_line_width.checked_add(amount_u32)?;
+                page_h = page_h.checked_add(amount_u32)?;
+                current_glyphs.push(GlyphPlanV0 {
+                    byte: pending_byte,
+                    advance_sp: amount,
+                });
+                expect_width_right_after_char = false;
+                continue;
+            }
+
+            if op == DVI_RIGHT3 {
+                right3_count = right3_count.checked_add(1)?;
+                index += 1;
+                let amount = read_i24_be(bytes, &mut index)?;
+                if amount >= 0 {
+                    return None;
+                }
+                let back = u32::try_from(-amount).ok()?;
+                if back != page_h {
+                    return None;
+                }
+                page_h = 0;
+                expect_down3_after_reset = true;
+                continue;
+            }
+
+            if op == DVI_DOWN3 {
+                down3_count = down3_count.checked_add(1)?;
+                index += 1;
+                if read_i24_be(bytes, &mut index)? != line_advance_sp {
+                    return None;
+                }
+                if page_h != 0 {
                     return None;
                 }
                 if expect_down3_after_reset {
+                    expect_down3_after_reset = false;
+                }
+                page_v = page_v.checked_add(u32::try_from(line_advance_sp).ok()?)?;
+                let line = LinePlanV0 {
+                    glyphs: std::mem::take(&mut current_glyphs),
+                    width_sp: current_line_width,
+                };
+                if recompute_line_width_sp_v0(&line)? != line.width_sp {
                     return None;
                 }
-                expected_right_after_char = glyph_width_sp_v0(op, glyph_advance_sp)?;
-                index += 1;
-                expect_width_right_after_char = true;
+                page_h_max = page_h_max.max(line.width_sp);
+                page_lines.push(line);
+                current_line_width = 0;
+                continue;
             }
+
+            if op > 127 || !is_supported_text_byte_v0(op) || expect_down3_after_reset {
+                return None;
+            }
+            pending_byte = op;
+            index += 1;
+            expect_width_right_after_char = true;
         }
+
+        if page_lines.is_empty() {
+            return None;
+        }
+        pages.push(PagePlanV0 { lines: page_lines });
         if page_h_max > max_h {
             max_h = page_h_max;
         }
@@ -583,6 +613,7 @@ pub fn count_dvi_v2_text_movements_with_layout_v0(
         previous_bop_offset = Some(bop_offset);
         page_count = page_count.checked_add(1)?;
     }
+
     if page_count == 0 {
         return None;
     }
@@ -631,7 +662,60 @@ pub fn count_dvi_v2_text_movements_with_layout_v0(
     if !bytes[index..].iter().all(|byte| *byte == DVI_TRAILER_BYTE) {
         return None;
     }
-    Some((right3_count, w3_count, w0_count, down3_count, page_count))
+
+    Some(ParsedDviTextLayoutV0 {
+        layout: LayoutPlanV0 { pages },
+        right3_count,
+        down3_count,
+        page_count,
+    })
+}
+
+pub fn parse_dvi_v2_text_page_to_layout_v0(bytes: &[u8], line_advance_sp: i32) -> Option<LayoutPlanV0> {
+    parse_dvi_v2_text_page_internal_v0(bytes, line_advance_sp).map(|parsed| parsed.layout)
+}
+
+pub fn validate_dvi_v2_text_page_matches_layout_v0(
+    bytes: &[u8],
+    layout: &LayoutPlanV0,
+    line_advance_sp: i32,
+) -> bool {
+    parse_dvi_v2_text_page_to_layout_v0(bytes, line_advance_sp)
+        .map(|parsed_layout| parsed_layout == *layout)
+        .unwrap_or(false)
+}
+
+pub fn count_dvi_v2_text_pages_with_layout_v0(
+    bytes: &[u8],
+    glyph_advance_sp: i32,
+    line_advance_sp: i32,
+) -> Option<u16> {
+    count_dvi_v2_text_movements_with_layout_v0(bytes, glyph_advance_sp, line_advance_sp)
+        .map(|(_, _, _, _, page_count)| page_count)
+}
+
+pub fn count_dvi_v2_text_movements_with_layout_v0(
+    bytes: &[u8],
+    glyph_advance_sp: i32,
+    line_advance_sp: i32,
+) -> Option<(u32, u32, u32, u32, u16)> {
+    if glyph_advance_sp <= 0 {
+        return None;
+    }
+    let parsed = parse_dvi_v2_text_page_internal_v0(bytes, line_advance_sp)?;
+    for page in &parsed.layout.pages {
+        for line in &page.lines {
+            if recompute_line_width_sp_v0(line)? != line.width_sp {
+                return None;
+            }
+            for glyph in &line.glyphs {
+                if glyph.advance_sp != glyph_width_sp_v0(glyph.byte, glyph_advance_sp)? {
+                    return None;
+                }
+            }
+        }
+    }
+    Some((parsed.right3_count, 0, 0, parsed.down3_count, parsed.page_count))
 }
 
 pub fn sum_dvi_v2_positive_right3_amounts_with_layout_v0(
