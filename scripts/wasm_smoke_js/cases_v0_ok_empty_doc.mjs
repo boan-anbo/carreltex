@@ -13,6 +13,7 @@ import { runOkMathEnvCases } from './cases_v0_ok_math_envs.mjs';
 import { runOkQuoteCases } from './cases_v0_ok_quotes.mjs';
 import { runOkRefCases } from './cases_v0_ok_refs.mjs';
 import { runOkScriptCases } from './cases_v0_ok_scripts.mjs';
+import { runOkTableCases } from './cases_v0_ok_tables.mjs';
 import { runOkWrapperCases } from './cases_v0_ok_wrappers.mjs';
 
 export function runOkEmptyDocCases(ctx, helpers) {
@@ -739,6 +740,7 @@ export function runOkEmptyDocCases(ctx, helpers) {
   runOkBibCases(ctx, okBodyHelpers, stats);
   runOkRefCases(ctx, okBodyHelpers, stats);
   runOkScriptCases(ctx, okBodyHelpers, stats);
+  runOkTableCases(ctx, okBodyHelpers, stats);
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before OK pagebreak text doc case failed');
   }
