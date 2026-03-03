@@ -74,6 +74,20 @@ pub(super) fn is_supported_ok_table_stub_env_v0(name: &[u8]) -> bool {
     matches!(name, b"tabular" | b"tabular*" | b"tabularx" | b"longtable")
 }
 
+pub(super) fn ok_thm_stub_marker_v0(name: &[u8]) -> Option<&'static [u8]> {
+    match name {
+        b"theorem"
+        | b"lemma"
+        | b"proposition"
+        | b"corollary"
+        | b"definition"
+        | b"remark"
+        | b"example" => Some(b"THM"),
+        b"proof" => Some(b"PROOF"),
+        _ => None,
+    }
+}
+
 pub(super) fn consume_named_environment_span_v0(
     tokens: &[TokenV0],
     begin_index: usize,
