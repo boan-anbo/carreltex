@@ -84,16 +84,30 @@ fn consume_theorem_preamble_command(tokens: &[TokenV0], index: usize) -> Option<
         }
         b"newtheorem" => {
             let mut cursor = skip_spaces(tokens, index + 1);
-            if matches!(tokens.get(cursor), Some(TokenV0::Char(b'*'))) {
+            let is_star = matches!(tokens.get(cursor), Some(TokenV0::Char(b'*')));
+            if is_star {
                 cursor += 1;
                 cursor = skip_spaces(tokens, cursor);
             }
             cursor = consume_char_space_group_non_empty(tokens, cursor)?;
             cursor = skip_spaces(tokens, cursor);
+            let mut saw_prefix_bracket = false;
             if matches!(tokens.get(cursor), Some(TokenV0::Char(b'['))) {
-                return None;
+                if is_star {
+                    return None;
+                }
+                saw_prefix_bracket = true;
+                cursor = consume_bracket_options_non_empty(tokens, cursor)?;
+                cursor = skip_spaces(tokens, cursor);
             }
             cursor = consume_char_space_group_non_empty(tokens, cursor)?;
+            cursor = skip_spaces(tokens, cursor);
+            if matches!(tokens.get(cursor), Some(TokenV0::Char(b'['))) {
+                if is_star || saw_prefix_bracket {
+                    return None;
+                }
+                cursor = consume_bracket_options_non_empty(tokens, cursor)?;
+            }
             Some(skip_spaces(tokens, cursor))
         }
         _ => None,

@@ -73,9 +73,43 @@ fn style_declaration_in_preamble_is_ok() {
 }
 
 #[test]
-fn newtheorem_optional_bracket_form_is_not_implemented() {
+fn newtheorem_prefix_optional_bracket_is_ok_and_output_matches_without_it() {
+    let with_optional = compile_main(
+        b"\\documentclass{article}\\newtheorem{theorem}[section]{Theorem}\\begin{document}\\begin{theorem}X\\end{theorem}\\end{document}",
+    );
+    let without_optional =
+        compile_main(b"\\documentclass{article}\\begin{document}\\begin{theorem}X\\end{theorem}\\end{document}");
+    assert_eq!(with_optional.status, CompileStatus::Ok);
+    assert_eq!(without_optional.status, CompileStatus::Ok);
+    assert!(with_optional.log_bytes.is_empty());
+    assert!(validate_dvi_v2_text_page_v0(&with_optional.main_xdv_bytes));
+    assert_eq!(
+        right3_positive_total(&with_optional),
+        right3_positive_total(&without_optional)
+    );
+}
+
+#[test]
+fn newtheorem_suffix_optional_bracket_is_ok_and_output_matches_without_it() {
+    let with_optional = compile_main(
+        b"\\documentclass{article}\\newtheorem{theorem}{Theorem}[section]\\begin{document}\\begin{theorem}X\\end{theorem}\\end{document}",
+    );
+    let without_optional =
+        compile_main(b"\\documentclass{article}\\begin{document}\\begin{theorem}X\\end{theorem}\\end{document}");
+    assert_eq!(with_optional.status, CompileStatus::Ok);
+    assert_eq!(without_optional.status, CompileStatus::Ok);
+    assert!(with_optional.log_bytes.is_empty());
+    assert!(validate_dvi_v2_text_page_v0(&with_optional.main_xdv_bytes));
+    assert_eq!(
+        right3_positive_total(&with_optional),
+        right3_positive_total(&without_optional)
+    );
+}
+
+#[test]
+fn newtheorem_star_with_optional_bracket_is_not_implemented() {
     let result = compile_main(
-        b"\\documentclass{article}\\newtheorem{theorem}[section]{Theorem}\\begin{document}X\\end{document}",
+        b"\\documentclass{article}\\newtheorem*{theorem}[section]{Theorem}\\begin{document}X\\end{document}",
     );
     assert_eq!(result.status, CompileStatus::NotImplemented);
     assert!(result.main_xdv_bytes.is_empty());
