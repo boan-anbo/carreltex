@@ -95,6 +95,29 @@ fn consume_char_space_nested_group_non_empty_v0(
     Some(next_index)
 }
 
+fn render_group_fragment_v0(
+    tokens: &[TokenV0],
+    index: usize,
+    end: usize,
+    max_group_depth: usize,
+    body: &mut Vec<u8>,
+    previous_was_space: &mut bool,
+) -> Option<usize> {
+    let cursor = skip_spaces_until(tokens, index, end);
+    let (inner_start, inner_end, next_index) =
+        consume_balanced_group_bounds_v0(tokens, cursor, max_group_depth, end)?;
+    consume_bibitem_label_fragment_range_v0(
+        tokens,
+        inner_start,
+        inner_end,
+        max_group_depth,
+        true,
+        body,
+        previous_was_space,
+    )?;
+    Some(next_index)
+}
+
 fn consume_bibitem_label_fragment_range_v0(
     tokens: &[TokenV0],
     start: usize,
@@ -123,6 +146,7 @@ fn consume_bibitem_label_fragment_range_v0(
                 index + 1
             }
             TokenV0::ControlSeq(name) if name.as_slice() == b"begin" => return None,
+            TokenV0::ControlSeq(name) if name.as_slice() == b"protect" => index + 1,
             TokenV0::ControlSeq(name) if is_supported_ok_wrapper_command_v0(name.as_slice()) => {
                 let cursor = skip_spaces_until(tokens, index + 1, end);
                 let (inner_start, inner_end, next_index) =
@@ -152,6 +176,49 @@ fn consume_bibitem_label_fragment_range_v0(
                     previous_was_space,
                 )?;
                 next_index
+            }
+            TokenV0::ControlSeq(name) if name.as_slice() == b"natexlab" => {
+                render_group_fragment_v0(
+                    tokens,
+                    index + 1,
+                    end,
+                    max_group_depth,
+                    body,
+                    previous_was_space,
+                )?
+            }
+            TokenV0::ControlSeq(name) if name.as_slice() == b"citeauthoryear" => {
+                let mut cursor = index + 1;
+                cursor = render_group_fragment_v0(
+                    tokens,
+                    cursor,
+                    end,
+                    max_group_depth,
+                    body,
+                    previous_was_space,
+                )?;
+                if !*previous_was_space {
+                    body.push(b' ');
+                    *previous_was_space = true;
+                }
+                let mut discarded_group = Vec::new();
+                let mut discarded_previous_was_space = false;
+                cursor = render_group_fragment_v0(
+                    tokens,
+                    cursor,
+                    end,
+                    max_group_depth,
+                    &mut discarded_group,
+                    &mut discarded_previous_was_space,
+                )?;
+                render_group_fragment_v0(
+                    tokens,
+                    cursor,
+                    end,
+                    max_group_depth,
+                    body,
+                    previous_was_space,
+                )?
             }
             TokenV0::ControlSeq(name) if name.as_slice() == b"label" => {
                 consume_char_space_nested_group_non_empty_v0(tokens, index + 1, end, max_group_depth)?
