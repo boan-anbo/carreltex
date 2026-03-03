@@ -190,6 +190,40 @@ export function runOkBibCases(ctx, helpers, baselineStats) {
     );
   }
 
+  if (ctx.mountReset() !== 0) throw new Error('mount_reset before OK bibliography natbib-label case failed');
+  const bibNatbibLabelDocBytes = new TextEncoder().encode(
+    '\\documentclass{article}\\begin{document}\\begin{thebibliography}{9}\\bibitem[\\protect\\citeauthoryear{A}{B}{2020}\\natexlab{a}]{K}A\\end{thebibliography}\\end{document}',
+  );
+  if (addMountedFile('main.tex', bibNatbibLabelDocBytes, 'ok_bibliography_natbib_label_main') !== 0) {
+    throw new Error('mount_add_file(ok bibliography natbib-label main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) throw new Error('mount_finalize for OK bibliography natbib-label case failed');
+  expectOk(ctx.compileMain(), 'compile_main_v0(ok bibliography natbib-label)');
+  const bibNatbibLabelLogBytes = readCompileLogBytes();
+  if (bibNatbibLabelLogBytes.length !== 0) {
+    throw new Error(
+      `compile_main(ok bibliography natbib-label) expected empty log, got ${bibNatbibLabelLogBytes.length} bytes`,
+    );
+  }
+  assertEventsMatchLogAndStats(
+    bibNatbibLabelLogBytes,
+    { char_count: baselineStats.char_count + 42 },
+    'compile_main(ok bibliography natbib-label)',
+  );
+  const bibNatbibLabelXdvBytes = readMainXdvArtifactBytes('compile_main(ok bibliography natbib-label)');
+  if (bibNatbibLabelXdvBytes.length === 0) {
+    throw new Error('compile_main(ok bibliography natbib-label) main.xdv expected non-empty bytes');
+  }
+  const bibNatbibLabelMovement = countMovementOpsInTextPages(
+    bibNatbibLabelXdvBytes,
+    'compile_main(ok bibliography natbib-label)',
+  );
+  if (bibNatbibLabelMovement.right3PositiveTotal !== 753664) {
+    throw new Error(
+      `compile_main(ok bibliography natbib-label) expected right3PositiveTotal=753664, got ${bibNatbibLabelMovement.right3PositiveTotal}`,
+    );
+  }
+
   if (ctx.mountReset() !== 0) throw new Error('mount_reset before bibitem outside env invalid case failed');
   const bibitemOutsideEnvDocBytes = new TextEncoder().encode(
     '\\documentclass{article}\\begin{document}\\bibitem{X}A\\end{document}',
@@ -219,4 +253,14 @@ export function runOkBibCases(ctx, helpers, baselineStats) {
   }
   if (ctx.mountFinalize() !== 0) throw new Error('mount_finalize for bibliography label-fragment begin invalid case failed');
   expectNotImplemented(ctx.compileMain(), 'compile_main_v0(ok bibliography label-fragment begin invalid)');
+
+  if (ctx.mountReset() !== 0) throw new Error('mount_reset before bibliography natbib-label missing-group invalid case failed');
+  const bibNatbibLabelMissingGroupDocBytes = new TextEncoder().encode(
+    '\\documentclass{article}\\begin{document}\\begin{thebibliography}{9}\\bibitem[\\citeauthoryear{A}{B}]{K}A\\end{thebibliography}\\end{document}',
+  );
+  if (addMountedFile('main.tex', bibNatbibLabelMissingGroupDocBytes, 'ok_bibliography_natbib_label_missing_group_main') !== 0) {
+    throw new Error('mount_add_file(ok bibliography natbib-label missing-group main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) throw new Error('mount_finalize for bibliography natbib-label missing-group invalid case failed');
+  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(ok bibliography natbib-label missing-group invalid)');
 }
