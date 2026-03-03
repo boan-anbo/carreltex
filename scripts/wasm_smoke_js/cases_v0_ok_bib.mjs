@@ -122,6 +122,40 @@ export function runOkBibCases(ctx, helpers, baselineStats) {
     );
   }
 
+  if (ctx.mountReset() !== 0) throw new Error('mount_reset before OK bibliography newblock case failed');
+  const bibNewblockDocBytes = new TextEncoder().encode(
+    '\\documentclass{article}\\begin{document}\\begin{thebibliography}{9}\\bibitem{X}A\\newblock B\\end{thebibliography}\\end{document}',
+  );
+  if (addMountedFile('main.tex', bibNewblockDocBytes, 'ok_bibliography_newblock_main') !== 0) {
+    throw new Error('mount_add_file(ok bibliography newblock main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) throw new Error('mount_finalize for OK bibliography newblock case failed');
+  expectOk(ctx.compileMain(), 'compile_main_v0(ok bibliography newblock)');
+  const bibNewblockLogBytes = readCompileLogBytes();
+  if (bibNewblockLogBytes.length !== 0) {
+    throw new Error(
+      `compile_main(ok bibliography newblock) expected empty log, got ${bibNewblockLogBytes.length} bytes`,
+    );
+  }
+  assertEventsMatchLogAndStats(
+    bibNewblockLogBytes,
+    { char_count: baselineStats.char_count + 34 },
+    'compile_main(ok bibliography newblock)',
+  );
+  const bibNewblockXdvBytes = readMainXdvArtifactBytes('compile_main(ok bibliography newblock)');
+  if (bibNewblockXdvBytes.length === 0) {
+    throw new Error('compile_main(ok bibliography newblock) main.xdv expected non-empty bytes');
+  }
+  const bibNewblockMovement = countMovementOpsInTextPages(
+    bibNewblockXdvBytes,
+    'compile_main(ok bibliography newblock)',
+  );
+  if (bibNewblockMovement.right3PositiveTotal !== 262144) {
+    throw new Error(
+      `compile_main(ok bibliography newblock) expected right3PositiveTotal=262144, got ${bibNewblockMovement.right3PositiveTotal}`,
+    );
+  }
+
   if (ctx.mountReset() !== 0) throw new Error('mount_reset before bibitem outside env invalid case failed');
   const bibitemOutsideEnvDocBytes = new TextEncoder().encode(
     '\\documentclass{article}\\begin{document}\\bibitem{X}A\\end{document}',
@@ -131,4 +165,14 @@ export function runOkBibCases(ctx, helpers, baselineStats) {
   }
   if (ctx.mountFinalize() !== 0) throw new Error('mount_finalize for bibitem outside env invalid case failed');
   expectNotImplemented(ctx.compileMain(), 'compile_main_v0(ok bibitem outside env)');
+
+  if (ctx.mountReset() !== 0) throw new Error('mount_reset before newblock outside bibliography invalid case failed');
+  const newblockOutsideBibDocBytes = new TextEncoder().encode(
+    '\\documentclass{article}\\begin{document}A\\newblock B\\end{document}',
+  );
+  if (addMountedFile('main.tex', newblockOutsideBibDocBytes, 'ok_newblock_outside_bib_main') !== 0) {
+    throw new Error('mount_add_file(ok newblock outside bibliography main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) throw new Error('mount_finalize for newblock outside bibliography invalid case failed');
+  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(ok newblock outside bibliography)');
 }
