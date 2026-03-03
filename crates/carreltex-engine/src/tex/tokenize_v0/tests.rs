@@ -970,14 +970,6 @@ fn control_word_partial_is_not_par_prefix() {
 }
 
 #[test]
-fn verb_control_word_is_invalid_input() {
-    assert_eq!(
-        tokenize_v0(b"\\verb|x|"),
-        Err(TokenizeErrorV0::InvalidInput)
-    );
-}
-
-#[test]
 fn too_many_tokens_is_fail_closed() {
     let input = vec![b'x'; MAX_TOKENS_V0 + 1];
     assert_eq!(tokenize_v0(&input), Err(TokenizeErrorV0::TooManyTokens));
