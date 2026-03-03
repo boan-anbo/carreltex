@@ -715,6 +715,15 @@ export function runOkEmptyDocCases(ctx, helpers) {
   if (countMovementOpsInTextPages(parControlSeqTextXdvBytes, 'compile_main(ok par control-seq text doc)').right3 !== 3) {
     throw new Error('compile_main(ok par control-seq text doc) expected right3=3 for A space B');
   }
+  if (ctx.mountReset() !== 0) throw new Error('mount_reset before OK noindent text doc case failed');
+  const noindentTextDocBytes = new TextEncoder().encode('\\documentclass{article}\\begin{document}\\noindent XYZ\\end{document}');
+  if (addMountedFile('main.tex', noindentTextDocBytes, 'ok_noindent_text_doc_main') !== 0) throw new Error('mount_add_file(ok noindent text doc main.tex) failed');
+  if (ctx.mountFinalize() !== 0) throw new Error('mount_finalize for OK noindent text doc case failed');
+  expectOk(ctx.compileMain(), 'compile_main_v0(ok noindent text doc)');
+  const noindentTextLogBytes = readCompileLogBytes();
+  if (noindentTextLogBytes.length !== 0) throw new Error(`compile_main(ok noindent text doc) expected empty log, got ${noindentTextLogBytes.length} bytes`);
+  assertEventsMatchLogAndStats(noindentTextLogBytes, { char_count: stats.char_count + 3 }, 'compile_main(ok noindent text doc)');
+  if (readMainXdvArtifactBytes('compile_main(ok noindent text doc)').length === 0) throw new Error('compile_main(ok noindent text doc) main.xdv expected non-empty bytes');
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before OK pagebreak text doc case failed');
   }
