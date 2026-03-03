@@ -258,14 +258,45 @@ fn ok_long_text_without_newline_wraps_automatically() {
 }
 
 #[test]
-fn unsupported_char_backslash_in_body_falls_back_to_not_implemented() {
+fn printable_backslash_in_body_is_ok() {
+    let mut baseline_mount = Mount::default();
+    let baseline_main = b"\\documentclass{article}\n\\begin{document}\n\n\\end{document}\n";
+    assert!(baseline_mount.add_file(b"main.tex", baseline_main).is_ok());
+    let baseline_result = compile_request_v0(&mut baseline_mount, &valid_request());
+    assert_eq!(baseline_result.status, CompileStatus::Ok);
+    let baseline_char_count =
+        stats_u64_field(&baseline_result.tex_stats_json, "char_count").expect("char_count");
+
     let mut mount = Mount::default();
     let main =
         b"\\documentclass{article}\n\\begin{document}\nA\\textbackslash B\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
-    assert!(result.main_xdv_bytes.is_empty());
+    assert_eq!(result.status, CompileStatus::Ok);
+    assert!(validate_dvi_v2_text_page_v0(&result.main_xdv_bytes));
+    let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
+    assert_eq!(char_count, baseline_char_count + 3);
+}
+
+#[test]
+fn macro_expanded_ok_body_returns_ok() {
+    let mut baseline_mount = Mount::default();
+    let baseline_main = b"\\documentclass{article}\n\\begin{document}\n\n\\end{document}\n";
+    assert!(baseline_mount.add_file(b"main.tex", baseline_main).is_ok());
+    let baseline_result = compile_request_v0(&mut baseline_mount, &valid_request());
+    assert_eq!(baseline_result.status, CompileStatus::Ok);
+    let baseline_char_count =
+        stats_u64_field(&baseline_result.tex_stats_json, "char_count").expect("char_count");
+
+    let mut mount = Mount::default();
+    let main =
+        b"\\documentclass{article}\\begin{document}\\def\\foo{XYZ}\\foo\\end{document}";
+    assert!(mount.add_file(b"main.tex", main).is_ok());
+    let result = compile_request_v0(&mut mount, &valid_request());
+    assert_eq!(result.status, CompileStatus::Ok);
+    assert!(validate_dvi_v2_text_page_v0(&result.main_xdv_bytes));
+    let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
+    assert_eq!(char_count, baseline_char_count + 3);
 }
 
 #[test]

@@ -2,6 +2,7 @@ export function runMacroCases(ctx, helpers, baselineMainCharCount) {
   const {
     addMountedFile,
     expectInvalid,
+    expectOk,
     expectNotImplemented,
     readCompileReportJson,
     readCompileLogBytes,
@@ -10,8 +11,8 @@ export function runMacroCases(ctx, helpers, baselineMainCharCount) {
     assertEventsMatchLogAndStats,
     assertMainXdvArtifactEmpty,
     assertNoEvents,
+    readMainXdvArtifactBytes,
   } = helpers;
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before macro expansion positive case failed');
   }
@@ -26,13 +27,14 @@ export function runMacroCases(ctx, helpers, baselineMainCharCount) {
   if (ctx.mountFinalize() !== 0) {
     throw new Error('mount_finalize for input-macro interplay case failed');
   }
-  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(input->macro interplay)');
+  expectOk(ctx.compileMain(), 'compile_main_v0(input->macro interplay)');
   {
     const report = readCompileReportJson();
-    if (report.status !== 'NOT_IMPLEMENTED') {
-      throw new Error(`compile_main(input->macro interplay) report.status expected NOT_IMPLEMENTED, got ${report.status}`);
+    if (report.status !== 'OK') {
+      throw new Error(`compile_main(input->macro interplay) report.status expected OK, got ${report.status}`);
     }
     const logBytes = readCompileLogBytes();
+    if (logBytes.length !== 0) throw new Error(`compile_main(input->macro interplay) expected empty log, got ${logBytes.length} bytes`);
     const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(input->macro interplay)');
     if (baselineMainCharCount === null) {
       throw new Error('baselineMainCharCount not initialized');
@@ -40,9 +42,8 @@ export function runMacroCases(ctx, helpers, baselineMainCharCount) {
     if (stats.char_count !== baselineMainCharCount + 3) {
       throw new Error(`compile_main(input->macro interplay) char_count delta expected +3, got baseline=${baselineMainCharCount}, current=${stats.char_count}`);
     }
-    assertMainXdvArtifactEmpty('compile_main(input->macro interplay)');
+    readMainXdvArtifactBytes('compile_main(input->macro interplay)');
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before macro expansion positive case failed');
   }
@@ -53,14 +54,15 @@ export function runMacroCases(ctx, helpers, baselineMainCharCount) {
   if (ctx.mountFinalize() !== 0) {
     throw new Error('mount_finalize for macro expansion positive case failed');
   }
-  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(macro expansion positive)');
+  expectOk(ctx.compileMain(), 'compile_main_v0(macro expansion positive)');
   let gdefBaselineCharCount = null;
   {
     const report = readCompileReportJson();
-    if (report.status !== 'NOT_IMPLEMENTED') {
-      throw new Error(`compile_main(macro expansion) report.status expected NOT_IMPLEMENTED, got ${report.status}`);
+    if (report.status !== 'OK') {
+      throw new Error(`compile_main(macro expansion) report.status expected OK, got ${report.status}`);
     }
     const logBytes = readCompileLogBytes();
+    if (logBytes.length !== 0) throw new Error(`compile_main(macro expansion) expected empty log, got ${logBytes.length} bytes`);
     const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(macro expansion positive)');
     if (baselineMainCharCount === null) {
       throw new Error('baselineMainCharCount not initialized');
@@ -69,9 +71,8 @@ export function runMacroCases(ctx, helpers, baselineMainCharCount) {
       throw new Error(`compile_main(macro expansion) char_count delta expected +3, got baseline=${baselineMainCharCount}, current=${stats.char_count}`);
     }
     gdefBaselineCharCount = baselineMainCharCount;
-    assertMainXdvArtifactEmpty('compile_main(macro expansion positive)');
+    readMainXdvArtifactBytes('compile_main(macro expansion positive)');
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before macro cycle compile check failed');
   }
@@ -92,7 +93,6 @@ export function runMacroCases(ctx, helpers, baselineMainCharCount) {
     }
     assertNoEvents('compile_main_v0(macro cycle)');
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before macro single-param positive case failed');
   }
@@ -103,13 +103,14 @@ export function runMacroCases(ctx, helpers, baselineMainCharCount) {
   if (ctx.mountFinalize() !== 0) {
     throw new Error('mount_finalize for macro single-param positive case failed');
   }
-  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(macro single-param positive)');
+  expectOk(ctx.compileMain(), 'compile_main_v0(macro single-param positive)');
   {
     const report = readCompileReportJson();
-    if (report.status !== 'NOT_IMPLEMENTED') {
-      throw new Error(`compile_main(macro single-param) report.status expected NOT_IMPLEMENTED, got ${report.status}`);
+    if (report.status !== 'OK') {
+      throw new Error(`compile_main(macro single-param) report.status expected OK, got ${report.status}`);
     }
     const logBytes = readCompileLogBytes();
+    if (logBytes.length !== 0) throw new Error(`compile_main(macro single-param) expected empty log, got ${logBytes.length} bytes`);
     const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(macro single-param positive)');
     if (gdefBaselineCharCount === null) {
       throw new Error('gdefBaselineCharCount not initialized');
@@ -117,9 +118,8 @@ export function runMacroCases(ctx, helpers, baselineMainCharCount) {
     if (stats.char_count !== gdefBaselineCharCount + 3) {
       throw new Error(`compile_main(macro single-param) char_count delta expected +3, got baseline=${gdefBaselineCharCount}, current=${stats.char_count}`);
     }
-    assertMainXdvArtifactEmpty('compile_main(macro single-param positive)');
+    readMainXdvArtifactBytes('compile_main(macro single-param positive)');
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before macro def-space positive case failed');
   }
@@ -130,9 +130,12 @@ export function runMacroCases(ctx, helpers, baselineMainCharCount) {
   if (ctx.mountFinalize() !== 0) {
     throw new Error('mount_finalize for macro def-space positive case failed');
   }
-  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(macro def-space positive)');
+  expectOk(ctx.compileMain(), 'compile_main_v0(macro def-space positive)');
   {
     const logBytes = readCompileLogBytes();
+    if (logBytes.length !== 0) {
+      throw new Error(`compile_main(macro def-space) expected empty log, got ${logBytes.length} bytes`);
+    }
     const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(macro def-space positive)');
     if (baselineMainCharCount === null) {
       throw new Error('baselineMainCharCount not initialized');
@@ -140,9 +143,8 @@ export function runMacroCases(ctx, helpers, baselineMainCharCount) {
     if (stats.char_count !== baselineMainCharCount + 3) {
       throw new Error(`compile_main(macro def-space) char_count delta expected +3, got baseline=${baselineMainCharCount}, current=${stats.char_count}`);
     }
-    assertMainXdvArtifactEmpty('compile_main(macro def-space positive)');
+    readMainXdvArtifactBytes('compile_main(macro def-space positive)');
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before macro single-param def-space positive case failed');
   }
@@ -153,9 +155,12 @@ export function runMacroCases(ctx, helpers, baselineMainCharCount) {
   if (ctx.mountFinalize() !== 0) {
     throw new Error('mount_finalize for macro single-param def-space positive case failed');
   }
-  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(macro single-param def-space positive)');
+  expectOk(ctx.compileMain(), 'compile_main_v0(macro single-param def-space positive)');
   {
     const logBytes = readCompileLogBytes();
+    if (logBytes.length !== 0) {
+      throw new Error(`compile_main(macro single-param def-space) expected empty log, got ${logBytes.length} bytes`);
+    }
     const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(macro single-param def-space positive)');
     if (baselineMainCharCount === null) {
       throw new Error('baselineMainCharCount not initialized');
@@ -163,9 +168,8 @@ export function runMacroCases(ctx, helpers, baselineMainCharCount) {
     if (stats.char_count !== baselineMainCharCount + 3) {
       throw new Error(`compile_main(macro single-param def-space) char_count delta expected +3, got baseline=${baselineMainCharCount}, current=${stats.char_count}`);
     }
-    assertMainXdvArtifactEmpty('compile_main(macro single-param def-space positive)');
+    readMainXdvArtifactBytes('compile_main(macro single-param def-space positive)');
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before macro def-non-space invalid case failed');
   }
@@ -186,7 +190,6 @@ export function runMacroCases(ctx, helpers, baselineMainCharCount) {
     }
     assertNoEvents('compile_main_v0(macro def-non-space invalid)');
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before macro params unsupported check failed');
   }
@@ -207,7 +210,6 @@ export function runMacroCases(ctx, helpers, baselineMainCharCount) {
     }
     assertNoEvents('compile_main_v0(macro params unsupported)');
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before macro scoped-no-leak baseline case failed');
   }
@@ -236,7 +238,6 @@ export function runMacroCases(ctx, helpers, baselineMainCharCount) {
     const stats = JSON.parse(statsText);
     scopedNoLeakBaselineCharCount = stats.char_count;
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before macro scoped-no-leak case failed');
   }
@@ -281,7 +282,6 @@ export function runMacroCases(ctx, helpers, baselineMainCharCount) {
     }
     assertMainXdvArtifactEmpty('compile_main(macro scoped-no-leak)');
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before macro begingroup/no-leak case failed');
   }
@@ -304,7 +304,6 @@ export function runMacroCases(ctx, helpers, baselineMainCharCount) {
     }
     assertMainXdvArtifactEmpty('compile_main(macro begingroup/no-leak)');
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before macro begingroup/global-def case failed');
   }
@@ -327,7 +326,6 @@ export function runMacroCases(ctx, helpers, baselineMainCharCount) {
     }
     assertMainXdvArtifactEmpty('compile_main(macro begingroup/global-def)');
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before macro relax/no-op case failed');
   }
@@ -338,9 +336,12 @@ export function runMacroCases(ctx, helpers, baselineMainCharCount) {
   if (ctx.mountFinalize() !== 0) {
     throw new Error('mount_finalize for macro relax/no-op case failed');
   }
-  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(macro relax/no-op)');
+  expectOk(ctx.compileMain(), 'compile_main_v0(macro relax/no-op)');
   {
     const logBytes = readCompileLogBytes();
+    if (logBytes.length !== 0) {
+      throw new Error(`compile_main(macro relax/no-op) expected empty log, got ${logBytes.length} bytes`);
+    }
     const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(macro relax/no-op)');
     if (baselineMainCharCount === null) {
       throw new Error('baselineMainCharCount not initialized');
@@ -348,9 +349,8 @@ export function runMacroCases(ctx, helpers, baselineMainCharCount) {
     if (stats.char_count !== baselineMainCharCount + 3) {
       throw new Error(`compile_main(macro relax/no-op) char_count delta expected +3, got baseline=${baselineMainCharCount}, current=${stats.char_count}`);
     }
-    assertMainXdvArtifactEmpty('compile_main(macro relax/no-op)');
+    readMainXdvArtifactBytes('compile_main(macro relax/no-op)');
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before macro bgroup/no-leak case failed');
   }
@@ -373,7 +373,6 @@ export function runMacroCases(ctx, helpers, baselineMainCharCount) {
     }
     assertMainXdvArtifactEmpty('compile_main(macro bgroup/no-leak)');
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before macro bgroup/global-def case failed');
   }
@@ -396,7 +395,6 @@ export function runMacroCases(ctx, helpers, baselineMainCharCount) {
     }
     assertMainXdvArtifactEmpty('compile_main(macro bgroup/global-def)');
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before macro endgroup-underflow case failed');
   }
@@ -416,7 +414,6 @@ export function runMacroCases(ctx, helpers, baselineMainCharCount) {
     }
     assertNoEvents('compile_main_v0(macro endgroup-underflow)');
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before macro gdef-global baseline case failed');
   }
@@ -451,7 +448,6 @@ export function runMacroCases(ctx, helpers, baselineMainCharCount) {
     gdefBaselineCharCount = baselineStats.char_count;
     assertMainXdvArtifactEmpty('compile_main(macro gdef-global baseline)');
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before macro gdef-global case failed');
   }
@@ -495,7 +491,6 @@ export function runMacroCases(ctx, helpers, baselineMainCharCount) {
     }
     assertMainXdvArtifactEmpty('compile_main(macro gdef-global)');
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before macro global-def case failed');
   }
@@ -522,7 +517,6 @@ export function runMacroCases(ctx, helpers, baselineMainCharCount) {
     }
     assertMainXdvArtifactEmpty('compile_main(macro global-def)');
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before macro global-gdef case failed');
   }
@@ -549,7 +543,6 @@ export function runMacroCases(ctx, helpers, baselineMainCharCount) {
     }
     assertMainXdvArtifactEmpty('compile_main(macro global-gdef)');
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before macro stacked global-def case failed');
   }
@@ -576,7 +569,6 @@ export function runMacroCases(ctx, helpers, baselineMainCharCount) {
     }
     assertMainXdvArtifactEmpty('compile_main(macro stacked global-def)');
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before macro global-prefix invalid case failed');
   }
@@ -603,7 +595,6 @@ export function runMacroCases(ctx, helpers, baselineMainCharCount) {
     }
     assertMainXdvArtifactEmpty('compile_main(macro let-alias)');
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before macro futurelet case failed');
   }
@@ -634,7 +625,6 @@ export function runMacroCases(ctx, helpers, baselineMainCharCount) {
     }
     assertMainXdvArtifactEmpty('compile_main(macro input let-snapshot)');
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before macro futurelet case failed');
   }
@@ -665,7 +655,6 @@ export function runMacroCases(ctx, helpers, baselineMainCharCount) {
     }
     assertMainXdvArtifactEmpty('compile_main(macro input futurelet)');
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before macro futurelet case failed');
   }
@@ -692,7 +681,6 @@ export function runMacroCases(ctx, helpers, baselineMainCharCount) {
     }
     assertMainXdvArtifactEmpty('compile_main(macro futurelet)');
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before macro global-prefix invalid case failed');
   }
@@ -713,7 +701,6 @@ export function runMacroCases(ctx, helpers, baselineMainCharCount) {
     }
     assertNoEvents('compile_main_v0(macro global-prefix invalid)');
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before macro let unsupported case failed');
   }
@@ -734,7 +721,6 @@ export function runMacroCases(ctx, helpers, baselineMainCharCount) {
     }
     assertNoEvents('compile_main_v0(macro let unsupported)');
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before macro futurelet unsupported case failed');
   }
@@ -755,7 +741,6 @@ export function runMacroCases(ctx, helpers, baselineMainCharCount) {
     }
     assertNoEvents('compile_main_v0(macro futurelet unsupported)');
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before compile_request negative setter tests failed');
   }
@@ -782,7 +767,6 @@ export function runMacroCases(ctx, helpers, baselineMainCharCount) {
     }
     assertMainXdvArtifactEmpty('compile_main(macro expandafter)');
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before macro input expandafter case failed');
   }
@@ -813,7 +797,6 @@ export function runMacroCases(ctx, helpers, baselineMainCharCount) {
     }
     assertMainXdvArtifactEmpty('compile_main(macro input expandafter)');
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before macro expandafter unsupported case failed');
   }
@@ -834,7 +817,6 @@ export function runMacroCases(ctx, helpers, baselineMainCharCount) {
     }
     assertNoEvents('compile_main_v0(macro expandafter unsupported)');
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before compile_request negative setter tests failed');
   }
@@ -865,7 +847,6 @@ export function runMacroCases(ctx, helpers, baselineMainCharCount) {
     }
     assertMainXdvArtifactEmpty('compile_main(macro input csname)');
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before compile_request negative setter tests failed');
   }
@@ -892,7 +873,6 @@ export function runMacroCases(ctx, helpers, baselineMainCharCount) {
     }
     assertMainXdvArtifactEmpty('compile_main(macro csname)');
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before macro csname unsupported case failed');
   }
@@ -913,7 +893,6 @@ export function runMacroCases(ctx, helpers, baselineMainCharCount) {
     }
     assertNoEvents('compile_main_v0(macro csname unsupported)');
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before compile_request negative setter tests failed');
   }
@@ -944,7 +923,6 @@ export function runMacroCases(ctx, helpers, baselineMainCharCount) {
     }
     assertMainXdvArtifactEmpty('compile_main(macro input string)');
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before compile_request negative setter tests failed');
   }
@@ -971,7 +949,6 @@ export function runMacroCases(ctx, helpers, baselineMainCharCount) {
     }
     assertMainXdvArtifactEmpty('compile_main(macro string)');
   }
-
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before macro string unsupported case failed');
   }
@@ -992,7 +969,6 @@ export function runMacroCases(ctx, helpers, baselineMainCharCount) {
     }
     assertNoEvents('compile_main_v0(macro string unsupported)');
   }
-
   return {
     gdefBaselineCharCount,
   };

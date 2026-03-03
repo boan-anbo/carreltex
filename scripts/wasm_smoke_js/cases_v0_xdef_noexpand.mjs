@@ -5,6 +5,7 @@ export function runXdefNoexpandCases(ctx, helpers) {
     expectOk,
     expectNotImplemented,
     readCompileLogBytes,
+    readMainXdvArtifactBytes,
     assertEventsMatchLogAndStats,
     assertMainXdvArtifactEmpty,
     assertNoEvents,
@@ -88,9 +89,12 @@ export function runXdefNoexpandCases(ctx, helpers) {
   if (ctx.mountFinalize() !== 0) {
     throw new Error('mount_finalize for noexpand dynamic case failed');
   }
-  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(macro noexpand dynamic)');
+  expectOk(ctx.compileMain(), 'compile_main_v0(macro noexpand dynamic)');
   {
     const logBytes = readCompileLogBytes();
+    if (logBytes.length !== 0) {
+      throw new Error(`compile_main(macro noexpand dynamic) expected empty log, got ${logBytes.length} bytes`);
+    }
     const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(macro noexpand dynamic)');
     if (baselineCharCount === null) {
       throw new Error('baselineCharCount not initialized for noexpand dynamic case');
@@ -98,7 +102,7 @@ export function runXdefNoexpandCases(ctx, helpers) {
     if (stats.char_count !== baselineCharCount + 3) {
       throw new Error(`compile_main(macro noexpand dynamic) char_count delta expected +3, got baseline=${baselineCharCount}, current=${stats.char_count}`);
     }
-    assertMainXdvArtifactEmpty('compile_main(macro noexpand dynamic)');
+    readMainXdvArtifactBytes('compile_main(macro noexpand dynamic)');
   }
 
   if (ctx.mountReset() !== 0) {
@@ -115,9 +119,12 @@ export function runXdefNoexpandCases(ctx, helpers) {
   if (ctx.mountFinalize() !== 0) {
     throw new Error('mount_finalize for noexpand input snapshot case failed');
   }
-  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(macro noexpand input snapshot)');
+  expectOk(ctx.compileMain(), 'compile_main_v0(macro noexpand input snapshot)');
   {
     const logBytes = readCompileLogBytes();
+    if (logBytes.length !== 0) {
+      throw new Error(`compile_main(macro noexpand input snapshot) expected empty log, got ${logBytes.length} bytes`);
+    }
     const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(macro noexpand input snapshot)');
     if (baselineCharCount === null) {
       throw new Error('baselineCharCount not initialized for noexpand input snapshot case');
@@ -125,7 +132,7 @@ export function runXdefNoexpandCases(ctx, helpers) {
     if (stats.char_count !== baselineCharCount + 1) {
       throw new Error(`compile_main(macro noexpand input snapshot) char_count delta expected +1, got baseline=${baselineCharCount}, current=${stats.char_count}`);
     }
-    assertMainXdvArtifactEmpty('compile_main(macro noexpand input snapshot)');
+    readMainXdvArtifactBytes('compile_main(macro noexpand input snapshot)');
   }
 
   if (ctx.mountReset() !== 0) {

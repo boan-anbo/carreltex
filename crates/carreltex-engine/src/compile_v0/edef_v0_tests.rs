@@ -44,7 +44,7 @@ fn edef_expands_body_once_at_definition_time() {
         b"\\documentclass{article}\n\\begin{document}\n\\def\\bar{XYZ}\\edef\\foo{\\bar}\\foo\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert_eq!(result.status, CompileStatus::Ok);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline + 3);
 }
@@ -58,7 +58,7 @@ fn edef_snapshot_is_stable_across_input_boundary() {
     assert!(mount.add_file(b"main.tex", main).is_ok());
     assert!(mount.add_file(b"sub.tex", sub).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert_eq!(result.status, CompileStatus::Ok);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline + 3);
 }
@@ -71,7 +71,7 @@ fn edef_is_snapshot_not_dynamic_after_redefinition() {
         b"\\documentclass{article}\n\\begin{document}\n\\def\\bar{X}\\edef\\foo{\\bar}\\def\\bar{XYZ}\\foo\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert_eq!(result.status, CompileStatus::Ok);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline + 1);
 }

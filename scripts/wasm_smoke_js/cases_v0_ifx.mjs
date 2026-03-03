@@ -3,10 +3,9 @@ export function runIfxCases(ctx, helpers) {
     addMountedFile,
     expectInvalid,
     expectOk,
-    expectNotImplemented,
     readCompileLogBytes,
+    readMainXdvArtifactBytes,
     assertEventsMatchLogAndStats,
-    assertMainXdvArtifactEmpty,
     assertNoEvents,
   } = helpers;
 
@@ -38,7 +37,7 @@ export function runIfxCases(ctx, helpers) {
   if (ctx.mountFinalize() !== 0) {
     throw new Error('mount_finalize for ifx alias==alias case failed');
   }
-  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(macro ifx alias==alias)');
+  expectOk(ctx.compileMain(), 'compile_main_v0(macro ifx alias==alias)');
   {
     const logBytes = readCompileLogBytes();
     const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(macro ifx alias==alias)');
@@ -48,7 +47,7 @@ export function runIfxCases(ctx, helpers) {
     if (stats.char_count !== baselineCharCount + 3) {
       throw new Error(`compile_main(macro ifx alias==alias) char_count delta expected +3, got baseline=${baselineCharCount}, current=${stats.char_count}`);
     }
-    assertMainXdvArtifactEmpty('compile_main(macro ifx alias==alias)');
+    readMainXdvArtifactBytes('compile_main(macro ifx alias==alias)');
   }
 
   if (ctx.mountReset() !== 0) {
@@ -61,7 +60,7 @@ export function runIfxCases(ctx, helpers) {
   if (ctx.mountFinalize() !== 0) {
     throw new Error('mount_finalize for ifx macro!=macro case failed');
   }
-  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(macro ifx macro!=macro)');
+  expectOk(ctx.compileMain(), 'compile_main_v0(macro ifx macro!=macro)');
   {
     const logBytes = readCompileLogBytes();
     const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(macro ifx macro!=macro)');
@@ -71,7 +70,7 @@ export function runIfxCases(ctx, helpers) {
     if (stats.char_count !== baselineCharCount + 3) {
       throw new Error(`compile_main(macro ifx macro!=macro) char_count delta expected +3, got baseline=${baselineCharCount}, current=${stats.char_count}`);
     }
-    assertMainXdvArtifactEmpty('compile_main(macro ifx macro!=macro)');
+    readMainXdvArtifactBytes('compile_main(macro ifx macro!=macro)');
   }
 
   if (ctx.mountReset() !== 0) {
@@ -88,7 +87,7 @@ export function runIfxCases(ctx, helpers) {
   if (ctx.mountFinalize() !== 0) {
     throw new Error('mount_finalize for ifx input alias==source case failed');
   }
-  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(macro ifx input alias==source)');
+  expectOk(ctx.compileMain(), 'compile_main_v0(macro ifx input alias==source)');
   {
     const logBytes = readCompileLogBytes();
     const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(macro ifx input alias==source)');
@@ -98,7 +97,7 @@ export function runIfxCases(ctx, helpers) {
     if (stats.char_count !== baselineCharCount + 4) {
       throw new Error(`compile_main(macro ifx input alias==source) char_count delta expected +4, got baseline=${baselineCharCount}, current=${stats.char_count}`);
     }
-    assertMainXdvArtifactEmpty('compile_main(macro ifx input alias==source)');
+    readMainXdvArtifactBytes('compile_main(macro ifx input alias==source)');
   }
 
   if (ctx.mountReset() !== 0) {
@@ -132,7 +131,7 @@ export function runIfxCases(ctx, helpers) {
   if (ctx.mountFinalize() !== 0) {
     throw new Error('mount_finalize for ifx let snapshot!=current case failed');
   }
-  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(macro ifx let snapshot!=current)');
+  expectOk(ctx.compileMain(), 'compile_main_v0(macro ifx let snapshot!=current)');
   {
     const logBytes = readCompileLogBytes();
     const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(macro ifx let snapshot!=current)');
@@ -142,7 +141,7 @@ export function runIfxCases(ctx, helpers) {
     if (stats.char_count !== baselineCharCount + 3) {
       throw new Error(`compile_main(macro ifx let snapshot!=current) char_count delta expected +3, got baseline=${baselineCharCount}, current=${stats.char_count}`);
     }
-    assertMainXdvArtifactEmpty('compile_main(macro ifx let snapshot!=current)');
+    readMainXdvArtifactBytes('compile_main(macro ifx let snapshot!=current)');
   }
 
   if (ctx.mountReset() !== 0) {
@@ -155,7 +154,7 @@ export function runIfxCases(ctx, helpers) {
   if (ctx.mountFinalize() !== 0) {
     throw new Error('mount_finalize for ifx let undefined==undefined case failed');
   }
-  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(macro ifx let undefined==undefined)');
+  expectOk(ctx.compileMain(), 'compile_main_v0(macro ifx let undefined==undefined)');
   {
     const logBytes = readCompileLogBytes();
     const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(macro ifx let undefined==undefined)');
@@ -165,6 +164,6 @@ export function runIfxCases(ctx, helpers) {
     if (stats.char_count !== baselineCharCount + 3) {
       throw new Error(`compile_main(macro ifx let undefined==undefined) char_count delta expected +3, got baseline=${baselineCharCount}, current=${stats.char_count}`);
     }
-    assertMainXdvArtifactEmpty('compile_main(macro ifx let undefined==undefined)');
+    readMainXdvArtifactBytes('compile_main(macro ifx let undefined==undefined)');
   }
 }

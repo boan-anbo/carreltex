@@ -44,7 +44,7 @@ fn count0_assignment_then_the_emits_decimal_chars() {
         b"\\documentclass{article}\n\\begin{document}\n\\count0=12\\the\\count0\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert_eq!(result.status, CompileStatus::Ok);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline + 2);
 }
@@ -56,7 +56,7 @@ fn the_count1_without_assignment_defaults_to_zero() {
     let main = b"\\documentclass{article}\n\\begin{document}\n\\the\\count1\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert_eq!(result.status, CompileStatus::Ok);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline + 1);
 }

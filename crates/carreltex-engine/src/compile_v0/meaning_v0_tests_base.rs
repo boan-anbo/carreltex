@@ -44,7 +44,7 @@ fn meaning_macro_binding_emits_macro_descriptor() {
         b"\\documentclass{article}\n\\begin{document}\n\\def\\foo{XYZ}\\meaning\\foo\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert_eq!(result.status, CompileStatus::Ok);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline + b"macro:foo".len() as u64);
 }
@@ -57,7 +57,7 @@ fn meaning_alias_binding_emits_alias_descriptor() {
         b"\\documentclass{article}\n\\begin{document}\n\\def\\foo{XYZ}\\let\\bar=\\foo\\meaning\\bar\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert_eq!(result.status, CompileStatus::Ok);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline + b"alias:bar->foo".len() as u64);
 }
@@ -69,7 +69,7 @@ fn meaning_undefined_binding_emits_undefined_descriptor() {
     let main = b"\\documentclass{article}\n\\begin{document}\n\\meaning\\nope\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert_eq!(result.status, CompileStatus::Ok);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline + b"undefined:nope".len() as u64);
 }
@@ -92,7 +92,7 @@ fn let_uses_snapshot_semantics_not_dynamic_alias() {
         b"\\documentclass{article}\n\\begin{document}\n\\def\\foo{X}\\let\\bar=\\foo\\def\\foo{XYZ}\\bar\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert_eq!(result.status, CompileStatus::Ok);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline + 1);
 }
