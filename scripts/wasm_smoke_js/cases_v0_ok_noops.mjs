@@ -112,12 +112,69 @@ export function runOkNoopCases(ctx, helpers) {
     }
   };
 
+  const runBreakNoopCase = (commandSource, tag) => {
+    if (ctx.mountReset() !== 0) throw new Error(`mount_reset before ${tag} baseline failed`);
+    const baselineDocBytes = new TextEncoder().encode(
+      '\\documentclass{article}\\begin{document}HelloWorld\\end{document}',
+    );
+    if (addMountedFile('main.tex', baselineDocBytes, `${tag}_baseline_main`) !== 0) {
+      throw new Error(`mount_add_file(${tag} baseline main.tex) failed`);
+    }
+    if (ctx.mountFinalize() !== 0) throw new Error(`mount_finalize for ${tag} baseline failed`);
+    expectOk(ctx.compileMain(), `compile_main_v0(${tag} baseline)`);
+    const baselineLogBytes = readCompileLogBytes();
+    if (baselineLogBytes.length !== 0) {
+      throw new Error(`compile_main(${tag} baseline) expected empty log, got ${baselineLogBytes.length} bytes`);
+    }
+    const baselineStats = assertEventsMatchLogAndStats(
+      baselineLogBytes,
+      {},
+      `compile_main(${tag} baseline)`,
+    );
+    const baselineXdvBytes = readMainXdvArtifactBytes(`compile_main(${tag} baseline)`);
+    const baselineMovement = countMovementOpsInTextPages(baselineXdvBytes, `compile_main(${tag} baseline)`);
+
+    if (ctx.mountReset() !== 0) throw new Error(`mount_reset before ${tag} case failed`);
+    const docBytes = new TextEncoder().encode(
+      `\\documentclass{article}\\begin{document}HelloWorld${commandSource}\\end{document}`,
+    );
+    if (addMountedFile('main.tex', docBytes, `${tag}_main`) !== 0) {
+      throw new Error(`mount_add_file(${tag} main.tex) failed`);
+    }
+    if (ctx.mountFinalize() !== 0) throw new Error(`mount_finalize for ${tag} case failed`);
+    expectOk(ctx.compileMain(), `compile_main_v0(${tag})`);
+    const logBytes = readCompileLogBytes();
+    if (logBytes.length !== 0) {
+      throw new Error(`compile_main(${tag}) expected empty log, got ${logBytes.length} bytes`);
+    }
+    assertEventsMatchLogAndStats(
+      logBytes,
+      { char_count: baselineStats.char_count },
+      `compile_main(${tag})`,
+    );
+    const xdvBytes = readMainXdvArtifactBytes(`compile_main(${tag})`);
+    if (xdvBytes.length === 0) {
+      throw new Error(`compile_main(${tag}) main.xdv expected non-empty bytes`);
+    }
+    const movement = countMovementOpsInTextPages(xdvBytes, `compile_main(${tag})`);
+    if (movement.right3PositiveTotal !== baselineMovement.right3PositiveTotal) {
+      throw new Error(
+        `compile_main(${tag}) expected right3PositiveTotal=${baselineMovement.right3PositiveTotal}, got ${movement.right3PositiveTotal}`,
+      );
+    }
+  };
+
   runNoopCase('\\phantomsection ', 'ok_noop_phantomsection');
   runNoopCase('\\bibliographystyle{plain}', 'ok_noop_bibliographystyle');
   runNoopCase('\\bibliography{refs}', 'ok_noop_bibliography');
   runNoopCase('\\nocite{X,Y}', 'ok_noop_nocite');
   runNoopCase('\\addcontentsline{toc}{section}{Foo}', 'ok_noop_addcontentsline');
   runNoopCase('\\markboth{L}{R}', 'ok_noop_markboth');
+  runBreakNoopCase('\\newpage', 'ok_noop_newpage');
+  runBreakNoopCase('\\clearpage', 'ok_noop_clearpage');
+  runBreakNoopCase('\\nopagebreak', 'ok_noop_nopagebreak');
+  runBreakNoopCase('\\linebreak', 'ok_noop_linebreak');
+  runBreakNoopCase('\\nolinebreak', 'ok_noop_nolinebreak');
   runNoopCase('\\vspace{1em}', 'ok_noop_vspace');
   runNoopCase('\\vspace*{1em}', 'ok_noop_vspace_star');
   runNoopCase('\\hspace{1em}', 'ok_noop_hspace');
@@ -152,4 +209,14 @@ export function runOkNoopCases(ctx, helpers) {
   }
   if (ctx.mountFinalize() !== 0) throw new Error('mount_finalize for noop hspace missing-arg invalid case failed');
   expectNotImplemented(ctx.compileMain(), 'compile_main_v0(ok noop hspace missing-arg invalid)');
+
+  if (ctx.mountReset() !== 0) throw new Error('mount_reset before noop newpage-group invalid case failed');
+  const newpageGroupDocBytes = new TextEncoder().encode(
+    '\\documentclass{article}\\begin{document}\\newpage{X}\\end{document}',
+  );
+  if (addMountedFile('main.tex', newpageGroupDocBytes, 'ok_noop_newpage_group_main') !== 0) {
+    throw new Error('mount_add_file(noop newpage-group main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) throw new Error('mount_finalize for noop newpage-group invalid case failed');
+  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(ok noop newpage-group invalid)');
 }
