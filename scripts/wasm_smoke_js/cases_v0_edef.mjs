@@ -3,10 +3,9 @@ export function runEdefCases(ctx, helpers) {
     addMountedFile,
     expectInvalid,
     expectOk,
-    expectNotImplemented,
     readCompileLogBytes,
+    readMainXdvArtifactBytes,
     assertEventsMatchLogAndStats,
-    assertMainXdvArtifactEmpty,
     assertNoEvents,
   } = helpers;
 
@@ -42,9 +41,12 @@ export function runEdefCases(ctx, helpers) {
   if (ctx.mountFinalize() !== 0) {
     throw new Error('mount_finalize for edef input snapshot case failed');
   }
-  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(macro edef input snapshot)');
+  expectOk(ctx.compileMain(), 'compile_main_v0(macro edef input snapshot)');
   {
     const logBytes = readCompileLogBytes();
+    if (logBytes.length !== 0) {
+      throw new Error(`compile_main(macro edef input snapshot) expected empty log, got ${logBytes.length} bytes`);
+    }
     const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(macro edef input snapshot)');
     if (baselineCharCount === null) {
       throw new Error('baselineCharCount not initialized for edef input snapshot case');
@@ -52,7 +54,7 @@ export function runEdefCases(ctx, helpers) {
     if (stats.char_count !== baselineCharCount + 3) {
       throw new Error(`compile_main(macro edef input snapshot) char_count delta expected +3, got baseline=${baselineCharCount}, current=${stats.char_count}`);
     }
-    assertMainXdvArtifactEmpty('compile_main(macro edef input snapshot)');
+    readMainXdvArtifactBytes('compile_main(macro edef input snapshot)');
   }
 
   if (ctx.mountReset() !== 0) {
@@ -65,9 +67,12 @@ export function runEdefCases(ctx, helpers) {
   if (ctx.mountFinalize() !== 0) {
     throw new Error('mount_finalize for edef positive case failed');
   }
-  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(macro edef positive)');
+  expectOk(ctx.compileMain(), 'compile_main_v0(macro edef positive)');
   {
     const logBytes = readCompileLogBytes();
+    if (logBytes.length !== 0) {
+      throw new Error(`compile_main(macro edef positive) expected empty log, got ${logBytes.length} bytes`);
+    }
     const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(macro edef positive)');
     if (baselineCharCount === null) {
       throw new Error('baselineCharCount not initialized for edef positive case');
@@ -75,7 +80,7 @@ export function runEdefCases(ctx, helpers) {
     if (stats.char_count !== baselineCharCount + 3) {
       throw new Error(`compile_main(macro edef positive) char_count delta expected +3, got baseline=${baselineCharCount}, current=${stats.char_count}`);
     }
-    assertMainXdvArtifactEmpty('compile_main(macro edef positive)');
+    readMainXdvArtifactBytes('compile_main(macro edef positive)');
   }
 
   if (ctx.mountReset() !== 0) {
@@ -88,9 +93,12 @@ export function runEdefCases(ctx, helpers) {
   if (ctx.mountFinalize() !== 0) {
     throw new Error('mount_finalize for edef snapshot case failed');
   }
-  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(macro edef snapshot)');
+  expectOk(ctx.compileMain(), 'compile_main_v0(macro edef snapshot)');
   {
     const logBytes = readCompileLogBytes();
+    if (logBytes.length !== 0) {
+      throw new Error(`compile_main(macro edef snapshot) expected empty log, got ${logBytes.length} bytes`);
+    }
     const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(macro edef snapshot)');
     if (baselineCharCount === null) {
       throw new Error('baselineCharCount not initialized for edef snapshot case');
@@ -98,7 +106,7 @@ export function runEdefCases(ctx, helpers) {
     if (stats.char_count !== baselineCharCount + 1) {
       throw new Error(`compile_main(macro edef snapshot) char_count delta expected +1, got baseline=${baselineCharCount}, current=${stats.char_count}`);
     }
-    assertMainXdvArtifactEmpty('compile_main(macro edef snapshot)');
+    readMainXdvArtifactBytes('compile_main(macro edef snapshot)');
   }
 
   if (ctx.mountReset() !== 0) {

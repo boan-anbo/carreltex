@@ -53,7 +53,7 @@ fn ifnum_true_branch_keeps_tokens() {
     let main = b"\\documentclass{article}\n\\begin{document}\n\\count0=1\\count1=2\\ifnum\\count0<\\count1 XYZ\\fi\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert_eq!(result.status, CompileStatus::Ok);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline + 3);
 }
@@ -65,7 +65,7 @@ fn ifnum_false_branch_drops_tokens() {
     let main = b"\\documentclass{article}\n\\begin{document}\n\\count0=2\\count1=1\\ifnum\\count0<\\count1 AAA\\else XYZ\\fi\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert_eq!(result.status, CompileStatus::Ok);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline + 3);
 }
@@ -79,7 +79,7 @@ fn ifnum_uses_counts_defined_via_input() {
     assert!(mount.add_file(b"main.tex", main).is_ok());
     assert!(mount.add_file(b"sub.tex", sub).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert_eq!(result.status, CompileStatus::Ok);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline + 3);
 }
@@ -366,7 +366,7 @@ fn control_word_textbackslash_is_counted_as_literal_char_and_space_is_swallowed(
         b"\\documentclass{article}\n\\begin{document}\nHello.\\textbackslash XYZ\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert_eq!(result.status, CompileStatus::Ok);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline + 4);
 }

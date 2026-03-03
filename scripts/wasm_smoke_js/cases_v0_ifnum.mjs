@@ -3,10 +3,9 @@ export function runIfnumCases(ctx, helpers) {
     addMountedFile,
     expectInvalid,
     expectOk,
-    expectNotImplemented,
     readCompileLogBytes,
+    readMainXdvArtifactBytes,
     assertEventsMatchLogAndStats,
-    assertMainXdvArtifactEmpty,
     assertNoEvents,
   } = helpers;
 
@@ -38,9 +37,12 @@ export function runIfnumCases(ctx, helpers) {
   if (ctx.mountFinalize() !== 0) {
     throw new Error('mount_finalize for ifnum true case failed');
   }
-  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(macro ifnum true)');
+  expectOk(ctx.compileMain(), 'compile_main_v0(macro ifnum true)');
   {
     const logBytes = readCompileLogBytes();
+    if (logBytes.length !== 0) {
+      throw new Error(`compile_main(macro ifnum true) expected empty log, got ${logBytes.length} bytes`);
+    }
     const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(macro ifnum true)');
     if (baselineCharCount === null) {
       throw new Error('baselineCharCount not initialized for ifnum true case');
@@ -48,7 +50,7 @@ export function runIfnumCases(ctx, helpers) {
     if (stats.char_count !== baselineCharCount + 3) {
       throw new Error(`compile_main(macro ifnum true) char_count delta expected +3, got baseline=${baselineCharCount}, current=${stats.char_count}`);
     }
-    assertMainXdvArtifactEmpty('compile_main(macro ifnum true)');
+    readMainXdvArtifactBytes('compile_main(macro ifnum true)');
   }
 
   if (ctx.mountReset() !== 0) {
@@ -61,9 +63,12 @@ export function runIfnumCases(ctx, helpers) {
   if (ctx.mountFinalize() !== 0) {
     throw new Error('mount_finalize for ifnum false case failed');
   }
-  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(macro ifnum false)');
+  expectOk(ctx.compileMain(), 'compile_main_v0(macro ifnum false)');
   {
     const logBytes = readCompileLogBytes();
+    if (logBytes.length !== 0) {
+      throw new Error(`compile_main(macro ifnum false) expected empty log, got ${logBytes.length} bytes`);
+    }
     const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(macro ifnum false)');
     if (baselineCharCount === null) {
       throw new Error('baselineCharCount not initialized for ifnum false case');
@@ -71,7 +76,7 @@ export function runIfnumCases(ctx, helpers) {
     if (stats.char_count !== baselineCharCount + 3) {
       throw new Error(`compile_main(macro ifnum false) char_count delta expected +3, got baseline=${baselineCharCount}, current=${stats.char_count}`);
     }
-    assertMainXdvArtifactEmpty('compile_main(macro ifnum false)');
+    readMainXdvArtifactBytes('compile_main(macro ifnum false)');
   }
 
   if (ctx.mountReset() !== 0) {
@@ -88,9 +93,12 @@ export function runIfnumCases(ctx, helpers) {
   if (ctx.mountFinalize() !== 0) {
     throw new Error('mount_finalize for ifnum input-counts case failed');
   }
-  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(macro ifnum input-counts)');
+  expectOk(ctx.compileMain(), 'compile_main_v0(macro ifnum input-counts)');
   {
     const logBytes = readCompileLogBytes();
+    if (logBytes.length !== 0) {
+      throw new Error(`compile_main(macro ifnum input-counts) expected empty log, got ${logBytes.length} bytes`);
+    }
     const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(macro ifnum input-counts)');
     if (baselineCharCount === null) {
       throw new Error('baselineCharCount not initialized for ifnum input-counts case');
@@ -98,7 +106,7 @@ export function runIfnumCases(ctx, helpers) {
     if (stats.char_count !== baselineCharCount + 3) {
       throw new Error(`compile_main(macro ifnum input-counts) char_count delta expected +3, got baseline=${baselineCharCount}, current=${stats.char_count}`);
     }
-    assertMainXdvArtifactEmpty('compile_main(macro ifnum input-counts)');
+    readMainXdvArtifactBytes('compile_main(macro ifnum input-counts)');
   }
 
   if (ctx.mountReset() !== 0) {

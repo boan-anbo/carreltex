@@ -296,7 +296,7 @@ export function runTokenizerCases(ctx, helpers) {
   if (ctx.mountFinalize() !== 0) {
     throw new Error('mount_finalize for tokenizer control-word-textbackslash case failed');
   }
-  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(tokenizer control-word-textbackslash)');
+  expectOk(ctx.compileMain(), 'compile_main_v0(tokenizer control-word-textbackslash)');
   {
     const logBytes = readCompileLogBytes();
     const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(tokenizer control-word-textbackslash)');
@@ -306,7 +306,7 @@ export function runTokenizerCases(ctx, helpers) {
     if (stats.char_count !== helloBaselineCharCount + 4) {
       throw new Error(`compile_main(tokenizer control-word-textbackslash) char_count delta expected +4, got baseline=${helloBaselineCharCount}, current=${stats.char_count}`);
     }
-    assertMainXdvArtifactEmpty('compile_main(tokenizer control-word-textbackslash)');
+    readMainXdvArtifactBytes('compile_main(tokenizer control-word-textbackslash)');
   }
   if (ctx.mountReset() !== 0) {
     throw new Error('mount_reset before tokenizer control-word-textasciitilde case failed');

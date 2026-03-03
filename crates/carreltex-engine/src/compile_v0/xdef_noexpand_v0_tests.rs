@@ -71,7 +71,7 @@ fn noexpand_makes_edef_dynamic() {
     let main = b"\\documentclass{article}\n\\begin{document}\n\\def\\bar{X}\\edef\\foo{\\noexpand\\bar}\\def\\bar{XYZ}\\foo\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert_eq!(result.status, CompileStatus::Ok);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline + 3);
 }
@@ -85,7 +85,7 @@ fn noexpand_makes_edef_dynamic_across_input_boundary() {
     assert!(mount.add_file(b"main.tex", main).is_ok());
     assert!(mount.add_file(b"sub.tex", sub).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert_eq!(result.status, CompileStatus::Ok);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline + 1);
 }
@@ -141,7 +141,7 @@ fn relax_is_noop() {
     let main = b"\\documentclass{article}\n\\begin{document}\n\\def\\foo{XYZ}\\relax\\foo\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert_eq!(result.status, CompileStatus::Ok);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline + 3);
 }
@@ -205,7 +205,7 @@ fn def_with_single_space_before_body_is_supported() {
         b"\\documentclass{article}\n\\begin{document}\n\\def\\foo {XYZ}\\foo\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert_eq!(result.status, CompileStatus::Ok);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline + 3);
 }
@@ -217,7 +217,7 @@ fn def_single_param_with_single_space_before_body_is_supported() {
     let main = b"\\documentclass{article}\n\\begin{document}\n\\def\\foo#1 {#1}\\foo{XYZ}\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert_eq!(result.status, CompileStatus::Ok);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline + 3);
 }
