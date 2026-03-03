@@ -43,7 +43,7 @@ fn newcommand_zero_param_expands() {
     let main = b"\\documentclass{article}\n\\begin{document}\n\\newcommand{\\foo}{XYZ}\\foo\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert_eq!(result.status, CompileStatus::Ok);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline + 3);
 }
@@ -55,7 +55,7 @@ fn newcommand_single_param_expands() {
     let main = b"\\documentclass{article}\n\\begin{document}\n\\newcommand{\\foo}[1]{#1}\\foo{A}\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert_eq!(result.status, CompileStatus::Ok);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline + 1);
 }
@@ -91,7 +91,7 @@ fn renewcommand_redefines_existing_macro() {
     let main = b"\\documentclass{article}\n\\begin{document}\n\\newcommand{\\foo}{A}\\renewcommand{\\foo}{XYZ}\\foo\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert_eq!(result.status, CompileStatus::Ok);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline + 3);
 }

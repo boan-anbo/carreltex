@@ -416,7 +416,7 @@ fn macro_expansion_positive_increases_char_count() {
     let macro_main = b"\\documentclass{article}\n\\begin{document}\nHello.\\def\\foo{XYZ}\\foo\n\\end{document}\n";
     assert!(macro_mount.add_file(b"main.tex", macro_main).is_ok());
     let macro_result = compile_request_v0(&mut macro_mount, &valid_request());
-    assert_eq!(macro_result.status, CompileStatus::NotImplemented);
+    assert_eq!(macro_result.status, CompileStatus::Ok);
     let macro_char_count =
         stats_u64_field(&macro_result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(macro_char_count, baseline_char_count + 3);
@@ -435,7 +435,7 @@ fn macro_single_param_positive_increases_char_count() {
     let macro_main = b"\\documentclass{article}\n\\begin{document}\nHello.\\def\\foo#1{#1}\\foo{XYZ}\n\\end{document}\n";
     assert!(macro_mount.add_file(b"main.tex", macro_main).is_ok());
     let macro_result = compile_request_v0(&mut macro_mount, &valid_request());
-    assert_eq!(macro_result.status, CompileStatus::NotImplemented);
+    assert_eq!(macro_result.status, CompileStatus::Ok);
     let macro_char_count =
         stats_u64_field(&macro_result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(macro_char_count, baseline_char_count + 3);
@@ -588,7 +588,7 @@ fn let_alias_expands_control_sequence() {
             b"\\documentclass{article}\n\\begin{document}\n\\def\\foo{XYZ}\\let\\bar=\\foo\\bar\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert_eq!(result.status, CompileStatus::Ok);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline_char_count + 3);
 }
@@ -679,7 +679,7 @@ fn expandafter_reorders_two_control_sequences() {
     let main = b"\\documentclass{article}\n\\begin{document}\n\\def\\foo{XYZ}\\def\\bar{A}\\expandafter\\bar\\foo\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert_eq!(result.status, CompileStatus::Ok);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline_char_count + 4);
 }
@@ -707,7 +707,7 @@ fn csname_generates_control_sequence_for_macro_lookup() {
             b"\\documentclass{article}\n\\begin{document}\n\\def\\foo{XYZ}\\csname foo\\endcsname\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert_eq!(result.status, CompileStatus::Ok);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline_char_count + 3);
 }
@@ -737,7 +737,7 @@ fn string_control_sequence_produces_literal_chars() {
             b"\\documentclass{article}\n\\begin{document}\n\\def\\foo{XYZ}\\string\\foo\n\\end{document}\n";
     assert!(mount.add_file(b"main.tex", main).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert_eq!(result.status, CompileStatus::Ok);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline_char_count + 4);
 }

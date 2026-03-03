@@ -46,7 +46,7 @@ fn meaning_sees_macro_defined_via_input_expansion() {
     assert!(mount.add_file(b"main.tex", main).is_ok());
     assert!(mount.add_file(b"sub.tex", sub).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert_eq!(result.status, CompileStatus::Ok);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline + b"macro:foo".len() as u64);
 }
@@ -60,7 +60,7 @@ fn let_uses_snapshot_semantics_across_input_boundary() {
     assert!(mount.add_file(b"main.tex", main).is_ok());
     assert!(mount.add_file(b"sub.tex", sub).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert_eq!(result.status, CompileStatus::Ok);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline + 3);
 }
@@ -88,7 +88,7 @@ fn csname_sees_macro_defined_across_input_boundary() {
     assert!(mount.add_file(b"main.tex", main).is_ok());
     assert!(mount.add_file(b"sub.tex", sub).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert_eq!(result.status, CompileStatus::Ok);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline + 3);
 }
@@ -103,7 +103,7 @@ fn string_sees_macro_defined_across_input_boundary() {
     assert!(mount.add_file(b"main.tex", main).is_ok());
     assert!(mount.add_file(b"sub.tex", sub).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert_eq!(result.status, CompileStatus::Ok);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline + 4);
 }
@@ -117,7 +117,7 @@ fn expandafter_sees_macros_defined_across_input_boundary() {
     assert!(mount.add_file(b"main.tex", main).is_ok());
     assert!(mount.add_file(b"sub.tex", sub).is_ok());
     let result = compile_request_v0(&mut mount, &valid_request());
-    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert_eq!(result.status, CompileStatus::Ok);
     let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
     assert_eq!(char_count, baseline + 4);
 }

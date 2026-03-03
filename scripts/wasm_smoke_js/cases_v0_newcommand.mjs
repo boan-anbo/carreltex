@@ -3,10 +3,9 @@ export function runNewcommandCases(ctx, helpers) {
     addMountedFile,
     expectInvalid,
     expectOk,
-    expectNotImplemented,
     readCompileLogBytes,
+    readMainXdvArtifactBytes,
     assertEventsMatchLogAndStats,
-    assertMainXdvArtifactEmpty,
     assertNoEvents,
   } = helpers;
 
@@ -38,9 +37,12 @@ export function runNewcommandCases(ctx, helpers) {
   if (ctx.mountFinalize() !== 0) {
     throw new Error('mount_finalize for newcommand zero-param case failed');
   }
-  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(macro newcommand zero-param)');
+  expectOk(ctx.compileMain(), 'compile_main_v0(macro newcommand zero-param)');
   {
     const logBytes = readCompileLogBytes();
+    if (logBytes.length !== 0) {
+      throw new Error(`compile_main(macro newcommand zero-param) expected empty log, got ${logBytes.length} bytes`);
+    }
     const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(macro newcommand zero-param)');
     if (baselineCharCount === null) {
       throw new Error('baselineCharCount not initialized for newcommand zero-param');
@@ -48,7 +50,7 @@ export function runNewcommandCases(ctx, helpers) {
     if (stats.char_count !== baselineCharCount + 3) {
       throw new Error(`compile_main(macro newcommand zero-param) char_count delta expected +3, got baseline=${baselineCharCount}, current=${stats.char_count}`);
     }
-    assertMainXdvArtifactEmpty('compile_main(macro newcommand zero-param)');
+    readMainXdvArtifactBytes('compile_main(macro newcommand zero-param)');
   }
 
   if (ctx.mountReset() !== 0) {
@@ -61,9 +63,12 @@ export function runNewcommandCases(ctx, helpers) {
   if (ctx.mountFinalize() !== 0) {
     throw new Error('mount_finalize for newcommand single-param case failed');
   }
-  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(macro newcommand single-param)');
+  expectOk(ctx.compileMain(), 'compile_main_v0(macro newcommand single-param)');
   {
     const logBytes = readCompileLogBytes();
+    if (logBytes.length !== 0) {
+      throw new Error(`compile_main(macro newcommand single-param) expected empty log, got ${logBytes.length} bytes`);
+    }
     const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(macro newcommand single-param)');
     if (baselineCharCount === null) {
       throw new Error('baselineCharCount not initialized for newcommand single-param');
@@ -71,7 +76,7 @@ export function runNewcommandCases(ctx, helpers) {
     if (stats.char_count !== baselineCharCount + 1) {
       throw new Error(`compile_main(macro newcommand single-param) char_count delta expected +1, got baseline=${baselineCharCount}, current=${stats.char_count}`);
     }
-    assertMainXdvArtifactEmpty('compile_main(macro newcommand single-param)');
+    readMainXdvArtifactBytes('compile_main(macro newcommand single-param)');
   }
 
   if (ctx.mountReset() !== 0) {

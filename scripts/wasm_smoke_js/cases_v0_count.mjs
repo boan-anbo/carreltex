@@ -3,10 +3,9 @@ export function runCountCases(ctx, helpers) {
     addMountedFile,
     expectInvalid,
     expectOk,
-    expectNotImplemented,
     readCompileLogBytes,
+    readMainXdvArtifactBytes,
     assertEventsMatchLogAndStats,
-    assertMainXdvArtifactEmpty,
     assertNoEvents,
   } = helpers;
 
@@ -38,9 +37,12 @@ export function runCountCases(ctx, helpers) {
   if (ctx.mountFinalize() !== 0) {
     throw new Error('mount_finalize for macro count0 case failed');
   }
-  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(macro count0=12 + the)');
+  expectOk(ctx.compileMain(), 'compile_main_v0(macro count0=12 + the)');
   {
     const logBytes = readCompileLogBytes();
+    if (logBytes.length !== 0) {
+      throw new Error(`compile_main(macro count0=12 + the) expected empty log, got ${logBytes.length} bytes`);
+    }
     const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(macro count0=12 + the)');
     if (countBaselineCharCount === null) {
       throw new Error('countBaselineCharCount not initialized');
@@ -48,7 +50,7 @@ export function runCountCases(ctx, helpers) {
     if (stats.char_count !== countBaselineCharCount + 2) {
       throw new Error(`compile_main(macro count0=12 + the) char_count delta expected +2, got baseline=${countBaselineCharCount}, current=${stats.char_count}`);
     }
-    assertMainXdvArtifactEmpty('compile_main(macro count0=12 + the)');
+    readMainXdvArtifactBytes('compile_main(macro count0=12 + the)');
   }
 
   if (ctx.mountReset() !== 0) {
@@ -61,9 +63,12 @@ export function runCountCases(ctx, helpers) {
   if (ctx.mountFinalize() !== 0) {
     throw new Error('mount_finalize for macro count1 default case failed');
   }
-  expectNotImplemented(ctx.compileMain(), 'compile_main_v0(macro the count1 default)');
+  expectOk(ctx.compileMain(), 'compile_main_v0(macro the count1 default)');
   {
     const logBytes = readCompileLogBytes();
+    if (logBytes.length !== 0) {
+      throw new Error(`compile_main(macro the count1 default) expected empty log, got ${logBytes.length} bytes`);
+    }
     const stats = assertEventsMatchLogAndStats(logBytes, {}, 'compile_main(macro the count1 default)');
     if (countBaselineCharCount === null) {
       throw new Error('countBaselineCharCount not initialized');
@@ -71,7 +76,7 @@ export function runCountCases(ctx, helpers) {
     if (stats.char_count !== countBaselineCharCount + 1) {
       throw new Error(`compile_main(macro the count1 default) char_count delta expected +1, got baseline=${countBaselineCharCount}, current=${stats.char_count}`);
     }
-    assertMainXdvArtifactEmpty('compile_main(macro the count1 default)');
+    readMainXdvArtifactBytes('compile_main(macro the count1 default)');
   }
 
   if (ctx.mountReset() !== 0) {
