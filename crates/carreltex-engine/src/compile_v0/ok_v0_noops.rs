@@ -31,6 +31,12 @@ pub(super) fn is_ok_noop_command_v0(name: &[u8]) -> bool {
             | b"bigskip"
             | b"hfill"
             | b"vfill"
+            | b"newpage"
+            | b"clearpage"
+            | b"pagebreak"
+            | b"nopagebreak"
+            | b"linebreak"
+            | b"nolinebreak"
             | b"vspace"
             | b"hspace"
     )
@@ -43,9 +49,18 @@ pub(super) fn consume_ok_noop_command_v0(
     name: &[u8],
 ) -> Option<usize> {
     match name {
-        b"phantomsection" | b"smallskip" | b"medskip" | b"bigskip" | b"hfill" | b"vfill" => {
-            Some(index + 1)
-        }
+        b"phantomsection"
+        | b"smallskip"
+        | b"medskip"
+        | b"bigskip"
+        | b"hfill"
+        | b"vfill"
+        | b"newpage"
+        | b"clearpage"
+        | b"pagebreak"
+        | b"nopagebreak"
+        | b"linebreak"
+        | b"nolinebreak" => Some(index + 1),
         b"vspace" | b"hspace" => {
             let mut cursor = skip_spaces_until(tokens, index + 1, end);
             if matches!(tokens.get(cursor), Some(TokenV0::Char(b'*'))) {
