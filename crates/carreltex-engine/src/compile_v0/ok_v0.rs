@@ -186,6 +186,18 @@ fn consume_ok_group_fragment_v0(
     Some(next_index)
 }
 
+fn consume_ok_group_fragment_discard_v0(tokens: &[TokenV0], index: usize, end: usize) -> Option<usize> {
+    let mut scratch_body = Vec::new();
+    let mut scratch_previous_was_space = false;
+    consume_ok_group_fragment_v0(
+        tokens,
+        index,
+        end,
+        &mut scratch_body,
+        &mut scratch_previous_was_space,
+    )
+}
+
 fn consume_balanced_group_bounds_v0(
     tokens: &[TokenV0],
     index: usize,
@@ -297,6 +309,13 @@ fn consume_ok_body_token_v0(
         }
         Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"url" => {
             consume_ok_group_fragment_v0(tokens, index + 1, end, body, previous_was_space)
+        }
+        Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"textcolor" => {
+            let first_arg_end = consume_ok_group_fragment_discard_v0(tokens, index + 1, end)?;
+            consume_ok_group_fragment_v0(tokens, first_arg_end, end, body, previous_was_space)
+        }
+        Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"color" => {
+            consume_ok_group_fragment_discard_v0(tokens, index + 1, end)
         }
         Some(TokenV0::ControlSeq(name))
             if is_supported_ok_wrapper_command_v0(name.as_slice()) =>
