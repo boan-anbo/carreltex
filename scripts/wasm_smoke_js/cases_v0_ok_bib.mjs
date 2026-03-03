@@ -224,6 +224,42 @@ export function runOkBibCases(ctx, helpers, baselineStats) {
     );
   }
 
+  if (ctx.mountReset() !== 0) throw new Error('mount_reset before OK bibliography natbib-label top-group case failed');
+  const bibNatbibLabelTopGroupDocBytes = new TextEncoder().encode(
+    '\\documentclass{article}\\begin{document}\\begin{thebibliography}{9}\\bibitem[{\\protect\\citeauthoryear{A}{B}{2020}\\natexlab{a}}]{K}A\\end{thebibliography}\\end{document}',
+  );
+  if (addMountedFile('main.tex', bibNatbibLabelTopGroupDocBytes, 'ok_bibliography_natbib_label_top_group_main') !== 0) {
+    throw new Error('mount_add_file(ok bibliography natbib-label top-group main.tex) failed');
+  }
+  if (ctx.mountFinalize() !== 0) throw new Error('mount_finalize for OK bibliography natbib-label top-group case failed');
+  expectOk(ctx.compileMain(), 'compile_main_v0(ok bibliography natbib-label top-group)');
+  const bibNatbibLabelTopGroupLogBytes = readCompileLogBytes();
+  if (bibNatbibLabelTopGroupLogBytes.length !== 0) {
+    throw new Error(
+      `compile_main(ok bibliography natbib-label top-group) expected empty log, got ${bibNatbibLabelTopGroupLogBytes.length} bytes`,
+    );
+  }
+  assertEventsMatchLogAndStats(
+    bibNatbibLabelTopGroupLogBytes,
+    { char_count: baselineStats.char_count + 42 },
+    'compile_main(ok bibliography natbib-label top-group)',
+  );
+  const bibNatbibLabelTopGroupXdvBytes = readMainXdvArtifactBytes(
+    'compile_main(ok bibliography natbib-label top-group)',
+  );
+  if (bibNatbibLabelTopGroupXdvBytes.length === 0) {
+    throw new Error('compile_main(ok bibliography natbib-label top-group) main.xdv expected non-empty bytes');
+  }
+  const bibNatbibLabelTopGroupMovement = countMovementOpsInTextPages(
+    bibNatbibLabelTopGroupXdvBytes,
+    'compile_main(ok bibliography natbib-label top-group)',
+  );
+  if (bibNatbibLabelTopGroupMovement.right3PositiveTotal !== 753664) {
+    throw new Error(
+      `compile_main(ok bibliography natbib-label top-group) expected right3PositiveTotal=753664, got ${bibNatbibLabelTopGroupMovement.right3PositiveTotal}`,
+    );
+  }
+
   if (ctx.mountReset() !== 0) throw new Error('mount_reset before bibitem outside env invalid case failed');
   const bibitemOutsideEnvDocBytes = new TextEncoder().encode(
     '\\documentclass{article}\\begin{document}\\bibitem{X}A\\end{document}',
