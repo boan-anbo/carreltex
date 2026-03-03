@@ -13,6 +13,7 @@ mod ok_v0_ensuremath;
 mod ok_v0_lists;
 use ok_v0_env_refs::{emit_ok_markers_in_env_v0, OkEnvMarkersV0};
 use ok_v0_optional_brackets::{
+    consume_optional_simple_bracket_span_capture_v0,
     consume_optional_digits_bracket_span_v0, consume_optional_heading_short_title_v0,
     consume_optional_nested_bracket_span_v0, consume_optional_simple_bracket_span_v0,
 };
@@ -816,17 +817,31 @@ fn consume_ok_body_token_v0(
         {
             match list_env {
                 Some(ListStateV0::Thebibliography) => {
-                    let after_optional = consume_optional_simple_bracket_span_v0(
+                    let mut label = Vec::new();
+                    let label_start = skip_spaces_until(tokens, index + 1, end);
+                    let has_label =
+                        matches!(tokens.get(label_start), Some(TokenV0::Char(b'[')));
+                    let after_optional = consume_optional_simple_bracket_span_capture_v0(
                         tokens,
                         index + 1,
                         end,
                         MAX_OK_BRACKET_BYTES_V0,
+                        &mut label,
                     )?;
                     let next_index =
                         consume_char_space_nested_group_non_empty_v0(tokens, after_optional, end)?;
                     body.push(0x0a);
                     body.push(b'-');
                     body.push(b' ');
+                    if has_label {
+                        if !label.iter().all(|byte| is_supported_ok_char_v0(*byte)) {
+                            return None;
+                        }
+                        body.push(b'[');
+                        body.extend_from_slice(&label);
+                        body.push(b']');
+                        body.push(b' ');
+                    }
                     *previous_was_space = true;
                     Some(next_index)
                 }
