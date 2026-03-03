@@ -452,6 +452,29 @@ fn noindent_in_body_is_ignored_for_ok() {
 }
 
 #[test]
+fn newline_control_sequence_in_body_is_treated_as_linefeed() {
+    let mut baseline_mount = Mount::default();
+    let baseline_main = b"\\documentclass{article}\\begin{document}\\end{document}";
+    assert!(baseline_mount.add_file(b"main.tex", baseline_main).is_ok());
+    let baseline_result = compile_request_v0(&mut baseline_mount, &valid_request());
+    assert_eq!(baseline_result.status, CompileStatus::Ok);
+    let baseline_char_count =
+        stats_u64_field(&baseline_result.tex_stats_json, "char_count").expect("char_count");
+
+    let mut mount = Mount::default();
+    let main = b"\\documentclass{article}\\begin{document}A\\csname newline\\endcsname B\\end{document}";
+    assert!(mount.add_file(b"main.tex", main).is_ok());
+    let result = compile_request_v0(&mut mount, &valid_request());
+    assert_eq!(result.status, CompileStatus::Ok);
+    assert!(validate_dvi_v2_text_page_v0(&result.main_xdv_bytes));
+    let char_count = stats_u64_field(&result.tex_stats_json, "char_count").expect("char_count");
+    assert_eq!(char_count, baseline_char_count + 2);
+    let movement = count_dvi_v2_text_movements_v0(&result.main_xdv_bytes).expect("movement summary");
+    assert_eq!(movement.3, 1);
+    assert_eq!(movement.4, 1);
+}
+
+#[test]
 fn begin_end_with_space_before_group_is_accepted() {
     let mut baseline_mount = Mount::default();
     let baseline_main = b"\\documentclass{article}\n\\begin {document}\n\n\\end {document}\n";

@@ -182,6 +182,11 @@ pub(crate) fn extract_strict_ok_text_body_v0(tokens: &[TokenV0]) -> Option<Vec<u
             Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"noindent" => {
                 index += 1;
             }
+            Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"newline" => {
+                body.push(0x0a);
+                previous_was_space = false;
+                index += 1;
+            }
             Some(TokenV0::Char(0x0c)) => {
                 body.push(0x0c);
                 previous_was_space = false;
