@@ -20,6 +20,8 @@ mod meaning_v0_tests_input_guards;
 mod newcommand_v0_tests;
 mod ok_v0;
 #[cfg(test)]
+mod ok_v0_color_tests;
+#[cfg(test)]
 mod ok_v0_tests;
 #[cfg(test)]
 mod providecommand_v0_tests;
