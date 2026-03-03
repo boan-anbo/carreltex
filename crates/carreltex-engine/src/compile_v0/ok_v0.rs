@@ -3,7 +3,7 @@ use crate::tex::tokenize_v0::TokenV0;
 mod ok_v0_env_support;
 use ok_v0_env_support::{
     consume_display_math_environment_span_v0, consume_named_environment_span_v0,
-    is_supported_ok_block_env_v0, is_supported_ok_table_stub_env_v0,
+    is_supported_ok_block_env_v0, is_supported_ok_table_stub_env_v0, ok_thm_stub_marker_v0,
 };
 pub(crate) const MAX_OK_TEXT_BYTES_V0: usize = 64 * 1024;
 pub(crate) const OK_GLYPH_ADVANCE_SP_V0: i32 = 65_536;
@@ -419,6 +419,15 @@ fn emit_ok_table_marker_v0(body: &mut Vec<u8>, previous_was_space: &mut bool) {
     *previous_was_space = true;
 }
 
+fn emit_ok_block_marker_v0(body: &mut Vec<u8>, marker: &[u8], previous_was_space: &mut bool) {
+    body.push(0x0a);
+    body.push(b'[');
+    body.extend_from_slice(marker);
+    body.push(b']');
+    body.push(0x0a);
+    *previous_was_space = true;
+}
+
 fn consume_ok_body_range_v0(
     tokens: &[TokenV0],
     start: usize,
@@ -697,6 +706,10 @@ fn consume_ok_body_token_v0(
                 }
                 if is_supported_ok_table_stub_env_v0(&env_name) {
                     emit_ok_table_marker_v0(body, previous_was_space);
+                    return Some(next_index);
+                }
+                if let Some(marker) = ok_thm_stub_marker_v0(&env_name) {
+                    emit_ok_block_marker_v0(body, marker, previous_was_space);
                     return Some(next_index);
                 }
             }
