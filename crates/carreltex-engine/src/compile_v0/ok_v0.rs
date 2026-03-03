@@ -9,6 +9,8 @@ mod ok_v0_optional_brackets;
 mod ok_v0_dollar_math;
 #[path = "ok_v0_ensuremath.rs"]
 mod ok_v0_ensuremath;
+#[path = "ok_v0_lists.rs"]
+mod ok_v0_lists;
 use ok_v0_env_refs::{emit_ok_markers_in_env_v0, OkEnvMarkersV0};
 use ok_v0_optional_brackets::{
     consume_optional_digits_bracket_span_v0, consume_optional_heading_short_title_v0,
@@ -16,6 +18,7 @@ use ok_v0_optional_brackets::{
 };
 use ok_v0_dollar_math::{consume_display_math_dollar_span_v0, consume_inline_math_dollar_span_v0};
 use ok_v0_ensuremath::{consume_inline_math_group_span_v0, consume_math_control_span_v0};
+use ok_v0_lists::{begin_list_v0, emit_list_item_v0, end_list_v0, list_stack_active_v0, ListStateV0};
 use ok_v0_env_support::{
     consume_named_environment_span_v0, is_supported_display_math_env_v0,
     is_supported_ok_block_env_v0, is_supported_ok_table_stub_env_v0, ok_thm_stub_marker_v0,
@@ -32,7 +35,6 @@ const MAX_OK_ENSUREMATH_TOKENS_V0: usize = 4096;
 const MAX_OK_HEADING_SHORT_TOKENS_V0: usize = 2048;
 const MAX_OK_CITE_NOTE_TOKENS_V0: usize = 2048;
 const MAX_OK_REF_NOTE_TOKENS_V0: usize = 2048;
-enum ListEnvV0 { Itemize, Enumerate { next: u32 }, Thebibliography, Figure, Table }
 fn skip_spaces(tokens: &[TokenV0], mut index: usize) -> usize {
     while matches!(tokens.get(index), Some(TokenV0::Space)) {
         index += 1;
@@ -370,7 +372,7 @@ fn consume_ok_body_range_v0(
     start: usize,
     end: usize,
     allow_nested_groups: bool,
-    list_env: &mut Option<ListEnvV0>,
+    list_env: &mut Option<ListStateV0>,
     body: &mut Vec<u8>,
     previous_was_space: &mut bool,
 ) -> Option<()> {
@@ -394,7 +396,7 @@ fn consume_ok_body_token_v0(
     index: usize,
     end: usize,
     allow_nested_groups: bool,
-    list_env: &mut Option<ListEnvV0>,
+    list_env: &mut Option<ListStateV0>,
     body: &mut Vec<u8>,
     previous_was_space: &mut bool,
 ) -> Option<usize> {
@@ -679,6 +681,9 @@ fn consume_ok_body_token_v0(
             if !allow_nested_groups && name.as_slice() == b"begin" =>
         {
             let cursor = skip_spaces_until(tokens, index + 1, end);
+            if list_stack_active_v0(list_env) {
+                return begin_list_v0(tokens, cursor, list_env);
+            }
             if list_env.is_some() {
                 return None;
             }
@@ -741,12 +746,7 @@ fn consume_ok_body_token_v0(
                     return Some(next_index);
                 }
             }
-            if let Some(next_index) = consume_group_literal(tokens, cursor, b"itemize") {
-                *list_env = Some(ListEnvV0::Itemize);
-                return Some(next_index);
-            }
-            if let Some(next_index) = consume_group_literal(tokens, cursor, b"enumerate") {
-                *list_env = Some(ListEnvV0::Enumerate { next: 1 });
+            if let Some(next_index) = begin_list_v0(tokens, cursor, list_env) {
                 return Some(next_index);
             }
             if let Some(begin_env_end) = consume_group_literal(tokens, cursor, b"figure") {
@@ -756,7 +756,7 @@ fn consume_ok_body_token_v0(
                     end,
                     MAX_OK_BRACKET_BYTES_V0,
                 )?;
-                *list_env = Some(ListEnvV0::Figure);
+                *list_env = Some(ListStateV0::Figure);
                 return Some(next_index);
             }
             if let Some(begin_env_end) = consume_group_literal(tokens, cursor, b"table") {
@@ -766,13 +766,13 @@ fn consume_ok_body_token_v0(
                     end,
                     MAX_OK_BRACKET_BYTES_V0,
                 )?;
-                *list_env = Some(ListEnvV0::Table);
+                *list_env = Some(ListStateV0::Table);
                 return Some(next_index);
             }
             if let Some(begin_env_end) = consume_group_literal(tokens, cursor, b"thebibliography") {
                 let next_index =
                     consume_char_space_nested_group_non_empty_v0(tokens, begin_env_end, end)?;
-                *list_env = Some(ListEnvV0::Thebibliography);
+                *list_env = Some(ListStateV0::Thebibliography);
                 return Some(next_index);
             }
             None
@@ -781,74 +781,41 @@ fn consume_ok_body_token_v0(
             if !allow_nested_groups && name.as_slice() == b"end" =>
         {
             let cursor = skip_spaces_until(tokens, index + 1, end);
+            if let Some(next_index) = end_list_v0(tokens, cursor, list_env, body, previous_was_space) {
+                return Some(next_index);
+            }
             match list_env {
-                Some(ListEnvV0::Itemize) => {
-                    let next_index = consume_group_literal(tokens, cursor, b"itemize")?;
-                    body.push(0x0a);
-                    *previous_was_space = true;
-                    *list_env = None;
-                    Some(next_index)
-                }
-                Some(ListEnvV0::Enumerate { .. }) => {
-                    let next_index = consume_group_literal(tokens, cursor, b"enumerate")?;
-                    body.push(0x0a);
-                    *previous_was_space = true;
-                    *list_env = None;
-                    Some(next_index)
-                }
-                Some(ListEnvV0::Thebibliography) => {
+                Some(ListStateV0::Thebibliography) => {
                     let next_index = consume_group_literal(tokens, cursor, b"thebibliography")?;
                     body.push(0x0a);
                     *previous_was_space = true;
                     *list_env = None;
                     Some(next_index)
                 }
-                Some(ListEnvV0::Figure) => {
+                Some(ListStateV0::Figure) => {
                     let next_index = consume_group_literal(tokens, cursor, b"figure")?;
                     *list_env = None;
                     Some(next_index)
                 }
-                Some(ListEnvV0::Table) => {
+                Some(ListStateV0::Table) => {
                     let next_index = consume_group_literal(tokens, cursor, b"table")?;
                     *list_env = None;
                     Some(next_index)
                 }
                 None => None,
+                Some(ListStateV0::Lists(_)) => None,
             }
         }
         Some(TokenV0::ControlSeq(name))
             if !allow_nested_groups && name.as_slice() == b"item" =>
         {
-            match list_env {
-                Some(ListEnvV0::Itemize) => {
-                    body.push(0x0a);
-                    body.push(b'-');
-                    body.push(b' ');
-                    *previous_was_space = true;
-                    Some(index + 1)
-                }
-                Some(ListEnvV0::Enumerate { next }) => {
-                    body.push(0x0a);
-                    for byte in next.to_string().as_bytes() {
-                        body.push(*byte);
-                    }
-                    body.push(b'.');
-                    body.push(b' ');
-                    *next += 1;
-                    *previous_was_space = true;
-                    Some(index + 1)
-                }
-                Some(ListEnvV0::Thebibliography) => None,
-                Some(ListEnvV0::Figure) => None,
-                Some(ListEnvV0::Table) => None,
-                None => None,
-            }
+            emit_list_item_v0(list_env, body, previous_was_space).map(|()| index + 1)
         }
         Some(TokenV0::ControlSeq(name))
             if !allow_nested_groups && name.as_slice() == b"bibitem" =>
         {
             match list_env {
-                Some(ListEnvV0::Thebibliography) => {
+                Some(ListStateV0::Thebibliography) => {
                     let next_index =
                         consume_char_space_nested_group_non_empty_v0(tokens, index + 1, end)?;
                     body.push(0x0a);
@@ -945,7 +912,7 @@ pub(crate) fn extract_strict_ok_text_body_v0(tokens: &[TokenV0]) -> Option<Vec<u
 
     let mut body = Vec::<u8>::new();
     let mut previous_was_space = false;
-    let mut list_env: Option<ListEnvV0> = None;
+    let mut list_env: Option<ListStateV0> = None;
     loop {
         if list_env.is_none()
             && matches!(
