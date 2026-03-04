@@ -13,6 +13,8 @@ use super::ok_v0_title_state::OkTitleStateV0;
 mod ok_v0_extract_preamble;
 #[path = "ok_v0_extract_preamble_page_style.rs"]
 mod ok_v0_extract_preamble_page_style;
+#[path = "ok_v0_extract_preamble_sectioning_toc.rs"]
+mod ok_v0_extract_preamble_sectioning_toc;
 
 use ok_v0_extract_preamble::{
     consume_biblatex_resource_preamble_command, consume_bibliography_preamble_command,
@@ -38,6 +40,7 @@ use ok_v0_extract_preamble::{
     is_supported_meta_preamble_command,
 };
 use ok_v0_extract_preamble_page_style::consume_index_page_style_preamble_command;
+use ok_v0_extract_preamble_sectioning_toc::consume_sectioning_toc_preamble_command;
 
 pub(crate) fn extract_strict_ok_text_body_v0(tokens: &[TokenV0]) -> Option<Vec<u8>> {
     let mut index = 0usize;
@@ -123,6 +126,12 @@ pub(crate) fn extract_strict_ok_text_body_v0(tokens: &[TokenV0]) -> Option<Vec<u
                 continue;
             }
             Some(TokenV0::ControlSeq(name))
+                if matches!(name.as_slice(), b"setcounter" | b"renewcommand" | b"addto") =>
+            {
+                index = consume_sectioning_toc_preamble_command(tokens, index, &mut title_state)?;
+                continue;
+            }
+            Some(TokenV0::ControlSeq(name))
                 if matches!(name.as_slice(), b"setcounter" | b"addtolength" | b"setlength") =>
             {
                 index = consume_length_counter_preamble_command(tokens, index)?;
@@ -144,7 +153,7 @@ pub(crate) fn extract_strict_ok_text_body_v0(tokens: &[TokenV0]) -> Option<Vec<u
                 continue;
             }
             Some(TokenV0::ControlSeq(name))
-                if matches!(name.as_slice(), b"floatplacement" | b"renewcommand") =>
+                if matches!(name.as_slice(), b"floatplacement") =>
             {
                 index = consume_float_listof_preamble_command(tokens, index, &mut title_state)?;
                 continue;
