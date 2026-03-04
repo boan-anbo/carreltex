@@ -216,9 +216,12 @@ mod ok_v0_tests;
 #[cfg(test)]
 mod ok_v0_optional_bracket_args_tests;
 #[cfg(test)]
+mod typeset_minimal_v0_tests;
+#[cfg(test)]
 mod providecommand_v0_tests;
 mod stats_v0;
 mod tokenize_reason_v0;
+mod typeset_minimal_v0;
 #[cfg(test)]
 mod tokenizer_verb_tests;
 #[cfg(test)]
@@ -261,6 +264,7 @@ use ok_v0::{
 };
 use stats_v0::build_tex_stats_from_tokens_v0;
 use trace_v0::build_not_implemented_log_v0;
+use typeset_minimal_v0::{extract_typeset_minimal_text_body_v0, TYPESET_MINIMAL_MAX_LINE_GLYPHS_V0};
 const MISSING_COMPONENTS_V0: &[&str] = &["tex-engine"];
 const EMPTY_TEX_STATS_JSON: &str = "";
 fn invalid_result_v0(max_log_bytes: u32, reason: InvalidInputReasonV0) -> CompileResultV0 {
@@ -283,6 +287,131 @@ pub fn compile_main_v0(mount: &mut Mount) -> CompileResultV0 {
         ok_glyph_advance_sp_v0: None,
     };
     compile_request_v0(mount, &request)
+}
+
+pub fn compile_main_typeset_minimal_v0(mount: &mut Mount) -> CompileResultV0 {
+    let request = CompileRequestV0 {
+        entrypoint: "main.tex".to_owned(),
+        source_date_epoch: 1,
+        max_log_bytes: DEFAULT_COMPILE_MAIN_MAX_LOG_BYTES_V0,
+        ok_max_line_glyphs_v0: None,
+        ok_max_lines_per_page_v0: None,
+        ok_line_advance_sp_v0: None,
+        ok_glyph_advance_sp_v0: None,
+    };
+
+    if mount.finalize().is_err() {
+        return invalid_result_v0(request.max_log_bytes, InvalidInputReasonV0::MountFinalizeFailed);
+    }
+    let entry_bytes = match mount.read_file_by_bytes_v0(request.entrypoint.as_bytes()) {
+        Ok(Some(bytes)) => bytes.to_vec(),
+        _ => return invalid_result_v0(request.max_log_bytes, InvalidInputReasonV0::EntrypointMissing),
+    };
+    let tokens = match tokenize_v0(&entry_bytes) {
+        Ok(tokens) => tokens,
+        Err(error) => {
+            return invalid_result_v0(
+                request.max_log_bytes,
+                tokenize_reason_v0::map_tokenize_error_to_reason_v0(error),
+            )
+        }
+    };
+    let (expanded_tokens, input_trace) = match expand_inputs_v0(&tokens, mount) {
+        Ok(result) => result,
+        Err(reason) => return invalid_result_v0(request.max_log_bytes, reason),
+    };
+    if expanded_tokens.len() > MAX_TOKENS_V0 {
+        return invalid_result_v0(
+            request.max_log_bytes,
+            InvalidInputReasonV0::InputValidationFailed,
+        );
+    }
+    if expanded_tokens
+        .iter()
+        .any(|token| matches!(token, TokenV0::ControlSeq(name) if name.as_slice() == b"input"))
+    {
+        return invalid_result_v0(
+            request.max_log_bytes,
+            InvalidInputReasonV0::InputValidationFailed,
+        );
+    }
+    let macro_expanded_tokens = match expand_macros_v0(&expanded_tokens) {
+        Ok(tokens) => tokens,
+        Err(reason) => return invalid_result_v0(request.max_log_bytes, reason),
+    };
+    let tex_stats_json = match build_tex_stats_from_tokens_v0(&macro_expanded_tokens) {
+        Ok(json) => json,
+        Err(_) => {
+            return invalid_result_v0(request.max_log_bytes, InvalidInputReasonV0::StatsBuildFailed);
+        }
+    };
+    if tex_stats_json.is_empty() {
+        return invalid_result_v0(request.max_log_bytes, InvalidInputReasonV0::StatsBuildFailed);
+    }
+    let ok_text_bytes = extract_typeset_minimal_text_body_v0(&macro_expanded_tokens);
+    if let Some(ok_text_bytes) = ok_text_bytes {
+        if ok_text_bytes.len() <= MAX_OK_TEXT_BYTES_V0 {
+            let glyph_advance_sp = OK_GLYPH_ADVANCE_SP_V0;
+            let line_advance_sp = OK_LINE_ADVANCE_SP_V0;
+            let layout_plan = match plan_layout_v0(
+                &ok_text_bytes,
+                glyph_advance_sp,
+                line_advance_sp,
+                TYPESET_MINIMAL_MAX_LINE_GLYPHS_V0,
+                DEFAULT_MAX_LINES_PER_PAGE_V0,
+            ) {
+                Some(plan) => plan,
+                None => {
+                    return invalid_result_v0(
+                        request.max_log_bytes,
+                        InvalidInputReasonV0::StatsBuildFailed,
+                    )
+                }
+            };
+            let xdv_bytes = match write_dvi_v2_text_page_from_layout_v0(&layout_plan, line_advance_sp) {
+                Some(bytes) => bytes,
+                None => {
+                    return invalid_result_v0(
+                        request.max_log_bytes,
+                        InvalidInputReasonV0::StatsBuildFailed,
+                    )
+                }
+            };
+            if !validate_dvi_v2_text_page_with_layout_v0(&xdv_bytes, glyph_advance_sp, line_advance_sp) {
+                return invalid_result_v0(
+                    request.max_log_bytes,
+                    InvalidInputReasonV0::StatsBuildFailed,
+                );
+            }
+            if !validate_dvi_v2_text_page_matches_layout_v0(&xdv_bytes, &layout_plan, line_advance_sp) {
+                return invalid_result_v0(
+                    request.max_log_bytes,
+                    InvalidInputReasonV0::StatsBuildFailed,
+                );
+            }
+            return build_compile_result_v0(
+                CompileStatus::Ok,
+                &[],
+                vec![],
+                xdv_bytes,
+                tex_stats_json,
+            );
+        }
+    }
+    let not_implemented_log =
+        match build_not_implemented_log_v0(request.max_log_bytes as usize, &input_trace) {
+            Some(log) => log,
+            None => {
+                return invalid_result_v0(request.max_log_bytes, InvalidInputReasonV0::StatsBuildFailed)
+            }
+        };
+    build_compile_result_v0(
+        CompileStatus::NotImplemented,
+        MISSING_COMPONENTS_V0,
+        truncate_log_bytes_v0(&not_implemented_log, request.max_log_bytes),
+        vec![],
+        tex_stats_json,
+    )
 }
 
 pub fn compile_request_v0(mount: &mut Mount, req: &CompileRequestV0) -> CompileResultV0 {
