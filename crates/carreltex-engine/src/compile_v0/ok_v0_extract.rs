@@ -60,6 +60,37 @@ fn consume_package_option_plumbing_preamble_command(
     }
 }
 
+fn consume_biblatex_resource_preamble_command(tokens: &[TokenV0], index: usize) -> Option<usize> {
+    let name = match tokens.get(index) {
+        Some(TokenV0::ControlSeq(name)) => name.as_slice(),
+        _ => return None,
+    };
+    match name {
+        b"addbibresource" => {
+            let mut cursor = skip_spaces(tokens, index + 1);
+            if matches!(tokens.get(cursor), Some(TokenV0::Char(b'['))) {
+                cursor = consume_bracket_options_non_empty(tokens, cursor)?;
+                cursor = skip_spaces(tokens, cursor);
+            }
+            cursor = consume_char_space_group_non_empty(tokens, cursor)?;
+            Some(skip_spaces(tokens, cursor))
+        }
+        b"ExecuteBibliographyOptions" | b"DeclareBibliographyCategory" => {
+            let mut cursor = skip_spaces(tokens, index + 1);
+            cursor = consume_char_space_group_non_empty(tokens, cursor)?;
+            Some(skip_spaces(tokens, cursor))
+        }
+        b"addtocategory" => {
+            let mut cursor = skip_spaces(tokens, index + 1);
+            cursor = consume_char_space_group_non_empty(tokens, cursor)?;
+            cursor = skip_spaces(tokens, cursor);
+            cursor = consume_char_space_group_non_empty(tokens, cursor)?;
+            Some(skip_spaces(tokens, cursor))
+        }
+        _ => None,
+    }
+}
+
 fn is_supported_meta_preamble_command(name: &[u8]) -> bool {
     matches!(name, b"title" | b"author" | b"date")
 }
@@ -683,6 +714,18 @@ pub(crate) fn extract_strict_ok_text_body_v0(tokens: &[TokenV0]) -> Option<Vec<u
                 ) =>
             {
                 index = consume_package_option_plumbing_preamble_command(tokens, index)?;
+                continue;
+            }
+            Some(TokenV0::ControlSeq(name))
+                if matches!(
+                    name.as_slice(),
+                    b"addbibresource"
+                        | b"ExecuteBibliographyOptions"
+                        | b"DeclareBibliographyCategory"
+                        | b"addtocategory"
+                ) =>
+            {
+                index = consume_biblatex_resource_preamble_command(tokens, index)?;
                 continue;
             }
             Some(TokenV0::ControlSeq(name)) if is_supported_meta_preamble_command(name.as_slice()) => {
