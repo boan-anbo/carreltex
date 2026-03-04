@@ -72,6 +72,8 @@ mod ok_v0_preamble_text_symbol_accent_decls_tests;
 #[cfg(test)]
 mod ok_v0_preamble_text_composite_command_tests;
 #[cfg(test)]
+mod ok_v0_preamble_text_composite_tests;
+#[cfg(test)]
 mod ok_v0_protect_relax_tests;
 #[cfg(test)]
 mod ok_v0_env_tests;
