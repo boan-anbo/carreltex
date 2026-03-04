@@ -232,6 +232,35 @@ fn pdf_renderer_emits_valid_header_and_contains_text() {
 }
 
 #[test]
+fn pdf_renderer_applies_maketitle_typography_v0() {
+    let demo_text =
+        b"CarrelTeX Minimal Typeset Vertical Slice\nAlice\n2026-03-04\n\nBody paragraph line.";
+    let xdv = write_dvi_v2_text_page_v0(demo_text).expect("writer should accept demo text");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+    assert!(pdf.windows(b"18 Tf".len()).any(|w| w == b"18 Tf"));
+
+    let pdf_text = String::from_utf8_lossy(&pdf);
+    let mut found_non_margin_tm = false;
+    for line in pdf_text.lines() {
+        if !line.contains(" Tm ") {
+            continue;
+        }
+        let fields = line.split_whitespace().collect::<Vec<_>>();
+        if fields.len() < 7 || fields[6] != "Tm" {
+            continue;
+        }
+        let Ok(x_pt) = fields[4].parse::<f32>() else {
+            continue;
+        };
+        if (x_pt - 72.0).abs() > 0.01 {
+            found_non_margin_tm = true;
+            break;
+        }
+    }
+    assert!(found_non_margin_tm, "expected centered title transform");
+}
+
+#[test]
 fn validator_rejects_wrong_movement_amount() {
     let mut bytes = write_dvi_v2_text_page_v0(b"ABCD").expect("writer should accept ABCD");
     let right_index = bytes
