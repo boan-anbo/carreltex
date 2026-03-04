@@ -100,6 +100,8 @@ mod ok_v0_preamble_sectioning_toc_tests;
 #[cfg(test)]
 mod ok_v0_preamble_caption_footnote_tests;
 #[cfg(test)]
+mod ok_v0_preamble_caption_decls_tests;
+#[cfg(test)]
 mod ok_v0_preamble_math_operator_decls_tests;
 #[cfg(test)]
 mod ok_v0_preamble_math_alphabet_decls_tests;
