@@ -25,6 +25,7 @@ use ok_v0_extract_preamble::{
     consume_mathcode_delcode_preamble_command, consume_meta_preamble_command,
     consume_package_option_plumbing_preamble_command, consume_label_aux_preamble_command,
     consume_length_counter_preamble_command, consume_mark_preamble_command,
+    consume_hyperref_preamble_command,
     consume_language_decl_preamble_command,
     consume_symbol_font_setter_preamble_command, consume_text_command_default_preamble_command,
     consume_text_decl_bundle_preamble_command, consume_theorem_preamble_command,
@@ -125,6 +126,15 @@ pub(crate) fn extract_strict_ok_text_body_v0(tokens: &[TokenV0]) -> Option<Vec<u
                 if matches!(name.as_slice(), b"markboth" | b"markright") =>
             {
                 index = consume_mark_preamble_command(tokens, index)?;
+                continue;
+            }
+            Some(TokenV0::ControlSeq(name))
+                if matches!(
+                    name.as_slice(),
+                    b"pdfstringdefDisableCommands" | b"AtBeginShipout" | b"AtBeginShipoutNext"
+                ) =>
+            {
+                index = consume_hyperref_preamble_command(tokens, index)?;
                 continue;
             }
             Some(TokenV0::ControlSeq(name))
