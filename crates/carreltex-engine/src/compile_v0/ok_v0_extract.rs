@@ -218,6 +218,35 @@ fn consume_doc_hook_preamble_command(tokens: &[TokenV0], index: usize) -> Option
     Some(skip_spaces(tokens, cursor))
 }
 
+fn consume_mathcode_delcode_preamble_command(tokens: &[TokenV0], index: usize) -> Option<usize> {
+    if !matches!(
+        tokens.get(index),
+        Some(TokenV0::ControlSeq(name)) if matches!(name.as_slice(), b"mathcode" | b"delcode")
+    ) {
+        return None;
+    }
+    let mut cursor = skip_spaces(tokens, index + 1);
+    if !matches!(tokens.get(cursor), Some(TokenV0::Char(_))) {
+        return None;
+    }
+    cursor += 1;
+    cursor = skip_spaces(tokens, cursor);
+    if !matches!(tokens.get(cursor), Some(TokenV0::Char(b'='))) {
+        return None;
+    }
+    cursor += 1;
+    cursor = skip_spaces(tokens, cursor);
+    let mut saw_digit = false;
+    while matches!(tokens.get(cursor), Some(TokenV0::Char(b'0'..=b'9'))) {
+        saw_digit = true;
+        cursor += 1;
+    }
+    if !saw_digit {
+        return None;
+    }
+    Some(skip_spaces(tokens, cursor))
+}
+
 fn consume_single_controlseq_group_v0(tokens: &[TokenV0], index: usize) -> Option<usize> {
     let mut cursor = skip_spaces(tokens, index);
     if !matches!(tokens.get(cursor), Some(TokenV0::BeginGroup)) {
@@ -644,6 +673,12 @@ pub(crate) fn extract_strict_ok_text_body_v0(tokens: &[TokenV0]) -> Option<Vec<u
                 if matches!(name.as_slice(), b"AtBeginDocument" | b"AtEndDocument") =>
             {
                 index = consume_doc_hook_preamble_command(tokens, index)?;
+                continue;
+            }
+            Some(TokenV0::ControlSeq(name))
+                if matches!(name.as_slice(), b"mathcode" | b"delcode") =>
+            {
+                index = consume_mathcode_delcode_preamble_command(tokens, index)?;
                 continue;
             }
             Some(TokenV0::ControlSeq(name))
