@@ -432,13 +432,26 @@ fn normalize_tex_ellipsis_v0(body: &[u8]) -> Vec<u8> {
     out
 }
 
-fn normalize_parentheses_spacing_v0(body: &[u8]) -> Vec<u8> {
+fn opening_bracket_closer_v0(byte: u8) -> Option<u8> {
+    match byte {
+        b'(' => Some(b')'),
+        b'[' => Some(b']'),
+        b'{' => Some(b'}'),
+        _ => None,
+    }
+}
+
+fn is_closing_bracket_v0(byte: u8) -> bool {
+    matches!(byte, b')' | b']' | b'}')
+}
+
+fn normalize_bracket_spacing_v0(body: &[u8]) -> Vec<u8> {
     let mut out = Vec::with_capacity(body.len());
     let mut index = 0usize;
 
     while index < body.len() {
         let byte = body[index];
-        if byte == b'(' {
+        if opening_bracket_closer_v0(byte).is_some() {
             out.push(byte);
             index += 1;
 
@@ -462,7 +475,7 @@ fn normalize_parentheses_spacing_v0(body: &[u8]) -> Vec<u8> {
             while index < body.len() && body[index] == b' ' {
                 index += 1;
             }
-            if index < body.len() && body[index] == b')' {
+            if index < body.len() && is_closing_bracket_v0(body[index]) {
                 continue;
             }
             out.extend_from_slice(&body[spaces_start..index]);
@@ -682,7 +695,7 @@ pub(crate) fn extract_typeset_minimal_text_body_v0(tokens: &[TokenV0]) -> Option
     body = normalize_tex_double_quotes_v0(&body);
     body = normalize_tex_dashes_v0(&body);
     body = normalize_tex_ellipsis_v0(&body);
-    body = normalize_parentheses_spacing_v0(&body);
+    body = normalize_bracket_spacing_v0(&body);
     trim_trailing_spaces(&mut body);
     while matches!(body.last().copied(), Some(NEWLINE_MARKER_V0)) {
         body.pop();
