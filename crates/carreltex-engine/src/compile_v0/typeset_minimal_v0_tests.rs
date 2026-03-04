@@ -22,15 +22,15 @@ fn extract_typeset_body(main: &[u8]) -> Vec<u8> {
     extract_typeset_minimal_text_body_v0(&normalized).expect("extract should succeed")
 }
 
-fn layout_first_line_bytes(main: &[u8]) -> Vec<u8> {
+fn layout_lines_bytes(main: &[u8]) -> Vec<Vec<u8>> {
     let result = compile_typeset(main);
     assert_eq!(result.status, CompileStatus::Ok);
     let layout =
         parse_dvi_v2_text_page_to_layout_v0(&result.main_xdv_bytes, 917_504).expect("layout parse");
-    layout.pages[0].lines[0]
-        .glyphs
+    layout.pages[0]
+        .lines
         .iter()
-        .map(|glyph| glyph.byte)
+        .map(|line| line.glyphs.iter().map(|glyph| glyph.byte).collect())
         .collect()
 }
 
@@ -106,6 +106,15 @@ fn typeset_minimal_long_paragraph_wraps_to_multiple_lines() {
 #[test]
 fn typeset_minimal_single_newline_collapses_to_space() {
     let main = b"\\documentclass{article}\\begin{document}Hello,\nworld.\\end{document}";
-    let first_line = layout_first_line_bytes(main);
-    assert_eq!(first_line, b"Hello, world.");
+    let lines = layout_lines_bytes(main);
+    assert_eq!(lines[0], b"Hello, world.");
+}
+
+#[test]
+fn typeset_minimal_double_backslash_emits_hard_newline() {
+    let main = b"\\documentclass{article}\\begin{document}Hello\\\\world.\\end{document}";
+    let lines = layout_lines_bytes(main);
+    assert!(lines.len() >= 2, "expected at least two lines, got {:?}", lines);
+    assert_eq!(lines[0], b"Hello");
+    assert_eq!(lines[1], b"world.");
 }

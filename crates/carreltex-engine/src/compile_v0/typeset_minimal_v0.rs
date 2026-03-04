@@ -2,6 +2,7 @@ use crate::tex::tokenize_v0::TokenV0;
 
 const NEWLINE_MARKER_V0: u8 = 0x0a;
 const CARRELPAR_MARKER_CONTROL_V0: &[u8] = b"carrelpar";
+const HARD_LINE_BREAK_CONTROL_V0: &[u8] = b"\\";
 const ITALIC_START_MARKER_V0: u8 = b'[';
 const ITALIC_END_MARKER_V0: u8 = b']';
 const BOLD_START_MARKER_V0: u8 = b'{';
@@ -307,6 +308,7 @@ fn consume_fragment_token_v0(
     index: usize,
     out: &mut Vec<u8>,
     allow_and: bool,
+    allow_hard_break: bool,
 ) -> Option<usize> {
     match tokens.get(index)? {
         TokenV0::Char(byte) if *byte == NEWLINE_MARKER_V0 => {
@@ -328,6 +330,13 @@ fn consume_fragment_token_v0(
             push_newline(out);
             Some(index + 1)
         }
+        TokenV0::ControlSeq(name)
+            if allow_hard_break
+                && (name.as_slice().is_empty() || name.as_slice() == HARD_LINE_BREAK_CONTROL_V0) =>
+        {
+            push_newline(out);
+            Some(index + 1)
+        }
         TokenV0::ControlSeq(name) if name.as_slice() == b"protect" || name.as_slice() == b"relax" => {
             Some(index + 1)
         }
@@ -339,7 +348,7 @@ fn consume_fragment_token_v0(
             };
             let (group_start, group_end, next) = consume_group_bounds(tokens, index + 1)?;
             out.push(style_markers.0);
-            consume_fragment_range_v0(tokens, group_start, group_end, out, allow_and)?;
+            consume_fragment_range_v0(tokens, group_start, group_end, out, allow_and, allow_hard_break)?;
             out.push(style_markers.1);
             Some(next)
         }
@@ -353,10 +362,11 @@ fn consume_fragment_range_v0(
     end: usize,
     out: &mut Vec<u8>,
     allow_and: bool,
+    allow_hard_break: bool,
 ) -> Option<()> {
     let mut cursor = start;
     while cursor < end {
-        let next = consume_fragment_token_v0(tokens, cursor, out, allow_and)?;
+        let next = consume_fragment_token_v0(tokens, cursor, out, allow_and, allow_hard_break)?;
         if next <= cursor || next > end {
             return None;
         }
@@ -383,7 +393,7 @@ fn consume_meta_declaration_v0(
     }
     let (group_start, group_end, next) = consume_group_bounds(tokens, cursor)?;
     let mut value = Vec::new();
-    consume_fragment_range_v0(tokens, group_start, group_end, &mut value, allow_and)?;
+    consume_fragment_range_v0(tokens, group_start, group_end, &mut value, allow_and, false)?;
     trim_trailing_spaces(&mut value);
     if value.is_empty() {
         return None;
@@ -468,7 +478,7 @@ pub(crate) fn extract_typeset_minimal_text_body_v0(tokens: &[TokenV0]) -> Option
                 index += 1;
             }
             Some(_) => {
-                index = consume_fragment_token_v0(tokens, index, &mut body, false)?;
+                index = consume_fragment_token_v0(tokens, index, &mut body, false, true)?;
             }
             None => return None,
         }
