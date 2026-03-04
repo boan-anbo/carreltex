@@ -176,6 +176,25 @@ fn typeset_minimal_parentheses_do_not_strip_across_hard_newline() {
 }
 
 #[test]
+fn typeset_minimal_brackets_and_braces_remove_inner_spaces_same_line() {
+    let main = b"\\documentclass{article}\\begin{document}\\emph{ A } \\textbf{ B }\\end{document}";
+    let body = extract_typeset_body(main);
+    let text = String::from_utf8(body).expect("body should be valid utf8");
+    assert!(text.contains("[A] {B}"), "body={text:?}");
+    assert!(!text.contains("[ A ]"), "body={text:?}");
+    assert!(!text.contains("{ B }"), "body={text:?}");
+}
+
+#[test]
+fn typeset_minimal_brackets_and_braces_do_not_strip_across_hard_newline() {
+    let main =
+        b"\\documentclass{article}\n\\begin{document}\n\\emph{\\textbf{ \\newline A }}\n\\end{document}\n";
+    let body = extract_typeset_body(main);
+    let text = String::from_utf8(body).expect("body should be valid utf8");
+    assert!(text.contains("[{\nA}]"), "body={text:?}");
+}
+
+#[test]
 fn typeset_minimal_double_backslash_emits_hard_newline() {
     let main = b"\\documentclass{article}\\begin{document}Hello\\\\world.\\end{document}";
     let lines = layout_lines_bytes(main);
