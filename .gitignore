@@ -2,6 +2,9 @@
 **/*.rs.bk
 .DS_Store
 
+# local-only upstream references (never commit)
+/third_party/
+
 # wasm-pack / bundlers
 /pkg/
 /dist/
@@ -9,4 +12,3 @@
 # editor/ide
 .idea/
 .vscode/
-
