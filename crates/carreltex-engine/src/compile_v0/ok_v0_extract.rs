@@ -15,6 +15,8 @@ mod ok_v0_extract_preamble;
 mod ok_v0_extract_preamble_page_style;
 #[path = "ok_v0_extract_preamble_sectioning_toc.rs"]
 mod ok_v0_extract_preamble_sectioning_toc;
+#[path = "ok_v0_extract_preamble_caption_footnote.rs"]
+mod ok_v0_extract_preamble_caption_footnote;
 
 use ok_v0_extract_preamble::{
     consume_biblatex_resource_preamble_command, consume_bibliography_preamble_command,
@@ -40,6 +42,7 @@ use ok_v0_extract_preamble::{
     is_supported_meta_preamble_command,
 };
 use ok_v0_extract_preamble_page_style::consume_index_page_style_preamble_command;
+use ok_v0_extract_preamble_caption_footnote::consume_caption_footnote_preamble_command;
 use ok_v0_extract_preamble_sectioning_toc::consume_sectioning_toc_preamble_command;
 
 pub(crate) fn extract_strict_ok_text_body_v0(tokens: &[TokenV0]) -> Option<Vec<u8>> {
@@ -126,13 +129,35 @@ pub(crate) fn extract_strict_ok_text_body_v0(tokens: &[TokenV0]) -> Option<Vec<u
                 continue;
             }
             Some(TokenV0::ControlSeq(name))
-                if matches!(name.as_slice(), b"setcounter" | b"renewcommand" | b"addto") =>
+                if matches!(name.as_slice(), b"captionsetup" | b"floatname") =>
             {
+                index = consume_caption_footnote_preamble_command(tokens, index)?;
+                continue;
+            }
+            Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"renewcommand" => {
+                if let Some(next_index) = consume_caption_footnote_preamble_command(tokens, index) {
+                    index = next_index;
+                    continue;
+                }
                 index = consume_sectioning_toc_preamble_command(tokens, index, &mut title_state)?;
                 continue;
             }
             Some(TokenV0::ControlSeq(name))
-                if matches!(name.as_slice(), b"setcounter" | b"addtolength" | b"setlength") =>
+                if matches!(name.as_slice(), b"setcounter" | b"addto") =>
+            {
+                index = consume_sectioning_toc_preamble_command(tokens, index, &mut title_state)?;
+                continue;
+            }
+            Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"setlength" => {
+                if let Some(next_index) = consume_caption_footnote_preamble_command(tokens, index) {
+                    index = next_index;
+                    continue;
+                }
+                index = consume_length_counter_preamble_command(tokens, index)?;
+                continue;
+            }
+            Some(TokenV0::ControlSeq(name))
+                if matches!(name.as_slice(), b"setcounter" | b"addtolength") =>
             {
                 index = consume_length_counter_preamble_command(tokens, index)?;
                 continue;
@@ -203,7 +228,6 @@ pub(crate) fn extract_strict_ok_text_body_v0(tokens: &[TokenV0]) -> Option<Vec<u
                     name.as_slice(),
                     b"hypersetup"
                         | b"geometry"
-                        | b"captionsetup"
                         | b"graphicspath"
                         | b"urlstyle"
                         | b"setlist"
