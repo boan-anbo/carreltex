@@ -178,12 +178,14 @@ function parseDviV2TextPages(bytes) {
 }
 
 function buildPdfFromDviV2(parsed) {
-  const renderScale = 6;
-  const ptPerSp = (1 / 65536) * renderScale;
+  const renderScaleX = 6;
+  const renderScaleY = 1;
+  const ptPerSpX = (1 / 65536) * renderScaleX;
+  const ptPerSpY = (1 / 65536) * renderScaleY;
   const marginPt = 72;
   const fontSizePt = 10;
-  const pageWidthPt = Math.max(612, parsed.maxHSp * ptPerSp + marginPt * 2);
-  const pageHeightPt = Math.max(792, parsed.maxVSp * ptPerSp + marginPt * 2 + 2 * fontSizePt);
+  const pageWidthPt = Math.max(612, parsed.maxHSp * ptPerSpX + marginPt * 2);
+  const pageHeightPt = Math.max(792, parsed.maxVSp * ptPerSpY + marginPt * 2 + 2 * fontSizePt);
 
   const pageCount = parsed.pages.length;
   if (pageCount <= 0) {
@@ -215,8 +217,8 @@ function buildPdfFromDviV2(parsed) {
     let content = 'BT\n';
     content += `/F1 ${fontSizePt} Tf\n`;
     for (const glyph of page.glyphs) {
-      const x = marginPt + glyph.hSp * ptPerSp;
-      const y = pageHeightPt - marginPt - fontSizePt - glyph.vSp * ptPerSp;
+      const x = marginPt + glyph.hSp * ptPerSpX;
+      const y = pageHeightPt - marginPt - fontSizePt - glyph.vSp * ptPerSpY;
       const s = escapePdfStringByte(glyph.byte);
       if (s.length === 0) continue;
       content += `1 0 0 1 ${x.toFixed(3)} ${y.toFixed(3)} Tm (${s}) Tj\n`;
