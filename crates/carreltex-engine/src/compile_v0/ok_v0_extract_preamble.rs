@@ -85,6 +85,17 @@ pub(super) fn consume_biblatex_resource_preamble_command(tokens: &[TokenV0], ind
             cursor = consume_char_space_group_non_empty(tokens, cursor)?;
             Some(skip_spaces(tokens, cursor))
         }
+        b"DeclareLanguageMapping"
+        | b"DeclareBibliographyAlias"
+        | b"DeclareNameAlias"
+        | b"DeclareListAlias"
+        | b"DeclareFieldAlias" => {
+            let mut cursor = skip_spaces(tokens, index + 1);
+            cursor = consume_char_space_group_non_empty(tokens, cursor)?;
+            cursor = skip_spaces(tokens, cursor);
+            cursor = consume_char_space_group_non_empty(tokens, cursor)?;
+            Some(skip_spaces(tokens, cursor))
+        }
         _ => None,
     }
 }

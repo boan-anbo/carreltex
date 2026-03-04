@@ -72,6 +72,11 @@ pub(crate) fn extract_strict_ok_text_body_v0(tokens: &[TokenV0]) -> Option<Vec<u
                         | b"ExecuteBibliographyOptions"
                         | b"DeclareBibliographyCategory"
                         | b"addtocategory"
+                        | b"DeclareLanguageMapping"
+                        | b"DeclareBibliographyAlias"
+                        | b"DeclareNameAlias"
+                        | b"DeclareListAlias"
+                        | b"DeclareFieldAlias"
                 ) =>
             {
                 index = consume_biblatex_resource_preamble_command(tokens, index)?;
