@@ -145,6 +145,28 @@ pub(super) fn consume_length_counter_preamble_command(tokens: &[TokenV0], index:
     Some(skip_spaces(tokens, cursor))
 }
 
+pub(super) fn consume_mark_preamble_command(tokens: &[TokenV0], index: usize) -> Option<usize> {
+    let name = match tokens.get(index) {
+        Some(TokenV0::ControlSeq(name)) => name.as_slice(),
+        _ => return None,
+    };
+    match name {
+        b"markright" => {
+            let mut cursor = skip_spaces(tokens, index + 1);
+            cursor = consume_char_space_nested_group_non_empty_v0(tokens, cursor, tokens.len())?;
+            Some(skip_spaces(tokens, cursor))
+        }
+        b"markboth" => {
+            let mut cursor = skip_spaces(tokens, index + 1);
+            cursor = consume_char_space_nested_group_non_empty_v0(tokens, cursor, tokens.len())?;
+            cursor = skip_spaces(tokens, cursor);
+            cursor = consume_char_space_nested_group_non_empty_v0(tokens, cursor, tokens.len())?;
+            Some(skip_spaces(tokens, cursor))
+        }
+        _ => None,
+    }
+}
+
 pub(super) fn consume_language_decl_preamble_command(tokens: &[TokenV0], index: usize) -> Option<usize> {
     let name = match tokens.get(index) {
         Some(TokenV0::ControlSeq(name)) => name.as_slice(),
