@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 
 import { createCtx } from './wasm_smoke_js/ctx.mjs';
 import { createMemHelpers } from './wasm_smoke_js/mem.mjs';
@@ -22,14 +22,16 @@ const outDir = process.argv[2]
   ? path.resolve(process.cwd(), process.argv[2])
   : path.join(rootDir, 'target', 'wasm_pdf_smoke');
 
+const inputTexPath = process.argv[3] ? path.resolve(process.cwd(), process.argv[3]) : null;
+
 const ctx = await createCtx(rootDir);
 const mem = createMemHelpers(ctx);
 const helpers = createAssertHelpers(ctx, mem);
 
 const { addMountedFile, expectOk, readCompileReportJson, readCompileLogBytes, readMainXdvArtifactBytes } = helpers;
 
-const mainTex = '\\documentclass{article}\n\\begin{document}\nHello.\n\\end{document}\n';
-const mainBytes = new TextEncoder().encode(mainTex);
+const defaultMainTex = '\\documentclass{article}\n\\begin{document}\nHello.\n\\end{document}\n';
+const mainBytes = inputTexPath ? new Uint8Array(await readFile(inputTexPath)) : new TextEncoder().encode(defaultMainTex);
 
 expectOk(ctx.mountReset(), 'mount_reset');
 expectOk(addMountedFile('main.tex', mainBytes, 'main_tex'), 'mount_add_file(main.tex)');
