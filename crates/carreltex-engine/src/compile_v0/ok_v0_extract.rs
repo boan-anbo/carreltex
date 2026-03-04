@@ -474,6 +474,7 @@ fn consume_text_command_default_preamble_command(
                 b"ProvideTextCommandDefault"
                     | b"DeclareTextCommandDefault"
                     | b"DeclareTextAccentDefault"
+                    | b"DeclareTextSymbolDefault"
             )
     ) {
         return None;
@@ -686,6 +687,7 @@ pub(crate) fn extract_strict_ok_text_body_v0(tokens: &[TokenV0]) -> Option<Vec<u
                     b"ProvideTextCommandDefault"
                         | b"DeclareTextCommandDefault"
                         | b"DeclareTextAccentDefault"
+                        | b"DeclareTextSymbolDefault"
                 ) =>
             {
                 index = consume_text_command_default_preamble_command(tokens, index)?;
