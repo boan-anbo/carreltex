@@ -479,6 +479,8 @@ fn consume_declare_text_composite_command_preamble_command(
     cursor = skip_spaces(tokens, cursor);
     cursor = consume_char_space_group_non_empty(tokens, cursor)?;
     cursor = skip_spaces(tokens, cursor);
+    cursor = consume_optional_robust_command_one_arity_v0(tokens, cursor)?;
+    cursor = skip_spaces(tokens, cursor);
     cursor = consume_char_space_nested_group_non_empty_v0(tokens, cursor, tokens.len())?;
     Some(skip_spaces(tokens, cursor))
 }
