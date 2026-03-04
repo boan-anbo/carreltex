@@ -54,6 +54,20 @@ fn declare_math_operator_star_preamble_is_ok_and_output_matches_without_it() {
 }
 
 #[test]
+fn declare_math_operator_space_star_preamble_is_ok_and_output_matches_without_it() {
+    let with_decl = compile_main(
+        b"\\documentclass{article}\\DeclareMathOperator *{\\Foo}{Foo}\\begin{document}HelloWorld\\end{document}",
+    );
+    let without_decl =
+        compile_main(b"\\documentclass{article}\\begin{document}HelloWorld\\end{document}");
+    assert_eq!(with_decl.status, CompileStatus::Ok);
+    assert_eq!(without_decl.status, CompileStatus::Ok);
+    assert!(with_decl.log_bytes.is_empty());
+    assert!(validate_dvi_v2_text_page_v0(&with_decl.main_xdv_bytes));
+    assert_eq!(right3_positive_total(&with_decl), right3_positive_total(&without_decl));
+}
+
+#[test]
 fn declare_math_operator_bad_first_arg_shape_is_not_implemented() {
     let result = compile_main(
         b"\\documentclass{article}\\DeclareMathOperator{Foo}{Foo}\\begin{document}HelloWorld\\end{document}",
