@@ -1,0 +1,69 @@
+% CarrelTeX (native TeX Live) demo fixture
+%
+% Purpose:
+% - Produce a real, typeset PDF via XeLaTeX (XeTeX -> XDV -> xdvipdfmx).
+% - Serve as a stable "vertical slice" artifact for PM/CEO demos while the browser/WASM lane evolves.
+%
+\documentclass{article}
+
+\usepackage{amsmath}
+\usepackage{hyperref}
+\usepackage{xcolor}
+
+\title{CarrelTeX Typeset Demo}
+\author{Alice \and Bob}
+\date{2026-03-04}
+
+\begin{document}
+\maketitle
+
+\section{Text + Style}
+Plain text with \emph{emphasis}, \textbf{bold}, \texttt{monospace}, and \textcolor{blue}{color}.
+
+\section{Math}
+Inline: $a+b=c$.
+Display:
+\[
+  E = mc^2
+\]
+Aligned:
+\begin{align}
+  x &= 1 + 2 \\
+  y &= 3 + 4
+\end{align}
+
+\section{Links + Footnotes}
+URL: \url{https://example.com}.\\
+Link: \href{https://example.com}{click}.\\
+Footnote\footnote{Note text}.
+
+\section{Lists}
+\subsection{Itemize}
+\begin{itemize}
+  \item Item one
+  \item Item two
+\end{itemize}
+
+\subsection{Enumerate}
+\begin{enumerate}
+  \item First
+  \item Second
+\end{enumerate}
+
+\section{Table + Figure}
+\subsection{Table}
+\begin{tabular}{ll}
+  \textbf{Name} & \textbf{Value} \\
+  Alpha & 1 \\
+  Beta & 2 \\
+\end{tabular}
+
+\subsection{Figure (placeholder)}
+\fbox{\rule{0pt}{2cm}\rule{2cm}{0pt}}
+
+\section{Bibliography}
+\begin{thebibliography}{9}
+  \bibitem{demo-key} Demo entry.
+\end{thebibliography}
+
+\end{document}
