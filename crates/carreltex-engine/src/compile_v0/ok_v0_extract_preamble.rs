@@ -3,7 +3,7 @@ use crate::tex::tokenize_v0::TokenV0;
 use super::super::ok_v0_body::{
     consume_bracket_options_non_empty, consume_char_space_group_non_empty,
     consume_char_space_nested_group_non_empty_v0, consume_ok_group_fragment_discard_v0,
-    consume_ok_group_fragment_v0, skip_spaces,
+    consume_ok_group_fragment_v0, is_supported_ok_style_declaration_v0, skip_spaces,
 };
 use super::super::ok_v0_title_state::OkTitleStateV0;
 
@@ -193,6 +193,62 @@ pub(super) fn consume_setuptoc_preamble_command(tokens: &[TokenV0], index: usize
     let mut cursor = skip_spaces(tokens, index + 1);
     cursor = consume_char_space_nested_group_non_empty_v0(tokens, cursor, tokens.len())?;
     Some(skip_spaces(tokens, cursor))
+}
+
+fn consume_koma_style_decls_group_v0(tokens: &[TokenV0], index: usize) -> Option<usize> {
+    let mut cursor = skip_spaces(tokens, index);
+    if !matches!(tokens.get(cursor), Some(TokenV0::BeginGroup)) {
+        return None;
+    }
+    cursor += 1;
+    let mut has_non_space = false;
+    loop {
+        match tokens.get(cursor)? {
+            TokenV0::EndGroup if has_non_space => return Some(cursor + 1),
+            TokenV0::EndGroup => return None,
+            TokenV0::Space => {
+                cursor += 1;
+            }
+            TokenV0::Char(byte) if (0x20..=0x7e).contains(byte) => {
+                has_non_space = true;
+                cursor += 1;
+            }
+            TokenV0::ControlSeq(name) if is_supported_ok_style_declaration_v0(name.as_slice()) => {
+                has_non_space = true;
+                cursor += 1;
+            }
+            _ => return None,
+        }
+    }
+}
+
+pub(super) fn consume_koma_config_preamble_command(tokens: &[TokenV0], index: usize) -> Option<usize> {
+    let name = match tokens.get(index) {
+        Some(TokenV0::ControlSeq(name)) => name.as_slice(),
+        _ => return None,
+    };
+    match name {
+        b"KOMAoptions" => {
+            let mut cursor = skip_spaces(tokens, index + 1);
+            cursor = consume_char_space_group_non_empty(tokens, cursor)?;
+            Some(skip_spaces(tokens, cursor))
+        }
+        b"KOMAoption" => {
+            let mut cursor = skip_spaces(tokens, index + 1);
+            cursor = consume_char_space_group_non_empty(tokens, cursor)?;
+            cursor = skip_spaces(tokens, cursor);
+            cursor = consume_char_space_group_non_empty(tokens, cursor)?;
+            Some(skip_spaces(tokens, cursor))
+        }
+        b"setkomafont" | b"addtokomafont" => {
+            let mut cursor = skip_spaces(tokens, index + 1);
+            cursor = consume_char_space_group_non_empty(tokens, cursor)?;
+            cursor = skip_spaces(tokens, cursor);
+            cursor = consume_koma_style_decls_group_v0(tokens, cursor)?;
+            Some(skip_spaces(tokens, cursor))
+        }
+        _ => None,
+    }
 }
 
 fn consume_single_named_controlseq_group_v0(
