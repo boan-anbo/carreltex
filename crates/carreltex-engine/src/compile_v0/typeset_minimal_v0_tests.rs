@@ -127,3 +127,34 @@ fn typeset_minimal_newline_alias_emits_hard_newline() {
     assert_eq!(lines[0], b"Hello");
     assert_eq!(lines[1], b"world.");
 }
+
+#[test]
+fn typeset_minimal_linebreak_alias_emits_hard_newline() {
+    let main = b"\\documentclass{article}\\begin{document}Hello\\linebreak world.\\end{document}";
+    let lines = layout_lines_bytes(main);
+    assert!(lines.len() >= 2, "expected at least two lines, got {:?}", lines);
+    assert_eq!(lines[0], b"Hello");
+    assert_eq!(lines[1], b"world.");
+}
+
+#[test]
+fn typeset_minimal_pagebreak_alias_emits_forced_page_split() {
+    let main = b"\\documentclass{article}\\begin{document}A\\pagebreak B\\end{document}";
+    let result = compile_typeset(main);
+    assert_eq!(result.status, CompileStatus::Ok);
+    let layout =
+        parse_dvi_v2_text_page_to_layout_v0(&result.main_xdv_bytes, 917_504).expect("layout parse");
+    assert_eq!(layout.pages.len(), 2);
+    let first_line: Vec<u8> = layout.pages[0].lines[0]
+        .glyphs
+        .iter()
+        .map(|glyph| glyph.byte)
+        .collect();
+    let second_line: Vec<u8> = layout.pages[1].lines[0]
+        .glyphs
+        .iter()
+        .map(|glyph| glyph.byte)
+        .collect();
+    assert_eq!(first_line, b"A");
+    assert_eq!(second_line, b"B");
+}

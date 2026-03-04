@@ -1,10 +1,13 @@
 use crate::tex::tokenize_v0::TokenV0;
 
 const NEWLINE_MARKER_V0: u8 = 0x0a;
+const PAGE_BREAK_MARKER_V0: u8 = 0x0c;
 const CARRELPAR_MARKER_CONTROL_V0: &[u8] = b"carrelpar";
 const CARRELNEWLINE_MARKER_CONTROL_V0: &[u8] = b"carrelnewline";
 const HARD_LINE_BREAK_CONTROL_V0: &[u8] = b"\\";
 const NEWLINE_ALIAS_CONTROL_V0: &[u8] = b"newline";
+const LINEBREAK_ALIAS_CONTROL_V0: &[u8] = b"linebreak";
+const PAGEBREAK_ALIAS_CONTROL_V0: &[u8] = b"pagebreak";
 const ITALIC_START_MARKER_V0: u8 = b'[';
 const ITALIC_END_MARKER_V0: u8 = b']';
 const BOLD_START_MARKER_V0: u8 = b'{';
@@ -56,6 +59,13 @@ fn push_paragraph_break(out: &mut Vec<u8>) {
         out.push(NEWLINE_MARKER_V0);
     }
     out.push(NEWLINE_MARKER_V0);
+}
+
+fn push_page_break(out: &mut Vec<u8>) {
+    trim_trailing_spaces(out);
+    if !matches!(out.last().copied(), Some(PAGE_BREAK_MARKER_V0)) {
+        out.push(PAGE_BREAK_MARKER_V0);
+    }
 }
 
 fn is_horizontal_space_v0(byte: u8) -> bool {
@@ -315,6 +325,10 @@ fn consume_fragment_token_v0(
     allow_hard_break: bool,
 ) -> Option<usize> {
     match tokens.get(index)? {
+        TokenV0::Char(byte) if allow_hard_break && *byte == PAGE_BREAK_MARKER_V0 => {
+            push_page_break(out);
+            Some(index + 1)
+        }
         TokenV0::Char(byte) if *byte == NEWLINE_MARKER_V0 => {
             push_space(out);
             Some(index + 1)
@@ -339,9 +353,16 @@ fn consume_fragment_token_v0(
                 && (name.as_slice().is_empty()
                     || name.as_slice() == HARD_LINE_BREAK_CONTROL_V0
                     || name.as_slice() == NEWLINE_ALIAS_CONTROL_V0
+                    || name.as_slice() == LINEBREAK_ALIAS_CONTROL_V0
                     || name.as_slice() == CARRELNEWLINE_MARKER_CONTROL_V0) =>
         {
             push_newline(out);
+            Some(index + 1)
+        }
+        TokenV0::ControlSeq(name)
+            if allow_hard_break && name.as_slice() == PAGEBREAK_ALIAS_CONTROL_V0 =>
+        {
+            push_page_break(out);
             Some(index + 1)
         }
         TokenV0::ControlSeq(name) if name.as_slice() == b"protect" || name.as_slice() == b"relax" => {
