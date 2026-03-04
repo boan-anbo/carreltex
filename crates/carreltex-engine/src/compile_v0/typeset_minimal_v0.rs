@@ -12,6 +12,11 @@ const ITALIC_START_MARKER_V0: u8 = b'[';
 const ITALIC_END_MARKER_V0: u8 = b']';
 const BOLD_START_MARKER_V0: u8 = b'{';
 const BOLD_END_MARKER_V0: u8 = b'}';
+const SECTION_CONTROL_V0: &[u8] = b"section";
+const SUBSECTION_CONTROL_V0: &[u8] = b"subsection";
+const SUBSUBSECTION_CONTROL_V0: &[u8] = b"subsubsection";
+const PARAGRAPH_CONTROL_V0: &[u8] = b"paragraph";
+const SUBPARAGRAPH_CONTROL_V0: &[u8] = b"subparagraph";
 
 #[derive(Default)]
 struct TitleMetaV0 {
@@ -575,6 +580,33 @@ fn consume_fragment_range_v0(
     Some(())
 }
 
+fn is_heading_control_v0(name: &[u8]) -> bool {
+    name == SECTION_CONTROL_V0
+        || name == SUBSECTION_CONTROL_V0
+        || name == SUBSUBSECTION_CONTROL_V0
+        || name == PARAGRAPH_CONTROL_V0
+        || name == SUBPARAGRAPH_CONTROL_V0
+}
+
+fn consume_heading_command_v0(tokens: &[TokenV0], index: usize, out: &mut Vec<u8>) -> Option<usize> {
+    let TokenV0::ControlSeq(name) = tokens.get(index)? else {
+        return None;
+    };
+    if !is_heading_control_v0(name.as_slice()) {
+        return None;
+    }
+    let (group_start, group_end, next) = consume_group_bounds(tokens, index + 1)?;
+    let mut heading = Vec::new();
+    consume_fragment_range_v0(tokens, group_start, group_end, &mut heading, false, true)?;
+    trim_trailing_spaces(&mut heading);
+    push_paragraph_break(out);
+    out.push(BOLD_START_MARKER_V0);
+    out.extend_from_slice(&heading);
+    out.push(BOLD_END_MARKER_V0);
+    push_paragraph_break(out);
+    Some(next)
+}
+
 fn consume_meta_declaration_v0(
     tokens: &[TokenV0],
     index: usize,
@@ -676,6 +708,9 @@ pub(crate) fn extract_typeset_minimal_text_body_v0(tokens: &[TokenV0]) -> Option
             Some(TokenV0::ControlSeq(name)) if name.as_slice() == CARRELPAR_MARKER_CONTROL_V0 => {
                 push_paragraph_break(&mut body);
                 index += 1;
+            }
+            Some(TokenV0::ControlSeq(name)) if is_heading_control_v0(name.as_slice()) => {
+                index = consume_heading_command_v0(tokens, index, &mut body)?;
             }
             Some(_) => {
                 index = consume_fragment_token_v0(tokens, index, &mut body, false, true)?;
