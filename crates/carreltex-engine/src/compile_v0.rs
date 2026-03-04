@@ -84,6 +84,8 @@ mod ok_v0_preamble_hyperref_noops_tests;
 #[cfg(test)]
 mod ok_v0_preamble_float_listof_tests;
 #[cfg(test)]
+mod ok_v0_preamble_toc_noops_tests;
+#[cfg(test)]
 mod ok_v0_preamble_math_operator_decls_tests;
 #[cfg(test)]
 mod ok_v0_preamble_math_alphabet_decls_tests;

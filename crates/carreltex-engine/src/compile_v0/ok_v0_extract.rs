@@ -26,6 +26,7 @@ use ok_v0_extract_preamble::{
     consume_package_option_plumbing_preamble_command, consume_label_aux_preamble_command,
     consume_length_counter_preamble_command, consume_mark_preamble_command,
     consume_hyperref_preamble_command, consume_float_listof_preamble_command,
+    consume_setuptoc_preamble_command,
     consume_language_decl_preamble_command,
     consume_symbol_font_setter_preamble_command, consume_text_command_default_preamble_command,
     consume_text_decl_bundle_preamble_command, consume_theorem_preamble_command,
@@ -141,6 +142,22 @@ pub(crate) fn extract_strict_ok_text_body_v0(tokens: &[TokenV0]) -> Option<Vec<u
                 if matches!(name.as_slice(), b"floatplacement" | b"renewcommand") =>
             {
                 index = consume_float_listof_preamble_command(tokens, index, &mut title_state)?;
+                continue;
+            }
+            Some(TokenV0::ControlSeq(name))
+                if matches!(
+                    name.as_slice(),
+                    b"tableofcontents" | b"listoffigures" | b"listoftables"
+                ) =>
+            {
+                index += 1;
+                index = skip_spaces(tokens, index);
+                continue;
+            }
+            Some(TokenV0::ControlSeq(name))
+                if name.as_slice() == b"setuptoc" =>
+            {
+                index = consume_setuptoc_preamble_command(tokens, index)?;
                 continue;
             }
             Some(TokenV0::ControlSeq(name))
