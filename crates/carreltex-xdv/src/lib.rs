@@ -22,7 +22,8 @@ pub const DEFAULT_MAX_LINES_PER_PAGE_V0: usize = 200;
 mod layout_v0;
 mod pdf_v0;
 pub use layout_v0::{
-    plan_layout_v0, recompute_line_width_sp_v0, GlyphPlanV0, LayoutPlanV0, LinePlanV0,
+    plan_layout_v0, plan_layout_width_v0, recompute_line_width_sp_v0, GlyphPlanV0, LayoutPlanV0,
+    LinePlanV0,
     PagePlanV0,
 };
 pub use pdf_v0::render_dvi_v2_text_page_to_pdf_v0;
@@ -244,6 +245,17 @@ fn emit_line_plan_v0(out: &mut Vec<u8>, line: &LinePlanV0) -> Option<u32> {
     Some(emitted_width)
 }
 
+fn emit_reset_back_v0(out: &mut Vec<u8>, mut reset_back: u32) -> Option<()> {
+    const MAX_RIGHT3_STEP_V0: u32 = 8_388_607;
+    while reset_back > 0 {
+        let step = reset_back.min(MAX_RIGHT3_STEP_V0);
+        out.push(DVI_RIGHT3);
+        push_i24_be(out, -i32::try_from(step).ok()?)?;
+        reset_back -= step;
+    }
+    Some(())
+}
+
 pub fn write_dvi_v2_text_page_from_layout_v0(
     layout: &LayoutPlanV0,
     line_advance_sp: i32,
@@ -286,9 +298,7 @@ pub fn write_dvi_v2_text_page_from_layout_v0(
         page_h = page_h.max(previous_line_h);
         for line in page.lines.iter().skip(1) {
             if previous_line_h > 0 {
-                out.push(DVI_RIGHT3);
-                let reset_back = -i32::try_from(previous_line_h).ok()?;
-                push_i24_be(&mut out, reset_back)?;
+                emit_reset_back_v0(&mut out, previous_line_h)?;
             }
             out.push(DVI_DOWN3);
             push_i24_be(&mut out, line_advance_sp)?;
@@ -560,10 +570,10 @@ fn parse_dvi_v2_text_page_internal_v0(
                     return None;
                 }
                 let back = u32::try_from(-amount).ok()?;
-                if back != page_h {
+                if back == 0 || back > page_h {
                     return None;
                 }
-                page_h = 0;
+                page_h -= back;
                 expect_down3_after_reset = true;
                 continue;
             }

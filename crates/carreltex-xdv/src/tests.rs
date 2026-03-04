@@ -1,7 +1,8 @@
 use super::{
     count_dvi_v2_text_movements_v0, count_dvi_v2_text_pages_v0,
     count_dvi_v2_text_pages_with_advance_v0, validate_dvi_v2_empty_page_v0,
-    parse_dvi_v2_text_page_to_layout_v0, plan_layout_v0, recompute_line_width_sp_v0,
+    parse_dvi_v2_text_page_to_layout_v0, plan_layout_v0, plan_layout_width_v0,
+    recompute_line_width_sp_v0,
     render_dvi_v2_text_page_to_pdf_v0,
     sum_dvi_v2_positive_right3_amounts_with_layout_v0, validate_dvi_v2_text_page_matches_layout_v0,
     validate_dvi_v2_text_page_v0, validate_dvi_v2_text_page_with_layout_v0,
@@ -132,6 +133,38 @@ fn planner_propagates_wi_dot_glyph_advances_and_line_width() {
     assert_eq!(line.glyphs[2].advance_sp, 32_768);
     assert_eq!(line.width_sp, 163_840);
     assert_eq!(recompute_line_width_sp_v0(line), Some(line.width_sp));
+}
+
+#[test]
+fn planner_width_wraps_long_line_at_spaces() {
+    let plan =
+        plan_layout_width_v0(b"aaaa bbbb cccc", 65_536, 786_432, 327_680, 200).expect("layout plan");
+    assert_eq!(plan.pages.len(), 1);
+    assert_eq!(plan.pages[0].lines.len(), 3);
+    assert_eq!(
+        plan.pages[0].lines[0]
+            .glyphs
+            .iter()
+            .map(|glyph| glyph.byte)
+            .collect::<Vec<_>>(),
+        b"aaaa"
+    );
+    assert_eq!(
+        plan.pages[0].lines[1]
+            .glyphs
+            .iter()
+            .map(|glyph| glyph.byte)
+            .collect::<Vec<_>>(),
+        b"bbbb"
+    );
+    assert_eq!(
+        plan.pages[0].lines[2]
+            .glyphs
+            .iter()
+            .map(|glyph| glyph.byte)
+            .collect::<Vec<_>>(),
+        b"cccc"
+    );
 }
 
 #[test]

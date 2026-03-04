@@ -252,7 +252,7 @@ use carreltex_core::{
     CompileStatus, Mount, DEFAULT_COMPILE_MAIN_MAX_LOG_BYTES_V0, MAX_LOG_BYTES_V0,
 };
 use carreltex_xdv::{
-    plan_layout_v0, validate_dvi_v2_text_page_matches_layout_v0,
+    plan_layout_v0, plan_layout_width_v0, validate_dvi_v2_text_page_matches_layout_v0,
     validate_dvi_v2_text_page_with_layout_v0, write_dvi_v2_text_page_from_layout_v0,
     DEFAULT_MAX_LINES_PER_PAGE_V0, DEFAULT_MAX_LINE_GLYPHS_V0,
 };
@@ -266,10 +266,13 @@ use stats_v0::build_tex_stats_from_tokens_v0;
 use trace_v0::build_not_implemented_log_v0;
 use typeset_minimal_v0::{
     extract_typeset_minimal_text_body_v0, normalize_typeset_minimal_tokens_v0,
-    preprocess_typeset_minimal_source_v0, TYPESET_MINIMAL_MAX_LINE_GLYPHS_V0,
+    preprocess_typeset_minimal_source_v0,
 };
 const MISSING_COMPONENTS_V0: &[&str] = &["tex-engine"];
 const EMPTY_TEX_STATS_JSON: &str = "";
+const TYPESET_MINIMAL_GLYPH_ADVANCE_SP_V0: i32 = 471_859;
+const TYPESET_MINIMAL_LINE_ADVANCE_SP_V0: i32 = 917_504;
+const TYPESET_MINIMAL_MAX_LINE_WIDTH_SP_V0: u32 = 30_670_848;
 fn invalid_result_v0(max_log_bytes: u32, reason: InvalidInputReasonV0) -> CompileResultV0 {
     build_compile_result_v0(
         CompileStatus::InvalidInput,
@@ -356,13 +359,13 @@ pub fn compile_main_typeset_minimal_v0(mount: &mut Mount) -> CompileResultV0 {
     let ok_text_bytes = extract_typeset_minimal_text_body_v0(&normalized_typeset_tokens);
     if let Some(ok_text_bytes) = ok_text_bytes {
         if ok_text_bytes.len() <= MAX_OK_TEXT_BYTES_V0 {
-            let glyph_advance_sp = OK_GLYPH_ADVANCE_SP_V0;
-            let line_advance_sp = OK_LINE_ADVANCE_SP_V0;
-            let layout_plan = match plan_layout_v0(
+            let glyph_advance_sp = TYPESET_MINIMAL_GLYPH_ADVANCE_SP_V0;
+            let line_advance_sp = TYPESET_MINIMAL_LINE_ADVANCE_SP_V0;
+            let layout_plan = match plan_layout_width_v0(
                 &ok_text_bytes,
                 glyph_advance_sp,
                 line_advance_sp,
-                TYPESET_MINIMAL_MAX_LINE_GLYPHS_V0,
+                TYPESET_MINIMAL_MAX_LINE_WIDTH_SP_V0,
                 DEFAULT_MAX_LINES_PER_PAGE_V0,
             ) {
                 Some(plan) => plan,
