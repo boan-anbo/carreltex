@@ -23,6 +23,8 @@ mod ok_v0_extract_preamble_caption_footnote;
 mod ok_v0_extract_preamble_caption_decls;
 #[path = "ok_v0_extract_preamble_fancyhdr_glue.rs"]
 mod ok_v0_extract_preamble_fancyhdr_glue;
+#[path = "ok_v0_extract_preamble_biblatex_formats.rs"]
+mod ok_v0_extract_preamble_biblatex_formats;
 
 use ok_v0_extract_preamble::{
     consume_biblatex_resource_preamble_command, consume_bibliography_preamble_command,
@@ -54,6 +56,7 @@ use ok_v0_extract_preamble_page_style::consume_index_page_style_preamble_command
 use ok_v0_extract_preamble_caption_footnote::consume_caption_footnote_preamble_command;
 use ok_v0_extract_preamble_caption_decls::consume_caption_decl_preamble_command;
 use ok_v0_extract_preamble_fancyhdr_glue::consume_fancyhdr_glue_preamble_command;
+use ok_v0_extract_preamble_biblatex_formats::consume_biblatex_format_preamble_command;
 use ok_v0_extract_preamble_sectioning_toc::consume_sectioning_toc_preamble_command;
 
 pub(crate) fn extract_strict_ok_text_body_v0(tokens: &[TokenV0]) -> Option<Vec<u8>> {
@@ -106,6 +109,20 @@ pub(crate) fn extract_strict_ok_text_body_v0(tokens: &[TokenV0]) -> Option<Vec<u
                 ) =>
             {
                 index = consume_biblatex_resource_preamble_command(tokens, index)?;
+                continue;
+            }
+            Some(TokenV0::ControlSeq(name))
+                if matches!(
+                    name.as_slice(),
+                    b"DeclareFieldFormat"
+                        | b"DeclareNameFormat"
+                        | b"DeclareDelimFormat"
+                        | b"DeclareDelimAlias"
+                        | b"DeclareBibliographyDriver"
+                        | b"DefineBibliographyStrings"
+                ) =>
+            {
+                index = consume_biblatex_format_preamble_command(tokens, index)?;
                 continue;
             }
             Some(TokenV0::ControlSeq(name))
