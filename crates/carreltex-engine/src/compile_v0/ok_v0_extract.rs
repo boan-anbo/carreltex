@@ -29,6 +29,8 @@ mod ok_v0_extract_preamble_biblatex_formats;
 mod ok_v0_extract_preamble_tikz_pgf;
 #[path = "ok_v0_extract_preamble_fontspec_config.rs"]
 mod ok_v0_extract_preamble_fontspec_config;
+#[path = "ok_v0_extract_preamble_listings_algo_table.rs"]
+mod ok_v0_extract_preamble_listings_algo_table;
 
 use ok_v0_extract_preamble::{
     consume_biblatex_resource_preamble_command, consume_bibliography_preamble_command,
@@ -63,6 +65,7 @@ use ok_v0_extract_preamble_fancyhdr_glue::consume_fancyhdr_glue_preamble_command
 use ok_v0_extract_preamble_biblatex_formats::consume_biblatex_format_preamble_command;
 use ok_v0_extract_preamble_tikz_pgf::consume_tikz_pgf_preamble_command;
 use ok_v0_extract_preamble_fontspec_config::consume_fontspec_config_preamble_command;
+use ok_v0_extract_preamble_listings_algo_table::consume_listings_algo_table_preamble_command;
 use ok_v0_extract_preamble_sectioning_toc::consume_sectioning_toc_preamble_command;
 
 pub(crate) fn extract_strict_ok_text_body_v0(tokens: &[TokenV0]) -> Option<Vec<u8>> {
@@ -152,11 +155,24 @@ pub(crate) fn extract_strict_ok_text_body_v0(tokens: &[TokenV0]) -> Option<Vec<u
                         | b"setsansfont"
                         | b"setmonofont"
                         | b"sisetup"
-                        | b"lstset"
                         | b"microtypesetup"
                 ) =>
             {
                 index = consume_fontspec_config_preamble_command(tokens, index)?;
+                continue;
+            }
+            Some(TokenV0::ControlSeq(name))
+                if matches!(
+                    name.as_slice(),
+                    b"lstset"
+                        | b"lstdefinestyle"
+                        | b"lstnewenvironment"
+                        | b"SetKwInput"
+                        | b"SetKw"
+                        | b"newcolumntype"
+                ) =>
+            {
+                index = consume_listings_algo_table_preamble_command(tokens, index)?;
                 continue;
             }
             Some(TokenV0::ControlSeq(name))
