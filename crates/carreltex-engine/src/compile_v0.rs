@@ -62,6 +62,8 @@ mod ok_v0_preamble_biblatex_resources_tests;
 #[cfg(test)]
 mod ok_v0_preamble_biblatex_alias_decls_tests;
 #[cfg(test)]
+mod ok_v0_preamble_language_decls_tests;
+#[cfg(test)]
 mod ok_v0_preamble_meta_extras_tests;
 #[cfg(test)]
 mod ok_v0_preamble_math_operator_decls_tests;
