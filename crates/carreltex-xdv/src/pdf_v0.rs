@@ -7,7 +7,9 @@ const PAGE_WIDTH_PT_V0: f32 = 612.0;
 const PAGE_HEIGHT_PT_V0: f32 = 792.0;
 const MARGIN_PT_V0: f32 = 72.0;
 const FONT_SIZE_PT_V0: f32 = 12.0;
+const TITLE_FONT_SIZE_PT_V0: f32 = 18.0;
 const LEADING_PT_V0: f32 = 14.0;
+const TITLE_EXTRA_GAP_PT_V0: f32 = LEADING_PT_V0;
 const ITALIC_START_MARKER_V0: u8 = b'[';
 const ITALIC_END_MARKER_V0: u8 = b']';
 const BOLD_START_MARKER_V0: u8 = b'{';
@@ -129,34 +131,70 @@ fn parse_styled_segments_v0(line: &[u8]) -> Option<Vec<(PdfTextStyleV0, Vec<u8>)
     Some(segments)
 }
 
+fn detect_title_block_len_v0(lines: &[Vec<u8>]) -> usize {
+    let mut index = 0usize;
+    while index < lines.len() && !lines[index].is_empty() {
+        index += 1;
+    }
+    if index > 0 && index < lines.len() {
+        index
+    } else {
+        0
+    }
+}
+
+fn centered_line_x_v0(glyph_count: usize, font_size_pt: f32) -> f32 {
+    let width_pt = (glyph_count as f32) * font_size_pt * 0.6;
+    let centered = (PAGE_WIDTH_PT_V0 - width_pt) * 0.5;
+    centered.clamp(MARGIN_PT_V0, PAGE_WIDTH_PT_V0 - MARGIN_PT_V0)
+}
+
 fn build_page_content_stream_v0(lines: &[Vec<u8>]) -> Option<Vec<u8>> {
     let mut out = Vec::new();
     out.extend_from_slice(b"BT\n");
     out.extend_from_slice(b"0 g\n");
 
-    let mut y = PAGE_HEIGHT_PT_V0 - MARGIN_PT_V0 - FONT_SIZE_PT_V0;
-    for line in lines {
+    let title_block_len = detect_title_block_len_v0(lines);
+    let mut y = PAGE_HEIGHT_PT_V0 - MARGIN_PT_V0 - TITLE_FONT_SIZE_PT_V0;
+    for (line_index, line) in lines.iter().enumerate() {
         if y < MARGIN_PT_V0 {
             break;
         }
         let segments = parse_styled_segments_v0(line)?;
-        out.extend_from_slice(b"1 0 0 1 ");
-        out.extend_from_slice(format!("{:.2} {:.2} Tm ", MARGIN_PT_V0, y).as_bytes());
-        for (style, bytes) in segments {
-            if bytes.is_empty() {
-                continue;
+        let in_title_block = title_block_len > 0 && line_index < title_block_len;
+        let font_size_pt = if in_title_block && line_index == 0 {
+            TITLE_FONT_SIZE_PT_V0
+        } else {
+            FONT_SIZE_PT_V0
+        };
+        if !segments.is_empty() {
+            let glyph_count: usize = segments.iter().map(|(_, bytes)| bytes.len()).sum();
+            let line_x = if in_title_block {
+                centered_line_x_v0(glyph_count, font_size_pt)
+            } else {
+                MARGIN_PT_V0
+            };
+            out.extend_from_slice(b"1 0 0 1 ");
+            out.extend_from_slice(format!("{:.2} {:.2} Tm ", line_x, y).as_bytes());
+            for (style, bytes) in segments {
+                if bytes.is_empty() {
+                    continue;
+                }
+                let escaped = escape_pdf_string_bytes(&bytes);
+                out.extend_from_slice(b"/");
+                out.extend_from_slice(style_font_alias_v0(style));
+                out.extend_from_slice(b" ");
+                out.extend_from_slice(format!("{font_size_pt}").as_bytes());
+                out.extend_from_slice(b" Tf (");
+                out.extend_from_slice(&escaped);
+                out.extend_from_slice(b") Tj ");
             }
-            let escaped = escape_pdf_string_bytes(&bytes);
-            out.extend_from_slice(b"/");
-            out.extend_from_slice(style_font_alias_v0(style));
-            out.extend_from_slice(b" ");
-            out.extend_from_slice(format!("{FONT_SIZE_PT_V0}").as_bytes());
-            out.extend_from_slice(b" Tf (");
-            out.extend_from_slice(&escaped);
-            out.extend_from_slice(b") Tj ");
+            out.extend_from_slice(b"\n");
         }
-        out.extend_from_slice(b"\n");
         y -= LEADING_PT_V0;
+        if title_block_len > 0 && line_index + 1 == title_block_len {
+            y -= TITLE_EXTRA_GAP_PT_V0;
+        }
     }
 
     out.extend_from_slice(b"ET\n");
