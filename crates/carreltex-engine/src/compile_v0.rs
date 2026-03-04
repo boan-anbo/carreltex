@@ -74,6 +74,8 @@ mod ok_v0_preamble_noarg_toggles_tests;
 #[cfg(test)]
 mod ok_v0_preamble_noarg_page_style_tests;
 #[cfg(test)]
+mod ok_v0_preamble_label_aux_tests;
+#[cfg(test)]
 mod ok_v0_preamble_math_operator_decls_tests;
 #[cfg(test)]
 mod ok_v0_preamble_math_alphabet_decls_tests;

@@ -100,6 +100,36 @@ pub(super) fn consume_biblatex_resource_preamble_command(tokens: &[TokenV0], ind
     }
 }
 
+pub(super) fn consume_label_aux_preamble_command(tokens: &[TokenV0], index: usize) -> Option<usize> {
+    let name = match tokens.get(index) {
+        Some(TokenV0::ControlSeq(name)) => name.as_slice(),
+        _ => return None,
+    };
+    match name {
+        b"label" | b"ref" | b"pageref" => {
+            let mut cursor = skip_spaces(tokens, index + 1);
+            cursor = consume_char_space_group_non_empty(tokens, cursor)?;
+            Some(skip_spaces(tokens, cursor))
+        }
+        b"addtocontents" => {
+            let mut cursor = skip_spaces(tokens, index + 1);
+            cursor = consume_char_space_group_non_empty(tokens, cursor)?;
+            cursor = skip_spaces(tokens, cursor);
+            cursor = consume_char_space_nested_group_non_empty_v0(tokens, cursor, tokens.len())?;
+            Some(skip_spaces(tokens, cursor))
+        }
+        b"addcontentsline" => {
+            let mut cursor = skip_spaces(tokens, index + 1);
+            for _ in 0..3 {
+                cursor = consume_char_space_group_non_empty(tokens, cursor)?;
+                cursor = skip_spaces(tokens, cursor);
+            }
+            Some(cursor)
+        }
+        _ => None,
+    }
+}
+
 pub(super) fn consume_language_decl_preamble_command(tokens: &[TokenV0], index: usize) -> Option<usize> {
     let name = match tokens.get(index) {
         Some(TokenV0::ControlSeq(name)) => name.as_slice(),
