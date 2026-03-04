@@ -21,6 +21,8 @@ mod ok_v0_extract_preamble_sectioning_toc;
 mod ok_v0_extract_preamble_caption_footnote;
 #[path = "ok_v0_extract_preamble_caption_decls.rs"]
 mod ok_v0_extract_preamble_caption_decls;
+#[path = "ok_v0_extract_preamble_fancyhdr_glue.rs"]
+mod ok_v0_extract_preamble_fancyhdr_glue;
 
 use ok_v0_extract_preamble::{
     consume_biblatex_resource_preamble_command, consume_bibliography_preamble_command,
@@ -51,6 +53,7 @@ use ok_v0_extract_preamble_metadata::{
 use ok_v0_extract_preamble_page_style::consume_index_page_style_preamble_command;
 use ok_v0_extract_preamble_caption_footnote::consume_caption_footnote_preamble_command;
 use ok_v0_extract_preamble_caption_decls::consume_caption_decl_preamble_command;
+use ok_v0_extract_preamble_fancyhdr_glue::consume_fancyhdr_glue_preamble_command;
 use ok_v0_extract_preamble_sectioning_toc::consume_sectioning_toc_preamble_command;
 
 pub(crate) fn extract_strict_ok_text_body_v0(tokens: &[TokenV0]) -> Option<Vec<u8>> {
@@ -155,8 +158,27 @@ pub(crate) fn extract_strict_ok_text_body_v0(tokens: &[TokenV0]) -> Option<Vec<u
                 index = consume_caption_decl_preamble_command(tokens, index)?;
                 continue;
             }
+            Some(TokenV0::ControlSeq(name))
+                if matches!(
+                    name.as_slice(),
+                    b"leftmark"
+                        | b"rightmark"
+                        | b"nouppercase"
+                        | b"MakeUppercase"
+                        | b"MakeLowercase"
+                ) =>
+            {
+                index = consume_fancyhdr_glue_preamble_command(tokens, index, &mut title_state)?;
+                continue;
+            }
             Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"renewcommand" => {
                 if let Some(next_index) = consume_caption_footnote_preamble_command(tokens, index) {
+                    index = next_index;
+                    continue;
+                }
+                if let Some(next_index) =
+                    consume_fancyhdr_glue_preamble_command(tokens, index, &mut title_state)
+                {
                     index = next_index;
                     continue;
                 }
@@ -182,6 +204,12 @@ pub(crate) fn extract_strict_ok_text_body_v0(tokens: &[TokenV0]) -> Option<Vec<u
             }
             Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"setlength" => {
                 if let Some(next_index) = consume_caption_footnote_preamble_command(tokens, index) {
+                    index = next_index;
+                    continue;
+                }
+                if let Some(next_index) =
+                    consume_fancyhdr_glue_preamble_command(tokens, index, &mut title_state)
+                {
                     index = next_index;
                     continue;
                 }

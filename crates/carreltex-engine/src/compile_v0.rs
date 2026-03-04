@@ -96,6 +96,8 @@ mod ok_v0_preamble_koma_config_bundle_tests;
 #[cfg(test)]
 mod ok_v0_preamble_fancyhdr_tests;
 #[cfg(test)]
+mod ok_v0_preamble_fancyhdr_glue_tests;
+#[cfg(test)]
 mod ok_v0_preamble_sectioning_toc_tests;
 #[cfg(test)]
 mod ok_v0_preamble_caption_footnote_tests;
