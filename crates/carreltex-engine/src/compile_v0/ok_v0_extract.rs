@@ -448,7 +448,8 @@ fn consume_declare_text_font_command_preamble_command(tokens: &[TokenV0], index:
 fn consume_declare_text_command_preamble_command(tokens: &[TokenV0], index: usize) -> Option<usize> {
     if !matches!(
         tokens.get(index),
-        Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"DeclareTextCommand"
+        Some(TokenV0::ControlSeq(name))
+            if matches!(name.as_slice(), b"DeclareTextCommand" | b"ProvideTextCommand")
     ) {
         return None;
     }
@@ -651,7 +652,7 @@ pub(crate) fn extract_strict_ok_text_body_v0(tokens: &[TokenV0]) -> Option<Vec<u
                 continue;
             }
             Some(TokenV0::ControlSeq(name))
-                if name.as_slice() == b"DeclareTextCommand" =>
+                if matches!(name.as_slice(), b"DeclareTextCommand" | b"ProvideTextCommand") =>
             {
                 index = consume_declare_text_command_preamble_command(tokens, index)?;
                 continue;
