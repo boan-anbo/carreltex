@@ -284,17 +284,17 @@ fn build_pdf_for_pages_v0(pages: &[Vec<Vec<u8>>]) -> Vec<u8> {
     offsets.push(write_pdf_obj(
         &mut out,
         font_regular_id,
-        b"<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>",
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
     ));
     offsets.push(write_pdf_obj(
         &mut out,
         font_italic_id,
-        b"<< /Type /Font /Subtype /Type1 /BaseFont /Courier-Oblique >>",
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Oblique >>",
     ));
     offsets.push(write_pdf_obj(
         &mut out,
         font_bold_id,
-        b"<< /Type /Font /Subtype /Type1 /BaseFont /Courier-Bold >>",
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>",
     ));
 
     let xref_offset = out.len() as u32;
