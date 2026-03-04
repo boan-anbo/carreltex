@@ -1,0 +1,343 @@
+use crate::tex::tokenize_v0::TokenV0;
+
+pub(crate) const TYPESET_MINIMAL_MAX_LINE_GLYPHS_V0: usize = 56;
+
+const NEWLINE_MARKER_V0: u8 = 0x0a;
+const ITALIC_START_MARKER_V0: u8 = b'[';
+const ITALIC_END_MARKER_V0: u8 = b']';
+const BOLD_START_MARKER_V0: u8 = b'{';
+const BOLD_END_MARKER_V0: u8 = b'}';
+
+#[derive(Default)]
+struct TitleMetaV0 {
+    title: Option<Vec<u8>>,
+    author: Option<Vec<u8>>,
+    date: Option<Vec<u8>>,
+}
+
+fn skip_spaces(tokens: &[TokenV0], mut index: usize) -> usize {
+    while matches!(tokens.get(index), Some(TokenV0::Space)) {
+        index += 1;
+    }
+    index
+}
+
+fn push_space(out: &mut Vec<u8>) {
+    match out.last().copied() {
+        None | Some(b' ') | Some(NEWLINE_MARKER_V0) => {}
+        _ => out.push(b' '),
+    }
+}
+
+fn trim_trailing_spaces(out: &mut Vec<u8>) {
+    while matches!(out.last(), Some(b' ')) {
+        out.pop();
+    }
+}
+
+fn push_newline(out: &mut Vec<u8>) {
+    trim_trailing_spaces(out);
+    if !matches!(out.last().copied(), Some(NEWLINE_MARKER_V0)) {
+        out.push(NEWLINE_MARKER_V0);
+    }
+}
+
+fn consume_group_bounds(tokens: &[TokenV0], index: usize) -> Option<(usize, usize, usize)> {
+    let start = skip_spaces(tokens, index);
+    if !matches!(tokens.get(start), Some(TokenV0::BeginGroup)) {
+        return None;
+    }
+    let mut depth = 1usize;
+    let mut cursor = start + 1;
+    while let Some(token) = tokens.get(cursor) {
+        match token {
+            TokenV0::BeginGroup => depth += 1,
+            TokenV0::EndGroup => {
+                depth -= 1;
+                if depth == 0 {
+                    return Some((start + 1, cursor, cursor + 1));
+                }
+            }
+            _ => {}
+        }
+        cursor += 1;
+    }
+    None
+}
+
+fn consume_simple_bracket_non_empty(tokens: &[TokenV0], index: usize) -> Option<usize> {
+    let mut cursor = skip_spaces(tokens, index);
+    if !matches!(tokens.get(cursor), Some(TokenV0::Char(b'['))) {
+        return Some(cursor);
+    }
+    cursor += 1;
+    let mut saw_non_space = false;
+    while let Some(token) = tokens.get(cursor) {
+        match token {
+            TokenV0::Char(b']') => return if saw_non_space { Some(cursor + 1) } else { None },
+            TokenV0::Char(_) => saw_non_space = true,
+            TokenV0::Space => {}
+            _ => return None,
+        }
+        cursor += 1;
+    }
+    None
+}
+
+fn consume_documentclass_v0(tokens: &[TokenV0], index: usize) -> Option<usize> {
+    if !matches!(
+        tokens.get(index),
+        Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"documentclass"
+    ) {
+        return None;
+    }
+    let mut cursor = consume_simple_bracket_non_empty(tokens, index + 1)?;
+    let (group_start, group_end, next) = consume_group_bounds(tokens, cursor)?;
+    let mut class_bytes = Vec::new();
+    for token in &tokens[group_start..group_end] {
+        match token {
+            TokenV0::Char(byte) => class_bytes.push(*byte),
+            TokenV0::Space => class_bytes.push(b' '),
+            _ => return None,
+        }
+    }
+    while matches!(class_bytes.first(), Some(b' ')) {
+        class_bytes.remove(0);
+    }
+    while matches!(class_bytes.last(), Some(b' ')) {
+        class_bytes.pop();
+    }
+    if class_bytes != b"article" {
+        return None;
+    }
+    cursor = next;
+    Some(cursor)
+}
+
+fn consume_document_env_command_v0(tokens: &[TokenV0], index: usize, name: &[u8]) -> Option<usize> {
+    if !matches!(
+        tokens.get(index),
+        Some(TokenV0::ControlSeq(control)) if control.as_slice() == name
+    ) {
+        return None;
+    }
+    let (group_start, group_end, next) = consume_group_bounds(tokens, index + 1)?;
+    let mut env_bytes = Vec::new();
+    for token in &tokens[group_start..group_end] {
+        match token {
+            TokenV0::Char(byte) => env_bytes.push(*byte),
+            TokenV0::Space => env_bytes.push(b' '),
+            _ => return None,
+        }
+    }
+    while matches!(env_bytes.first(), Some(b' ')) {
+        env_bytes.remove(0);
+    }
+    while matches!(env_bytes.last(), Some(b' ')) {
+        env_bytes.pop();
+    }
+    if env_bytes != b"document" {
+        return None;
+    }
+    Some(next)
+}
+
+fn is_supported_literal_char_v0(byte: u8) -> bool {
+    if !(0x20..=0x7e).contains(&byte) {
+        return false;
+    }
+    !matches!(
+        byte,
+        ITALIC_START_MARKER_V0 | ITALIC_END_MARKER_V0 | BOLD_START_MARKER_V0 | BOLD_END_MARKER_V0
+    )
+}
+
+fn consume_fragment_token_v0(
+    tokens: &[TokenV0],
+    index: usize,
+    out: &mut Vec<u8>,
+    allow_and: bool,
+) -> Option<usize> {
+    match tokens.get(index)? {
+        TokenV0::Char(byte) if *byte == NEWLINE_MARKER_V0 => {
+            push_newline(out);
+            Some(index + 1)
+        }
+        TokenV0::Char(byte) => {
+            if !is_supported_literal_char_v0(*byte) {
+                return None;
+            }
+            out.push(*byte);
+            Some(index + 1)
+        }
+        TokenV0::Space => {
+            push_space(out);
+            Some(index + 1)
+        }
+        TokenV0::ControlSeq(name) if allow_and && name.as_slice() == b"and" => {
+            push_newline(out);
+            Some(index + 1)
+        }
+        TokenV0::ControlSeq(name) if name.as_slice() == b"protect" || name.as_slice() == b"relax" => {
+            Some(index + 1)
+        }
+        TokenV0::ControlSeq(name) if name.as_slice() == b"emph" || name.as_slice() == b"textbf" => {
+            let style_markers = if name.as_slice() == b"emph" {
+                (ITALIC_START_MARKER_V0, ITALIC_END_MARKER_V0)
+            } else {
+                (BOLD_START_MARKER_V0, BOLD_END_MARKER_V0)
+            };
+            let (group_start, group_end, next) = consume_group_bounds(tokens, index + 1)?;
+            out.push(style_markers.0);
+            consume_fragment_range_v0(tokens, group_start, group_end, out, allow_and)?;
+            out.push(style_markers.1);
+            Some(next)
+        }
+        _ => None,
+    }
+}
+
+fn consume_fragment_range_v0(
+    tokens: &[TokenV0],
+    start: usize,
+    end: usize,
+    out: &mut Vec<u8>,
+    allow_and: bool,
+) -> Option<()> {
+    let mut cursor = start;
+    while cursor < end {
+        let next = consume_fragment_token_v0(tokens, cursor, out, allow_and)?;
+        if next <= cursor || next > end {
+            return None;
+        }
+        cursor = next;
+    }
+    Some(())
+}
+
+fn consume_meta_declaration_v0(
+    tokens: &[TokenV0],
+    index: usize,
+    name: &[u8],
+    allow_and: bool,
+) -> Option<(usize, Vec<u8>)> {
+    if !matches!(
+        tokens.get(index),
+        Some(TokenV0::ControlSeq(control)) if control.as_slice() == name
+    ) {
+        return None;
+    }
+    let mut cursor = skip_spaces(tokens, index + 1);
+    if matches!(tokens.get(cursor), Some(TokenV0::Char(b'*'))) {
+        cursor = skip_spaces(tokens, cursor + 1);
+    }
+    let (group_start, group_end, next) = consume_group_bounds(tokens, cursor)?;
+    let mut value = Vec::new();
+    consume_fragment_range_v0(tokens, group_start, group_end, &mut value, allow_and)?;
+    trim_trailing_spaces(&mut value);
+    if value.is_empty() {
+        return None;
+    }
+    Some((next, value))
+}
+
+fn emit_maketitle_block_v0(out: &mut Vec<u8>, meta: &TitleMetaV0) {
+    let mut emitted = false;
+    if let Some(title) = &meta.title {
+        out.extend_from_slice(title);
+        push_newline(out);
+        emitted = true;
+    }
+    if let Some(author) = &meta.author {
+        out.extend_from_slice(author);
+        push_newline(out);
+        emitted = true;
+    }
+    if let Some(date) = &meta.date {
+        out.extend_from_slice(date);
+        push_newline(out);
+        emitted = true;
+    }
+    if emitted {
+        push_newline(out);
+    }
+}
+
+pub(crate) fn extract_typeset_minimal_text_body_v0(tokens: &[TokenV0]) -> Option<Vec<u8>> {
+    let mut index = skip_spaces(tokens, 0);
+    index = consume_documentclass_v0(tokens, index)?;
+
+    let mut meta = TitleMetaV0::default();
+    loop {
+        index = skip_spaces(tokens, index);
+        match tokens.get(index) {
+            Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"title" => {
+                let (next, value) = consume_meta_declaration_v0(tokens, index, b"title", false)?;
+                meta.title = Some(value);
+                index = next;
+            }
+            Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"author" => {
+                let (next, value) = consume_meta_declaration_v0(tokens, index, b"author", true)?;
+                meta.author = Some(value);
+                index = next;
+            }
+            Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"date" => {
+                let (next, value) = consume_meta_declaration_v0(tokens, index, b"date", false)?;
+                meta.date = Some(value);
+                index = next;
+            }
+            Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"begin" => {
+                index = consume_document_env_command_v0(tokens, index, b"begin")?;
+                break;
+            }
+            Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"protect" || name.as_slice() == b"relax" => {
+                index += 1;
+            }
+            Some(TokenV0::Space) => index += 1,
+            _ => return None,
+        }
+    }
+
+    let mut body = Vec::<u8>::new();
+    loop {
+        match tokens.get(index) {
+            Some(TokenV0::Space) => {
+                push_space(&mut body);
+                index += 1;
+            }
+            Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"maketitle" => {
+                emit_maketitle_block_v0(&mut body, &meta);
+                index += 1;
+            }
+            Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"end" => {
+                index = consume_document_env_command_v0(tokens, index, b"end")?;
+                break;
+            }
+            Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"par" => {
+                push_newline(&mut body);
+                push_newline(&mut body);
+                index += 1;
+            }
+            Some(_) => {
+                index = consume_fragment_token_v0(tokens, index, &mut body, false)?;
+            }
+            None => return None,
+        }
+    }
+
+    if tokens[index..]
+        .iter()
+        .any(|token| !matches!(token, TokenV0::Space))
+    {
+        return None;
+    }
+
+    trim_trailing_spaces(&mut body);
+    while matches!(body.last().copied(), Some(NEWLINE_MARKER_V0)) {
+        body.pop();
+    }
+    if body.is_empty() {
+        return None;
+    }
+    Some(body)
+}
