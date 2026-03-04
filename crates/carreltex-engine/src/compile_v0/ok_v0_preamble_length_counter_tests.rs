@@ -50,3 +50,12 @@ fn preamble_length_counter_missing_group_is_not_implemented() {
     assert_eq!(result.status, CompileStatus::NotImplemented);
     assert!(result.main_xdv_bytes.is_empty());
 }
+
+#[test]
+fn preamble_length_counter_control_seq_in_group_is_not_implemented() {
+    let result = compile_main(
+        b"\\documentclass{article}\\setlength{parskip}{\\baselineskip}\\begin{document}HelloWorld\\end{document}",
+    );
+    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert!(result.main_xdv_bytes.is_empty());
+}

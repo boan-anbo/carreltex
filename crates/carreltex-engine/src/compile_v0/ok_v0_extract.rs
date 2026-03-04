@@ -117,13 +117,7 @@ pub(crate) fn extract_strict_ok_text_body_v0(tokens: &[TokenV0]) -> Option<Vec<u
             Some(TokenV0::ControlSeq(name))
                 if matches!(name.as_slice(), b"setcounter" | b"addtolength" | b"setlength") =>
             {
-                if let Some(next_index) = consume_length_counter_preamble_command(tokens, index) {
-                    index = next_index;
-                } else {
-                    index =
-                        consume_ok_noop_command_v0(tokens, index, tokens.len(), name.as_slice())?;
-                    index = skip_spaces(tokens, index);
-                }
+                index = consume_length_counter_preamble_command(tokens, index)?;
                 continue;
             }
             Some(TokenV0::ControlSeq(name))
