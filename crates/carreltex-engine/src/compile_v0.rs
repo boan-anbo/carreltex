@@ -80,6 +80,8 @@ mod ok_v0_preamble_declare_text_accent_default_tests;
 #[cfg(test)]
 mod ok_v0_preamble_declare_text_symbol_default_tests;
 #[cfg(test)]
+mod ok_v0_preamble_declare_text_composite_default_tests;
+#[cfg(test)]
 mod ok_v0_preamble_text_decl_bundle_tests;
 #[cfg(test)]
 mod ok_v0_preamble_text_symbol_accent_decls_tests;
