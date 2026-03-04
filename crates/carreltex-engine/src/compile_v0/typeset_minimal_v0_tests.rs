@@ -22,6 +22,18 @@ fn extract_typeset_body(main: &[u8]) -> Vec<u8> {
     extract_typeset_minimal_text_body_v0(&normalized).expect("extract should succeed")
 }
 
+fn layout_first_line_bytes(main: &[u8]) -> Vec<u8> {
+    let result = compile_typeset(main);
+    assert_eq!(result.status, CompileStatus::Ok);
+    let layout =
+        parse_dvi_v2_text_page_to_layout_v0(&result.main_xdv_bytes, 917_504).expect("layout parse");
+    layout.pages[0].lines[0]
+        .glyphs
+        .iter()
+        .map(|glyph| glyph.byte)
+        .collect()
+}
+
 #[test]
 fn typeset_minimal_subset_compiles_ok() {
     let main = b"\\documentclass{article}\\title{CarrelTeX Minimal Typeset Demo}\\author{Alice \\and Bob}\\date{2026-03-04}\\begin{document}\\maketitle Hello, world. This is a paragraph with \\emph{emphasis} and \\textbf{bold}.\\end{document}";
@@ -89,4 +101,11 @@ fn typeset_minimal_long_paragraph_wraps_to_multiple_lines() {
         layout.pages.first().map(|page| page.lines.len()).unwrap_or(0) >= 2,
         "expected wrapped output with multiple lines"
     );
+}
+
+#[test]
+fn typeset_minimal_single_newline_collapses_to_space() {
+    let main = b"\\documentclass{article}\\begin{document}Hello,\nworld.\\end{document}";
+    let first_line = layout_first_line_bytes(main);
+    assert_eq!(first_line, b"Hello, world.");
 }
