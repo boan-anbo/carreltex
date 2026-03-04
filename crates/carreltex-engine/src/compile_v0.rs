@@ -84,6 +84,8 @@ mod ok_v0_preamble_declare_text_composite_default_tests;
 #[cfg(test)]
 mod ok_v0_preamble_text_decl_bundle_tests;
 #[cfg(test)]
+mod ok_v0_preamble_textcmd_bundle_tests;
+#[cfg(test)]
 mod ok_v0_preamble_text_symbol_accent_decls_tests;
 #[cfg(test)]
 mod ok_v0_preamble_text_composite_command_tests;
