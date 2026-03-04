@@ -45,7 +45,7 @@ fn newtheorem_preamble_is_ok_and_output_matches_without_it() {
 #[test]
 fn setlength_preamble_is_ok_and_output_matches_without_it() {
     let with_setlength = compile_main(
-        b"\\documentclass{article}\\setlength{\\parindent}{1em}\\begin{document}HelloWorld\\end{document}",
+        b"\\documentclass{article}\\setlength{parindent}{1em}\\begin{document}HelloWorld\\end{document}",
     );
     let without_setlength =
         compile_main(b"\\documentclass{article}\\begin{document}HelloWorld\\end{document}");
