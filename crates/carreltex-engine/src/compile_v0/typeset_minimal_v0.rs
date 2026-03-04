@@ -317,6 +317,54 @@ fn is_supported_literal_char_v0(byte: u8) -> bool {
     )
 }
 
+fn is_spacing_or_newline_v0(byte: u8) -> bool {
+    matches!(byte, b' ' | NEWLINE_MARKER_V0)
+}
+
+fn is_punctuation_spacing_target_v0(byte: u8) -> bool {
+    matches!(byte, b'.' | b',' | b';' | b':' | b'!' | b'?')
+}
+
+fn normalize_punctuation_spacing_v0(body: &[u8]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(body.len());
+    let mut index = 0usize;
+
+    while index < body.len() {
+        let byte = body[index];
+        out.push(byte);
+        index += 1;
+        if !is_punctuation_spacing_target_v0(byte) {
+            continue;
+        }
+
+        if index >= body.len() || !is_spacing_or_newline_v0(body[index]) {
+            continue;
+        }
+
+        let mut saw_space = false;
+        let mut newline_count = 0usize;
+        while index < body.len() && is_spacing_or_newline_v0(body[index]) {
+            match body[index] {
+                b' ' => saw_space = true,
+                NEWLINE_MARKER_V0 => newline_count += 1,
+                _ => {}
+            }
+            index += 1;
+        }
+
+        if newline_count >= 2 {
+            out.push(NEWLINE_MARKER_V0);
+            out.push(NEWLINE_MARKER_V0);
+        } else if newline_count == 1 {
+            out.push(NEWLINE_MARKER_V0);
+        } else if saw_space && index < body.len() && body[index] != PAGE_BREAK_MARKER_V0 {
+            out.push(b' ');
+        }
+    }
+
+    out
+}
+
 fn consume_fragment_token_v0(
     tokens: &[TokenV0],
     index: usize,
@@ -519,6 +567,7 @@ pub(crate) fn extract_typeset_minimal_text_body_v0(tokens: &[TokenV0]) -> Option
         return None;
     }
 
+    body = normalize_punctuation_spacing_v0(&body);
     trim_trailing_spaces(&mut body);
     while matches!(body.last().copied(), Some(NEWLINE_MARKER_V0)) {
         body.pop();
