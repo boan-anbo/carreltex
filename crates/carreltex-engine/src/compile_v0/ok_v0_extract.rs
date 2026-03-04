@@ -250,7 +250,10 @@ pub(crate) fn extract_strict_ok_text_body_v0(tokens: &[TokenV0]) -> Option<Vec<u
                 continue;
             }
             Some(TokenV0::ControlSeq(name))
-                if name.as_slice() == b"newtheorem" || name.as_slice() == b"theoremstyle" =>
+                if matches!(
+                    name.as_slice(),
+                    b"newtheorem" | b"theoremstyle" | b"newtheoremstyle" | b"swapnumbers"
+                ) =>
             {
                 index = consume_theorem_preamble_command(tokens, index)?;
                 continue;

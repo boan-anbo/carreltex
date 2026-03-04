@@ -104,6 +104,8 @@ mod ok_v0_preamble_caption_decls_tests;
 #[cfg(test)]
 mod ok_v0_preamble_math_operator_decls_tests;
 #[cfg(test)]
+mod ok_v0_preamble_amsthm_decls_tests;
+#[cfg(test)]
 mod ok_v0_preamble_math_alphabet_decls_tests;
 #[cfg(test)]
 mod ok_v0_preamble_math_symbol_decls_tests;

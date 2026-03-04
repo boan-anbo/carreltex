@@ -402,10 +402,22 @@ pub(super) fn consume_theorem_preamble_command(tokens: &[TokenV0], index: usize)
         _ => return None,
     };
     match name {
+        b"swapnumbers" => {
+            let cursor = skip_spaces(tokens, index + 1);
+            Some(cursor)
+        }
         b"theoremstyle" => {
             let mut cursor = skip_spaces(tokens, index + 1);
             cursor = consume_char_space_group_non_empty(tokens, cursor)?;
             Some(skip_spaces(tokens, cursor))
+        }
+        b"newtheoremstyle" => {
+            let mut cursor = skip_spaces(tokens, index + 1);
+            for _ in 0..9 {
+                cursor = consume_char_space_group_non_empty(tokens, cursor)?;
+                cursor = skip_spaces(tokens, cursor);
+            }
+            Some(cursor)
         }
         b"newtheorem" => {
             let mut cursor = skip_spaces(tokens, index + 1);
