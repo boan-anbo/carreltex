@@ -183,6 +183,18 @@ pub(super) fn consume_hyperref_preamble_command(tokens: &[TokenV0], index: usize
     Some(skip_spaces(tokens, cursor))
 }
 
+pub(super) fn consume_setuptoc_preamble_command(tokens: &[TokenV0], index: usize) -> Option<usize> {
+    if !matches!(
+        tokens.get(index),
+        Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"setuptoc"
+    ) {
+        return None;
+    }
+    let mut cursor = skip_spaces(tokens, index + 1);
+    cursor = consume_char_space_nested_group_non_empty_v0(tokens, cursor, tokens.len())?;
+    Some(skip_spaces(tokens, cursor))
+}
+
 fn consume_single_named_controlseq_group_v0(
     tokens: &[TokenV0],
     index: usize,
