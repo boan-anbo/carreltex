@@ -394,6 +394,43 @@ fn consume_fontenc_decl_preamble_command(tokens: &[TokenV0], index: usize) -> Op
     Some(cursor)
 }
 
+fn consume_optional_robust_command_one_arity_v0(tokens: &[TokenV0], index: usize) -> Option<usize> {
+    let mut cursor = skip_spaces(tokens, index);
+    if !matches!(tokens.get(cursor), Some(TokenV0::Char(b'['))) {
+        return Some(cursor);
+    }
+    cursor += 1;
+    cursor = skip_spaces(tokens, cursor);
+    if !matches!(tokens.get(cursor), Some(TokenV0::Char(b'1'))) {
+        return None;
+    }
+    cursor += 1;
+    cursor = skip_spaces(tokens, cursor);
+    if !matches!(tokens.get(cursor), Some(TokenV0::Char(b']'))) {
+        return None;
+    }
+    Some(cursor + 1)
+}
+
+fn consume_declare_robust_command_preamble_command(tokens: &[TokenV0], index: usize) -> Option<usize> {
+    if !matches!(
+        tokens.get(index),
+        Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"DeclareRobustCommand"
+    ) {
+        return None;
+    }
+    let mut cursor = skip_spaces(tokens, index + 1);
+    if matches!(tokens.get(cursor), Some(TokenV0::Char(b'*'))) {
+        return None;
+    }
+    cursor = consume_single_controlseq_group_v0(tokens, cursor)?;
+    cursor = skip_spaces(tokens, cursor);
+    cursor = consume_optional_robust_command_one_arity_v0(tokens, cursor)?;
+    cursor = skip_spaces(tokens, cursor);
+    cursor = consume_char_space_nested_group_non_empty_v0(tokens, cursor, tokens.len())?;
+    Some(skip_spaces(tokens, cursor))
+}
+
 pub(crate) fn extract_strict_ok_text_body_v0(tokens: &[TokenV0]) -> Option<Vec<u8>> {
     let mut index = 0usize;
     if !matches!(
@@ -513,6 +550,12 @@ pub(crate) fn extract_strict_ok_text_body_v0(tokens: &[TokenV0]) -> Option<Vec<u
                 if matches!(name.as_slice(), b"DeclareFontEncoding" | b"DeclareFontSubstitution") =>
             {
                 index = consume_fontenc_decl_preamble_command(tokens, index)?;
+                continue;
+            }
+            Some(TokenV0::ControlSeq(name))
+                if name.as_slice() == b"DeclareRobustCommand" =>
+            {
+                index = consume_declare_robust_command_preamble_command(tokens, index)?;
                 continue;
             }
             Some(TokenV0::ControlSeq(name))
