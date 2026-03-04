@@ -43,10 +43,18 @@ fn preamble_noarg_page_style_bundle_is_ok_and_output_matches_without_commands() 
 }
 
 #[test]
-fn preamble_page_style_arg_form_remains_not_implemented() {
-    let result = compile_main(
+fn preamble_page_style_arg_form_is_accepted_for_ok() {
+    let with_command = compile_main(
         b"\\documentclass{article}\\pagestyle{plain}\\begin{document}HelloWorld\\end{document}",
     );
-    assert_eq!(result.status, CompileStatus::NotImplemented);
-    assert!(result.main_xdv_bytes.is_empty());
+    let without_command =
+        compile_main(b"\\documentclass{article}\\begin{document}HelloWorld\\end{document}");
+    assert_eq!(with_command.status, CompileStatus::Ok);
+    assert_eq!(without_command.status, CompileStatus::Ok);
+    assert!(with_command.log_bytes.is_empty());
+    assert!(validate_dvi_v2_text_page_v0(&with_command.main_xdv_bytes));
+    assert_eq!(
+        right3_positive_total(&with_command),
+        right3_positive_total(&without_command)
+    );
 }
