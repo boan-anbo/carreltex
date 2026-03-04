@@ -2,6 +2,7 @@ use super::{
     count_dvi_v2_text_movements_v0, count_dvi_v2_text_pages_v0,
     count_dvi_v2_text_pages_with_advance_v0, validate_dvi_v2_empty_page_v0,
     parse_dvi_v2_text_page_to_layout_v0, plan_layout_v0, recompute_line_width_sp_v0,
+    render_dvi_v2_text_page_to_pdf_v0,
     sum_dvi_v2_positive_right3_amounts_with_layout_v0, validate_dvi_v2_text_page_matches_layout_v0,
     validate_dvi_v2_text_page_v0, validate_dvi_v2_text_page_with_layout_v0,
     write_dvi_v2_empty_page_v0, write_dvi_v2_text_page_v0,
@@ -219,6 +220,15 @@ fn validator_rejects_positive_right_without_preceding_char() {
     bytes[right_index + 1] = 0x00;
     bytes[right_index + 2] = 0x01;
     assert!(!validate_dvi_v2_text_page_v0(&bytes));
+}
+
+#[test]
+fn pdf_renderer_emits_valid_header_and_contains_text() {
+    let bytes = write_dvi_v2_text_page_v0(b"Hello\nWorld").expect("writer should accept text");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&bytes).expect("pdf render");
+    assert!(pdf.starts_with(b"%PDF-1.4\n"));
+    assert!(pdf.windows(b"Hello".len()).any(|w| w == b"Hello"));
+    assert!(pdf.windows(b"World".len()).any(|w| w == b"World"));
 }
 
 #[test]

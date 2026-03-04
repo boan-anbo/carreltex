@@ -49,6 +49,7 @@ export async function createCtx(rootDir) {
     compileRequestSetOkLineAdvanceSp: instance.exports.carreltex_wasm_compile_request_set_ok_line_advance_sp_v0,
     compileRequestSetOkGlyphAdvanceSp: instance.exports.carreltex_wasm_compile_request_set_ok_glyph_advance_sp_v0,
     compileRun: instance.exports.carreltex_wasm_compile_run_v0,
+    renderMainPdf: instance.exports.carreltex_wasm_render_main_pdf_v0,
     reportLen: instance.exports.carreltex_wasm_compile_report_len_v0,
     reportCopy: instance.exports.carreltex_wasm_compile_report_copy_v0,
     logLen: instance.exports.carreltex_wasm_compile_log_len_v0,
@@ -57,6 +58,8 @@ export async function createCtx(rootDir) {
     eventsCopy: instance.exports.carreltex_wasm_events_copy_v0,
     artifactMainXdvLen: instance.exports.carreltex_wasm_artifact_main_xdv_len_v0,
     artifactMainXdvCopy: instance.exports.carreltex_wasm_artifact_main_xdv_copy_v0,
+    artifactMainPdfLen: instance.exports.carreltex_wasm_artifact_main_pdf_len_v0,
+    artifactMainPdfCopy: instance.exports.carreltex_wasm_artifact_main_pdf_copy_v0,
     artifactLenByName: instance.exports.carreltex_wasm_artifact_len_v0,
     artifactCopyByName: instance.exports.carreltex_wasm_artifact_copy_v0,
   };
@@ -81,6 +84,7 @@ export async function createCtx(rootDir) {
     ['carreltex_wasm_compile_request_set_ok_line_advance_sp_v0', ctx.compileRequestSetOkLineAdvanceSp],
     ['carreltex_wasm_compile_request_set_ok_glyph_advance_sp_v0', ctx.compileRequestSetOkGlyphAdvanceSp],
     ['carreltex_wasm_compile_run_v0', ctx.compileRun],
+    ['carreltex_wasm_render_main_pdf_v0', ctx.renderMainPdf],
     ['carreltex_wasm_compile_report_len_v0', ctx.reportLen],
     ['carreltex_wasm_compile_report_copy_v0', ctx.reportCopy],
     ['carreltex_wasm_compile_log_len_v0', ctx.logLen],
@@ -89,6 +93,8 @@ export async function createCtx(rootDir) {
     ['carreltex_wasm_events_copy_v0', ctx.eventsCopy],
     ['carreltex_wasm_artifact_main_xdv_len_v0', ctx.artifactMainXdvLen],
     ['carreltex_wasm_artifact_main_xdv_copy_v0', ctx.artifactMainXdvCopy],
+    ['carreltex_wasm_artifact_main_pdf_len_v0', ctx.artifactMainPdfLen],
+    ['carreltex_wasm_artifact_main_pdf_copy_v0', ctx.artifactMainPdfCopy],
     ['carreltex_wasm_artifact_len_v0', ctx.artifactLenByName],
     ['carreltex_wasm_artifact_copy_v0', ctx.artifactCopyByName],
   ]) {

@@ -9,6 +9,7 @@ use carreltex_core::{
     MAX_WASM_ALLOC_BYTES_V0,
 };
 use carreltex_engine::{compile_main_v0, compile_request_v0};
+use carreltex_xdv::render_dvi_v2_text_page_to_pdf_v0;
 
 #[no_mangle]
 pub extern "C" fn carreltex_wasm_smoke_add(left: i32, right: i32) -> i32 {
@@ -31,6 +32,11 @@ fn last_log_state() -> &'static Mutex<Vec<u8>> {
 }
 
 fn last_xdv_state() -> &'static Mutex<Vec<u8>> {
+    static STATE: OnceLock<Mutex<Vec<u8>>> = OnceLock::new();
+    STATE.get_or_init(|| Mutex::new(Vec::new()))
+}
+
+fn last_pdf_state() -> &'static Mutex<Vec<u8>> {
     static STATE: OnceLock<Mutex<Vec<u8>>> = OnceLock::new();
     STATE.get_or_init(|| Mutex::new(Vec::new()))
 }
@@ -294,6 +300,20 @@ fn read_last_xdv_bytes() -> Option<Vec<u8>> {
     Some(last.clone())
 }
 
+fn set_last_pdf_bytes(pdf_bytes: &[u8]) {
+    let mut last = match last_pdf_state().lock() {
+        Ok(guard) => guard,
+        Err(_) => return,
+    };
+    last.clear();
+    last.extend_from_slice(pdf_bytes);
+}
+
+fn read_last_pdf_bytes() -> Option<Vec<u8>> {
+    let last = last_pdf_state().lock().ok()?;
+    Some(last.clone())
+}
+
 fn set_last_events_bytes(events_bytes: &[u8]) {
     let mut last = match last_events_state().lock() {
         Ok(guard) => guard,
@@ -314,6 +334,7 @@ fn write_report_for_status(status: CompileStatus) {
     set_last_report_bytes(fallback);
     set_last_log_bytes(&[]);
     set_last_xdv_bytes(&[]);
+    set_last_pdf_bytes(&[]);
     set_last_events_bytes(&[]);
 }
 
@@ -641,6 +662,32 @@ pub extern "C" fn carreltex_wasm_compile_run_v0() -> i32 {
 }
 
 #[no_mangle]
+pub extern "C" fn carreltex_wasm_render_main_pdf_v0() -> i32 {
+    let xdv_bytes = match read_last_xdv_bytes() {
+        Some(bytes) => bytes,
+        None => return 1,
+    };
+    if xdv_bytes.is_empty() {
+        set_last_pdf_bytes(&[]);
+        return 1;
+    }
+
+    let pdf_bytes = match render_dvi_v2_text_page_to_pdf_v0(&xdv_bytes) {
+        Some(bytes) => bytes,
+        None => {
+            set_last_pdf_bytes(&[]);
+            return 1;
+        }
+    };
+    if !artifact_bytes_within_cap_v0(&pdf_bytes) {
+        set_last_pdf_bytes(&[]);
+        return 1;
+    }
+    set_last_pdf_bytes(&pdf_bytes);
+    0
+}
+
+#[no_mangle]
 pub extern "C" fn carreltex_wasm_compile_report_len_v0() -> usize {
     let last = match last_report_state().lock() {
         Ok(guard) => guard,
@@ -737,18 +784,33 @@ pub extern "C" fn carreltex_wasm_artifact_main_xdv_copy_v0(
 }
 
 #[no_mangle]
+pub extern "C" fn carreltex_wasm_artifact_main_pdf_len_v0() -> usize {
+    let name = b"main.pdf";
+    carreltex_wasm_artifact_len_v0(name.as_ptr(), name.len())
+}
+
+#[no_mangle]
+pub extern "C" fn carreltex_wasm_artifact_main_pdf_copy_v0(out_ptr: *mut u8, out_len: usize) -> usize {
+    let name = b"main.pdf";
+    carreltex_wasm_artifact_copy_v0(name.as_ptr(), name.len(), out_ptr, out_len)
+}
+
+#[no_mangle]
 pub extern "C" fn carreltex_wasm_artifact_len_v0(name_ptr: *const u8, name_len: usize) -> usize {
     let name = match resolve_artifact_name(name_ptr, name_len) {
         Some(name) => name,
         None => return 0,
     };
-    if name != "main.xdv" {
-        return 0;
-    }
-
-    let bytes = match read_last_xdv_bytes() {
-        Some(bytes) => bytes,
-        None => return 0,
+    let bytes = match name {
+        "main.xdv" => match read_last_xdv_bytes() {
+            Some(bytes) => bytes,
+            None => return 0,
+        },
+        "main.pdf" => match read_last_pdf_bytes() {
+            Some(bytes) => bytes,
+            None => return 0,
+        },
+        _ => return 0,
     };
     if !artifact_bytes_within_cap_v0(&bytes) {
         return 0;
@@ -767,13 +829,16 @@ pub extern "C" fn carreltex_wasm_artifact_copy_v0(
         Some(name) => name,
         None => return 0,
     };
-    if name != "main.xdv" {
-        return 0;
-    }
-
-    let bytes = match read_last_xdv_bytes() {
-        Some(bytes) => bytes,
-        None => return 0,
+    let bytes = match name {
+        "main.xdv" => match read_last_xdv_bytes() {
+            Some(bytes) => bytes,
+            None => return 0,
+        },
+        "main.pdf" => match read_last_pdf_bytes() {
+            Some(bytes) => bytes,
+            None => return 0,
+        },
+        _ => return 0,
     };
     if !artifact_bytes_within_cap_v0(&bytes) {
         return 0;

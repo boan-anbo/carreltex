@@ -20,6 +20,7 @@ version = "0.1.0"
 dependencies = [
  "carreltex-core",
  "carreltex-engine",
+ "carreltex-xdv",
 ]
 
 [[package]]
