@@ -278,6 +278,25 @@ pub(crate) fn extract_strict_ok_text_body_v0(tokens: &[TokenV0]) -> Option<Vec<u
                 continue;
             }
             Some(TokenV0::ControlSeq(name))
+                if matches!(
+                    name.as_slice(),
+                    b"makeatletter"
+                        | b"makeatother"
+                        | b"ExplSyntaxOn"
+                        | b"ExplSyntaxOff"
+                        | b"raggedbottom"
+                        | b"flushbottom"
+                        | b"sloppy"
+                        | b"fussy"
+                        | b"nofiles"
+                        | b"listfiles"
+                ) =>
+            {
+                index += 1;
+                index = skip_spaces(tokens, index);
+                continue;
+            }
+            Some(TokenV0::ControlSeq(name))
                 if is_supported_ok_style_declaration_v0(name.as_slice()) =>
             {
                 index += 1;
