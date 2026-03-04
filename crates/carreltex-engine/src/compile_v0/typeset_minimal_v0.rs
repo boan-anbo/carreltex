@@ -312,7 +312,7 @@ fn consume_fragment_token_v0(
 ) -> Option<usize> {
     match tokens.get(index)? {
         TokenV0::Char(byte) if *byte == NEWLINE_MARKER_V0 => {
-            push_space(out);
+            push_newline(out);
             Some(index + 1)
         }
         TokenV0::Char(byte) => {
@@ -332,7 +332,8 @@ fn consume_fragment_token_v0(
         }
         TokenV0::ControlSeq(name)
             if allow_hard_break
-                && (name.as_slice().is_empty() || name.as_slice() == HARD_LINE_BREAK_CONTROL_V0) =>
+                && (name.as_slice().is_empty()
+                    || name.as_slice() == HARD_LINE_BREAK_CONTROL_V0) =>
         {
             push_newline(out);
             Some(index + 1)
