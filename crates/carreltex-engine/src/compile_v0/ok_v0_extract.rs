@@ -11,6 +11,8 @@ use super::ok_v0_title_state::OkTitleStateV0;
 
 #[path = "ok_v0_extract_preamble.rs"]
 mod ok_v0_extract_preamble;
+#[path = "ok_v0_extract_preamble_metadata.rs"]
+mod ok_v0_extract_preamble_metadata;
 #[path = "ok_v0_extract_preamble_page_style.rs"]
 mod ok_v0_extract_preamble_page_style;
 #[path = "ok_v0_extract_preamble_sectioning_toc.rs"]
@@ -29,7 +31,7 @@ use ok_v0_extract_preamble::{
     consume_font_decl_preamble_command, consume_math_accent_radical_decl_preamble_command,
     consume_math_alphabet_decl_preamble_command, consume_math_operator_preamble_command,
     consume_math_symbol_decl_preamble_command, consume_math_version_sizes_preamble_command,
-    consume_mathcode_delcode_preamble_command, consume_meta_preamble_command,
+    consume_mathcode_delcode_preamble_command,
     consume_package_option_plumbing_preamble_command, consume_label_aux_preamble_command,
     consume_length_counter_preamble_command, consume_mark_preamble_command,
     consume_hyperref_preamble_command, consume_float_listof_preamble_command,
@@ -39,6 +41,9 @@ use ok_v0_extract_preamble::{
     consume_symbol_font_setter_preamble_command, consume_text_command_default_preamble_command,
     consume_text_decl_bundle_preamble_command, consume_theorem_preamble_command,
     consume_usepackage_preamble_command, is_supported_bibliography_preamble_command,
+};
+use ok_v0_extract_preamble_metadata::{
+    consume_meta_preamble_command, consume_renewcommand_and_preamble_command,
     is_supported_meta_preamble_command,
 };
 use ok_v0_extract_preamble_page_style::consume_index_page_style_preamble_command;
@@ -139,8 +144,19 @@ pub(crate) fn extract_strict_ok_text_body_v0(tokens: &[TokenV0]) -> Option<Vec<u
                     index = next_index;
                     continue;
                 }
-                index = consume_sectioning_toc_preamble_command(tokens, index, &mut title_state)?;
-                continue;
+                if let Some(next_index) =
+                    consume_sectioning_toc_preamble_command(tokens, index, &mut title_state)
+                {
+                    index = next_index;
+                    continue;
+                }
+                if let Some(next_index) =
+                    consume_renewcommand_and_preamble_command(tokens, index, &mut title_state)
+                {
+                    index = next_index;
+                    continue;
+                }
+                return None;
             }
             Some(TokenV0::ControlSeq(name))
                 if matches!(name.as_slice(), b"setcounter" | b"addto") =>
