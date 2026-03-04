@@ -462,13 +462,17 @@ fn consume_declare_text_command_preamble_command(tokens: &[TokenV0], index: usiz
     Some(skip_spaces(tokens, cursor))
 }
 
-fn consume_provide_text_command_default_preamble_command(
+fn consume_text_command_default_preamble_command(
     tokens: &[TokenV0],
     index: usize,
 ) -> Option<usize> {
     if !matches!(
         tokens.get(index),
-        Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"ProvideTextCommandDefault"
+        Some(TokenV0::ControlSeq(name))
+            if matches!(
+                name.as_slice(),
+                b"ProvideTextCommandDefault" | b"DeclareTextCommandDefault"
+            )
     ) {
         return None;
     }
@@ -675,9 +679,12 @@ pub(crate) fn extract_strict_ok_text_body_v0(tokens: &[TokenV0]) -> Option<Vec<u
                 continue;
             }
             Some(TokenV0::ControlSeq(name))
-                if name.as_slice() == b"ProvideTextCommandDefault" =>
+                if matches!(
+                    name.as_slice(),
+                    b"ProvideTextCommandDefault" | b"DeclareTextCommandDefault"
+                ) =>
             {
-                index = consume_provide_text_command_default_preamble_command(tokens, index)?;
+                index = consume_text_command_default_preamble_command(tokens, index)?;
                 continue;
             }
             Some(TokenV0::ControlSeq(name))
