@@ -332,26 +332,24 @@ fn normalize_punctuation_spacing_v0(body: &[u8]) -> Vec<u8> {
     while index < body.len() {
         let byte = body[index];
         out.push(byte);
+        index += 1;
         if !is_punctuation_spacing_target_v0(byte) {
-            index += 1;
             continue;
         }
 
-        let mut cursor = index + 1;
-        if cursor >= body.len() || !is_spacing_or_newline_v0(body[cursor]) {
-            index += 1;
+        if index >= body.len() || !is_spacing_or_newline_v0(body[index]) {
             continue;
         }
 
         let mut saw_space = false;
         let mut newline_count = 0usize;
-        while cursor < body.len() && is_spacing_or_newline_v0(body[cursor]) {
-            match body[cursor] {
+        while index < body.len() && is_spacing_or_newline_v0(body[index]) {
+            match body[index] {
                 b' ' => saw_space = true,
                 NEWLINE_MARKER_V0 => newline_count += 1,
                 _ => {}
             }
-            cursor += 1;
+            index += 1;
         }
 
         if newline_count >= 2 {
@@ -359,11 +357,9 @@ fn normalize_punctuation_spacing_v0(body: &[u8]) -> Vec<u8> {
             out.push(NEWLINE_MARKER_V0);
         } else if newline_count == 1 {
             out.push(NEWLINE_MARKER_V0);
-        } else if saw_space && cursor < body.len() && body[cursor] != PAGE_BREAK_MARKER_V0 {
+        } else if saw_space && index < body.len() && body[index] != PAGE_BREAK_MARKER_V0 {
             out.push(b' ');
         }
-
-        index = cursor;
     }
 
     out

@@ -121,6 +121,15 @@ fn typeset_minimal_punctuation_does_not_cross_paragraph_break() {
 }
 
 #[test]
+fn typeset_minimal_punctuation_collapses_following_spaces_to_one() {
+    let main = b"\\documentclass{article}\\begin{document}Hello,    world.\\end{document}";
+    let body = extract_typeset_body(main);
+    let text = String::from_utf8(body).expect("body should be valid utf8");
+    assert!(text.contains("Hello, world."), "body={text:?}");
+    assert!(!text.contains("Hello,  world."), "body={text:?}");
+}
+
+#[test]
 fn typeset_minimal_double_backslash_emits_hard_newline() {
     let main = b"\\documentclass{article}\\begin{document}Hello\\\\world.\\end{document}";
     let lines = layout_lines_bytes(main);
