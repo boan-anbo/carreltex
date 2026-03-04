@@ -11,6 +11,8 @@ use super::ok_v0_title_state::OkTitleStateV0;
 
 #[path = "ok_v0_extract_preamble.rs"]
 mod ok_v0_extract_preamble;
+#[path = "ok_v0_extract_preamble_page_style.rs"]
+mod ok_v0_extract_preamble_page_style;
 
 use ok_v0_extract_preamble::{
     consume_biblatex_resource_preamble_command, consume_bibliography_preamble_command,
@@ -28,12 +30,14 @@ use ok_v0_extract_preamble::{
     consume_length_counter_preamble_command, consume_mark_preamble_command,
     consume_hyperref_preamble_command, consume_float_listof_preamble_command,
     consume_setuptoc_preamble_command, consume_koma_config_preamble_command,
-    consume_language_decl_preamble_command, consume_index_page_style_preamble_command,
+    consume_language_decl_preamble_command,
+    consume_fancyhdr_preamble_command,
     consume_symbol_font_setter_preamble_command, consume_text_command_default_preamble_command,
     consume_text_decl_bundle_preamble_command, consume_theorem_preamble_command,
     consume_usepackage_preamble_command, is_supported_bibliography_preamble_command,
     is_supported_meta_preamble_command,
 };
+use ok_v0_extract_preamble_page_style::consume_index_page_style_preamble_command;
 
 pub(crate) fn extract_strict_ok_text_body_v0(tokens: &[TokenV0]) -> Option<Vec<u8>> {
     let mut index = 0usize;
@@ -168,6 +172,15 @@ pub(crate) fn extract_strict_ok_text_body_v0(tokens: &[TokenV0]) -> Option<Vec<u
                 ) =>
             {
                 index = consume_koma_config_preamble_command(tokens, index)?;
+                continue;
+            }
+            Some(TokenV0::ControlSeq(name))
+                if matches!(
+                    name.as_slice(),
+                    b"fancyhf" | b"fancyhead" | b"fancyfoot" | b"fancypagestyle"
+                ) =>
+            {
+                index = consume_fancyhdr_preamble_command(tokens, index)?;
                 continue;
             }
             Some(TokenV0::ControlSeq(name))

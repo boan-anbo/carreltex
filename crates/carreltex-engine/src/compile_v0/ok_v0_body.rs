@@ -270,7 +270,7 @@ pub(super) fn consume_char_space_nested_group_v0(tokens: &[TokenV0], index: usiz
     Some(next_index)
 }
 
-fn consume_balanced_group_bounds_v0(
+pub(super) fn consume_balanced_group_bounds_v0(
     tokens: &[TokenV0],
     index: usize,
     depth_cap: usize,
