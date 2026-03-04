@@ -19,6 +19,8 @@ mod ok_v0_extract_preamble_page_style;
 mod ok_v0_extract_preamble_sectioning_toc;
 #[path = "ok_v0_extract_preamble_caption_footnote.rs"]
 mod ok_v0_extract_preamble_caption_footnote;
+#[path = "ok_v0_extract_preamble_caption_decls.rs"]
+mod ok_v0_extract_preamble_caption_decls;
 
 use ok_v0_extract_preamble::{
     consume_biblatex_resource_preamble_command, consume_bibliography_preamble_command,
@@ -48,6 +50,7 @@ use ok_v0_extract_preamble_metadata::{
 };
 use ok_v0_extract_preamble_page_style::consume_index_page_style_preamble_command;
 use ok_v0_extract_preamble_caption_footnote::consume_caption_footnote_preamble_command;
+use ok_v0_extract_preamble_caption_decls::consume_caption_decl_preamble_command;
 use ok_v0_extract_preamble_sectioning_toc::consume_sectioning_toc_preamble_command;
 
 pub(crate) fn extract_strict_ok_text_body_v0(tokens: &[TokenV0]) -> Option<Vec<u8>> {
@@ -137,6 +140,19 @@ pub(crate) fn extract_strict_ok_text_body_v0(tokens: &[TokenV0]) -> Option<Vec<u
                 if matches!(name.as_slice(), b"captionsetup" | b"floatname") =>
             {
                 index = consume_caption_footnote_preamble_command(tokens, index)?;
+                continue;
+            }
+            Some(TokenV0::ControlSeq(name))
+                if matches!(
+                    name.as_slice(),
+                    b"DeclareCaptionFormat"
+                        | b"DeclareCaptionLabelFormat"
+                        | b"DeclareCaptionLabelSeparator"
+                        | b"DeclareCaptionFont"
+                        | b"DeclareCaptionStyle"
+                ) =>
+            {
+                index = consume_caption_decl_preamble_command(tokens, index)?;
                 continue;
             }
             Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"renewcommand" => {
