@@ -130,6 +130,16 @@ fn typeset_minimal_punctuation_collapses_following_spaces_to_one() {
 }
 
 #[test]
+fn typeset_minimal_tex_double_quotes_normalize_to_ascii_quote() {
+    let main = b"\\documentclass{article}\\begin{document}``Hello''\\end{document}";
+    let body = extract_typeset_body(main);
+    let text = String::from_utf8(body).expect("body should be valid utf8");
+    assert!(text.contains("\"Hello\""), "body={text:?}");
+    assert!(!text.contains("``"), "body={text:?}");
+    assert!(!text.contains("''"), "body={text:?}");
+}
+
+#[test]
 fn typeset_minimal_double_backslash_emits_hard_newline() {
     let main = b"\\documentclass{article}\\begin{document}Hello\\\\world.\\end{document}";
     let lines = layout_lines_bytes(main);
