@@ -1,0 +1,51 @@
+\documentclass{article}
+
+\begin{document}
+\title{CarrelTeX OK Demo}
+\author{Alice \and Bob}
+\date{2026-03-04}
+\maketitle
+
+\section*{Text}
+Plain text. \textbf{Bold}. \emph{Emph}.
+
+\section[Short]{Markers}
+Cite: \cite{demo-key}. Citet: \citet{demo-key}.\\
+Ref: \ref{sec:markers}. Page: \pageref{sec:markers}.
+\label{sec:markers}
+
+\section*{Math stubs}
+Inline: $a+b$. Display: $$a=b$$.\\
+Ensuremath: \ensuremath{a+b}. Text-in-math: \text{abc}.
+
+\section*{Footnote + Links}
+Footnote\footnote[3]{Note text}.\\
+URL: \url{https://example.com}.\\
+Href: \href{https://example.com}{click}.
+
+\section*{Lists}
+\begin{itemize}
+\item Item one
+\item Item two
+\begin{enumerate}
+\item Nested one
+\item Nested two
+\end{enumerate}
+\end{itemize}
+
+\section*{Figure/Table stubs}
+\begin{figure}[ht]
+\includegraphics[width=1cm]{fig.png}
+\caption[Short]{Long caption}
+\end{figure}
+
+\begin{table}[ht]
+\caption{Table caption}
+\end{table}
+
+\section*{Bibliography stub}
+\begin{thebibliography}{9}
+\bibitem{demo-key} Demo entry \newblock More.
+\end{thebibliography}
+
+\end{document}

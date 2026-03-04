@@ -45,14 +45,26 @@ const setEntrypointCode = mem.callWithBytes(requestEntrypoint, 'compile_request_
 expectOk(setEntrypointCode, 'compile_request_set_entrypoint_v0(main.tex)');
 expectOk(ctx.compileRequestSetEpoch(1700000000n), 'compile_request_set_source_date_epoch_v0');
 expectOk(ctx.compileRequestSetMaxLogBytes(4096), 'compile_request_set_max_log_bytes_v0');
+expectOk(ctx.compileRequestSetOkMaxLineGlyphs(256), 'compile_request_set_ok_max_line_glyphs_v0(256)');
+expectOk(ctx.compileRequestSetOkMaxLinesPerPage(200), 'compile_request_set_ok_max_lines_per_page_v0(200)');
 
 // Make the emitted DVI v2 easier to view as a PDF:
-// - monospaced glyph cell: 6pt (typical Courier width at 10pt)
+// - monospaced glyph cell: 1pt (engine default; PDF preview can scale separately)
 // - line height: 12pt
-expectOk(ctx.compileRequestSetOkGlyphAdvanceSp(393_216), 'compile_request_set_ok_glyph_advance_sp_v0(6pt)');
+expectOk(ctx.compileRequestSetOkGlyphAdvanceSp(65_536), 'compile_request_set_ok_glyph_advance_sp_v0(1pt)');
 expectOk(ctx.compileRequestSetOkLineAdvanceSp(786_432), 'compile_request_set_ok_line_advance_sp_v0(12pt)');
 
-expectOk(ctx.compileRun(), 'compile_run_v0');
+const compileStatusCode = ctx.compileRun();
+if (compileStatusCode !== 0) {
+  const report = readCompileReportJson();
+  const logBytes = readCompileLogBytes();
+  const logText = new TextDecoder().decode(logBytes);
+  throw new Error(
+    `compile_run_v0 failed: code=${compileStatusCode} report.status=${report.status} missing_components=${JSON.stringify(
+      report.missing_components,
+    )} log_bytes=${logBytes.length} log=${JSON.stringify(logText)}`,
+  );
+}
 const report = readCompileReportJson();
 if (report.status !== 'OK') {
   throw new Error(`compile_run report.status expected OK, got ${report.status}`);
@@ -166,7 +178,8 @@ function parseDviV2TextPages(bytes) {
 }
 
 function buildPdfFromDviV2(parsed) {
-  const ptPerSp = 1 / 65536;
+  const renderScale = 6;
+  const ptPerSp = (1 / 65536) * renderScale;
   const marginPt = 72;
   const fontSizePt = 10;
   const pageWidthPt = Math.max(612, parsed.maxHSp * ptPerSp + marginPt * 2);

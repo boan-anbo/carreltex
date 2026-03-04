@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT_DIR="${CARRELTEX_WASM_DEMO_OUT_DIR:-$ROOT_DIR/target/wasm_pdf_demo}"
-FIXTURE_PATH="${CARRELTEX_WASM_DEMO_TEX:-$ROOT_DIR/scripts/wasm_smoke_js/fixtures/ok_demo_v0.tex}"
+FIXTURE_PATH="${CARRELTEX_WASM_DEMO_TEX:-$ROOT_DIR/scripts/wasm_smoke_js/fixtures/ok_demo_capabilities_v0.tex}"
 
 "$ROOT_DIR/scripts/wasm_smoke_build.sh"
 
