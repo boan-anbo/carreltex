@@ -76,6 +76,8 @@ mod ok_v0_preamble_provide_text_command_default_tests;
 #[cfg(test)]
 mod ok_v0_preamble_declare_text_command_default_tests;
 #[cfg(test)]
+mod ok_v0_preamble_declare_text_accent_default_tests;
+#[cfg(test)]
 mod ok_v0_preamble_text_symbol_accent_decls_tests;
 #[cfg(test)]
 mod ok_v0_preamble_text_composite_command_tests;
