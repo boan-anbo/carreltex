@@ -102,6 +102,8 @@ mod ok_v0_preamble_koma_meta_bundle_tests;
 #[cfg(test)]
 mod ok_v0_preamble_koma_config_bundle_tests;
 #[cfg(test)]
+mod ok_v0_preamble_upstream_audit_tests;
+#[cfg(test)]
 mod ok_v0_preamble_fancyhdr_tests;
 #[cfg(test)]
 mod ok_v0_preamble_fancyhdr_glue_tests;
