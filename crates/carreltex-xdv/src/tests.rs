@@ -7,6 +7,7 @@ use super::{
     sum_dvi_v2_positive_right3_amounts_with_layout_v0, validate_dvi_v2_text_page_matches_layout_v0,
     validate_dvi_v2_text_page_v0, validate_dvi_v2_text_page_with_layout_v0,
     write_dvi_v2_empty_page_v0, write_dvi_v2_text_page_v0,
+    write_dvi_v2_text_page_from_layout_v0,
     write_dvi_v2_text_page_with_advance_v0, write_dvi_v2_text_page_with_layout_and_wrap_v0,
     write_dvi_v2_text_page_with_layout_v0, write_dvi_v2_text_page_with_layout_wrap_and_paging_v0,
     DVI_DOWN3, DVI_EOP, DVI_FNT_DEF1, DVI_PRE, DVI_RIGHT3, DVI_TRAILER_BYTE,
@@ -181,6 +182,18 @@ fn planner_width_uses_variable_space_width_v0() {
             .collect::<Vec<_>>(),
         b"A A"
     );
+}
+
+#[test]
+fn pdf_renderer_keeps_multi_space_line_unwrapped_under_width_limit_v0() {
+    let layout =
+        plan_layout_width_v0(b"A     B", 65_536, 786_432, 300_000, 200).expect("layout plan");
+    assert_eq!(layout.pages.len(), 1);
+    assert_eq!(layout.pages[0].lines.len(), 1);
+
+    let xdv = write_dvi_v2_text_page_from_layout_v0(&layout, 786_432).expect("xdv bytes");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+    assert!(pdf.windows(b"(A     B) Tj".len()).any(|w| w == b"(A     B) Tj"));
 }
 
 #[test]
