@@ -236,7 +236,7 @@ pub(super) fn consume_ok_group_fragment_v0(
     Some(next_index)
 }
 
-fn consume_ok_group_fragment_discard_v0(
+pub(super) fn consume_ok_group_fragment_discard_v0(
     tokens: &[TokenV0],
     index: usize,
     end: usize,

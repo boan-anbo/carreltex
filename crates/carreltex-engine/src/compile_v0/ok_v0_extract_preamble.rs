@@ -2,7 +2,8 @@ use crate::tex::tokenize_v0::TokenV0;
 
 use super::super::ok_v0_body::{
     consume_bracket_options_non_empty, consume_char_space_group_non_empty,
-    consume_char_space_nested_group_non_empty_v0, consume_ok_group_fragment_v0, skip_spaces,
+    consume_char_space_nested_group_non_empty_v0, consume_ok_group_fragment_discard_v0,
+    consume_ok_group_fragment_v0, skip_spaces,
 };
 use super::super::ok_v0_title_state::OkTitleStateV0;
 
@@ -89,7 +90,20 @@ pub(super) fn consume_biblatex_resource_preamble_command(tokens: &[TokenV0], ind
 }
 
 pub(super) fn is_supported_meta_preamble_command(name: &[u8]) -> bool {
-    matches!(name, b"title" | b"author" | b"date")
+    matches!(
+        name,
+        b"title"
+            | b"author"
+            | b"date"
+            | b"subtitle"
+            | b"institute"
+            | b"affiliation"
+            | b"address"
+            | b"email"
+            | b"homepage"
+            | b"keywords"
+            | b"subject"
+    )
 }
 
 pub(super) fn is_supported_bibliography_preamble_command(name: &[u8]) -> bool {
@@ -107,17 +121,22 @@ pub(super) fn consume_meta_preamble_command(
         }
         _ => return None,
     };
-    let mut fragment = Vec::new();
-    let mut fragment_previous_was_space = false;
-    let next_index = consume_ok_group_fragment_v0(
-        tokens,
-        index + 1,
-        tokens.len(),
-        title_state,
-        &mut fragment,
-        &mut fragment_previous_was_space,
-    )?;
-    title_state.set_field(name, fragment);
+    if matches!(name, b"title" | b"author" | b"date") {
+        let mut fragment = Vec::new();
+        let mut fragment_previous_was_space = false;
+        let next_index = consume_ok_group_fragment_v0(
+            tokens,
+            index + 1,
+            tokens.len(),
+            title_state,
+            &mut fragment,
+            &mut fragment_previous_was_space,
+        )?;
+        title_state.set_field(name, fragment);
+        return Some(skip_spaces(tokens, next_index));
+    }
+    let next_index =
+        consume_ok_group_fragment_discard_v0(tokens, index + 1, tokens.len(), title_state)?;
     Some(skip_spaces(tokens, next_index))
 }
 
