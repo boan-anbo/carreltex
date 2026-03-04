@@ -167,6 +167,22 @@ pub(super) fn consume_mark_preamble_command(tokens: &[TokenV0], index: usize) ->
     }
 }
 
+pub(super) fn consume_hyperref_preamble_command(tokens: &[TokenV0], index: usize) -> Option<usize> {
+    if !matches!(
+        tokens.get(index),
+        Some(TokenV0::ControlSeq(name))
+            if matches!(
+                name.as_slice(),
+                b"pdfstringdefDisableCommands" | b"AtBeginShipout" | b"AtBeginShipoutNext"
+            )
+    ) {
+        return None;
+    }
+    let mut cursor = skip_spaces(tokens, index + 1);
+    cursor = consume_char_space_nested_group_non_empty_v0(tokens, cursor, tokens.len())?;
+    Some(skip_spaces(tokens, cursor))
+}
+
 pub(super) fn consume_language_decl_preamble_command(tokens: &[TokenV0], index: usize) -> Option<usize> {
     let name = match tokens.get(index) {
         Some(TokenV0::ControlSeq(name)) => name.as_slice(),
