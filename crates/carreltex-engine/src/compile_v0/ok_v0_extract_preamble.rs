@@ -146,7 +146,11 @@ pub(super) fn consume_length_counter_preamble_command(tokens: &[TokenV0], index:
     Some(skip_spaces(tokens, cursor))
 }
 
-fn consume_balanced_group_discard_non_empty_v0(tokens: &[TokenV0], index: usize, max_tokens: usize) -> Option<usize> {
+pub(super) fn consume_balanced_group_discard_non_empty_v0(
+    tokens: &[TokenV0],
+    index: usize,
+    max_tokens: usize,
+) -> Option<usize> {
     let (inner_start, inner_end, next_index) = consume_balanced_group_bounds_v0(
         tokens,
         skip_spaces(tokens, index),
