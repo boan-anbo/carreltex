@@ -483,6 +483,22 @@ fn consume_declare_text_composite_command_preamble_command(
     Some(skip_spaces(tokens, cursor))
 }
 
+fn consume_declare_text_composite_preamble_command(tokens: &[TokenV0], index: usize) -> Option<usize> {
+    if !matches!(
+        tokens.get(index),
+        Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"DeclareTextComposite"
+    ) {
+        return None;
+    }
+    let mut cursor = skip_spaces(tokens, index + 1);
+    cursor = consume_single_controlseq_group_v0(tokens, cursor)?;
+    cursor = skip_spaces(tokens, cursor);
+    cursor = consume_char_space_group_non_empty(tokens, cursor)?;
+    cursor = skip_spaces(tokens, cursor);
+    cursor = consume_char_space_nested_group_non_empty_v0(tokens, cursor, tokens.len())?;
+    Some(skip_spaces(tokens, cursor))
+}
+
 pub(crate) fn extract_strict_ok_text_body_v0(tokens: &[TokenV0]) -> Option<Vec<u8>> {
     let mut index = 0usize;
     if !matches!(
@@ -626,6 +642,12 @@ pub(crate) fn extract_strict_ok_text_body_v0(tokens: &[TokenV0]) -> Option<Vec<u
                 if name.as_slice() == b"DeclareTextCompositeCommand" =>
             {
                 index = consume_declare_text_composite_command_preamble_command(tokens, index)?;
+                continue;
+            }
+            Some(TokenV0::ControlSeq(name))
+                if name.as_slice() == b"DeclareTextComposite" =>
+            {
+                index = consume_declare_text_composite_preamble_command(tokens, index)?;
                 continue;
             }
             Some(TokenV0::ControlSeq(name))
