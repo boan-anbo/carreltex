@@ -25,6 +25,8 @@ mod ok_v0_extract_preamble_caption_decls;
 mod ok_v0_extract_preamble_fancyhdr_glue;
 #[path = "ok_v0_extract_preamble_biblatex_formats.rs"]
 mod ok_v0_extract_preamble_biblatex_formats;
+#[path = "ok_v0_extract_preamble_tikz_pgf.rs"]
+mod ok_v0_extract_preamble_tikz_pgf;
 
 use ok_v0_extract_preamble::{
     consume_biblatex_resource_preamble_command, consume_bibliography_preamble_command,
@@ -57,6 +59,7 @@ use ok_v0_extract_preamble_caption_footnote::consume_caption_footnote_preamble_c
 use ok_v0_extract_preamble_caption_decls::consume_caption_decl_preamble_command;
 use ok_v0_extract_preamble_fancyhdr_glue::consume_fancyhdr_glue_preamble_command;
 use ok_v0_extract_preamble_biblatex_formats::consume_biblatex_format_preamble_command;
+use ok_v0_extract_preamble_tikz_pgf::consume_tikz_pgf_preamble_command;
 use ok_v0_extract_preamble_sectioning_toc::consume_sectioning_toc_preamble_command;
 
 pub(crate) fn extract_strict_ok_text_body_v0(tokens: &[TokenV0]) -> Option<Vec<u8>> {
@@ -123,6 +126,20 @@ pub(crate) fn extract_strict_ok_text_body_v0(tokens: &[TokenV0]) -> Option<Vec<u
                 ) =>
             {
                 index = consume_biblatex_format_preamble_command(tokens, index)?;
+                continue;
+            }
+            Some(TokenV0::ControlSeq(name))
+                if matches!(
+                    name.as_slice(),
+                    b"usetikzlibrary"
+                        | b"usepgfplotslibrary"
+                        | b"tikzset"
+                        | b"pgfplotsset"
+                        | b"pgfkeys"
+                        | b"pgfkeysalso"
+                ) =>
+            {
+                index = consume_tikz_pgf_preamble_command(tokens, index)?;
                 continue;
             }
             Some(TokenV0::ControlSeq(name))
