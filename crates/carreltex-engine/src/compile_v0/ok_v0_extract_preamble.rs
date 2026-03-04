@@ -1,6 +1,7 @@
 use crate::tex::tokenize_v0::TokenV0;
 
 use super::super::ok_v0_body::{
+    consume_balanced_group_bounds_v0,
     consume_bracket_options_non_empty, consume_char_space_group_non_empty,
     consume_char_space_nested_group_non_empty_v0, consume_ok_group_fragment_discard_v0,
     consume_ok_group_fragment_v0, is_supported_ok_style_declaration_v0, skip_spaces,
@@ -145,28 +146,46 @@ pub(super) fn consume_length_counter_preamble_command(tokens: &[TokenV0], index:
     Some(skip_spaces(tokens, cursor))
 }
 
-pub(super) fn consume_index_page_style_preamble_command(tokens: &[TokenV0], index: usize) -> Option<usize> {
-    let name = match tokens.get(index) {
-        Some(TokenV0::ControlSeq(name)) => name.as_slice(),
-        _ => return None,
-    };
-    match name {
-        b"makeindex" => {
-            let mut cursor = skip_spaces(tokens, index + 1);
-            if matches!(tokens.get(cursor), Some(TokenV0::Char(b'['))) {
-                cursor = consume_bracket_options_non_empty(tokens, cursor)?;
-            }
-            Some(skip_spaces(tokens, cursor))
-        }
-        b"pagenumbering" | b"pagestyle" | b"thispagestyle" => {
-            let mut cursor = skip_spaces(tokens, index + 1);
-            if matches!(tokens.get(cursor), Some(TokenV0::BeginGroup)) {
-                cursor = consume_char_space_group_non_empty(tokens, cursor)?;
-            }
-            Some(skip_spaces(tokens, cursor))
-        }
-        _ => None,
+fn consume_balanced_group_discard_non_empty_v0(tokens: &[TokenV0], index: usize, max_tokens: usize) -> Option<usize> {
+    let (inner_start, inner_end, next_index) = consume_balanced_group_bounds_v0(
+        tokens,
+        skip_spaces(tokens, index),
+        super::super::MAX_OK_GROUP_DEPTH_V0,
+        tokens.len(),
+    )?;
+    if inner_end <= inner_start || inner_end - inner_start > max_tokens {
+        return None;
     }
+    let mut has_non_space = false;
+    for token in &tokens[inner_start..inner_end] {
+        if matches!(token, TokenV0::ControlSeq(name) if matches!(name.as_slice(), b"begin" | b"end")) {
+            return None;
+        }
+        if !matches!(token, TokenV0::Space) {
+            has_non_space = true;
+        }
+    }
+    has_non_space.then_some(skip_spaces(tokens, next_index))
+}
+
+pub(super) fn consume_fancyhdr_preamble_command(tokens: &[TokenV0], index: usize) -> Option<usize> {
+    let name = match tokens.get(index) { Some(TokenV0::ControlSeq(name)) => name.as_slice(), _ => return None };
+    if matches!(name, b"fancyhf" | b"fancyhead" | b"fancyfoot") {
+        let mut cursor = skip_spaces(tokens, index + 1);
+        if matches!(tokens.get(cursor), Some(TokenV0::Char(b'['))) {
+            cursor = consume_bracket_options_non_empty(tokens, cursor)?;
+            cursor = skip_spaces(tokens, cursor);
+        }
+        let (_, _, next_index) =
+            consume_balanced_group_bounds_v0(tokens, cursor, super::super::MAX_OK_GROUP_DEPTH_V0, tokens.len())?;
+        return Some(skip_spaces(tokens, next_index));
+    }
+    if name == b"fancypagestyle" {
+        let mut cursor = skip_spaces(tokens, index + 1);
+        cursor = consume_char_space_group_non_empty(tokens, cursor)?;
+        return consume_balanced_group_discard_non_empty_v0(tokens, cursor, 2048);
+    }
+    None
 }
 
 pub(super) fn consume_mark_preamble_command(tokens: &[TokenV0], index: usize) -> Option<usize> {
