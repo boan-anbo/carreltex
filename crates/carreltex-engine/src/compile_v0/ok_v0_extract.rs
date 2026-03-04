@@ -376,7 +376,7 @@ fn consume_math_accent_radical_decl_preamble_command(tokens: &[TokenV0], index: 
     }
 }
 
-fn consume_fontenc_decl_preamble_command(tokens: &[TokenV0], index: usize) -> Option<usize> {
+fn consume_font_decl_preamble_command(tokens: &[TokenV0], index: usize) -> Option<usize> {
     let name = match tokens.get(index) {
         Some(TokenV0::ControlSeq(name)) => name.as_slice(),
         _ => return None,
@@ -384,6 +384,11 @@ fn consume_fontenc_decl_preamble_command(tokens: &[TokenV0], index: usize) -> Op
     let arity = match name {
         b"DeclareFontEncoding" => 3usize,
         b"DeclareFontSubstitution" => 4usize,
+        b"DeclareFontFamily" => 3usize,
+        b"DeclareFontShape" => 6usize,
+        b"DeclareFontEncodingDefaults" => 2usize,
+        b"DeclareFontSeriesDefault" => 3usize,
+        b"DeclareFontShapeDefault" => 3usize,
         _ => return None,
     };
     let mut cursor = skip_spaces(tokens, index + 1);
@@ -674,9 +679,18 @@ pub(crate) fn extract_strict_ok_text_body_v0(tokens: &[TokenV0]) -> Option<Vec<u
                 continue;
             }
             Some(TokenV0::ControlSeq(name))
-                if matches!(name.as_slice(), b"DeclareFontEncoding" | b"DeclareFontSubstitution") =>
+                if matches!(
+                    name.as_slice(),
+                    b"DeclareFontEncoding"
+                        | b"DeclareFontSubstitution"
+                        | b"DeclareFontFamily"
+                        | b"DeclareFontShape"
+                        | b"DeclareFontEncodingDefaults"
+                        | b"DeclareFontSeriesDefault"
+                        | b"DeclareFontShapeDefault"
+                ) =>
             {
-                index = consume_fontenc_decl_preamble_command(tokens, index)?;
+                index = consume_font_decl_preamble_command(tokens, index)?;
                 continue;
             }
             Some(TokenV0::ControlSeq(name))
