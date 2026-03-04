@@ -247,6 +247,29 @@ fn consume_mathcode_delcode_preamble_command(tokens: &[TokenV0], index: usize) -
     Some(skip_spaces(tokens, cursor))
 }
 
+fn consume_math_version_sizes_preamble_command(tokens: &[TokenV0], index: usize) -> Option<usize> {
+    let name = match tokens.get(index) {
+        Some(TokenV0::ControlSeq(name)) => name.as_slice(),
+        _ => return None,
+    };
+    match name {
+        b"DeclareMathVersion" | b"mathversion" => {
+            let mut cursor = skip_spaces(tokens, index + 1);
+            cursor = consume_char_space_group_non_empty(tokens, cursor)?;
+            Some(skip_spaces(tokens, cursor))
+        }
+        b"DeclareMathSizes" => {
+            let mut cursor = skip_spaces(tokens, index + 1);
+            for _ in 0..4 {
+                cursor = consume_char_space_group_non_empty(tokens, cursor)?;
+                cursor = skip_spaces(tokens, cursor);
+            }
+            Some(cursor)
+        }
+        _ => None,
+    }
+}
+
 fn consume_single_controlseq_group_v0(tokens: &[TokenV0], index: usize) -> Option<usize> {
     let mut cursor = skip_spaces(tokens, index);
     if !matches!(tokens.get(cursor), Some(TokenV0::BeginGroup)) {
@@ -679,6 +702,15 @@ pub(crate) fn extract_strict_ok_text_body_v0(tokens: &[TokenV0]) -> Option<Vec<u
                 if matches!(name.as_slice(), b"mathcode" | b"delcode") =>
             {
                 index = consume_mathcode_delcode_preamble_command(tokens, index)?;
+                continue;
+            }
+            Some(TokenV0::ControlSeq(name))
+                if matches!(
+                    name.as_slice(),
+                    b"DeclareMathVersion" | b"mathversion" | b"DeclareMathSizes"
+                ) =>
+            {
+                index = consume_math_version_sizes_preamble_command(tokens, index)?;
                 continue;
             }
             Some(TokenV0::ControlSeq(name))
