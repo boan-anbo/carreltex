@@ -145,6 +145,30 @@ pub(super) fn consume_length_counter_preamble_command(tokens: &[TokenV0], index:
     Some(skip_spaces(tokens, cursor))
 }
 
+pub(super) fn consume_index_page_style_preamble_command(tokens: &[TokenV0], index: usize) -> Option<usize> {
+    let name = match tokens.get(index) {
+        Some(TokenV0::ControlSeq(name)) => name.as_slice(),
+        _ => return None,
+    };
+    match name {
+        b"makeindex" => {
+            let mut cursor = skip_spaces(tokens, index + 1);
+            if matches!(tokens.get(cursor), Some(TokenV0::Char(b'['))) {
+                cursor = consume_bracket_options_non_empty(tokens, cursor)?;
+            }
+            Some(skip_spaces(tokens, cursor))
+        }
+        b"pagenumbering" | b"pagestyle" | b"thispagestyle" => {
+            let mut cursor = skip_spaces(tokens, index + 1);
+            if matches!(tokens.get(cursor), Some(TokenV0::BeginGroup)) {
+                cursor = consume_char_space_group_non_empty(tokens, cursor)?;
+            }
+            Some(skip_spaces(tokens, cursor))
+        }
+        _ => None,
+    }
+}
+
 pub(super) fn consume_mark_preamble_command(tokens: &[TokenV0], index: usize) -> Option<usize> {
     let name = match tokens.get(index) {
         Some(TokenV0::ControlSeq(name)) => name.as_slice(),

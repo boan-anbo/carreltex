@@ -2,6 +2,7 @@ use crate::tex::tokenize_v0::TokenV0;
 
 use super::ok_v0_body::{
     consume_bracket_options_non_empty, consume_group_literal, consume_ok_body_token_v0,
+    consume_ok_group_fragment_discard_v0,
     is_supported_ok_style_declaration_v0, skip_spaces,
 };
 use super::ok_v0_lists::ListStateV0;
@@ -27,7 +28,7 @@ use ok_v0_extract_preamble::{
     consume_length_counter_preamble_command, consume_mark_preamble_command,
     consume_hyperref_preamble_command, consume_float_listof_preamble_command,
     consume_setuptoc_preamble_command, consume_koma_config_preamble_command,
-    consume_language_decl_preamble_command,
+    consume_language_decl_preamble_command, consume_index_page_style_preamble_command,
     consume_symbol_font_setter_preamble_command, consume_text_command_default_preamble_command,
     consume_text_decl_bundle_preamble_command, consume_theorem_preamble_command,
     consume_usepackage_preamble_command, is_supported_bibliography_preamble_command,
@@ -345,6 +346,18 @@ pub(crate) fn extract_strict_ok_text_body_v0(tokens: &[TokenV0]) -> Option<Vec<u
             Some(TokenV0::ControlSeq(name))
                 if matches!(
                     name.as_slice(),
+                    b"makeindex"
+                        | b"pagenumbering"
+                        | b"pagestyle"
+                        | b"thispagestyle"
+                ) =>
+            {
+                index = consume_index_page_style_preamble_command(tokens, index)?;
+                continue;
+            }
+            Some(TokenV0::ControlSeq(name))
+                if matches!(
+                    name.as_slice(),
                     b"makeatletter"
                         | b"makeatother"
                         | b"ExplSyntaxOn"
@@ -364,13 +377,9 @@ pub(crate) fn extract_strict_ok_text_body_v0(tokens: &[TokenV0]) -> Option<Vec<u
             Some(TokenV0::ControlSeq(name))
                 if matches!(
                     name.as_slice(),
-                    b"makeindex"
-                        | b"frontmatter"
+                    b"frontmatter"
                         | b"mainmatter"
                         | b"backmatter"
-                        | b"pagenumbering"
-                        | b"pagestyle"
-                        | b"thispagestyle"
                 ) =>
             {
                 index += 1;
@@ -419,6 +428,20 @@ pub(crate) fn extract_strict_ok_text_body_v0(tokens: &[TokenV0]) -> Option<Vec<u
             && consume_group_literal(tokens, skip_spaces(tokens, index + 1), b"document").is_some()
         {
             break;
+        }
+        if matches!(
+            tokens.get(index),
+            Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"index"
+        ) {
+            index = consume_ok_group_fragment_discard_v0(tokens, index + 1, tokens.len(), &mut title_state)?;
+            continue;
+        }
+        if matches!(
+            tokens.get(index),
+            Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"printindex"
+        ) {
+            index += 1;
+            continue;
         }
         index = consume_ok_body_token_v0(
             tokens,
