@@ -259,6 +259,26 @@ fn consume_math_operator_preamble_command(tokens: &[TokenV0], index: usize) -> O
     Some(skip_spaces(tokens, cursor))
 }
 
+fn consume_math_alphabet_decl_preamble_command(tokens: &[TokenV0], index: usize) -> Option<usize> {
+    let name = match tokens.get(index) {
+        Some(TokenV0::ControlSeq(name)) => name.as_slice(),
+        _ => return None,
+    };
+    let trailing_arity = match name {
+        b"DeclareMathAlphabet" => 4usize,
+        b"SetMathAlphabet" => 5usize,
+        _ => return None,
+    };
+    let mut cursor = skip_spaces(tokens, index + 1);
+    cursor = consume_single_controlseq_group_v0(tokens, cursor)?;
+    cursor = skip_spaces(tokens, cursor);
+    for _ in 0..trailing_arity {
+        cursor = consume_char_space_group_non_empty(tokens, cursor)?;
+        cursor = skip_spaces(tokens, cursor);
+    }
+    Some(cursor)
+}
+
 pub(crate) fn extract_strict_ok_text_body_v0(tokens: &[TokenV0]) -> Option<Vec<u8>> {
     let mut index = 0usize;
     if !matches!(
@@ -345,6 +365,12 @@ pub(crate) fn extract_strict_ok_text_body_v0(tokens: &[TokenV0]) -> Option<Vec<u
                 if name.as_slice() == b"DeclareMathOperator" =>
             {
                 index = consume_math_operator_preamble_command(tokens, index)?;
+                continue;
+            }
+            Some(TokenV0::ControlSeq(name))
+                if matches!(name.as_slice(), b"DeclareMathAlphabet" | b"SetMathAlphabet") =>
+            {
+                index = consume_math_alphabet_decl_preamble_command(tokens, index)?;
                 continue;
             }
             Some(TokenV0::ControlSeq(name))
