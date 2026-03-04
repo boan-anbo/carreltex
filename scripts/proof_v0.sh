@@ -47,12 +47,18 @@ if [[ "$VERBOSE" == "1" ]]; then
   cargo test --manifest-path "$ROOT_DIR/crates/carreltex-core/Cargo.toml"
   cargo test --manifest-path "$ROOT_DIR/crates/carreltex-engine/Cargo.toml"
   "$ROOT_DIR/scripts/proof_wasm_smoke.sh"
+  if [[ "${PROOF_V0_WASM_PDF:-0}" == "1" ]]; then
+    "$ROOT_DIR/scripts/proof_wasm_pdf.sh"
+  fi
   "$ROOT_DIR/scripts/ledger_check.sh" "$ROOT_DIR/docs/LEDGER.md"
 else
   run_step_quiet "loc_guard" "quiet" "$ROOT_DIR/scripts/loc_guard.sh"
   run_step_quiet "core tests" "quiet" cargo test --manifest-path "$ROOT_DIR/crates/carreltex-core/Cargo.toml"
   run_step_quiet "engine tests" "quiet" cargo test --manifest-path "$ROOT_DIR/crates/carreltex-engine/Cargo.toml"
   run_step_quiet "wasm smoke" "passthrough_pass_line" "$ROOT_DIR/scripts/proof_wasm_smoke.sh"
+  if [[ "${PROOF_V0_WASM_PDF:-0}" == "1" ]]; then
+    run_step_quiet "wasm->pdf smoke" "passthrough_pass_line" "$ROOT_DIR/scripts/proof_wasm_pdf.sh"
+  fi
   run_step_quiet "ledger check" "passthrough_pass_line" "$ROOT_DIR/scripts/ledger_check.sh" "$ROOT_DIR/docs/LEDGER.md"
 fi
 
