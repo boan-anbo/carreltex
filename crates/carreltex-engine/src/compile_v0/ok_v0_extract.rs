@@ -466,21 +466,29 @@ fn consume_text_command_default_preamble_command(
     tokens: &[TokenV0],
     index: usize,
 ) -> Option<usize> {
+    let name = match tokens.get(index) {
+        Some(TokenV0::ControlSeq(name)) => name.as_slice(),
+        _ => return None,
+    };
     if !matches!(
-        tokens.get(index),
-        Some(TokenV0::ControlSeq(name))
-            if matches!(
-                name.as_slice(),
-                b"ProvideTextCommandDefault"
-                    | b"DeclareTextCommandDefault"
-                    | b"DeclareTextCompositeDefault"
-            )
+        name,
+        b"ProvideTextCommandDefault" | b"DeclareTextCommandDefault" | b"DeclareTextCompositeDefault"
     ) {
         return None;
     }
     let mut cursor = skip_spaces(tokens, index + 1);
     cursor = consume_single_controlseq_group_v0(tokens, cursor)?;
     cursor = skip_spaces(tokens, cursor);
+    if name == b"DeclareTextCompositeDefault" {
+        if let Some(enc_end) = consume_char_space_group_non_empty(tokens, cursor) {
+            let after_enc = skip_spaces(tokens, enc_end);
+            if matches!(tokens.get(after_enc), Some(TokenV0::BeginGroup)) {
+                cursor =
+                    consume_char_space_nested_group_non_empty_v0(tokens, after_enc, tokens.len())?;
+                return Some(skip_spaces(tokens, cursor));
+            }
+        }
+    }
     cursor = consume_char_space_nested_group_non_empty_v0(tokens, cursor, tokens.len())?;
     Some(skip_spaces(tokens, cursor))
 }
