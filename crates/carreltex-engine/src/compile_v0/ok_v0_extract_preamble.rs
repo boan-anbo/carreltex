@@ -100,6 +100,30 @@ pub(super) fn consume_biblatex_resource_preamble_command(tokens: &[TokenV0], ind
     }
 }
 
+pub(super) fn consume_language_decl_preamble_command(tokens: &[TokenV0], index: usize) -> Option<usize> {
+    let name = match tokens.get(index) {
+        Some(TokenV0::ControlSeq(name)) => name.as_slice(),
+        _ => return None,
+    };
+    match name {
+        b"selectlanguage" => {
+            let mut cursor = skip_spaces(tokens, index + 1);
+            cursor = consume_char_space_group_non_empty(tokens, cursor)?;
+            Some(skip_spaces(tokens, cursor))
+        }
+        b"setmainlanguage" | b"setdefaultlanguage" | b"setotherlanguage" => {
+            let mut cursor = skip_spaces(tokens, index + 1);
+            if matches!(tokens.get(cursor), Some(TokenV0::Char(b'['))) {
+                cursor = consume_bracket_options_non_empty(tokens, cursor)?;
+                cursor = skip_spaces(tokens, cursor);
+            }
+            cursor = consume_char_space_group_non_empty(tokens, cursor)?;
+            Some(skip_spaces(tokens, cursor))
+        }
+        _ => None,
+    }
+}
+
 pub(super) fn is_supported_meta_preamble_command(name: &[u8]) -> bool {
     matches!(
         name,
