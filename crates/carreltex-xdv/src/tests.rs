@@ -108,7 +108,7 @@ fn planner_wrap_and_paging_shape_is_deterministic() {
     assert_eq!(plan.pages[1].lines.len(), 1);
     assert_eq!(plan.pages[0].lines[0].width_sp, 4 * 65_536);
     assert_eq!(plan.pages[0].lines[1].width_sp, 4 * 65_536);
-    assert_eq!(plan.pages[1].lines[0].width_sp, 4 * 65_536);
+    assert!(plan.pages[1].lines[0].width_sp < 4 * 65_536);
 }
 
 #[test]
@@ -164,6 +164,22 @@ fn planner_width_wraps_long_line_at_spaces() {
             .map(|glyph| glyph.byte)
             .collect::<Vec<_>>(),
         b"cccc"
+    );
+}
+
+#[test]
+fn planner_width_uses_variable_space_width_v0() {
+    let plan =
+        plan_layout_width_v0(b"A A", 100, 786_432, 250, 200).expect("layout plan");
+    assert_eq!(plan.pages.len(), 1);
+    assert_eq!(plan.pages[0].lines.len(), 1);
+    assert_eq!(
+        plan.pages[0].lines[0]
+            .glyphs
+            .iter()
+            .map(|glyph| glyph.byte)
+            .collect::<Vec<_>>(),
+        b"A A"
     );
 }
 

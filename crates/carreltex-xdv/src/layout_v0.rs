@@ -27,21 +27,30 @@ fn is_supported_text_byte_v0(byte: u8) -> bool {
     (0x20..=0x7e).contains(&byte)
 }
 
+fn glyph_width_ratio_v0(byte: u8) -> (u32, u32) {
+    match byte {
+        b' ' => (1, 2),
+        b'.' | b',' | b';' | b':' | b'!' | b'?' | b'\'' | b'"' => (1, 2),
+        b'i' | b'l' | b'I' | b'|' => (1, 2),
+        b'm' | b'w' | b'M' | b'W' => (3, 2),
+        _ => (1, 1),
+    }
+}
+
 pub(crate) fn glyph_width_sp_v0(byte: u8, glyph_advance_sp: i32) -> Option<i32> {
     if glyph_advance_sp <= 0 {
         return None;
     }
-    let half_em = glyph_advance_sp.checked_add(1)?.checked_div(2)?;
-    let one_and_half_em = glyph_advance_sp.checked_add(half_em)?;
-    let width = match byte {
-        b' ' | b'.' | b'i' => half_em,
-        b'm' | b'W' => one_and_half_em,
-        _ => glyph_advance_sp,
-    };
+    let (num, den) = glyph_width_ratio_v0(byte);
+    let glyph_advance = i64::from(glyph_advance_sp);
+    let width = (glyph_advance
+        .checked_mul(i64::from(num))?
+        .checked_add(i64::from(den / 2))?)
+    .checked_div(i64::from(den))?;
     if !(1..=8_388_607).contains(&width) {
         return None;
     }
-    Some(width)
+    i32::try_from(width).ok()
 }
 
 pub fn recompute_line_width_sp_v0(line: &LinePlanV0) -> Option<u32> {
