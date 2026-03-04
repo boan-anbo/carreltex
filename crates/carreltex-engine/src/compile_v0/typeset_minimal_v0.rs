@@ -3,6 +3,7 @@ use crate::tex::tokenize_v0::TokenV0;
 pub(crate) const TYPESET_MINIMAL_MAX_LINE_GLYPHS_V0: usize = 56;
 
 const NEWLINE_MARKER_V0: u8 = 0x0a;
+const CARRELPAR_MARKER_CONTROL_V0: &[u8] = b"carrelpar";
 const ITALIC_START_MARKER_V0: u8 = b'[';
 const ITALIC_END_MARKER_V0: u8 = b']';
 const BOLD_START_MARKER_V0: u8 = b'{';
@@ -40,6 +41,157 @@ fn push_newline(out: &mut Vec<u8>) {
     if !matches!(out.last().copied(), Some(NEWLINE_MARKER_V0)) {
         out.push(NEWLINE_MARKER_V0);
     }
+}
+
+fn push_paragraph_break(out: &mut Vec<u8>) {
+    trim_trailing_spaces(out);
+    if out.is_empty() {
+        return;
+    }
+    if out.ends_with(&[NEWLINE_MARKER_V0, NEWLINE_MARKER_V0]) {
+        return;
+    }
+    if !out.ends_with(&[NEWLINE_MARKER_V0]) {
+        out.push(NEWLINE_MARKER_V0);
+    }
+    out.push(NEWLINE_MARKER_V0);
+}
+
+fn is_horizontal_space_v0(byte: u8) -> bool {
+    matches!(byte, b' ' | b'\t')
+}
+
+fn trim_horizontal_space_bytes_v0(mut bytes: &[u8]) -> &[u8] {
+    while matches!(bytes.first(), Some(byte) if is_horizontal_space_v0(*byte)) {
+        bytes = &bytes[1..];
+    }
+    while matches!(bytes.last(), Some(byte) if is_horizontal_space_v0(*byte)) {
+        bytes = &bytes[..bytes.len() - 1];
+    }
+    bytes
+}
+
+fn strip_comment_unescaped_v0(line: &[u8]) -> &[u8] {
+    let mut index = 0usize;
+    while index < line.len() {
+        if line[index] == b'%' {
+            let mut backslashes = 0usize;
+            let mut cursor = index;
+            while cursor > 0 && line[cursor - 1] == b'\\' {
+                backslashes += 1;
+                cursor -= 1;
+            }
+            if backslashes % 2 == 0 {
+                return &line[..index];
+            }
+        }
+        index += 1;
+    }
+    line
+}
+
+fn is_ascii_letter_v0(byte: u8) -> bool {
+    byte.is_ascii_alphabetic()
+}
+
+fn rewrite_explicit_par_controls_v0(line: &[u8]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(line.len());
+    let mut index = 0usize;
+    while index < line.len() {
+        if line[index] != b'\\' {
+            out.push(line[index]);
+            index += 1;
+            continue;
+        }
+        let control_start = index + 1;
+        if control_start >= line.len() || !is_ascii_letter_v0(line[control_start]) {
+            out.push(line[index]);
+            index += 1;
+            continue;
+        }
+        let mut control_end = control_start;
+        while control_end < line.len() && is_ascii_letter_v0(line[control_end]) {
+            control_end += 1;
+        }
+        let control_name = &line[control_start..control_end];
+        if control_name == b"par" {
+            out.extend_from_slice(b"\\carrelpar");
+        } else {
+            out.extend_from_slice(&line[index..control_end]);
+        }
+        index = control_end;
+    }
+    out
+}
+
+pub(crate) fn preprocess_typeset_minimal_source_v0(source: &[u8]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(source.len() + 16);
+    let mut cursor = 0usize;
+    let mut in_body = false;
+    let mut pending_paragraph_break = false;
+
+    while cursor <= source.len() {
+        let line_start = cursor;
+        while cursor < source.len() && source[cursor] != b'\n' && source[cursor] != b'\r' {
+            cursor += 1;
+        }
+        let line = &source[line_start..cursor];
+        let had_newline = cursor < source.len();
+        if had_newline {
+            if source[cursor] == b'\r' && cursor + 1 < source.len() && source[cursor + 1] == b'\n' {
+                cursor += 2;
+            } else {
+                cursor += 1;
+            }
+        } else {
+            cursor += 1;
+        }
+
+        let line_no_comment = strip_comment_unescaped_v0(line);
+        let trimmed = trim_horizontal_space_bytes_v0(line_no_comment);
+
+        if !in_body {
+            out.extend_from_slice(line);
+            if had_newline {
+                out.push(b'\n');
+            }
+            if trimmed == b"\\begin{document}" {
+                in_body = true;
+            }
+            continue;
+        }
+
+        if trimmed == b"\\end{document}" {
+            pending_paragraph_break = false;
+            out.extend_from_slice(line);
+            if had_newline {
+                out.push(b'\n');
+            }
+            in_body = false;
+            continue;
+        }
+
+        if trimmed.is_empty() {
+            pending_paragraph_break = true;
+            continue;
+        }
+
+        if pending_paragraph_break {
+            out.extend_from_slice(b"\\carrelpar ");
+            pending_paragraph_break = false;
+        }
+        let rewritten = rewrite_explicit_par_controls_v0(line);
+        out.extend_from_slice(&rewritten);
+        if had_newline {
+            out.push(b'\n');
+        }
+    }
+
+    out
+}
+
+pub(crate) fn normalize_typeset_minimal_tokens_v0(tokens: &[TokenV0]) -> Vec<TokenV0> {
+    tokens.to_vec()
 }
 
 fn consume_group_bounds(tokens: &[TokenV0], index: usize) -> Option<(usize, usize, usize)> {
@@ -313,9 +465,8 @@ pub(crate) fn extract_typeset_minimal_text_body_v0(tokens: &[TokenV0]) -> Option
                 index = consume_document_env_command_v0(tokens, index, b"end")?;
                 break;
             }
-            Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"par" => {
-                push_newline(&mut body);
-                push_newline(&mut body);
+            Some(TokenV0::ControlSeq(name)) if name.as_slice() == CARRELPAR_MARKER_CONTROL_V0 => {
+                push_paragraph_break(&mut body);
                 index += 1;
             }
             Some(_) => {
