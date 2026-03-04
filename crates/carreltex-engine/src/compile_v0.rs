@@ -66,6 +66,8 @@ mod ok_v0_preamble_fontenc_decls_tests;
 #[cfg(test)]
 mod ok_v0_preamble_font_decl_bundle_tests;
 #[cfg(test)]
+mod ok_v0_preamble_font_decl_bundle2_tests;
+#[cfg(test)]
 mod ok_v0_preamble_declare_robust_command_tests;
 #[cfg(test)]
 mod ok_v0_preamble_declare_text_font_command_tests;

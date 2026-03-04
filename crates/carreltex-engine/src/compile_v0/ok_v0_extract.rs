@@ -389,6 +389,7 @@ fn consume_font_decl_preamble_command(tokens: &[TokenV0], index: usize) -> Optio
         b"DeclareFontEncodingDefaults" => 2usize,
         b"DeclareFontSeriesDefault" => 3usize,
         b"DeclareFontShapeDefault" => 3usize,
+        b"DeclareFontFamilyDefault" => 2usize,
         _ => return None,
     };
     let mut cursor = skip_spaces(tokens, index + 1);
@@ -688,6 +689,7 @@ pub(crate) fn extract_strict_ok_text_body_v0(tokens: &[TokenV0]) -> Option<Vec<u
                         | b"DeclareFontEncodingDefaults"
                         | b"DeclareFontSeriesDefault"
                         | b"DeclareFontShapeDefault"
+                        | b"DeclareFontFamilyDefault"
                 ) =>
             {
                 index = consume_font_decl_preamble_command(tokens, index)?;
