@@ -294,6 +294,21 @@ fn pdf_renderer_emits_valid_header_and_contains_text() {
 }
 
 #[test]
+fn pdf_renderer_uses_helvetica_base_fonts_v0() {
+    let bytes = write_dvi_v2_text_page_v0(b"A [B] {C}").expect("writer should accept text");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&bytes).expect("pdf render");
+    assert!(pdf.windows(b"/Helvetica".len()).any(|w| w == b"/Helvetica"));
+    assert!(
+        pdf.windows(b"/Helvetica-Oblique".len())
+            .any(|w| w == b"/Helvetica-Oblique")
+    );
+    assert!(
+        pdf.windows(b"/Helvetica-Bold".len())
+            .any(|w| w == b"/Helvetica-Bold")
+    );
+}
+
+#[test]
 fn pdf_renderer_applies_maketitle_typography_v0() {
     let demo_text =
         b"CarrelTeX Minimal Typeset Vertical Slice\nAlice\n2026-03-04\n\nBody paragraph line.";
