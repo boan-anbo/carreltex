@@ -411,6 +411,27 @@ fn normalize_tex_dashes_v0(body: &[u8]) -> Vec<u8> {
     out
 }
 
+fn normalize_tex_ellipsis_v0(body: &[u8]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(body.len());
+    let mut index = 0usize;
+
+    while index < body.len() {
+        if index + 2 < body.len()
+            && body[index] == b'.'
+            && body[index + 1] == b'.'
+            && body[index + 2] == b'.'
+        {
+            out.extend_from_slice("…".as_bytes());
+            index += 3;
+            continue;
+        }
+        out.push(body[index]);
+        index += 1;
+    }
+
+    out
+}
+
 fn consume_fragment_token_v0(
     tokens: &[TokenV0],
     index: usize,
@@ -616,6 +637,7 @@ pub(crate) fn extract_typeset_minimal_text_body_v0(tokens: &[TokenV0]) -> Option
     body = normalize_punctuation_spacing_v0(&body);
     body = normalize_tex_double_quotes_v0(&body);
     body = normalize_tex_dashes_v0(&body);
+    body = normalize_tex_ellipsis_v0(&body);
     trim_trailing_spaces(&mut body);
     while matches!(body.last().copied(), Some(NEWLINE_MARKER_V0)) {
         body.pop();
