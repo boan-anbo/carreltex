@@ -45,7 +45,7 @@ fn typeset_minimal_subset_compiles_ok() {
 
 #[test]
 fn typeset_minimal_rejects_unsupported_control_sequence() {
-    let main = b"\\documentclass{article}\\begin{document}\\section{X}\\end{document}";
+    let main = b"\\documentclass{article}\\begin{document}\\foo{X}\\end{document}";
     let result = compile_typeset(main);
     assert_eq!(result.status, CompileStatus::NotImplemented);
     assert!(result.main_xdv_bytes.is_empty());
@@ -88,6 +88,26 @@ fn typeset_minimal_author_and_is_single_newline() {
     let text = String::from_utf8(body).expect("body should be valid utf8");
     assert!(!text.contains("Alice\n\nBob"), "body={text:?}");
     assert!(text.contains("Alice\nBob"), "body={text:?}");
+}
+
+#[test]
+fn typeset_minimal_headings_emit_bold_with_paragraph_breaks() {
+    let main = b"\\documentclass{article}\\begin{document}Before.\\section{Intro}\\subsection{A \\emph{B}}After.\\end{document}";
+    let body = extract_typeset_body(main);
+    let text = String::from_utf8(body).expect("body should be valid utf8");
+    assert!(
+        text.contains("Before.\n\n{Intro}\n\n{A [B]}\n\nAfter."),
+        "body={text:?}"
+    );
+}
+
+#[test]
+fn typeset_minimal_heading_at_start_has_no_leading_blank_lines() {
+    let main =
+        b"\\documentclass{article}\\begin{document}\\paragraph{Lead in}Body text.\\end{document}";
+    let body = extract_typeset_body(main);
+    let text = String::from_utf8(body).expect("body should be valid utf8");
+    assert!(text.starts_with("{Lead in}\n\nBody text."), "body={text:?}");
 }
 
 #[test]
