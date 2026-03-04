@@ -56,3 +56,17 @@ fn declare_text_composite_default_bad_first_arg_shape_is_not_implemented() {
     assert_eq!(result.status, CompileStatus::NotImplemented);
     assert!(result.main_xdv_bytes.is_empty());
 }
+
+#[test]
+fn declare_text_composite_default_with_encoding_preamble_is_ok_and_output_matches_without_it() {
+    let with_decl = compile_main(
+        b"\\documentclass{article}\\DeclareTextCompositeDefault{\\Foo}{T1}{ABC}\\begin{document}HelloWorld\\end{document}",
+    );
+    let without_decl =
+        compile_main(b"\\documentclass{article}\\begin{document}HelloWorld\\end{document}");
+    assert_eq!(with_decl.status, CompileStatus::Ok);
+    assert_eq!(without_decl.status, CompileStatus::Ok);
+    assert!(with_decl.log_bytes.is_empty());
+    assert!(validate_dvi_v2_text_page_v0(&with_decl.main_xdv_bytes));
+    assert_eq!(right3_positive_total(&with_decl), right3_positive_total(&without_decl));
+}
