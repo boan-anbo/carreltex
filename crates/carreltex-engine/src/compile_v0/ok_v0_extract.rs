@@ -218,6 +218,47 @@ fn consume_doc_hook_preamble_command(tokens: &[TokenV0], index: usize) -> Option
     Some(skip_spaces(tokens, cursor))
 }
 
+fn consume_single_controlseq_group_v0(tokens: &[TokenV0], index: usize) -> Option<usize> {
+    let mut cursor = skip_spaces(tokens, index);
+    if !matches!(tokens.get(cursor), Some(TokenV0::BeginGroup)) {
+        return None;
+    }
+    cursor += 1;
+    let mut saw_control_seq = false;
+    loop {
+        match tokens.get(cursor)? {
+            TokenV0::EndGroup if saw_control_seq => return Some(cursor + 1),
+            TokenV0::EndGroup => return None,
+            TokenV0::Space => {
+                cursor += 1;
+            }
+            TokenV0::ControlSeq(_) if !saw_control_seq => {
+                saw_control_seq = true;
+                cursor += 1;
+            }
+            _ => return None,
+        }
+    }
+}
+
+fn consume_math_operator_preamble_command(tokens: &[TokenV0], index: usize) -> Option<usize> {
+    if !matches!(
+        tokens.get(index),
+        Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"DeclareMathOperator"
+    ) {
+        return None;
+    }
+    let mut cursor = skip_spaces(tokens, index + 1);
+    if matches!(tokens.get(cursor), Some(TokenV0::Char(b'*'))) {
+        cursor += 1;
+        cursor = skip_spaces(tokens, cursor);
+    }
+    cursor = consume_single_controlseq_group_v0(tokens, cursor)?;
+    cursor = skip_spaces(tokens, cursor);
+    cursor = consume_char_space_group_non_empty(tokens, cursor)?;
+    Some(skip_spaces(tokens, cursor))
+}
+
 pub(crate) fn extract_strict_ok_text_body_v0(tokens: &[TokenV0]) -> Option<Vec<u8>> {
     let mut index = 0usize;
     if !matches!(
@@ -298,6 +339,12 @@ pub(crate) fn extract_strict_ok_text_body_v0(tokens: &[TokenV0]) -> Option<Vec<u
                 if matches!(name.as_slice(), b"AtBeginDocument" | b"AtEndDocument") =>
             {
                 index = consume_doc_hook_preamble_command(tokens, index)?;
+                continue;
+            }
+            Some(TokenV0::ControlSeq(name))
+                if name.as_slice() == b"DeclareMathOperator" =>
+            {
+                index = consume_math_operator_preamble_command(tokens, index)?;
                 continue;
             }
             Some(TokenV0::ControlSeq(name))
