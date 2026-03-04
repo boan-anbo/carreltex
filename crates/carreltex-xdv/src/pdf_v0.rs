@@ -8,6 +8,25 @@ const PAGE_HEIGHT_PT_V0: f32 = 792.0;
 const MARGIN_PT_V0: f32 = 72.0;
 const FONT_SIZE_PT_V0: f32 = 12.0;
 const LEADING_PT_V0: f32 = 14.0;
+const ITALIC_START_MARKER_V0: u8 = b'[';
+const ITALIC_END_MARKER_V0: u8 = b']';
+const BOLD_START_MARKER_V0: u8 = b'{';
+const BOLD_END_MARKER_V0: u8 = b'}';
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum PdfTextStyleV0 {
+    Regular,
+    Italic,
+    Bold,
+}
+
+fn style_font_alias_v0(style: PdfTextStyleV0) -> &'static [u8] {
+    match style {
+        PdfTextStyleV0::Regular => b"F1",
+        PdfTextStyleV0::Italic => b"F2",
+        PdfTextStyleV0::Bold => b"F3",
+    }
+}
 
 fn infer_line_advance_sp_v0(bytes: &[u8]) -> i32 {
     const DVI_DOWN3: u8 = 160;
@@ -66,12 +85,53 @@ fn write_pdf_stream_obj(out: &mut Vec<u8>, id: u32, stream: &[u8]) -> u32 {
     write_pdf_obj(out, id, &body)
 }
 
-fn build_page_content_stream_v0(lines: &[Vec<u8>]) -> Vec<u8> {
+fn parse_styled_segments_v0(line: &[u8]) -> Option<Vec<(PdfTextStyleV0, Vec<u8>)>> {
+    let mut style_stack = Vec::<PdfTextStyleV0>::new();
+    let mut current_style = PdfTextStyleV0::Regular;
+    let mut segments = Vec::<(PdfTextStyleV0, Vec<u8>)>::new();
+
+    for &byte in line {
+        match byte {
+            ITALIC_START_MARKER_V0 => {
+                style_stack.push(current_style);
+                current_style = PdfTextStyleV0::Italic;
+            }
+            ITALIC_END_MARKER_V0 => {
+                if current_style != PdfTextStyleV0::Italic {
+                    return None;
+                }
+                current_style = style_stack.pop()?;
+            }
+            BOLD_START_MARKER_V0 => {
+                style_stack.push(current_style);
+                current_style = PdfTextStyleV0::Bold;
+            }
+            BOLD_END_MARKER_V0 => {
+                if current_style != PdfTextStyleV0::Bold {
+                    return None;
+                }
+                current_style = style_stack.pop()?;
+            }
+            _ => {
+                if let Some((style, bytes)) = segments.last_mut() {
+                    if *style == current_style {
+                        bytes.push(byte);
+                        continue;
+                    }
+                }
+                segments.push((current_style, vec![byte]));
+            }
+        }
+    }
+    if !style_stack.is_empty() {
+        return None;
+    }
+    Some(segments)
+}
+
+fn build_page_content_stream_v0(lines: &[Vec<u8>]) -> Option<Vec<u8>> {
     let mut out = Vec::new();
     out.extend_from_slice(b"BT\n");
-    out.extend_from_slice(b"/F1 ");
-    out.extend_from_slice(format!("{FONT_SIZE_PT_V0}").as_bytes());
-    out.extend_from_slice(b" Tf\n");
     out.extend_from_slice(b"0 g\n");
 
     let mut y = PAGE_HEIGHT_PT_V0 - MARGIN_PT_V0 - FONT_SIZE_PT_V0;
@@ -79,17 +139,28 @@ fn build_page_content_stream_v0(lines: &[Vec<u8>]) -> Vec<u8> {
         if y < MARGIN_PT_V0 {
             break;
         }
-        let escaped = escape_pdf_string_bytes(line);
+        let segments = parse_styled_segments_v0(line)?;
         out.extend_from_slice(b"1 0 0 1 ");
         out.extend_from_slice(format!("{:.2} {:.2} Tm ", MARGIN_PT_V0, y).as_bytes());
-        out.extend_from_slice(b"(");
-        out.extend_from_slice(&escaped);
-        out.extend_from_slice(b") Tj\n");
+        for (style, bytes) in segments {
+            if bytes.is_empty() {
+                continue;
+            }
+            let escaped = escape_pdf_string_bytes(&bytes);
+            out.extend_from_slice(b"/");
+            out.extend_from_slice(style_font_alias_v0(style));
+            out.extend_from_slice(b" ");
+            out.extend_from_slice(format!("{FONT_SIZE_PT_V0}").as_bytes());
+            out.extend_from_slice(b" Tf (");
+            out.extend_from_slice(&escaped);
+            out.extend_from_slice(b") Tj ");
+        }
+        out.extend_from_slice(b"\n");
         y -= LEADING_PT_V0;
     }
 
     out.extend_from_slice(b"ET\n");
-    out
+    Some(out)
 }
 
 fn build_pdf_for_pages_v0(pages: &[Vec<Vec<u8>>]) -> Vec<u8> {
@@ -98,11 +169,13 @@ fn build_pdf_for_pages_v0(pages: &[Vec<Vec<u8>>]) -> Vec<u8> {
     // 2: Pages
     // 3..(3+page_count-1): Page objects
     // (3+page_count)..(3+2*page_count-1): Content stream objects
-    // last: Font object
+    // last: Font objects (regular/italic/bold)
     let page_count = pages.len() as u32;
     let first_page_id = 3u32;
     let first_stream_id = first_page_id + page_count;
-    let font_id = first_stream_id + page_count;
+    let font_regular_id = first_stream_id + page_count;
+    let font_italic_id = font_regular_id + 1;
+    let font_bold_id = font_regular_id + 2;
     let pages_id = 2u32;
 
     let mut out = Vec::<u8>::new();
@@ -144,7 +217,7 @@ fn build_pdf_for_pages_v0(pages: &[Vec<Vec<u8>>]) -> Vec<u8> {
         let page_id = first_page_id + page_index;
         let stream_id = first_stream_id + page_index;
         let body = format!(
-            "<< /Type /Page /Parent {pages_id} 0 R /MediaBox [0 0 {PAGE_WIDTH_PT_V0} {PAGE_HEIGHT_PT_V0}] /Resources << /Font << /F1 {font_id} 0 R >> >> /Contents {stream_id} 0 R >>"
+            "<< /Type /Page /Parent {pages_id} 0 R /MediaBox [0 0 {PAGE_WIDTH_PT_V0} {PAGE_HEIGHT_PT_V0}] /Resources << /Font << /F1 {font_regular_id} 0 R /F2 {font_italic_id} 0 R /F3 {font_bold_id} 0 R >> >> /Contents {stream_id} 0 R >>"
         );
         offsets.push(write_pdf_obj(&mut out, page_id, body.as_bytes()));
     }
@@ -152,15 +225,28 @@ fn build_pdf_for_pages_v0(pages: &[Vec<Vec<u8>>]) -> Vec<u8> {
     // Content stream objects
     for page_index in 0..page_count {
         let stream_id = first_stream_id + page_index;
-        let stream = build_page_content_stream_v0(&pages[page_index as usize]);
+        let stream = match build_page_content_stream_v0(&pages[page_index as usize]) {
+            Some(bytes) => bytes,
+            None => return Vec::new(),
+        };
         offsets.push(write_pdf_stream_obj(&mut out, stream_id, &stream));
     }
 
-    // Font
+    // Fonts
     offsets.push(write_pdf_obj(
         &mut out,
-        font_id,
+        font_regular_id,
         b"<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>",
+    ));
+    offsets.push(write_pdf_obj(
+        &mut out,
+        font_italic_id,
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Courier-Oblique >>",
+    ));
+    offsets.push(write_pdf_obj(
+        &mut out,
+        font_bold_id,
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Courier-Bold >>",
     ));
 
     let xref_offset = out.len() as u32;
@@ -209,6 +295,9 @@ pub fn render_dvi_v2_text_page_to_pdf_v0(bytes: &[u8]) -> Option<Vec<u8>> {
     if pages.is_empty() {
         return None;
     }
-    Some(build_pdf_for_pages_v0(&pages))
+    let pdf = build_pdf_for_pages_v0(&pages);
+    if pdf.is_empty() {
+        return None;
+    }
+    Some(pdf)
 }
-

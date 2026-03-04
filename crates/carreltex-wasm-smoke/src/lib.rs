@@ -8,7 +8,7 @@ use carreltex_core::{
     EVENT_KIND_TEX_STATS_JSON_V0, MAX_LOG_BYTES_V0, MAX_TEX_STATS_JSON_BYTES_V0,
     MAX_WASM_ALLOC_BYTES_V0,
 };
-use carreltex_engine::{compile_main_v0, compile_request_v0};
+use carreltex_engine::{compile_main_typeset_minimal_v0, compile_main_v0, compile_request_v0};
 use carreltex_xdv::render_dvi_v2_text_page_to_pdf_v0;
 
 #[no_mangle]
@@ -476,6 +476,35 @@ pub extern "C" fn carreltex_wasm_compile_main_v0() -> i32 {
     };
 
     let result = compile_main_v0(&mut mount);
+    let status = store_compile_result_or_fail_closed(
+        &result.report_json,
+        &result.log_bytes,
+        &result.main_xdv_bytes,
+        &result.tex_stats_json,
+        result.status,
+        DEFAULT_COMPILE_MAIN_MAX_LOG_BYTES_V0 as usize,
+    );
+    if status == CompileStatus::InvalidInput as i32 {
+        return status;
+    }
+    if store_events_for_v0_or_fail_closed(&result.log_bytes, &result.tex_stats_json).is_err() {
+        write_report_for_status(CompileStatus::InvalidInput);
+        return CompileStatus::InvalidInput as i32;
+    }
+    status
+}
+
+#[no_mangle]
+pub extern "C" fn carreltex_wasm_compile_main_typeset_minimal_v0() -> i32 {
+    let mut mount = match mount_state().lock() {
+        Ok(guard) => guard,
+        Err(_) => {
+            write_report_for_status(CompileStatus::InvalidInput);
+            return CompileStatus::InvalidInput as i32;
+        }
+    };
+
+    let result = compile_main_typeset_minimal_v0(&mut mount);
     let status = store_compile_result_or_fail_closed(
         &result.report_json,
         &result.log_bytes,
