@@ -5,6 +5,7 @@ use super::typeset_minimal_v0::{
 };
 use crate::tex::tokenize_v0::tokenize_v0;
 use carreltex_core::{CompileStatus, Mount};
+use carreltex_xdv::parse_dvi_v2_text_page_to_layout_v0;
 
 fn compile_typeset(main: &[u8]) -> carreltex_core::CompileResultV0 {
     let mut mount = Mount::default();
@@ -75,4 +76,17 @@ fn typeset_minimal_author_and_is_single_newline() {
     let text = String::from_utf8(body).expect("body should be valid utf8");
     assert!(!text.contains("Alice\n\nBob"), "body={text:?}");
     assert!(text.contains("Alice\nBob"), "body={text:?}");
+}
+
+#[test]
+fn typeset_minimal_long_paragraph_wraps_to_multiple_lines() {
+    let main = b"\\documentclass{article}\\begin{document}This is a long paragraph that should wrap deterministically to multiple physical lines in the minimal typeset pipeline when width-based layout is enabled and the content exceeds the configured line width for the page body area.\\end{document}";
+    let result = compile_typeset(main);
+    assert_eq!(result.status, CompileStatus::Ok);
+    let layout =
+        parse_dvi_v2_text_page_to_layout_v0(&result.main_xdv_bytes, 917_504).expect("layout parse");
+    assert!(
+        layout.pages.first().map(|page| page.lines.len()).unwrap_or(0) >= 2,
+        "expected wrapped output with multiple lines"
+    );
 }
