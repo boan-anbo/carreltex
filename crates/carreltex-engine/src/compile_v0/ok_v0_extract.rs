@@ -471,7 +471,9 @@ fn consume_text_command_default_preamble_command(
         Some(TokenV0::ControlSeq(name))
             if matches!(
                 name.as_slice(),
-                b"ProvideTextCommandDefault" | b"DeclareTextCommandDefault"
+                b"ProvideTextCommandDefault"
+                    | b"DeclareTextCommandDefault"
+                    | b"DeclareTextAccentDefault"
             )
     ) {
         return None;
@@ -681,7 +683,9 @@ pub(crate) fn extract_strict_ok_text_body_v0(tokens: &[TokenV0]) -> Option<Vec<u
             Some(TokenV0::ControlSeq(name))
                 if matches!(
                     name.as_slice(),
-                    b"ProvideTextCommandDefault" | b"DeclareTextCommandDefault"
+                    b"ProvideTextCommandDefault"
+                        | b"DeclareTextCommandDefault"
+                        | b"DeclareTextAccentDefault"
                 ) =>
             {
                 index = consume_text_command_default_preamble_command(tokens, index)?;
