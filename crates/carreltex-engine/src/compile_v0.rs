@@ -68,6 +68,8 @@ mod ok_v0_preamble_language_decls_tests;
 #[cfg(test)]
 mod ok_v0_preamble_tikz_pgf_tests;
 #[cfg(test)]
+mod ok_v0_preamble_fontspec_config_tests;
+#[cfg(test)]
 mod ok_v0_preamble_meta_extras_tests;
 #[cfg(test)]
 mod ok_v0_preamble_meta_extras2_tests;
