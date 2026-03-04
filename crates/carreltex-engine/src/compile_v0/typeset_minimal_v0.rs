@@ -310,7 +310,7 @@ fn consume_fragment_token_v0(
 ) -> Option<usize> {
     match tokens.get(index)? {
         TokenV0::Char(byte) if *byte == NEWLINE_MARKER_V0 => {
-            push_newline(out);
+            push_space(out);
             Some(index + 1)
         }
         TokenV0::Char(byte) => {
