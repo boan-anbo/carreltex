@@ -130,6 +130,21 @@ pub(super) fn consume_label_aux_preamble_command(tokens: &[TokenV0], index: usiz
     }
 }
 
+pub(super) fn consume_length_counter_preamble_command(tokens: &[TokenV0], index: usize) -> Option<usize> {
+    let name = match tokens.get(index) {
+        Some(TokenV0::ControlSeq(name)) => name.as_slice(),
+        _ => return None,
+    };
+    if !matches!(name, b"setcounter" | b"addtolength" | b"setlength") {
+        return None;
+    }
+    let mut cursor = skip_spaces(tokens, index + 1);
+    cursor = consume_char_space_group_non_empty(tokens, cursor)?;
+    cursor = skip_spaces(tokens, cursor);
+    cursor = consume_char_space_group_non_empty(tokens, cursor)?;
+    Some(skip_spaces(tokens, cursor))
+}
+
 pub(super) fn consume_language_decl_preamble_command(tokens: &[TokenV0], index: usize) -> Option<usize> {
     let name = match tokens.get(index) {
         Some(TokenV0::ControlSeq(name)) => name.as_slice(),
