@@ -64,6 +64,8 @@ mod ok_v0_preamble_math_accent_radical_decls_tests;
 #[cfg(test)]
 mod ok_v0_preamble_fontenc_decls_tests;
 #[cfg(test)]
+mod ok_v0_preamble_declare_robust_command_tests;
+#[cfg(test)]
 mod ok_v0_protect_relax_tests;
 #[cfg(test)]
 mod ok_v0_env_tests;
