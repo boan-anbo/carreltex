@@ -121,7 +121,7 @@ fn typeset_minimal_double_backslash_emits_hard_newline() {
 
 #[test]
 fn typeset_minimal_newline_alias_emits_hard_newline() {
-    let main = b"\\documentclass{article}\\begin{document}Hello\\newline world.\\end{document}";
+    let main = b"\\documentclass{article}\n\\begin{document}\nHello\\newline world.\n\\end{document}\n";
     let lines = layout_lines_bytes(main);
     assert!(lines.len() >= 2, "expected at least two lines, got {:?}", lines);
     assert_eq!(lines[0], b"Hello");
