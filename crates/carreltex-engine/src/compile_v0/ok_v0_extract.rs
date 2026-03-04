@@ -26,6 +26,40 @@ fn consume_usepackage_preamble_command(tokens: &[TokenV0], mut index: usize) -> 
     Some(skip_spaces(tokens, index))
 }
 
+fn consume_package_option_plumbing_preamble_command(
+    tokens: &[TokenV0],
+    index: usize,
+) -> Option<usize> {
+    let name = match tokens.get(index) {
+        Some(TokenV0::ControlSeq(name)) => name.as_slice(),
+        _ => return None,
+    };
+    match name {
+        b"RequirePackage" => {
+            let mut cursor = skip_spaces(tokens, index + 1);
+            if matches!(tokens.get(cursor), Some(TokenV0::Char(b'['))) {
+                cursor = consume_bracket_options_non_empty(tokens, cursor)?;
+                cursor = skip_spaces(tokens, cursor);
+            }
+            cursor = consume_char_space_group_non_empty(tokens, cursor)?;
+            Some(skip_spaces(tokens, cursor))
+        }
+        b"PassOptionsToPackage" | b"PassOptionsToClass" => {
+            let mut cursor = skip_spaces(tokens, index + 1);
+            cursor = consume_char_space_group_non_empty(tokens, cursor)?;
+            cursor = skip_spaces(tokens, cursor);
+            cursor = consume_char_space_group_non_empty(tokens, cursor)?;
+            Some(skip_spaces(tokens, cursor))
+        }
+        b"ExecuteOptions" => {
+            let mut cursor = skip_spaces(tokens, index + 1);
+            cursor = consume_char_space_group_non_empty(tokens, cursor)?;
+            Some(skip_spaces(tokens, cursor))
+        }
+        _ => None,
+    }
+}
+
 fn is_supported_meta_preamble_command(name: &[u8]) -> bool {
     matches!(name, b"title" | b"author" | b"date")
 }
@@ -637,6 +671,18 @@ pub(crate) fn extract_strict_ok_text_body_v0(tokens: &[TokenV0]) -> Option<Vec<u
         match tokens.get(index) {
             Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"usepackage" => {
                 index = consume_usepackage_preamble_command(tokens, index)?;
+                continue;
+            }
+            Some(TokenV0::ControlSeq(name))
+                if matches!(
+                    name.as_slice(),
+                    b"RequirePackage"
+                        | b"PassOptionsToPackage"
+                        | b"PassOptionsToClass"
+                        | b"ExecuteOptions"
+                ) =>
+            {
+                index = consume_package_option_plumbing_preamble_command(tokens, index)?;
                 continue;
             }
             Some(TokenV0::ControlSeq(name)) if is_supported_meta_preamble_command(name.as_slice()) => {
