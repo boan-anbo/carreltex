@@ -419,7 +419,11 @@ pub(super) fn consume_ok_body_token_v0(
             }
             Some(index + 1)
         }
-        Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"protect" => Some(index + 1),
+        Some(TokenV0::ControlSeq(name))
+            if matches!(name.as_slice(), b"protect" | b"relax") =>
+        {
+            Some(index + 1)
+        }
         Some(TokenV0::ControlSeq(name))
             if name.as_slice() == b"title" || name.as_slice() == b"author" || name.as_slice() == b"date" =>
         {
