@@ -2,7 +2,9 @@ use crate::tex::tokenize_v0::TokenV0;
 
 const NEWLINE_MARKER_V0: u8 = 0x0a;
 const CARRELPAR_MARKER_CONTROL_V0: &[u8] = b"carrelpar";
+const CARRELNEWLINE_MARKER_CONTROL_V0: &[u8] = b"carrelnewline";
 const HARD_LINE_BREAK_CONTROL_V0: &[u8] = b"\\";
+const NEWLINE_ALIAS_CONTROL_V0: &[u8] = b"newline";
 const ITALIC_START_MARKER_V0: u8 = b'[';
 const ITALIC_END_MARKER_V0: u8 = b']';
 const BOLD_START_MARKER_V0: u8 = b'{';
@@ -115,6 +117,8 @@ fn rewrite_explicit_par_controls_v0(line: &[u8]) -> Vec<u8> {
         let control_name = &line[control_start..control_end];
         if control_name == b"par" {
             out.extend_from_slice(b"\\carrelpar");
+        } else if control_name == b"newline" {
+            out.extend_from_slice(b"\\carrelnewline");
         } else {
             out.extend_from_slice(&line[index..control_end]);
         }
@@ -332,7 +336,10 @@ fn consume_fragment_token_v0(
         }
         TokenV0::ControlSeq(name)
             if allow_hard_break
-                && (name.as_slice().is_empty() || name.as_slice() == HARD_LINE_BREAK_CONTROL_V0) =>
+                && (name.as_slice().is_empty()
+                    || name.as_slice() == HARD_LINE_BREAK_CONTROL_V0
+                    || name.as_slice() == NEWLINE_ALIAS_CONTROL_V0
+                    || name.as_slice() == CARRELNEWLINE_MARKER_CONTROL_V0) =>
         {
             push_newline(out);
             Some(index + 1)
