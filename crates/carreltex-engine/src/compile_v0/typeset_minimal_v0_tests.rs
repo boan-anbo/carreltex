@@ -1,4 +1,9 @@
 use super::compile_main_typeset_minimal_v0;
+use super::typeset_minimal_v0::{
+    extract_typeset_minimal_text_body_v0, normalize_typeset_minimal_tokens_v0,
+    preprocess_typeset_minimal_source_v0,
+};
+use crate::tex::tokenize_v0::tokenize_v0;
 use carreltex_core::{CompileStatus, Mount};
 
 fn compile_typeset(main: &[u8]) -> carreltex_core::CompileResultV0 {
@@ -7,6 +12,13 @@ fn compile_typeset(main: &[u8]) -> carreltex_core::CompileResultV0 {
         .add_file(b"main.tex", main)
         .expect("main.tex should mount");
     compile_main_typeset_minimal_v0(&mut mount)
+}
+
+fn extract_typeset_body(main: &[u8]) -> Vec<u8> {
+    let preprocessed = preprocess_typeset_minimal_source_v0(main);
+    let tokens = tokenize_v0(&preprocessed).expect("tokenize should succeed");
+    let normalized = normalize_typeset_minimal_tokens_v0(&tokens);
+    extract_typeset_minimal_text_body_v0(&normalized).expect("extract should succeed")
 }
 
 #[test]
@@ -32,4 +44,35 @@ fn typeset_minimal_rejects_unsupported_wrapper_in_body() {
     let result = compile_typeset(main);
     assert_eq!(result.status, CompileStatus::NotImplemented);
     assert!(result.main_xdv_bytes.is_empty());
+}
+
+#[test]
+fn typeset_minimal_blank_line_emits_paragraph_break() {
+    let main = b"\\documentclass{article}\n\\begin{document}\nFirst paragraph.\n\n% spacer comment\n   \nSecond paragraph.\n\\end{document}\n";
+    let body = extract_typeset_body(main);
+    let text = String::from_utf8(body).expect("body should be valid utf8");
+    assert!(
+        text.contains("First paragraph.\n\nSecond paragraph."),
+        "body={text:?}"
+    );
+}
+
+#[test]
+fn typeset_minimal_explicit_par_emits_paragraph_break() {
+    let main = b"\\documentclass{article}\n\\begin{document}\nFirst paragraph.\\par Second paragraph.\n\\end{document}\n";
+    let body = extract_typeset_body(main);
+    let text = String::from_utf8(body).expect("body should be valid utf8");
+    assert!(
+        text.contains("First paragraph.\n\nSecond paragraph."),
+        "body={text:?}"
+    );
+}
+
+#[test]
+fn typeset_minimal_author_and_is_single_newline() {
+    let main = b"\\documentclass{article}\\author{Alice\\and Bob}\\begin{document}\\maketitle\\end{document}";
+    let body = extract_typeset_body(main);
+    let text = String::from_utf8(body).expect("body should be valid utf8");
+    assert!(!text.contains("Alice\n\nBob"), "body={text:?}");
+    assert!(text.contains("Alice\nBob"), "body={text:?}");
 }

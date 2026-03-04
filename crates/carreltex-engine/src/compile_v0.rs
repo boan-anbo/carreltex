@@ -264,7 +264,10 @@ use ok_v0::{
 };
 use stats_v0::build_tex_stats_from_tokens_v0;
 use trace_v0::build_not_implemented_log_v0;
-use typeset_minimal_v0::{extract_typeset_minimal_text_body_v0, TYPESET_MINIMAL_MAX_LINE_GLYPHS_V0};
+use typeset_minimal_v0::{
+    extract_typeset_minimal_text_body_v0, normalize_typeset_minimal_tokens_v0,
+    preprocess_typeset_minimal_source_v0, TYPESET_MINIMAL_MAX_LINE_GLYPHS_V0,
+};
 const MISSING_COMPONENTS_V0: &[&str] = &["tex-engine"];
 const EMPTY_TEX_STATS_JSON: &str = "";
 fn invalid_result_v0(max_log_bytes: u32, reason: InvalidInputReasonV0) -> CompileResultV0 {
@@ -307,7 +310,8 @@ pub fn compile_main_typeset_minimal_v0(mount: &mut Mount) -> CompileResultV0 {
         Ok(Some(bytes)) => bytes.to_vec(),
         _ => return invalid_result_v0(request.max_log_bytes, InvalidInputReasonV0::EntrypointMissing),
     };
-    let tokens = match tokenize_v0(&entry_bytes) {
+    let preprocessed_entry_bytes = preprocess_typeset_minimal_source_v0(&entry_bytes);
+    let tokens = match tokenize_v0(&preprocessed_entry_bytes) {
         Ok(tokens) => tokens,
         Err(error) => {
             return invalid_result_v0(
@@ -348,7 +352,8 @@ pub fn compile_main_typeset_minimal_v0(mount: &mut Mount) -> CompileResultV0 {
     if tex_stats_json.is_empty() {
         return invalid_result_v0(request.max_log_bytes, InvalidInputReasonV0::StatsBuildFailed);
     }
-    let ok_text_bytes = extract_typeset_minimal_text_body_v0(&macro_expanded_tokens);
+    let normalized_typeset_tokens = normalize_typeset_minimal_tokens_v0(&macro_expanded_tokens);
+    let ok_text_bytes = extract_typeset_minimal_text_body_v0(&normalized_typeset_tokens);
     if let Some(ok_text_bytes) = ok_text_bytes {
         if ok_text_bytes.len() <= MAX_OK_TEXT_BYTES_V0 {
             let glyph_advance_sp = OK_GLYPH_ADVANCE_SP_V0;
