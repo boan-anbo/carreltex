@@ -473,8 +473,6 @@ fn consume_text_command_default_preamble_command(
                 name.as_slice(),
                 b"ProvideTextCommandDefault"
                     | b"DeclareTextCommandDefault"
-                    | b"DeclareTextAccentDefault"
-                    | b"DeclareTextSymbolDefault"
             )
     ) {
         return None;
@@ -486,21 +484,30 @@ fn consume_text_command_default_preamble_command(
     Some(skip_spaces(tokens, cursor))
 }
 
-fn consume_text_symbol_accent_decl_preamble_command(tokens: &[TokenV0], index: usize) -> Option<usize> {
+fn consume_text_decl_bundle_preamble_command(tokens: &[TokenV0], index: usize) -> Option<usize> {
     let name = match tokens.get(index) {
         Some(TokenV0::ControlSeq(name)) => name.as_slice(),
         _ => return None,
     };
-    if !matches!(name, b"DeclareTextSymbol" | b"DeclareTextAccent") {
-        return None;
+    match name {
+        b"DeclareTextSymbol" | b"DeclareTextAccent" => {
+            let mut cursor = skip_spaces(tokens, index + 1);
+            cursor = consume_single_controlseq_group_v0(tokens, cursor)?;
+            cursor = skip_spaces(tokens, cursor);
+            cursor = consume_char_space_group_non_empty(tokens, cursor)?;
+            cursor = skip_spaces(tokens, cursor);
+            cursor = consume_char_space_group_non_empty(tokens, cursor)?;
+            Some(skip_spaces(tokens, cursor))
+        }
+        b"DeclareTextAccentDefault" | b"DeclareTextSymbolDefault" => {
+            let mut cursor = skip_spaces(tokens, index + 1);
+            cursor = consume_single_controlseq_group_v0(tokens, cursor)?;
+            cursor = skip_spaces(tokens, cursor);
+            cursor = consume_char_space_nested_group_non_empty_v0(tokens, cursor, tokens.len())?;
+            Some(skip_spaces(tokens, cursor))
+        }
+        _ => None,
     }
-    let mut cursor = skip_spaces(tokens, index + 1);
-    cursor = consume_single_controlseq_group_v0(tokens, cursor)?;
-    cursor = skip_spaces(tokens, cursor);
-    cursor = consume_char_space_group_non_empty(tokens, cursor)?;
-    cursor = skip_spaces(tokens, cursor);
-    cursor = consume_char_space_group_non_empty(tokens, cursor)?;
-    Some(skip_spaces(tokens, cursor))
 }
 
 fn consume_declare_text_composite_command_preamble_command(
@@ -686,17 +693,21 @@ pub(crate) fn extract_strict_ok_text_body_v0(tokens: &[TokenV0]) -> Option<Vec<u
                     name.as_slice(),
                     b"ProvideTextCommandDefault"
                         | b"DeclareTextCommandDefault"
-                        | b"DeclareTextAccentDefault"
-                        | b"DeclareTextSymbolDefault"
                 ) =>
             {
                 index = consume_text_command_default_preamble_command(tokens, index)?;
                 continue;
             }
             Some(TokenV0::ControlSeq(name))
-                if matches!(name.as_slice(), b"DeclareTextSymbol" | b"DeclareTextAccent") =>
+                if matches!(
+                    name.as_slice(),
+                    b"DeclareTextSymbol"
+                        | b"DeclareTextAccent"
+                        | b"DeclareTextAccentDefault"
+                        | b"DeclareTextSymbolDefault"
+                ) =>
             {
-                index = consume_text_symbol_accent_decl_preamble_command(tokens, index)?;
+                index = consume_text_decl_bundle_preamble_command(tokens, index)?;
                 continue;
             }
             Some(TokenV0::ControlSeq(name))
