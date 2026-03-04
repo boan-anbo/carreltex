@@ -128,6 +128,65 @@ fn wrap_logical_line_v0(line: &[u8], max_line_glyphs: usize) -> Option<Vec<Vec<u
     Some(wrapped)
 }
 
+fn wrap_logical_line_by_width_v0(
+    line: &[u8],
+    glyph_advance_sp: i32,
+    max_line_width_sp: u32,
+) -> Option<Vec<Vec<u8>>> {
+    if max_line_width_sp == 0 {
+        return None;
+    }
+    if line.is_empty() {
+        return Some(vec![Vec::new()]);
+    }
+    let mut wrapped = Vec::<Vec<u8>>::new();
+    let mut start = 0usize;
+    while start < line.len() {
+        let mut cursor = start;
+        let mut width = 0u32;
+        let mut last_space = None::<usize>;
+        while cursor < line.len() {
+            let advance_sp = u32::try_from(glyph_width_sp_v0(line[cursor], glyph_advance_sp)?).ok()?;
+            if width.checked_add(advance_sp)? > max_line_width_sp {
+                break;
+            }
+            width = width.checked_add(advance_sp)?;
+            if line[cursor] == b' ' {
+                last_space = Some(cursor);
+            }
+            cursor += 1;
+        }
+
+        if cursor == line.len() {
+            wrapped.push(line[start..].to_vec());
+            break;
+        }
+
+        if cursor == start {
+            let hard_break = start.checked_add(1)?;
+            wrapped.push(line[start..hard_break].to_vec());
+            start = hard_break;
+            continue;
+        }
+
+        if let Some(space_index) = last_space {
+            if space_index > start {
+                wrapped.push(line[start..space_index].to_vec());
+            } else {
+                wrapped.push(Vec::new());
+            }
+            start = space_index + 1;
+            while start < line.len() && line[start] == b' ' {
+                start += 1;
+            }
+        } else {
+            wrapped.push(line[start..cursor].to_vec());
+            start = cursor;
+        }
+    }
+    Some(wrapped)
+}
+
 fn build_line_plan_v0(line: &[u8], glyph_advance_sp: i32) -> Option<LinePlanV0> {
     let mut glyphs = Vec::<GlyphPlanV0>::new();
     for byte in line {
@@ -167,6 +226,46 @@ pub fn plan_layout_v0(
         let mut physical_lines = Vec::<LinePlanV0>::new();
         for logical_line in logical_lines {
             let wrapped = wrap_logical_line_v0(logical_line, max_line_glyphs)?;
+            for wrapped_line in wrapped {
+                let line_plan = build_line_plan_v0(&wrapped_line, glyph_advance_sp)?;
+                physical_lines.push(line_plan);
+            }
+        }
+        for chunk in physical_lines.chunks(max_lines_per_page) {
+            pages.push(PagePlanV0 {
+                lines: chunk.to_vec(),
+            });
+        }
+    }
+    if pages.is_empty() {
+        return None;
+    }
+    Some(LayoutPlanV0 { pages })
+}
+
+pub fn plan_layout_width_v0(
+    text: &[u8],
+    glyph_advance_sp: i32,
+    line_advance_sp: i32,
+    max_line_width_sp: u32,
+    max_lines_per_page: usize,
+) -> Option<LayoutPlanV0> {
+    if glyph_advance_sp <= 0
+        || line_advance_sp <= 0
+        || max_line_width_sp == 0
+        || max_lines_per_page == 0
+    {
+        return None;
+    }
+
+    let forced_pages = split_pages_v0(text)?;
+    let mut pages = Vec::<PagePlanV0>::new();
+    for forced_page in forced_pages {
+        let logical_lines = split_lines_v0(forced_page);
+        let mut physical_lines = Vec::<LinePlanV0>::new();
+        for logical_line in logical_lines {
+            let wrapped =
+                wrap_logical_line_by_width_v0(logical_line, glyph_advance_sp, max_line_width_sp)?;
             for wrapped_line in wrapped {
                 let line_plan = build_line_plan_v0(&wrapped_line, glyph_advance_sp)?;
                 physical_lines.push(line_plan);
