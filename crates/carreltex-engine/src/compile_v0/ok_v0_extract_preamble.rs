@@ -183,6 +183,68 @@ pub(super) fn consume_hyperref_preamble_command(tokens: &[TokenV0], index: usize
     Some(skip_spaces(tokens, cursor))
 }
 
+fn consume_single_named_controlseq_group_v0(
+    tokens: &[TokenV0],
+    index: usize,
+    allowed_names: &[&[u8]],
+) -> Option<usize> {
+    let mut cursor = skip_spaces(tokens, index);
+    if !matches!(tokens.get(cursor), Some(TokenV0::BeginGroup)) {
+        return None;
+    }
+    cursor += 1;
+    while matches!(tokens.get(cursor), Some(TokenV0::Space)) {
+        cursor += 1;
+    }
+    let name = match tokens.get(cursor) {
+        Some(TokenV0::ControlSeq(name)) => name.as_slice(),
+        _ => return None,
+    };
+    if !allowed_names.iter().any(|allowed| *allowed == name) {
+        return None;
+    }
+    cursor += 1;
+    while matches!(tokens.get(cursor), Some(TokenV0::Space)) {
+        cursor += 1;
+    }
+    if !matches!(tokens.get(cursor), Some(TokenV0::EndGroup)) {
+        return None;
+    }
+    Some(cursor + 1)
+}
+
+pub(super) fn consume_float_listof_preamble_command(
+    tokens: &[TokenV0],
+    index: usize,
+    title_state: &mut OkTitleStateV0,
+) -> Option<usize> {
+    let name = match tokens.get(index) {
+        Some(TokenV0::ControlSeq(name)) => name.as_slice(),
+        _ => return None,
+    };
+    match name {
+        b"floatplacement" => {
+            let mut cursor = skip_spaces(tokens, index + 1);
+            cursor = consume_char_space_group_non_empty(tokens, cursor)?;
+            cursor = skip_spaces(tokens, cursor);
+            cursor = consume_char_space_group_non_empty(tokens, cursor)?;
+            Some(skip_spaces(tokens, cursor))
+        }
+        b"renewcommand" => {
+            let mut cursor = skip_spaces(tokens, index + 1);
+            cursor = consume_single_named_controlseq_group_v0(
+                tokens,
+                cursor,
+                &[b"listfigurename", b"listtablename"],
+            )?;
+            cursor = skip_spaces(tokens, cursor);
+            cursor = consume_ok_group_fragment_discard_v0(tokens, cursor, tokens.len(), title_state)?;
+            Some(skip_spaces(tokens, cursor))
+        }
+        _ => None,
+    }
+}
+
 pub(super) fn consume_language_decl_preamble_command(tokens: &[TokenV0], index: usize) -> Option<usize> {
     let name = match tokens.get(index) {
         Some(TokenV0::ControlSeq(name)) => name.as_slice(),
