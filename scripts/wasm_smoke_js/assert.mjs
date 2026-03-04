@@ -377,6 +377,55 @@ export function createAssertHelpers(ctx, mem) {
     return dedicatedBytes;
   }
 
+  function readMainPdfArtifactBytes(label) {
+    const bytesLen = ctx.artifactMainPdfLen();
+    if (!Number.isInteger(bytesLen) || bytesLen <= 0 || bytesLen > 32 * 1024 * 1024) {
+      throw new Error(`${label}: expected main.pdf len>0, got ${bytesLen}`);
+    }
+    const outPtr = ctx.alloc(bytesLen);
+    if (!Number.isInteger(outPtr) || outPtr <= 0) {
+      throw new Error(`${label}: alloc failed for main.pdf copy`);
+    }
+    let dedicatedBytes;
+    try {
+      const written = ctx.artifactMainPdfCopy(outPtr, bytesLen);
+      if (written !== bytesLen) {
+        throw new Error(`${label}: artifact_main_pdf_copy_v0 expected ${bytesLen}, got ${written}`);
+      }
+      dedicatedBytes = new Uint8Array(ctx.memory.buffer, outPtr, bytesLen).slice();
+    } finally {
+      ctx.dealloc(outPtr, bytesLen);
+    }
+
+    const mainName = new TextEncoder().encode('main.pdf');
+    const genericLen = mem.callWithBytes(mainName, `${label}_generic_main_pdf_len`, (namePtr, nameLen) =>
+      ctx.artifactLenByName(namePtr, nameLen),
+    );
+    if (genericLen !== bytesLen) {
+      throw new Error(`${label}: artifact_len_v0(main.pdf) expected ${bytesLen}, got ${genericLen}`);
+    }
+
+    const genericOutPtr = ctx.alloc(bytesLen);
+    if (!Number.isInteger(genericOutPtr) || genericOutPtr <= 0) {
+      throw new Error(`${label}: alloc failed for generic main.pdf copy`);
+    }
+    try {
+      const genericWritten = mem.callWithBytes(mainName, `${label}_generic_main_pdf_copy`, (namePtr, nameLen) =>
+        ctx.artifactCopyByName(namePtr, nameLen, genericOutPtr, bytesLen),
+      );
+      if (genericWritten !== bytesLen) {
+        throw new Error(`${label}: artifact_copy_v0(main.pdf) expected ${bytesLen}, got ${genericWritten}`);
+      }
+      const genericBytes = new Uint8Array(ctx.memory.buffer, genericOutPtr, bytesLen);
+      if (!genericBytes.every((byte, index) => byte === dedicatedBytes[index])) {
+        throw new Error(`${label}: generic artifact bytes mismatch with dedicated main.pdf bytes`);
+      }
+    } finally {
+      ctx.dealloc(genericOutPtr, bytesLen);
+    }
+    return dedicatedBytes;
+  }
+
   function assertNoEvents(label) {
     const bytes = readEventsBytes();
     if (bytes.length !== 0) {
@@ -399,6 +448,7 @@ export function createAssertHelpers(ctx, mem) {
     assertReadbackZero,
     assertMainXdvArtifactEmpty,
     readMainXdvArtifactBytes,
+    readMainPdfArtifactBytes,
     assertNoEvents,
   };
 }

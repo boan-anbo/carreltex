@@ -10,3 +10,4 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 carreltex-core = { path = "../carreltex-core" }
 carreltex-engine = { path = "../carreltex-engine" }
+carreltex-xdv = { path = "../carreltex-xdv" }
