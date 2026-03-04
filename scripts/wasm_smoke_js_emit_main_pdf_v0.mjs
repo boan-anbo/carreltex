@@ -178,12 +178,21 @@ function parseDviV2TextPages(bytes) {
 }
 
 function buildPdfFromDviV2(parsed) {
+  // NOTE: Preview-only renderer.
+  //
+  // We draw a monospaced, debug-style PDF from a tiny DVI-v2-ish opcode subset. This is not real
+  // LaTeX typesetting; it is meant for quick, deterministic inspection only.
+  //
+  // Because OK layout may use fractional widths for some glyphs (see engine tests), we render each
+  // glyph at its DVI position but apply a small collision-avoidance step to prevent overprinting.
   const renderScaleX = 6;
   const renderScaleY = 1;
   const ptPerSpX = (1 / 65536) * renderScaleX;
   const ptPerSpY = (1 / 65536) * renderScaleY;
   const marginPt = 72;
   const fontSizePt = 10;
+  const charWidthPt = fontSizePt * 0.6; // Courier is roughly 600/1000 em width
+
   const pageWidthPt = Math.max(612, parsed.maxHSp * ptPerSpX + marginPt * 2);
   const pageHeightPt = Math.max(792, parsed.maxVSp * ptPerSpY + marginPt * 2 + 2 * fontSizePt);
 
@@ -213,14 +222,22 @@ function buildPdfFromDviV2(parsed) {
 
   for (let i = 0; i < pageCount; i++) {
     const page = parsed.pages[i];
+    const lastXByVSp = new Map();
 
     let content = 'BT\n';
     content += `/F1 ${fontSizePt} Tf\n`;
     for (const glyph of page.glyphs) {
-      const x = marginPt + glyph.hSp * ptPerSpX;
+      let x = marginPt + glyph.hSp * ptPerSpX;
       const y = pageHeightPt - marginPt - fontSizePt - glyph.vSp * ptPerSpY;
       const s = escapePdfStringByte(glyph.byte);
       if (s.length === 0) continue;
+
+      const lastX = lastXByVSp.get(glyph.vSp);
+      if (typeof lastX === 'number' && x <= lastX + charWidthPt * 0.8) {
+        x = lastX + charWidthPt;
+      }
+      lastXByVSp.set(glyph.vSp, x);
+
       content += `1 0 0 1 ${x.toFixed(3)} ${y.toFixed(3)} Tm (${s}) Tj\n`;
     }
     content += 'ET\n';
