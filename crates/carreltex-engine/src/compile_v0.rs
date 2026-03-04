@@ -66,6 +66,8 @@ mod ok_v0_preamble_language_decls_tests;
 #[cfg(test)]
 mod ok_v0_preamble_meta_extras_tests;
 #[cfg(test)]
+mod ok_v0_preamble_meta_extras2_tests;
+#[cfg(test)]
 mod ok_v0_preamble_math_operator_decls_tests;
 #[cfg(test)]
 mod ok_v0_preamble_math_alphabet_decls_tests;
