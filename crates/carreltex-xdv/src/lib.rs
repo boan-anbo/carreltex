@@ -20,10 +20,12 @@ pub const DEFAULT_MAX_LINE_GLYPHS_V0: usize = 80;
 pub const DEFAULT_MAX_LINES_PER_PAGE_V0: usize = 200;
 
 mod layout_v0;
+mod pdf_v0;
 pub use layout_v0::{
     plan_layout_v0, recompute_line_width_sp_v0, GlyphPlanV0, LayoutPlanV0, LinePlanV0,
     PagePlanV0,
 };
+pub use pdf_v0::render_dvi_v2_text_page_to_pdf_v0;
 use layout_v0::glyph_width_sp_v0;
 
 fn push_u32_be(out: &mut Vec<u8>, value: u32) {
