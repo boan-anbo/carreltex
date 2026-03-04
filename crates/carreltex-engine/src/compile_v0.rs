@@ -88,6 +88,8 @@ mod ok_v0_preamble_toc_noops_tests;
 #[cfg(test)]
 mod ok_v0_preamble_koma_meta_bundle_tests;
 #[cfg(test)]
+mod ok_v0_preamble_koma_config_bundle_tests;
+#[cfg(test)]
 mod ok_v0_preamble_math_operator_decls_tests;
 #[cfg(test)]
 mod ok_v0_preamble_math_alphabet_decls_tests;
