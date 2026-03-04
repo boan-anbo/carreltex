@@ -445,6 +445,22 @@ fn consume_declare_text_font_command_preamble_command(tokens: &[TokenV0], index:
     Some(skip_spaces(tokens, cursor))
 }
 
+fn consume_declare_text_command_preamble_command(tokens: &[TokenV0], index: usize) -> Option<usize> {
+    if !matches!(
+        tokens.get(index),
+        Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"DeclareTextCommand"
+    ) {
+        return None;
+    }
+    let mut cursor = skip_spaces(tokens, index + 1);
+    cursor = consume_single_controlseq_group_v0(tokens, cursor)?;
+    cursor = skip_spaces(tokens, cursor);
+    cursor = consume_char_space_group_non_empty(tokens, cursor)?;
+    cursor = skip_spaces(tokens, cursor);
+    cursor = consume_char_space_nested_group_non_empty_v0(tokens, cursor, tokens.len())?;
+    Some(skip_spaces(tokens, cursor))
+}
+
 fn consume_text_symbol_accent_decl_preamble_command(tokens: &[TokenV0], index: usize) -> Option<usize> {
     let name = match tokens.get(index) {
         Some(TokenV0::ControlSeq(name)) => name.as_slice(),
@@ -632,6 +648,12 @@ pub(crate) fn extract_strict_ok_text_body_v0(tokens: &[TokenV0]) -> Option<Vec<u
                 if name.as_slice() == b"DeclareTextFontCommand" =>
             {
                 index = consume_declare_text_font_command_preamble_command(tokens, index)?;
+                continue;
+            }
+            Some(TokenV0::ControlSeq(name))
+                if name.as_slice() == b"DeclareTextCommand" =>
+            {
+                index = consume_declare_text_command_preamble_command(tokens, index)?;
                 continue;
             }
             Some(TokenV0::ControlSeq(name))
