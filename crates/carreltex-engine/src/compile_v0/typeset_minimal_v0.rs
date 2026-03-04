@@ -1,7 +1,5 @@
 use crate::tex::tokenize_v0::TokenV0;
 
-pub(crate) const TYPESET_MINIMAL_MAX_LINE_GLYPHS_V0: usize = 56;
-
 const NEWLINE_MARKER_V0: u8 = 0x0a;
 const CARRELPAR_MARKER_CONTROL_V0: &[u8] = b"carrelpar";
 const ITALIC_START_MARKER_V0: u8 = b'[';
