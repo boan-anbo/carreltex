@@ -138,6 +138,15 @@ pub(super) fn is_supported_meta_preamble_command(name: &[u8]) -> bool {
             | b"homepage"
             | b"keywords"
             | b"subject"
+            | b"titlehead"
+            | b"authorrunning"
+            | b"titlerunning"
+            | b"publishers"
+            | b"dedication"
+            | b"extratitle"
+            | b"extrainfo"
+            | b"uppertitleback"
+            | b"lowertitleback"
     )
 }
 
