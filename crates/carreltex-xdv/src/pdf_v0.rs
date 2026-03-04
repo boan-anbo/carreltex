@@ -8,6 +8,7 @@ const PAGE_HEIGHT_PT_V0: f32 = 792.0;
 const MARGIN_PT_V0: f32 = 72.0;
 const FONT_SIZE_PT_V0: f32 = 12.0;
 const TITLE_FONT_SIZE_PT_V0: f32 = 18.0;
+const INDENT_PT_V0: f32 = FONT_SIZE_PT_V0 * 2.0;
 const LEADING_PT_V0: f32 = 14.0;
 const TITLE_EXTRA_GAP_PT_V0: f32 = LEADING_PT_V0;
 const ITALIC_START_MARKER_V0: u8 = b'[';
@@ -156,21 +157,26 @@ fn build_page_content_stream_v0(lines: &[Vec<u8>]) -> Option<Vec<u8>> {
 
     let title_block_len = detect_title_block_len_v0(lines);
     let mut y = PAGE_HEIGHT_PT_V0 - MARGIN_PT_V0 - TITLE_FONT_SIZE_PT_V0;
+    let mut previous_rendered_line_was_empty = false;
+    let mut skip_indent_after_title_block = title_block_len > 0;
     for (line_index, line) in lines.iter().enumerate() {
         if y < MARGIN_PT_V0 {
             break;
         }
         let segments = parse_styled_segments_v0(line)?;
+        let line_is_empty = segments.is_empty();
         let in_title_block = title_block_len > 0 && line_index < title_block_len;
         let font_size_pt = if in_title_block && line_index == 0 {
             TITLE_FONT_SIZE_PT_V0
         } else {
             FONT_SIZE_PT_V0
         };
-        if !segments.is_empty() {
+        if !line_is_empty {
             let glyph_count: usize = segments.iter().map(|(_, bytes)| bytes.len()).sum();
             let line_x = if in_title_block {
                 centered_line_x_v0(glyph_count, font_size_pt)
+            } else if previous_rendered_line_was_empty && !skip_indent_after_title_block {
+                MARGIN_PT_V0 + INDENT_PT_V0
             } else {
                 MARGIN_PT_V0
             };
@@ -190,7 +196,11 @@ fn build_page_content_stream_v0(lines: &[Vec<u8>]) -> Option<Vec<u8>> {
                 out.extend_from_slice(b") Tj ");
             }
             out.extend_from_slice(b"\n");
+            if !in_title_block && skip_indent_after_title_block {
+                skip_indent_after_title_block = false;
+            }
         }
+        previous_rendered_line_was_empty = line_is_empty;
         y -= LEADING_PT_V0;
         if title_block_len > 0 && line_index + 1 == title_block_len {
             y -= TITLE_EXTRA_GAP_PT_V0;

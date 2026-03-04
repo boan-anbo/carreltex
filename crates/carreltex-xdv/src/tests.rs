@@ -261,6 +261,37 @@ fn pdf_renderer_applies_maketitle_typography_v0() {
 }
 
 #[test]
+fn pdf_renderer_indents_body_paragraph_start_after_blank_line_v0() {
+    let demo_text = b"Title\nAuthor\n2026-03-04\n\nFirst body line after title.\n\nIndented paragraph starts here.\nContinuation line.";
+    let xdv = write_dvi_v2_text_page_v0(demo_text).expect("writer should accept demo text");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+
+    let pdf_text = String::from_utf8_lossy(&pdf);
+    let mut has_margin_x = false;
+    let mut has_indent_x = false;
+    for line in pdf_text.lines() {
+        if !line.contains(" Tm ") {
+            continue;
+        }
+        let fields = line.split_whitespace().collect::<Vec<_>>();
+        if fields.len() < 7 || fields[6] != "Tm" {
+            continue;
+        }
+        let Ok(x_pt) = fields[4].parse::<f32>() else {
+            continue;
+        };
+        if (x_pt - 72.0).abs() <= 0.02 {
+            has_margin_x = true;
+        }
+        if (x_pt - 96.0).abs() <= 0.02 {
+            has_indent_x = true;
+        }
+    }
+    assert!(has_margin_x, "expected at least one body line at margin x");
+    assert!(has_indent_x, "expected paragraph-start indent x");
+}
+
+#[test]
 fn validator_rejects_wrong_movement_amount() {
     let mut bytes = write_dvi_v2_text_page_v0(b"ABCD").expect("writer should accept ABCD");
     let right_index = bytes
