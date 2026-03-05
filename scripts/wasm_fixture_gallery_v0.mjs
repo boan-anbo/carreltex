@@ -207,6 +207,16 @@ async function loadFixtureCasesV0() {
       fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_graphicspath_probe_v0.tex',
     },
     {
+      id: 'typeset_demo_graphicspath_explicit_ext_probe_v0',
+      mode: 'typeset',
+      fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_graphicspath_explicit_ext_probe_v0.tex',
+    },
+    {
+      id: 'typeset_demo_graphicspath_invalid_probe_v0',
+      mode: 'typeset',
+      fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_graphicspath_invalid_probe_v0.tex',
+    },
+    {
       id: 'typeset_demo_pkgopt_probe_v0',
       mode: 'typeset',
       fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_pkgopt_probe_v0.tex',
@@ -888,9 +898,17 @@ function extractResourceHintEntriesFromSourceV0(sourceBytes) {
         index = commandIndex;
         continue;
       }
-      const prefixes = parseGraphicspathValuesV0(pathGroup.value)
-        .map((rawValue) => normalizePathHintTokenV0(rawValue, 'graphics_path'))
-        .filter((value) => value && value.length > 0);
+      const prefixes = [];
+      for (const rawValue of parseGraphicspathValuesV0(pathGroup.value)) {
+        try {
+          const normalized = normalizePathHintTokenV0(rawValue, 'graphics_path');
+          if (normalized && normalized.length > 0) {
+            prefixes.push(normalized);
+          }
+        } catch {
+          continue;
+        }
+      }
       graphicspathPrefixes = prefixes;
       index = pathGroup.next;
       continue;
