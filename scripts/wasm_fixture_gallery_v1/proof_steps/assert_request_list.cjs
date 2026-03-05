@@ -73,6 +73,27 @@ if (!packageRequest) {
   console.error('FAIL: request list must include package hint request for xcolor.sty');
   process.exit(1);
 }
+const hyperrefPackageRequest = listA.requests.find(
+  (request) => request.kind === 'texmf' && request.name === 'hyperref.sty' && request.variant === 'typeset',
+);
+if (!hyperrefPackageRequest) {
+  console.error('FAIL: request list must include package hint request for hyperref.sty');
+  process.exit(1);
+}
+const graphicxPackageRequest = listA.requests.find(
+  (request) => request.kind === 'texmf' && request.name === 'graphicx.sty' && request.variant === 'typeset',
+);
+if (!graphicxPackageRequest) {
+  console.error('FAIL: request list must include package hint request for graphicx.sty');
+  process.exit(1);
+}
+const normalizedOptionsPackageRequest = listA.requests.find(
+  (request) => request.kind === 'texmf' && request.name === 'foo.sty' && request.variant === 'typeset',
+);
+if (!normalizedOptionsPackageRequest) {
+  console.error('FAIL: request list must include normalized option package hint request for foo.sty');
+  process.exit(1);
+}
 const packagePathRequest = listA.requests.find(
   (request) => request.kind === 'texmf' && request.name === 'foo__bar.sty' && request.variant === 'typeset',
 );

@@ -63,7 +63,7 @@ if (resourceHintsShaSecond !== resourceHintsShaFirst) {
   console.error('FAIL: report.resource_hints_v0 must be stable across reruns');
   process.exit(1);
 }
-const requiredTypedKeys = ['toc', 'labels', 'refs', 'bib', 'cite', 'hyperref', 'pkgopt', 'graphics', 'input', 'math', 'table'];
+const requiredTypedKeys = ['toc', 'labels', 'refs', 'bib', 'cite', 'hyperref', 'pkgopt', 'packages', 'graphics', 'input', 'math', 'table'];
 const labelsShaFirst = fs.readFileSync(path.join(`${outDir}_baseline`, 'labels_v1_first.sha256'), 'utf8').trim();
 const refsShaFirst = fs.readFileSync(path.join(`${outDir}_baseline`, 'refs_v1_first.sha256'), 'utf8').trim();
 const tocShaFirst = fs.readFileSync(path.join(`${outDir}_baseline`, 'toc_v1_first.sha256'), 'utf8').trim();
@@ -71,6 +71,7 @@ const bibShaFirst = fs.readFileSync(path.join(`${outDir}_baseline`, 'bib_v1_firs
 const citeShaFirst = fs.readFileSync(path.join(`${outDir}_baseline`, 'cite_v1_first.sha256'), 'utf8').trim();
 const hyperrefShaFirst = fs.readFileSync(path.join(`${outDir}_baseline`, 'hyperref_v0_first.sha256'), 'utf8').trim();
 const pkgoptShaFirst = fs.readFileSync(path.join(`${outDir}_baseline`, 'pkgopt_v0_first.sha256'), 'utf8').trim();
+const packagesShaFirst = fs.readFileSync(path.join(`${outDir}_baseline`, 'packages_v1_first.sha256'), 'utf8').trim();
 const graphicsShaFirst = fs.readFileSync(path.join(`${outDir}_baseline`, 'graphics_v1_first.sha256'), 'utf8').trim();
 const mathShaFirst = fs.readFileSync(path.join(`${outDir}_baseline`, 'math_v1_first.sha256'), 'utf8').trim();
 const tableShaFirst = fs.readFileSync(path.join(`${outDir}_baseline`, 'table_v1_first.sha256'), 'utf8').trim();
@@ -439,6 +440,36 @@ if (!Array.isArray(pkgoptArtifactSecond?.entries) || pkgoptArtifactSecond.entrie
   process.exit(1);
 }
 
+const packagesSummary = JSON.parse(
+  fs.readFileSync(path.join(outDir, 'typeset_demo_usepackage_capture_probe_v1', 'summary.json'), 'utf8'),
+);
+const packagesArtifact = packagesSummary?.typed_artifacts?.packages;
+if (!packagesArtifact || packagesArtifact.present !== true) {
+  console.error('FAIL: expected packages typed artifact present after second run');
+  process.exit(1);
+}
+const packagesShaSecond = packagesArtifact.artifact_sha256;
+if (packagesShaSecond !== packagesShaFirst) {
+  console.error('FAIL: packages_v1 artifact sha256 must be stable across reruns');
+  process.exit(1);
+}
+const packagesArtifactSecond = JSON.parse(
+  fs.readFileSync(path.join(outDir, 'typeset_demo_usepackage_capture_probe_v1', 'packages_v1.json'), 'utf8'),
+);
+if (!Array.isArray(packagesArtifactSecond?.entries) || packagesArtifactSecond.entries.length <= 0) {
+  console.error('FAIL: expected non-empty packages_v1.entries after rerun');
+  process.exit(1);
+}
+const rerunHyperrefPackage = packagesArtifactSecond.entries.find((entry) => entry.name === 'hyperref.sty');
+if (!rerunHyperrefPackage) {
+  console.error('FAIL: expected packages_v1 rerun entries to include hyperref.sty');
+  process.exit(1);
+}
+if (JSON.stringify(rerunHyperrefPackage.options) !== JSON.stringify(['unicode'])) {
+  console.error('FAIL: expected packages_v1 rerun options for hyperref.sty to remain [unicode]');
+  process.exit(1);
+}
+
 const graphicsSummary = JSON.parse(
   fs.readFileSync(path.join(outDir, 'typeset_demo_graphics_probe_v0', 'summary.json'), 'utf8'),
 );
@@ -562,6 +593,7 @@ console.log(`PASS: bib_v1 sha stable ${bibShaSecond}`);
 console.log(`PASS: cite_v1 sha stable ${citeShaSecond}`);
 console.log(`PASS: hyperref_v0 sha stable ${hyperrefShaSecond}`);
 console.log(`PASS: pkgopt_v0 sha stable ${pkgoptShaSecond}`);
+console.log(`PASS: packages_v1 sha stable ${packagesShaSecond}`);
 console.log(`PASS: graphics_v1 sha stable ${graphicsShaSecond}`);
 console.log(`PASS: math_v1 sha stable ${mathShaSecond}`);
 console.log(`PASS: table_v1 sha stable ${tableShaSecond}`);
