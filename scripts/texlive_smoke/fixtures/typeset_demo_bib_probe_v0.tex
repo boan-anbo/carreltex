@@ -9,6 +9,11 @@
 \begin{document}
 \maketitle
 
-See \cite{demo-key}.
+See \cite{demo-key,aux-key,third-key} and then repeat \cite{demo-key} and \cite{aux-key}.
+\begin{thebibliography}{9}
+\bibitem{demo-key}Demo bibliography entry text for deterministic ordering.
+\bibitem{aux-key}Auxiliary bibliography entry text for deterministic ordering.
+\bibitem{third-key}Third bibliography entry text for deterministic ordering.
+\end{thebibliography}
 \printbibliography
 \end{document}

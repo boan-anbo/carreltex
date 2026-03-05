@@ -136,9 +136,18 @@ if (bibSummary?.typed_artifacts?.bib?.present !== true) {
   console.error('FAIL: expected bib typed artifact present after first run');
   process.exit(1);
 }
-const bibPath = path.join(outDir, 'typeset_demo_bib_probe_v0', 'bib_v0.json');
+if (bibSummary?.typed_artifacts?.cite?.present !== true) {
+  console.error('FAIL: expected cite typed artifact present after first run');
+  process.exit(1);
+}
+const bibPath = path.join(outDir, 'typeset_demo_bib_probe_v0', 'bib_v1.json');
 if (!fs.existsSync(bibPath)) {
-  console.error('FAIL: expected bib_v0.json artifact after first run');
+  console.error('FAIL: expected bib_v1.json artifact after first run');
+  process.exit(1);
+}
+const citePath = path.join(outDir, 'typeset_demo_bib_probe_v0', 'cite_v1.json');
+if (!fs.existsSync(citePath)) {
+  console.error('FAIL: expected cite_v1.json artifact after first run');
   process.exit(1);
 }
 const bibShaFirst = bibSummary.typed_artifacts.bib.artifact_sha256;
@@ -146,17 +155,116 @@ if (typeof bibShaFirst !== 'string' || !/^[0-9a-f]{64}$/.test(bibShaFirst)) {
   console.error('FAIL: expected bib artifact sha256 in first summary');
   process.exit(1);
 }
+const citeShaFirst = bibSummary.typed_artifacts.cite.artifact_sha256;
+if (typeof citeShaFirst !== 'string' || !/^[0-9a-f]{64}$/.test(citeShaFirst)) {
+  console.error('FAIL: expected cite artifact sha256 in first summary');
+  process.exit(1);
+}
 const bibArtifactFirst = JSON.parse(fs.readFileSync(bibPath, 'utf8'));
 if (!Array.isArray(bibArtifactFirst?.entries)) {
-  console.error('FAIL: expected bib_v0.entries array in first-run artifact');
+  console.error('FAIL: expected bib_v1.entries array in first-run artifact');
   process.exit(1);
 }
 if (bibArtifactFirst.entries.length <= 0) {
-  console.error('FAIL: expected non-empty bib_v0.entries for bib probe');
+  console.error('FAIL: expected non-empty bib_v1.entries for bib probe');
   process.exit(1);
 }
-assertEntrySourceSpans('typeset_demo_bib_probe_v0', 'bib_v0', bibArtifactFirst.entries);
-fs.writeFileSync(firstRunShaPath('bib_v0'), `${bibShaFirst}\n`);
+if (bibArtifactFirst?.schema !== 'bib_v1') {
+  console.error('FAIL: expected bib_v1 schema in first-run artifact');
+  process.exit(1);
+}
+for (const [index, entry] of bibArtifactFirst.entries.entries()) {
+  if (typeof entry?.key !== 'string' || entry.key.length === 0) {
+    console.error(`FAIL: bib_v1.entries[${index}] missing key`);
+    process.exit(1);
+  }
+  if (!Number.isInteger(entry?.ordinal) || entry.ordinal <= 0) {
+    console.error(`FAIL: bib_v1.entries[${index}] invalid ordinal`);
+    process.exit(1);
+  }
+  if (typeof entry?.text_sha256 !== 'string' || !/^[0-9a-f]{64}$/.test(entry.text_sha256)) {
+    console.error(`FAIL: bib_v1.entries[${index}] invalid text_sha256`);
+    process.exit(1);
+  }
+}
+const expectedBibOrder = ['demo-key', 'aux-key', 'third-key'];
+const actualBibOrder = bibArtifactFirst.entries.map((entry) => entry.key);
+if (JSON.stringify(actualBibOrder) !== JSON.stringify(expectedBibOrder)) {
+  console.error(`FAIL: expected bib_v1 key order ${JSON.stringify(expectedBibOrder)} but got ${JSON.stringify(actualBibOrder)}`);
+  process.exit(1);
+}
+const bibOrdinals = bibArtifactFirst.entries.map((entry) => entry.ordinal);
+if (JSON.stringify(bibOrdinals) !== JSON.stringify([1, 2, 3])) {
+  console.error(`FAIL: expected bib_v1 ordinals [1,2,3] but got ${JSON.stringify(bibOrdinals)}`);
+  process.exit(1);
+}
+const citeArtifactFirst = JSON.parse(fs.readFileSync(citePath, 'utf8'));
+if (!Array.isArray(citeArtifactFirst?.entries)) {
+  console.error('FAIL: expected cite_v1.entries array in first-run artifact');
+  process.exit(1);
+}
+if (citeArtifactFirst.entries.length <= 0) {
+  console.error('FAIL: expected non-empty cite_v1.entries for bib probe');
+  process.exit(1);
+}
+if (citeArtifactFirst?.schema !== 'cite_v1') {
+  console.error('FAIL: expected cite_v1 schema in first-run artifact');
+  process.exit(1);
+}
+for (const [index, entry] of citeArtifactFirst.entries.entries()) {
+  if (typeof entry?.key !== 'string' || entry.key.length === 0) {
+    console.error(`FAIL: cite_v1.entries[${index}] missing key`);
+    process.exit(1);
+  }
+  if (!Number.isInteger(entry?.line_index) || entry.line_index <= 0) {
+    console.error(`FAIL: cite_v1.entries[${index}] invalid line_index`);
+    process.exit(1);
+  }
+  if (!Number.isInteger(entry?.cite_order) || entry.cite_order <= 0) {
+    console.error(`FAIL: cite_v1.entries[${index}] invalid cite_order`);
+    process.exit(1);
+  }
+  if (entry?.resolved !== true) {
+    console.error(`FAIL: cite_v1.entries[${index}] expected resolved=true`);
+    process.exit(1);
+  }
+  if (!Number.isInteger(entry?.ordinal) || entry.ordinal <= 0) {
+    console.error(`FAIL: cite_v1.entries[${index}] invalid ordinal`);
+    process.exit(1);
+  }
+}
+const expectedCiteOrder = ['demo-key', 'aux-key', 'third-key', 'demo-key', 'aux-key'];
+const actualCiteOrder = citeArtifactFirst.entries.map((entry) => entry.key);
+if (JSON.stringify(actualCiteOrder) !== JSON.stringify(expectedCiteOrder)) {
+  console.error(`FAIL: expected cite_v1 occurrence order ${JSON.stringify(expectedCiteOrder)} but got ${JSON.stringify(actualCiteOrder)}`);
+  process.exit(1);
+}
+const actualCiteOrdinals = citeArtifactFirst.entries.map((entry) => entry.ordinal);
+if (JSON.stringify(actualCiteOrdinals) !== JSON.stringify([1, 2, 3, 1, 2])) {
+  console.error(`FAIL: expected cite_v1 ordinal mapping [1,2,3,1,2] but got ${JSON.stringify(actualCiteOrdinals)}`);
+  process.exit(1);
+}
+const citeOrderByKey = new Map();
+for (const entry of citeArtifactFirst.entries) {
+  if (!citeOrderByKey.has(entry.key)) {
+    citeOrderByKey.set(entry.key, entry.cite_order);
+  } else if (citeOrderByKey.get(entry.key) !== entry.cite_order) {
+    console.error(`FAIL: cite_v1 cite_order drift for key ${entry.key}`);
+    process.exit(1);
+  }
+}
+if (JSON.stringify([...citeOrderByKey.entries()]) !== JSON.stringify([
+  ['demo-key', 1],
+  ['aux-key', 2],
+  ['third-key', 3],
+])) {
+  console.error(`FAIL: expected cite_v1 cite_order mapping [[demo-key,1],[aux-key,2],[third-key,3]] but got ${JSON.stringify([...citeOrderByKey.entries()])}`);
+  process.exit(1);
+}
+assertEntrySourceSpans('typeset_demo_bib_probe_v0', 'bib_v1', bibArtifactFirst.entries);
+assertEntrySourceSpans('typeset_demo_bib_probe_v0', 'cite_v1', citeArtifactFirst.entries);
+fs.writeFileSync(firstRunShaPath('bib_v1'), `${bibShaFirst}\n`);
+fs.writeFileSync(firstRunShaPath('cite_v1'), `${citeShaFirst}\n`);
 
 const hyperrefSummary = JSON.parse(
   fs.readFileSync(path.join(outDir, 'typeset_demo_hyperref_probe_v0', 'summary.json'), 'utf8'),
@@ -569,7 +677,7 @@ if (!typedArtifactShaMap || typeof typedArtifactShaMap !== 'object') {
   console.error('FAIL: expected report.typed_artifact_sha256 map after first run');
   process.exit(1);
 }
-const typedKeys = ['toc', 'labels', 'bib', 'hyperref', 'pkgopt', 'graphics', 'math', 'table'];
+const typedKeys = ['toc', 'labels', 'bib', 'cite', 'hyperref', 'pkgopt', 'graphics', 'math', 'table'];
 for (const key of typedKeys) {
   const value = typedArtifactShaMap[key];
   if (typeof value !== 'string' || !/^[0-9a-f]{64}$/.test(value)) {
