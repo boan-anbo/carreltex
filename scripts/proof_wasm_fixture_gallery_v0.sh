@@ -97,13 +97,13 @@ if (typeof tocShaFirst !== 'string' || !/^[0-9a-f]{64}$/.test(tocShaFirst)) {
 fs.writeFileSync(firstRunShaPath('toc_v0'), `${tocShaFirst}\n`);
 
 const bibSummary = JSON.parse(
-  fs.readFileSync(path.join(outDir, 'typeset_demo_capabilities_v0', 'summary.json'), 'utf8'),
+  fs.readFileSync(path.join(outDir, 'typeset_demo_bib_probe_v0', 'summary.json'), 'utf8'),
 );
 if (bibSummary?.typed_artifacts?.bib?.present !== true) {
   console.error('FAIL: expected bib typed artifact present after first run');
   process.exit(1);
 }
-const bibPath = path.join(outDir, 'typeset_demo_capabilities_v0', 'bib_v0.json');
+const bibPath = path.join(outDir, 'typeset_demo_bib_probe_v0', 'bib_v0.json');
 if (!fs.existsSync(bibPath)) {
   console.error('FAIL: expected bib_v0.json artifact after first run');
   process.exit(1);
@@ -111,6 +111,15 @@ if (!fs.existsSync(bibPath)) {
 const bibShaFirst = bibSummary.typed_artifacts.bib.artifact_sha256;
 if (typeof bibShaFirst !== 'string' || !/^[0-9a-f]{64}$/.test(bibShaFirst)) {
   console.error('FAIL: expected bib artifact sha256 in first summary');
+  process.exit(1);
+}
+const bibArtifactFirst = JSON.parse(fs.readFileSync(bibPath, 'utf8'));
+if (!Array.isArray(bibArtifactFirst?.entries)) {
+  console.error('FAIL: expected bib_v0.entries array in first-run artifact');
+  process.exit(1);
+}
+if (bibArtifactFirst.entries.length <= 0) {
+  console.error('FAIL: expected non-empty bib_v0.entries for bib probe');
   process.exit(1);
 }
 fs.writeFileSync(firstRunShaPath('bib_v0'), `${bibShaFirst}\n`);
@@ -343,7 +352,7 @@ if (tocShaSecond !== tocShaFirst) {
 }
 
 const bibSummary = JSON.parse(
-  fs.readFileSync(path.join(outDir, 'typeset_demo_capabilities_v0', 'summary.json'), 'utf8'),
+  fs.readFileSync(path.join(outDir, 'typeset_demo_bib_probe_v0', 'summary.json'), 'utf8'),
 );
 const bibArtifact = bibSummary?.typed_artifacts?.bib;
 if (!bibArtifact || bibArtifact.present !== true) {
@@ -353,6 +362,13 @@ if (!bibArtifact || bibArtifact.present !== true) {
 const bibShaSecond = bibArtifact.artifact_sha256;
 if (bibShaSecond !== bibShaFirst) {
   console.error('FAIL: bib_v0 artifact sha256 must be stable across reruns');
+  process.exit(1);
+}
+const bibArtifactSecond = JSON.parse(
+  fs.readFileSync(path.join(outDir, 'typeset_demo_bib_probe_v0', 'bib_v0.json'), 'utf8'),
+);
+if (!Array.isArray(bibArtifactSecond?.entries) || bibArtifactSecond.entries.length <= 0) {
+  console.error('FAIL: expected non-empty bib_v0.entries after rerun');
   process.exit(1);
 }
 

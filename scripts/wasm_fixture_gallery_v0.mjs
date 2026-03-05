@@ -23,6 +23,8 @@ const EXPECTED_STATUS_VALUES_V0 = new Set([STATUS_OK_V0, STATUS_NI_V0, STATUS_IN
 const TYPED_ARTIFACT_KEYS_V0 = ['toc', 'labels', 'bib', 'hyperref'];
 const MAX_LABEL_ENTRIES_V0 = 256;
 const MAX_LABEL_VALUE_BYTES_V0 = 256;
+const MAX_BIB_ENTRIES_V0 = 256;
+const MAX_BIB_VALUE_BYTES_V0 = 256;
 
 function sha256HexV0(bytes) {
   return createHash('sha256').update(bytes).digest('hex');
@@ -319,6 +321,128 @@ function readBracedGroupV0(bytes, start) {
   return { ok: false, next: start, value: '' };
 }
 
+function readBracketGroupV0(bytes, start) {
+  let index = skipSpacesV0(bytes, start);
+  if (index >= bytes.length || bytes[index] !== 0x5b) {
+    return { ok: false, next: start, value: '' };
+  }
+  index += 1;
+  const begin = index;
+  let depth = 1;
+  while (index < bytes.length) {
+    const byte = bytes[index];
+    if (byte === 0x5b) {
+      depth += 1;
+    } else if (byte === 0x5d) {
+      depth -= 1;
+      if (depth === 0) {
+        const value = Buffer.from(bytes.slice(begin, index)).toString('utf8').trim();
+        return { ok: true, next: index + 1, value };
+      }
+    }
+    index += 1;
+  }
+  return { ok: false, next: start, value: '' };
+}
+
+function splitCommaValuesV0(rawValue) {
+  return rawValue
+    .split(',')
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0);
+}
+
+function addBibEntryV0(entries, entry) {
+  const value = entry.kind === 'cite_key' ? entry.key : entry.value;
+  const valueBytes = Buffer.from(value, 'utf8');
+  if (valueBytes.length > MAX_BIB_VALUE_BYTES_V0) {
+    throw new Error(`bib_v0 value exceeds cap ${MAX_BIB_VALUE_BYTES_V0}`);
+  }
+  entries.push(entry);
+  if (entries.length > MAX_BIB_ENTRIES_V0) {
+    throw new Error(`bib_v0 entries exceed cap ${MAX_BIB_ENTRIES_V0}`);
+  }
+}
+
+function extractBibEntriesFromSourceV0(sourceBytes) {
+  const entries = [];
+  const citeCommands = new Set([
+    'cite',
+    'citet',
+    'citep',
+    'parencite',
+    'textcite',
+    'autocite',
+    'footcite',
+    'citeauthor',
+    'citeyear',
+    'citeyearpar',
+    'nocite',
+  ]);
+  const resourceCommands = new Set(['addbibresource', 'bibliography']);
+
+  let index = 0;
+  while (index < sourceBytes.length) {
+    if (sourceBytes[index] !== 0x5c) {
+      index += 1;
+      continue;
+    }
+    let commandIndex = index + 1;
+    while (commandIndex < sourceBytes.length && isAsciiLetterByteV0(sourceBytes[commandIndex])) {
+      commandIndex += 1;
+    }
+    if (commandIndex === index + 1) {
+      index += 1;
+      continue;
+    }
+    const command = Buffer.from(sourceBytes.slice(index + 1, commandIndex)).toString('ascii');
+
+    if (resourceCommands.has(command)) {
+      let next = commandIndex;
+      if (command === 'addbibresource') {
+        const optGroup = readBracketGroupV0(sourceBytes, next);
+        if (optGroup.ok) {
+          next = optGroup.next;
+        }
+      }
+      const resourceGroup = readBracedGroupV0(sourceBytes, next);
+      if (!resourceGroup.ok) {
+        index = commandIndex;
+        continue;
+      }
+      for (const value of splitCommaValuesV0(resourceGroup.value)) {
+        addBibEntryV0(entries, { kind: 'resource_hint', command, value });
+      }
+      index = resourceGroup.next;
+      continue;
+    }
+
+    if (citeCommands.has(command)) {
+      let next = commandIndex;
+      for (let i = 0; i < 2; i += 1) {
+        const optGroup = readBracketGroupV0(sourceBytes, next);
+        if (!optGroup.ok) {
+          break;
+        }
+        next = optGroup.next;
+      }
+      const citeGroup = readBracedGroupV0(sourceBytes, next);
+      if (!citeGroup.ok) {
+        index = commandIndex;
+        continue;
+      }
+      for (const key of splitCommaValuesV0(citeGroup.value)) {
+        addBibEntryV0(entries, { kind: 'cite_key', command, key });
+      }
+      index = citeGroup.next;
+      continue;
+    }
+
+    index = commandIndex;
+  }
+  return entries;
+}
+
 function extractHyperrefLinksFromSourceV0(sourceBytes) {
   const links = [];
   let index = 0;
@@ -442,6 +566,24 @@ async function emitHyperrefTypedArtifactV0(caseOutDir, fixtureBytes) {
   };
 }
 
+async function emitBibTypedArtifactV0(caseOutDir, fixtureBytes) {
+  const payload = {
+    version: 1,
+    schema: 'bib_v0',
+    entries: extractBibEntriesFromSourceV0(fixtureBytes),
+  };
+  const bytes = Buffer.from(`${JSON.stringify(payload, null, 2)}\n`, 'utf8');
+  const relpath = 'bib_v0.json';
+  const fullPath = path.join(caseOutDir, relpath);
+  await writeFile(fullPath, bytes);
+  return {
+    present: true,
+    items: payload.entries.length,
+    artifact_relpath: relpath,
+    artifact_sha256: sha256HexV0(bytes),
+  };
+}
+
 async function emitTypedArtifactsV0(caseSpec, caseOutDir, typedArtifacts, fixtureBytes) {
   if (caseSpec.id === 'typeset_demo_toc_probe_v0') {
     typedArtifacts.toc = await emitPlaceholderTypedArtifactV0(caseOutDir, 'toc_v0', 'toc_v0');
@@ -449,8 +591,8 @@ async function emitTypedArtifactsV0(caseSpec, caseOutDir, typedArtifacts, fixtur
   if (caseSpec.id === 'typeset_demo_labels_probe_v0') {
     typedArtifacts.labels = await emitLabelsTypedArtifactV0(caseOutDir, fixtureBytes);
   }
-  if (caseSpec.id === 'typeset_demo_capabilities_v0') {
-    typedArtifacts.bib = await emitPlaceholderTypedArtifactV0(caseOutDir, 'bib_v0', 'bib_v0');
+  if (caseSpec.id === 'typeset_demo_bib_probe_v0') {
+    typedArtifacts.bib = await emitBibTypedArtifactV0(caseOutDir, fixtureBytes);
   }
   if (caseSpec.id === 'typeset_demo_hyperref_probe_v0') {
     typedArtifacts.hyperref = await emitHyperrefTypedArtifactV0(caseOutDir, fixtureBytes);
