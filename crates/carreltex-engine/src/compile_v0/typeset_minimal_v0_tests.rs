@@ -96,7 +96,7 @@ fn typeset_minimal_headings_emit_bold_with_paragraph_breaks() {
     let body = extract_typeset_body(main);
     let text = String::from_utf8(body).expect("body should be valid utf8");
     assert!(
-        text.contains("Before.\n\n{Intro}\n\n{A [B]}\n\n~ After."),
+        text.contains("Before.\n\n@S {Intro}\n\n@s {A [B]}\n\n~ After."),
         "body={text:?}"
     );
 }
@@ -107,7 +107,7 @@ fn typeset_minimal_heading_at_start_has_no_leading_blank_lines() {
         b"\\documentclass{article}\\begin{document}\\paragraph{Lead in}Body text.\\end{document}";
     let body = extract_typeset_body(main);
     let text = String::from_utf8(body).expect("body should be valid utf8");
-    assert!(text.starts_with("{Lead in}\n\n~ Body text."), "body={text:?}");
+    assert!(text.starts_with("@s {Lead in}\n\n~ Body text."), "body={text:?}");
 }
 
 #[test]
@@ -116,7 +116,7 @@ fn typeset_minimal_first_paragraph_after_heading_uses_noindent_marker() {
     let body = extract_typeset_body(main);
     let text = String::from_utf8(body).expect("body should be valid utf8");
     assert!(
-        text.contains("{Intro}\n\n~ First paragraph.\n\nSecond paragraph."),
+        text.contains("@S {Intro}\n\n~ First paragraph.\n\nSecond paragraph."),
         "body={text:?}"
     );
 }
@@ -190,7 +190,7 @@ fn typeset_minimal_heading_list_quote_rhythm_markers_are_stable() {
     let body = extract_typeset_body(main);
     let text = String::from_utf8(body).expect("body should be valid utf8");
     assert!(
-        text.contains("{Heading}\n\n~ After heading.\n\n- First item\n- Second item\n\n> Quoted line one\n> Quoted line two\n\nAfter quote."),
+        text.contains("@S {Heading}\n\n~ After heading.\n\n- First item\n- Second item\n\n> Quoted line one\n> Quoted line two\n\nAfter quote."),
         "body={text:?}"
     );
 }

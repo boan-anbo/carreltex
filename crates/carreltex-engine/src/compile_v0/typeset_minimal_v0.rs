@@ -20,6 +20,8 @@ const CENTERLINE_CONTROL_V0: &[u8] = b"centerline";
 const FLUSHRIGHT_ENV_V0: &[u8] = b"flushright";
 const RIGHTLINE_CONTROL_V0: &[u8] = b"rightline";
 const NOINDENT_PREFIX_MARKER_V0: &[u8] = b"~ ";
+const SECTION_HEADING_PREFIX_MARKER_V0: &[u8] = b"@S ";
+const SUBSECTION_HEADING_PREFIX_MARKER_V0: &[u8] = b"@s ";
 const ITALIC_START_MARKER_V0: u8 = b'[';
 const ITALIC_END_MARKER_V0: u8 = b']';
 const BOLD_START_MARKER_V0: u8 = b'{';
@@ -612,6 +614,20 @@ fn is_heading_control_v0(name: &[u8]) -> bool {
         || name == SUBPARAGRAPH_CONTROL_V0
 }
 
+fn heading_prefix_for_control_v0(name: &[u8]) -> Option<&'static [u8]> {
+    if name == SECTION_CONTROL_V0 {
+        Some(SECTION_HEADING_PREFIX_MARKER_V0)
+    } else if name == SUBSECTION_CONTROL_V0
+        || name == SUBSUBSECTION_CONTROL_V0
+        || name == PARAGRAPH_CONTROL_V0
+        || name == SUBPARAGRAPH_CONTROL_V0
+    {
+        Some(SUBSECTION_HEADING_PREFIX_MARKER_V0)
+    } else {
+        None
+    }
+}
+
 fn consume_heading_command_v0(tokens: &[TokenV0], index: usize, out: &mut Vec<u8>) -> Option<usize> {
     let TokenV0::ControlSeq(name) = tokens.get(index)? else {
         return None;
@@ -619,11 +635,13 @@ fn consume_heading_command_v0(tokens: &[TokenV0], index: usize, out: &mut Vec<u8
     if !is_heading_control_v0(name.as_slice()) {
         return None;
     }
+    let heading_prefix = heading_prefix_for_control_v0(name.as_slice())?;
     let (group_start, group_end, next) = consume_group_bounds(tokens, index + 1)?;
     let mut heading = Vec::new();
     consume_fragment_range_v0(tokens, group_start, group_end, &mut heading, false, true)?;
     trim_trailing_spaces(&mut heading);
     push_paragraph_break(out);
+    out.extend_from_slice(heading_prefix);
     out.push(BOLD_START_MARKER_V0);
     out.extend_from_slice(&heading);
     out.push(BOLD_END_MARKER_V0);
