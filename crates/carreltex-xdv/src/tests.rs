@@ -185,6 +185,33 @@ fn planner_width_uses_variable_space_width_v0() {
 }
 
 #[test]
+fn style_markers_have_zero_advance_and_roundtrip_v0() {
+    let layout = plan_layout_width_v0(b"A [B] {C}", 65_536, 786_432, 10_000_000, 200)
+        .expect("layout plan");
+    assert_eq!(layout.pages.len(), 1);
+    assert_eq!(layout.pages[0].lines.len(), 1);
+    let line = &layout.pages[0].lines[0];
+
+    for glyph in &line.glyphs {
+        if matches!(glyph.byte, b'[' | b']' | b'{' | b'}') {
+            assert_eq!(glyph.advance_sp, 0);
+        } else {
+            assert!(glyph.advance_sp > 0);
+        }
+    }
+
+    let xdv = write_dvi_v2_text_page_from_layout_v0(&layout, 786_432).expect("xdv bytes");
+    let parsed = parse_dvi_v2_text_page_to_layout_v0(&xdv, 786_432).expect("parsed layout");
+    assert_eq!(parsed, layout);
+    assert!(validate_dvi_v2_text_page_matches_layout_v0(
+        &xdv, &layout, 786_432
+    ));
+    assert!(validate_dvi_v2_text_page_with_layout_v0(
+        &xdv, 65_536, 786_432
+    ));
+}
+
+#[test]
 fn pdf_renderer_keeps_multi_space_line_unwrapped_under_width_limit_v0() {
     let layout =
         plan_layout_width_v0(b"A     B", 65_536, 786_432, 300_000, 200).expect("layout plan");

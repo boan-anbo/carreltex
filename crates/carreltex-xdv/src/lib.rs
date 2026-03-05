@@ -27,7 +27,7 @@ pub use layout_v0::{
     PagePlanV0,
 };
 pub use pdf_v0::render_dvi_v2_text_page_to_pdf_v0;
-use layout_v0::glyph_width_sp_v0;
+use layout_v0::{glyph_width_sp_v0, is_style_marker_byte_v0};
 
 fn push_u32_be(out: &mut Vec<u8>, value: u32) {
     out.extend_from_slice(&value.to_be_bytes());
@@ -231,13 +231,18 @@ fn emit_line_plan_v0(out: &mut Vec<u8>, line: &LinePlanV0) -> Option<u32> {
     }
     let mut emitted_width = 0u32;
     for glyph in &line.glyphs {
-        if !is_supported_text_byte_v0(glyph.byte) || glyph.advance_sp <= 0 {
+        if !is_supported_text_byte_v0(glyph.byte) || glyph.advance_sp < 0 {
+            return None;
+        }
+        if glyph.advance_sp == 0 && !is_style_marker_byte_v0(glyph.byte) {
             return None;
         }
         out.push(glyph.byte);
         out.push(DVI_RIGHT3);
         push_i24_be(out, glyph.advance_sp)?;
-        emitted_width = emitted_width.checked_add(u32::try_from(glyph.advance_sp).ok()?)?;
+        if glyph.advance_sp > 0 {
+            emitted_width = emitted_width.checked_add(u32::try_from(glyph.advance_sp).ok()?)?;
+        }
     }
     if emitted_width != line.width_sp {
         return None;
@@ -548,12 +553,20 @@ fn parse_dvi_v2_text_page_internal_v0(
                 right3_count = right3_count.checked_add(1)?;
                 index += 1;
                 let amount = read_i24_be(bytes, &mut index)?;
-                if amount <= 0 {
+                if amount < 0 {
                     return None;
                 }
-                let amount_u32 = u32::try_from(amount).ok()?;
-                current_line_width = current_line_width.checked_add(amount_u32)?;
-                page_h = page_h.checked_add(amount_u32)?;
+                if is_style_marker_byte_v0(pending_byte) {
+                    if amount != 0 {
+                        return None;
+                    }
+                } else if amount == 0 {
+                    return None;
+                } else {
+                    let amount_u32 = u32::try_from(amount).ok()?;
+                    current_line_width = current_line_width.checked_add(amount_u32)?;
+                    page_h = page_h.checked_add(amount_u32)?;
+                }
                 current_glyphs.push(GlyphPlanV0 {
                     byte: pending_byte,
                     advance_sp: amount,
