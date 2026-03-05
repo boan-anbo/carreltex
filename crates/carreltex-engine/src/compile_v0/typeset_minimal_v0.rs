@@ -15,6 +15,8 @@ const DOCUMENT_ENV_V0: &[u8] = b"document";
 const ITEMIZE_ENV_V0: &[u8] = b"itemize";
 const ENUMERATE_ENV_V0: &[u8] = b"enumerate";
 const QUOTE_ENV_V0: &[u8] = b"quote";
+const CENTER_ENV_V0: &[u8] = b"center";
+const CENTERLINE_CONTROL_V0: &[u8] = b"centerline";
 const ITALIC_START_MARKER_V0: u8 = b'[';
 const ITALIC_END_MARKER_V0: u8 = b']';
 const BOLD_START_MARKER_V0: u8 = b'{';
@@ -708,6 +710,24 @@ fn prefix_quote_lines_v0(content: &[u8]) -> Vec<u8> {
     out
 }
 
+fn prefix_center_lines_v0(content: &[u8]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(content.len().saturating_add(8));
+    let mut at_line_start = true;
+    for &byte in content {
+        if matches!(byte, NEWLINE_MARKER_V0 | PAGE_BREAK_MARKER_V0) {
+            out.push(byte);
+            at_line_start = true;
+            continue;
+        }
+        if at_line_start {
+            out.extend_from_slice(b"^ ");
+            at_line_start = false;
+        }
+        out.push(byte);
+    }
+    out
+}
+
 fn consume_quote_environment_v0(tokens: &[TokenV0], index: usize, out: &mut Vec<u8>) -> Option<usize> {
     let (env_name, mut cursor) = consume_env_name_command_v0(tokens, index, BEGIN_CONTROL_V0)?;
     if env_name.as_slice() != QUOTE_ENV_V0 {
@@ -744,6 +764,67 @@ fn consume_quote_environment_v0(tokens: &[TokenV0], index: usize, out: &mut Vec<
     }
 }
 
+fn consume_center_environment_v0(tokens: &[TokenV0], index: usize, out: &mut Vec<u8>) -> Option<usize> {
+    let (env_name, mut cursor) = consume_env_name_command_v0(tokens, index, BEGIN_CONTROL_V0)?;
+    if env_name.as_slice() != CENTER_ENV_V0 {
+        return None;
+    }
+
+    push_paragraph_break(out);
+    let mut centered = Vec::<u8>::new();
+    loop {
+        match tokens.get(cursor) {
+            Some(TokenV0::ControlSeq(name)) if name.as_slice() == END_CONTROL_V0 => {
+                let (end_env, next) = consume_env_name_command_v0(tokens, cursor, END_CONTROL_V0)?;
+                if end_env.as_slice() != CENTER_ENV_V0 {
+                    return None;
+                }
+                trim_trailing_spaces(&mut centered);
+                let prefixed = prefix_center_lines_v0(&centered);
+                out.extend_from_slice(&prefixed);
+                push_paragraph_break(out);
+                return Some(next);
+            }
+            Some(TokenV0::ControlSeq(name)) if name.as_slice() == BEGIN_CONTROL_V0 => {
+                return None;
+            }
+            Some(TokenV0::ControlSeq(name)) if name.as_slice() == CARRELPAR_MARKER_CONTROL_V0 => {
+                push_paragraph_break(&mut centered);
+                cursor += 1;
+            }
+            Some(_) => {
+                cursor = consume_fragment_token_v0(tokens, cursor, &mut centered, false, true)?;
+            }
+            None => return None,
+        }
+    }
+}
+
+fn consume_centerline_command_v0(tokens: &[TokenV0], index: usize, out: &mut Vec<u8>) -> Option<usize> {
+    if !matches!(
+        tokens.get(index),
+        Some(TokenV0::ControlSeq(name)) if name.as_slice() == CENTERLINE_CONTROL_V0
+    ) {
+        return None;
+    }
+    let (group_start, group_end, next) = consume_group_bounds(tokens, index + 1)?;
+    let mut centered = Vec::new();
+    consume_fragment_range_v0(tokens, group_start, group_end, &mut centered, false, true)?;
+    trim_trailing_spaces(&mut centered);
+    if centered.is_empty() {
+        return None;
+    }
+    if centered.contains(&NEWLINE_MARKER_V0) || centered.contains(&PAGE_BREAK_MARKER_V0) {
+        return None;
+    }
+
+    push_paragraph_break(out);
+    out.extend_from_slice(b"^ ");
+    out.extend_from_slice(&centered);
+    push_paragraph_break(out);
+    Some(next)
+}
+
 fn consume_body_environment_v0(tokens: &[TokenV0], index: usize, out: &mut Vec<u8>) -> Option<usize> {
     let (env_name, _) = consume_env_name_command_v0(tokens, index, BEGIN_CONTROL_V0)?;
     if env_name.as_slice() == ITEMIZE_ENV_V0 || env_name.as_slice() == ENUMERATE_ENV_V0 {
@@ -751,6 +832,9 @@ fn consume_body_environment_v0(tokens: &[TokenV0], index: usize, out: &mut Vec<u
     }
     if env_name.as_slice() == QUOTE_ENV_V0 {
         return consume_quote_environment_v0(tokens, index, out);
+    }
+    if env_name.as_slice() == CENTER_ENV_V0 {
+        return consume_center_environment_v0(tokens, index, out);
     }
     None
 }
@@ -859,6 +943,9 @@ pub(crate) fn extract_typeset_minimal_text_body_v0(tokens: &[TokenV0]) -> Option
             Some(TokenV0::ControlSeq(name)) if name.as_slice() == CARRELPAR_MARKER_CONTROL_V0 => {
                 push_paragraph_break(&mut body);
                 index += 1;
+            }
+            Some(TokenV0::ControlSeq(name)) if name.as_slice() == CENTERLINE_CONTROL_V0 => {
+                index = consume_centerline_command_v0(tokens, index, &mut body)?;
             }
             Some(TokenV0::ControlSeq(name)) if is_heading_control_v0(name.as_slice()) => {
                 index = consume_heading_command_v0(tokens, index, &mut body)?;
