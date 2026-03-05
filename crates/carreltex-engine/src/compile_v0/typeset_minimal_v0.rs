@@ -8,6 +8,12 @@ const HARD_LINE_BREAK_CONTROL_V0: &[u8] = b"\\";
 const NEWLINE_ALIAS_CONTROL_V0: &[u8] = b"newline";
 const LINEBREAK_ALIAS_CONTROL_V0: &[u8] = b"linebreak";
 const PAGEBREAK_ALIAS_CONTROL_V0: &[u8] = b"pagebreak";
+const BEGIN_CONTROL_V0: &[u8] = b"begin";
+const END_CONTROL_V0: &[u8] = b"end";
+const ITEM_CONTROL_V0: &[u8] = b"item";
+const DOCUMENT_ENV_V0: &[u8] = b"document";
+const ITEMIZE_ENV_V0: &[u8] = b"itemize";
+const ENUMERATE_ENV_V0: &[u8] = b"enumerate";
 const ITALIC_START_MARKER_V0: u8 = b'[';
 const ITALIC_END_MARKER_V0: u8 = b']';
 const BOLD_START_MARKER_V0: u8 = b'{';
@@ -284,10 +290,14 @@ fn consume_documentclass_v0(tokens: &[TokenV0], index: usize) -> Option<usize> {
     Some(cursor)
 }
 
-fn consume_document_env_command_v0(tokens: &[TokenV0], index: usize, name: &[u8]) -> Option<usize> {
+fn consume_env_name_command_v0(
+    tokens: &[TokenV0],
+    index: usize,
+    command_name: &[u8],
+) -> Option<(Vec<u8>, usize)> {
     if !matches!(
         tokens.get(index),
-        Some(TokenV0::ControlSeq(control)) if control.as_slice() == name
+        Some(TokenV0::ControlSeq(control)) if control.as_slice() == command_name
     ) {
         return None;
     }
@@ -306,7 +316,15 @@ fn consume_document_env_command_v0(tokens: &[TokenV0], index: usize, name: &[u8]
     while matches!(env_bytes.last(), Some(b' ')) {
         env_bytes.pop();
     }
-    if env_bytes != b"document" {
+    if env_bytes.is_empty() {
+        return None;
+    }
+    Some((env_bytes, next))
+}
+
+fn consume_document_env_command_v0(tokens: &[TokenV0], index: usize, name: &[u8]) -> Option<usize> {
+    let (env_name, next) = consume_env_name_command_v0(tokens, index, name)?;
+    if env_name.as_slice() != DOCUMENT_ENV_V0 {
         return None;
     }
     Some(next)
@@ -607,6 +625,70 @@ fn consume_heading_command_v0(tokens: &[TokenV0], index: usize, out: &mut Vec<u8
     Some(next)
 }
 
+fn consume_list_environment_v0(tokens: &[TokenV0], index: usize, out: &mut Vec<u8>) -> Option<usize> {
+    let (env_name, mut cursor) = consume_env_name_command_v0(tokens, index, BEGIN_CONTROL_V0)?;
+    let is_itemize = env_name.as_slice() == ITEMIZE_ENV_V0;
+    let is_enumerate = env_name.as_slice() == ENUMERATE_ENV_V0;
+    if !is_itemize && !is_enumerate {
+        return None;
+    }
+
+    push_paragraph_break(out);
+    let mut enumerate_counter = 1usize;
+
+    loop {
+        cursor = skip_spaces(tokens, cursor);
+        match tokens.get(cursor)? {
+            TokenV0::ControlSeq(name) if name.as_slice() == ITEM_CONTROL_V0 => {
+                push_newline(out);
+                if is_itemize {
+                    out.extend_from_slice(b"- ");
+                } else {
+                    out.extend_from_slice(enumerate_counter.to_string().as_bytes());
+                    out.extend_from_slice(b". ");
+                    enumerate_counter += 1;
+                }
+                cursor += 1;
+
+                loop {
+                    match tokens.get(cursor) {
+                        Some(TokenV0::ControlSeq(name)) if name.as_slice() == ITEM_CONTROL_V0 => {
+                            break;
+                        }
+                        Some(TokenV0::ControlSeq(name)) if name.as_slice() == BEGIN_CONTROL_V0 => {
+                            return None;
+                        }
+                        Some(TokenV0::ControlSeq(name)) if name.as_slice() == END_CONTROL_V0 => {
+                            let (end_env, next) =
+                                consume_env_name_command_v0(tokens, cursor, END_CONTROL_V0)?;
+                            if end_env != env_name {
+                                return None;
+                            }
+                            trim_trailing_spaces(out);
+                            push_paragraph_break(out);
+                            return Some(next);
+                        }
+                        Some(_) => {
+                            cursor = consume_fragment_token_v0(tokens, cursor, out, false, true)?;
+                        }
+                        None => return None,
+                    }
+                }
+                trim_trailing_spaces(out);
+            }
+            TokenV0::ControlSeq(name) if name.as_slice() == END_CONTROL_V0 => {
+                let (end_env, next) = consume_env_name_command_v0(tokens, cursor, END_CONTROL_V0)?;
+                if end_env != env_name {
+                    return None;
+                }
+                push_paragraph_break(out);
+                return Some(next);
+            }
+            _ => return None,
+        }
+    }
+}
+
 fn consume_meta_declaration_v0(
     tokens: &[TokenV0],
     index: usize,
@@ -678,8 +760,8 @@ pub(crate) fn extract_typeset_minimal_text_body_v0(tokens: &[TokenV0]) -> Option
                 meta.date = Some(value);
                 index = next;
             }
-            Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"begin" => {
-                index = consume_document_env_command_v0(tokens, index, b"begin")?;
+            Some(TokenV0::ControlSeq(name)) if name.as_slice() == BEGIN_CONTROL_V0 => {
+                index = consume_document_env_command_v0(tokens, index, BEGIN_CONTROL_V0)?;
                 break;
             }
             Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"protect" || name.as_slice() == b"relax" => {
@@ -701,9 +783,12 @@ pub(crate) fn extract_typeset_minimal_text_body_v0(tokens: &[TokenV0]) -> Option
                 emit_maketitle_block_v0(&mut body, &meta);
                 index += 1;
             }
-            Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"end" => {
-                index = consume_document_env_command_v0(tokens, index, b"end")?;
+            Some(TokenV0::ControlSeq(name)) if name.as_slice() == END_CONTROL_V0 => {
+                index = consume_document_env_command_v0(tokens, index, END_CONTROL_V0)?;
                 break;
+            }
+            Some(TokenV0::ControlSeq(name)) if name.as_slice() == BEGIN_CONTROL_V0 => {
+                index = consume_list_environment_v0(tokens, index, &mut body)?;
             }
             Some(TokenV0::ControlSeq(name)) if name.as_slice() == CARRELPAR_MARKER_CONTROL_V0 => {
                 push_paragraph_break(&mut body);

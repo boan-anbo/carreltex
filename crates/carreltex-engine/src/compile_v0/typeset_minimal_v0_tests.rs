@@ -111,6 +111,25 @@ fn typeset_minimal_heading_at_start_has_no_leading_blank_lines() {
 }
 
 #[test]
+fn typeset_minimal_lists_emit_expected_itemize_and_enumerate_lines() {
+    let main = b"\\documentclass{article}\\begin{document}Before.\\begin{itemize}\\item First \\emph{item}\\item Second item\\end{itemize}\\begin{enumerate}\\item One\\item Two\\end{enumerate}After.\\end{document}";
+    let body = extract_typeset_body(main);
+    let text = String::from_utf8(body).expect("body should be valid utf8");
+    assert!(
+        text.contains("Before.\n\n- First [item]\n- Second item\n\n1. One\n2. Two\n\nAfter."),
+        "body={text:?}"
+    );
+}
+
+#[test]
+fn typeset_minimal_rejects_nested_lists() {
+    let main = b"\\documentclass{article}\\begin{document}\\begin{itemize}\\item Outer\\begin{enumerate}\\item Inner\\end{enumerate}\\end{itemize}\\end{document}";
+    let result = compile_typeset(main);
+    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert!(result.main_xdv_bytes.is_empty());
+}
+
+#[test]
 fn typeset_minimal_long_paragraph_wraps_to_multiple_lines() {
     let main = b"\\documentclass{article}\\begin{document}This is a long paragraph that should wrap deterministically to multiple physical lines in the minimal typeset pipeline when width-based layout is enabled and the content exceeds the configured line width for the page body area.\\end{document}";
     let result = compile_typeset(main);
