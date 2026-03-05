@@ -38,6 +38,7 @@ const FOOTNOTE_LINE_PREFIX_MARKER_V0: &[u8] = b"!f ";
 const HREF_URL_LINE_PREFIX_MARKER_V0: &[u8] = b"!u ";
 const LABEL_LINE_PREFIX_MARKER_V0: &[u8] = b"!l ";
 const REF_LINE_PREFIX_MARKER_V0: &[u8] = b"!r ";
+const REF_ANCHOR_LINK_LINE_PREFIX_MARKER_V0: &[u8] = b"!ra ";
 const BIBITEM_LINE_PREFIX_MARKER_V0: &[u8] = b"!b ";
 const CITE_LINE_PREFIX_MARKER_V0: &[u8] = b"!c ";
 const TABLE_ROW_PREFIX_MARKER_V0: &[u8] = b"!t ";
@@ -101,6 +102,24 @@ struct RefOccurrenceMetaV0 {
     key: Vec<u8>,
     line_index: u32,
     resolved_anchor_id: Option<u32>,
+}
+
+#[derive(Clone)]
+struct HrefLinkMetaV0 {
+    link_id: u32,
+    url: Vec<u8>,
+}
+
+#[derive(Clone)]
+struct RefAnchorLinkMetaV0 {
+    link_id: u32,
+    anchor_id: u32,
+}
+
+struct CrossRefArtifactsV1 {
+    labels_by_key: BTreeMap<Vec<u8>, LabelEntryMetaV0>,
+    heading_anchor_ids: BTreeMap<u32, ()>,
+    hyperref_enabled: bool,
 }
 
 #[derive(Clone)]
@@ -815,6 +834,13 @@ fn consume_fragment_token_v0(
         }
         TokenV0::ControlSeq(name) if allow_hard_break && name.as_slice() == b"[" => {
             consume_display_math_command_v0(tokens, index, out)
+        }
+        TokenV0::ControlSeq(name) if name.as_slice() == REF_CONTROL_V0 => {
+            let (key, next) = parse_label_or_ref_key_group_v0(tokens, index)?;
+            out.extend_from_slice(REF_MARKER_PREFIX_V0);
+            out.extend_from_slice(&key);
+            out.extend_from_slice(REF_MARKER_SUFFIX_V0);
+            Some(next)
         }
         TokenV0::ControlSeq(name) if name.as_slice() == b"protect" || name.as_slice() == b"relax" => {
             Some(index + 1)
@@ -1636,10 +1662,34 @@ fn parse_label_or_ref_key_group_v0(tokens: &[TokenV0], index: usize) -> Option<(
     Some((key, next))
 }
 
-fn resolve_ref_markers_v0(
-    body: &[u8],
+fn build_crossref_artifacts_v1(
     labels_by_key: &BTreeMap<Vec<u8>, LabelEntryMetaV0>,
+    toc_entries: &[TocEntryMetaV0],
+    hyperref_enabled: bool,
+) -> Option<CrossRefArtifactsV1> {
+    let mut heading_anchor_ids = BTreeMap::<u32, ()>::new();
+    for entry in toc_entries {
+        if heading_anchor_ids.insert(entry.anchor_id, ()).is_some() {
+            return None;
+        }
+    }
+    for entry in labels_by_key.values() {
+        if matches!(entry.kind, LabelKindV0::Heading) {
+            heading_anchor_ids.entry(entry.anchor_id).or_insert(());
+        }
+    }
+    Some(CrossRefArtifactsV1 {
+        labels_by_key: labels_by_key.clone(),
+        heading_anchor_ids,
+        hyperref_enabled,
+    })
+}
+
+fn apply_crossref_pass_v1(
+    body: &[u8],
+    artifacts: &CrossRefArtifactsV1,
     ref_occurrences: &mut Vec<RefOccurrenceMetaV0>,
+    ref_link_anchor_ids: &mut Vec<u32>,
 ) -> Option<Vec<u8>> {
     let mut out = Vec::<u8>::with_capacity(body.len());
     let mut index = 0usize;
@@ -1662,18 +1712,33 @@ fn resolve_ref_markers_v0(
                 return None;
             }
             let key = body[key_start..key_end].to_vec();
-            let resolved_anchor_id = labels_by_key.get(&key).map(|entry| entry.anchor_id);
+            let resolved_anchor_id = artifacts.labels_by_key.get(&key).map(|entry| entry.anchor_id);
+            if let Some(anchor_id) = resolved_anchor_id {
+                if let Some(label) = artifacts.labels_by_key.get(&key) {
+                    if matches!(label.kind, LabelKindV0::Heading)
+                        && !artifacts.heading_anchor_ids.contains_key(&anchor_id)
+                    {
+                        return None;
+                    }
+                }
+            }
+            if let Some(anchor_id) = resolved_anchor_id {
+                if artifacts.hyperref_enabled {
+                    out.push(LINK_START_MARKER_V0);
+                    out.extend_from_slice(anchor_id.to_string().as_bytes());
+                    out.push(LINK_END_MARKER_V0);
+                    ref_link_anchor_ids.push(anchor_id);
+                } else {
+                    out.extend_from_slice(anchor_id.to_string().as_bytes());
+                }
+            } else {
+                out.extend_from_slice(b"??");
+            }
             ref_occurrences.push(RefOccurrenceMetaV0 {
                 key,
                 line_index,
                 resolved_anchor_id,
             });
-
-            if let Some(anchor_id) = resolved_anchor_id {
-                out.extend_from_slice(anchor_id.to_string().as_bytes());
-            } else {
-                out.extend_from_slice(b"??");
-            }
             index = key_end + REF_MARKER_SUFFIX_V0.len();
             continue;
         }
@@ -1686,6 +1751,57 @@ fn resolve_ref_markers_v0(
         index += 1;
     }
     Some(out)
+}
+
+fn assign_link_metadata_v1(
+    body: &[u8],
+    href_urls: &[Vec<u8>],
+    ref_link_anchor_ids: &[u32],
+) -> Option<(Vec<HrefLinkMetaV0>, Vec<RefAnchorLinkMetaV0>)> {
+    let mut href_links = Vec::<HrefLinkMetaV0>::new();
+    let mut ref_links = Vec::<RefAnchorLinkMetaV0>::new();
+    let mut href_cursor = 0usize;
+    let mut ref_cursor = 0usize;
+    let mut next_link_id = 1u32;
+    let mut index = 0usize;
+
+    while index < body.len() {
+        if body[index] != LINK_START_MARKER_V0 {
+            index += 1;
+            continue;
+        }
+        let segment_start = index + 1;
+        let mut segment_end = segment_start;
+        while segment_end < body.len() && body[segment_end] != LINK_END_MARKER_V0 {
+            segment_end += 1;
+        }
+        if segment_end >= body.len() || segment_end == segment_start {
+            return None;
+        }
+        let segment = &body[segment_start..segment_end];
+        if segment.first().copied() == Some(BOLD_START_MARKER_V0) {
+            let href_url = href_urls.get(href_cursor)?.clone();
+            href_links.push(HrefLinkMetaV0 {
+                link_id: next_link_id,
+                url: href_url,
+            });
+            href_cursor += 1;
+        } else {
+            let anchor_id = *ref_link_anchor_ids.get(ref_cursor)?;
+            ref_links.push(RefAnchorLinkMetaV0 {
+                link_id: next_link_id,
+                anchor_id,
+            });
+            ref_cursor += 1;
+        }
+        next_link_id = next_link_id.checked_add(1)?;
+        index = segment_end + 1;
+    }
+
+    if href_cursor != href_urls.len() || ref_cursor != ref_link_anchor_ids.len() {
+        return None;
+    }
+    Some((href_links, ref_links))
 }
 
 fn resolve_cite_markers_v0(
@@ -2027,6 +2143,7 @@ pub(crate) fn extract_typeset_minimal_text_body_v0(tokens: &[TokenV0]) -> Option
     let mut toc_entries = Vec::<TocEntryMetaV0>::new();
     let mut labels_by_key = BTreeMap::<Vec<u8>, LabelEntryMetaV0>::new();
     let mut ref_occurrences = Vec::<RefOccurrenceMetaV0>::new();
+    let mut ref_link_anchor_ids = Vec::<u32>::new();
     let mut cite_occurrences = Vec::<CiteOccurrenceMetaV0>::new();
     let mut next_anchor_id = 1u32;
     let mut saw_maketitle = false;
@@ -2191,7 +2308,19 @@ pub(crate) fn extract_typeset_minimal_text_body_v0(tokens: &[TokenV0]) -> Option
     body = normalize_tex_ellipsis_v0(&body);
     body = normalize_bracket_spacing_v0(&body);
     body = normalize_wrapper_marker_spacing_v0(&body);
-    body = resolve_ref_markers_v0(&body, &labels_by_key, &mut ref_occurrences)?;
+    let crossref_artifacts = build_crossref_artifacts_v1(
+        &labels_by_key,
+        &toc_entries,
+        !href_urls.is_empty(),
+    )?;
+    body = apply_crossref_pass_v1(
+        &body,
+        &crossref_artifacts,
+        &mut ref_occurrences,
+        &mut ref_link_anchor_ids,
+    )?;
+    let (href_links, ref_anchor_links) =
+        assign_link_metadata_v1(&body, &href_urls, &ref_link_anchor_ids)?;
     let bibitems_by_key = bibitems
         .iter()
         .map(|item| (item.key.clone(), item.ordinal))
@@ -2209,13 +2338,13 @@ pub(crate) fn extract_typeset_minimal_text_body_v0(tokens: &[TokenV0]) -> Option
         }
     }
 
-    if !href_urls.is_empty() {
+    if !href_links.is_empty() {
         push_paragraph_break(&mut body);
-        for (href_index, href_url) in href_urls.iter().enumerate() {
+        for href in &href_links {
             body.extend_from_slice(HREF_URL_LINE_PREFIX_MARKER_V0);
-            body.extend_from_slice((href_index + 1).to_string().as_bytes());
+            body.extend_from_slice(href.link_id.to_string().as_bytes());
             body.push(b' ');
-            body.extend_from_slice(href_url);
+            body.extend_from_slice(&href.url);
             push_newline(&mut body);
         }
     }
@@ -2269,6 +2398,16 @@ pub(crate) fn extract_typeset_minimal_text_body_v0(tokens: &[TokenV0]) -> Option
                     .to_string()
                     .as_bytes(),
             );
+            push_newline(&mut body);
+        }
+    }
+    if !ref_anchor_links.is_empty() {
+        push_paragraph_break(&mut body);
+        for link in &ref_anchor_links {
+            body.extend_from_slice(REF_ANCHOR_LINK_LINE_PREFIX_MARKER_V0);
+            body.extend_from_slice(link.link_id.to_string().as_bytes());
+            body.push(b' ');
+            body.extend_from_slice(link.anchor_id.to_string().as_bytes());
             push_newline(&mut body);
         }
     }
