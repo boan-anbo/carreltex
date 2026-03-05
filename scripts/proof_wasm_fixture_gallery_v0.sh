@@ -61,6 +61,8 @@ printf 'fixture-bytes-for-appendices-apx-a-nested\n' > "$FIXTURE_SOURCE_DIR/xete
 printf 'fixture-bytes-for-appendices-apx-b-nested\n' > "$FIXTURE_SOURCE_DIR/xetex/tex/appendices/apx_b.tex"
 printf 'fixture-bytes-for-appendices-apx-a-normalized\n' > "$FIXTURE_SOURCE_DIR/xetex/tex/appendices__apx_a.tex"
 printf 'fixture-bytes-for-appendices-apx-b-normalized\n' > "$FIXTURE_SOURCE_DIR/xetex/tex/appendices__apx_b.tex"
+printf '\\include{cycles/b}\n' > "$FIXTURE_SOURCE_DIR/xetex/tex/cycles__a.tex"
+printf '\\input{cycles/a}\n' > "$FIXTURE_SOURCE_DIR/xetex/tex/cycles__b.tex"
 printf 'fixture-bytes-for-demo-png\n' > "$FIXTURE_SOURCE_DIR/xetex/png/demo.png"
 printf 'fixture-bytes-for-probe-figure-png\n' > "$FIXTURE_SOURCE_DIR/xetex/png/probe-figure.png"
 printf 'fixture-bytes-for-figs-diagram-pdf\n' > "$FIXTURE_SOURCE_DIR/xetex/pdf/figs__diagram.pdf"

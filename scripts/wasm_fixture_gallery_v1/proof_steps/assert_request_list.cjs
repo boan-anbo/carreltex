@@ -185,6 +185,20 @@ if (!includeProbeRequest) {
   console.error('FAIL: request list must include include probe hint request for chapters__ch1.tex');
   process.exit(1);
 }
+const inputCycleProbeRequest = listA.requests.find(
+  (request) => request.kind === 'texmf' && request.format === 'tex' && request.name === 'cycles__a.tex' && request.variant === 'typeset',
+);
+if (!inputCycleProbeRequest) {
+  console.error('FAIL: request list must include input cycle probe hint request for cycles__a.tex');
+  process.exit(1);
+}
+const inputMissingProbeRequest = listA.requests.find(
+  (request) => request.kind === 'texmf' && request.format === 'tex' && request.name === 'missing__section.tex' && request.variant === 'typeset',
+);
+if (!inputMissingProbeRequest) {
+  console.error('FAIL: request list must include input missing probe hint request for missing__section.tex');
+  process.exit(1);
+}
 const ondemandInputProbeRequest = listA.requests.find(
   (request) => request.kind === 'texmf' && request.format === 'tex' && request.name === 'ondemand__extra_section.tex' && request.variant === 'typeset',
 );

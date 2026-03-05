@@ -56,6 +56,77 @@ fn typeset_minimal_subset_compiles_ok() {
 }
 
 #[test]
+fn typeset_minimal_input_inlines_referenced_tex_file() {
+    let main = b"\\documentclass{article}\\begin{document}Start.\\input{sections/intro}End.\\end{document}";
+    let result = compile_typeset_with_files(main, &[(b"sections/intro.tex", b" Included body. ")]);
+    assert_eq!(result.status, CompileStatus::Ok);
+    let layout =
+        parse_dvi_v2_text_page_to_layout_v0(&result.main_xdv_bytes, 917_504).expect("layout parse");
+    let text = layout.pages[0]
+        .lines
+        .iter()
+        .map(|line| {
+            line.glyphs
+                .iter()
+                .map(|glyph| glyph.byte)
+                .collect::<Vec<u8>>()
+        })
+        .collect::<Vec<Vec<u8>>>()
+        .join(&b'\n');
+    let rendered = String::from_utf8_lossy(&text);
+    assert!(rendered.contains("Start. Included body. End."), "text={rendered:?}");
+}
+
+#[test]
+fn typeset_minimal_include_emits_forced_page_break_before_inlined_file() {
+    let main = b"\\documentclass{article}\\begin{document}PageA\\include{sections/next}PageB\\end{document}";
+    let result = compile_typeset_with_files(main, &[(b"sections/next.tex", b" Included section. ")]);
+    assert_eq!(result.status, CompileStatus::Ok);
+    let layout =
+        parse_dvi_v2_text_page_to_layout_v0(&result.main_xdv_bytes, 917_504).expect("layout parse");
+    assert!(layout.pages.len() >= 2, "expected page split from include");
+    let page1 = String::from_utf8_lossy(
+        &layout.pages[0]
+            .lines
+            .iter()
+            .flat_map(|line| line.glyphs.iter().map(|glyph| glyph.byte).chain(std::iter::once(b'\n')))
+            .collect::<Vec<u8>>(),
+    )
+    .to_string();
+    let page2 = String::from_utf8_lossy(
+        &layout.pages[1]
+            .lines
+            .iter()
+            .flat_map(|line| line.glyphs.iter().map(|glyph| glyph.byte).chain(std::iter::once(b'\n')))
+            .collect::<Vec<u8>>(),
+    )
+    .to_string();
+    assert!(page1.contains("PageA"), "page1={page1:?}");
+    assert!(page2.contains("Included section. PageB"), "page2={page2:?}");
+}
+
+#[test]
+fn typeset_minimal_rejects_missing_input_file() {
+    let main = b"\\documentclass{article}\\begin{document}\\input{missing/sub}\\end{document}";
+    let result = compile_typeset(main);
+    assert_eq!(result.status, CompileStatus::InvalidInput);
+    assert!(result.main_xdv_bytes.is_empty());
+}
+
+#[test]
+fn typeset_minimal_rejects_input_include_cycle() {
+    let main = b"\\documentclass{article}\\begin{document}\\input{cycle/a}\\end{document}";
+    let a = b"\\include{cycle/b}";
+    let b = b"\\input{cycle/a}";
+    let result = compile_typeset_with_files(
+        main,
+        &[(b"cycle/a.tex", a.as_slice()), (b"cycle/b.tex", b.as_slice())],
+    );
+    assert_eq!(result.status, CompileStatus::InvalidInput);
+    assert!(result.main_xdv_bytes.is_empty());
+}
+
+#[test]
 fn typeset_minimal_rejects_unsupported_control_sequence() {
     let main = b"\\documentclass{article}\\begin{document}\\foo{X}\\end{document}";
     let result = compile_typeset(main);
