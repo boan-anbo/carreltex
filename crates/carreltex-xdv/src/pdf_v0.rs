@@ -27,6 +27,13 @@ const LINK_END_MARKER_V0: u8 = b'>';
 const FOOTNOTE_MARKER_PREFIX_V0: u8 = b'^';
 const FOOTNOTE_MARKER_FONT_SIZE_PT_V0: f32 = 8.0;
 const FOOTNOTE_MARKER_RISE_PT_V0: f32 = 4.0;
+const TABLE_ROW_PREFIX_MARKER_V0: &[u8] = b"!t ";
+const FIGURE_BOX_PREFIX_MARKER_V0: &[u8] = b"!gbox";
+const FIGURE_CAPTION_PREFIX_MARKER_V0: &[u8] = b"!gcap ";
+const TABLE_COLUMN_COUNT_V0: usize = 3;
+const TABLE_CELL_PADDING_PT_V0: f32 = 6.0;
+const FIGURE_PLACEHOLDER_LINE_V0: &[u8] = b"[ Figure placeholder ]";
+const FIGURE_CAPTION_FONT_SIZE_PT_V0: f32 = 11.0;
 const SECTION_HEADING_PREFIX_MARKER_V0: &[u8] = b"@S ";
 const SUBSECTION_HEADING_PREFIX_MARKER_V0: &[u8] = b"@s ";
 const ITALIC_START_MARKER_V0: u8 = b'[';
@@ -415,6 +422,221 @@ fn detect_heading_prefix_v0(glyphs: &[GlyphPlanV0]) -> Option<HeadingKindV0> {
         return Some(HeadingKindV0::Subsection);
     }
     None
+}
+
+fn has_table_row_prefix_v0(glyphs: &[GlyphPlanV0]) -> bool {
+    glyphs.len() >= TABLE_ROW_PREFIX_MARKER_V0.len()
+        && glyphs[..TABLE_ROW_PREFIX_MARKER_V0.len()]
+            .iter()
+            .map(|glyph| glyph.byte)
+            .eq(TABLE_ROW_PREFIX_MARKER_V0.iter().copied())
+}
+
+fn has_figure_box_prefix_v0(glyphs: &[GlyphPlanV0]) -> bool {
+    glyphs.len() == FIGURE_BOX_PREFIX_MARKER_V0.len()
+        && glyphs
+            .iter()
+            .map(|glyph| glyph.byte)
+            .eq(FIGURE_BOX_PREFIX_MARKER_V0.iter().copied())
+}
+
+fn has_figure_caption_prefix_v0(glyphs: &[GlyphPlanV0]) -> bool {
+    glyphs.len() >= FIGURE_CAPTION_PREFIX_MARKER_V0.len()
+        && glyphs[..FIGURE_CAPTION_PREFIX_MARKER_V0.len()]
+            .iter()
+            .map(|glyph| glyph.byte)
+            .eq(FIGURE_CAPTION_PREFIX_MARKER_V0.iter().copied())
+}
+
+fn trim_space_glyph_edges_v0(glyphs: &[GlyphPlanV0]) -> Vec<GlyphPlanV0> {
+    let mut start = 0usize;
+    let mut end = glyphs.len();
+    while start < end && glyphs[start].byte == b' ' {
+        start += 1;
+    }
+    while start < end && glyphs[end - 1].byte == b' ' {
+        end -= 1;
+    }
+    glyphs[start..end].to_vec()
+}
+
+fn parse_table_row_cells_v0(glyphs: &[GlyphPlanV0]) -> Option<Vec<Vec<GlyphPlanV0>>> {
+    if !has_table_row_prefix_v0(glyphs) {
+        return None;
+    }
+    let mut cells = Vec::<Vec<GlyphPlanV0>>::new();
+    let mut current = Vec::<GlyphPlanV0>::new();
+    let mut index = TABLE_ROW_PREFIX_MARKER_V0.len();
+    while index < glyphs.len() {
+        if index + 1 < glyphs.len() && glyphs[index].byte == b'|' && glyphs[index + 1].byte == b'|' {
+            cells.push(trim_space_glyph_edges_v0(&current));
+            current.clear();
+            index += 2;
+            continue;
+        }
+        current.push(glyphs[index].clone());
+        index += 1;
+    }
+    cells.push(trim_space_glyph_edges_v0(&current));
+    if cells.len() != TABLE_COLUMN_COUNT_V0 {
+        return None;
+    }
+    Some(cells)
+}
+
+fn parse_figure_caption_line_v0(glyphs: &[GlyphPlanV0]) -> Option<Vec<GlyphPlanV0>> {
+    if !has_figure_caption_prefix_v0(glyphs) {
+        return None;
+    }
+    let caption = trim_space_glyph_edges_v0(&glyphs[FIGURE_CAPTION_PREFIX_MARKER_V0.len()..]);
+    if caption.is_empty() {
+        return None;
+    }
+    Some(caption)
+}
+
+fn placeholder_segments_v0() -> Vec<PdfStyledSegmentV0> {
+    let glyphs: Vec<GlyphPlanV0> = FIGURE_PLACEHOLDER_LINE_V0
+        .iter()
+        .copied()
+        .map(|byte| GlyphPlanV0 {
+            byte,
+            advance_sp: 65_536,
+        })
+        .collect();
+    vec![PdfStyledSegmentV0 {
+        style: PdfTextStyleV0::Regular,
+        glyphs: glyphs.clone(),
+        advance_pt: glyphs
+            .iter()
+            .map(|glyph| (glyph.advance_sp as f32) / 65_536.0)
+            .sum(),
+        is_link: false,
+    }]
+}
+
+fn emit_table_block_v0(
+    out: &mut Vec<u8>,
+    rows: &[LinePlanV0],
+    y: &mut f32,
+    min_body_y_pt: f32,
+) -> Option<()> {
+    if rows.is_empty() {
+        return None;
+    }
+    let mut parsed_rows = Vec::<Vec<Vec<PdfRenderSegmentV0>>>::new();
+    let mut col_max_width_pt = [0.0f32; TABLE_COLUMN_COUNT_V0];
+
+    for row in rows {
+        let cells = parse_table_row_cells_v0(&row.glyphs)?;
+        let mut parsed_cells = Vec::<Vec<PdfRenderSegmentV0>>::new();
+        for (col_index, cell_glyphs) in cells.iter().enumerate() {
+            let segments = parse_styled_segments_v0(cell_glyphs)?;
+            let render_segments = split_superscript_segments_v0(&segments);
+            if render_segments.iter().any(|segment| segment.superscript || segment.is_link) {
+                return None;
+            }
+            let width_pt = render_segments.iter().map(|segment| segment.advance_pt).sum::<f32>();
+            col_max_width_pt[col_index] = col_max_width_pt[col_index].max(width_pt);
+            parsed_cells.push(render_segments);
+        }
+        parsed_rows.push(parsed_cells);
+    }
+
+    let table_width_pt = col_max_width_pt
+        .iter()
+        .copied()
+        .fold(0.0f32, |acc, width_pt| acc + width_pt + (TABLE_CELL_PADDING_PT_V0 * 2.0));
+    let max_content_width_pt = PAGE_WIDTH_PT_V0 - (2.0 * MARGIN_PT_V0);
+    if table_width_pt > max_content_width_pt {
+        return None;
+    }
+
+    for row in &parsed_rows {
+        if *y < min_body_y_pt {
+            return None;
+        }
+        let mut col_left_x = MARGIN_PT_V0;
+        for col_index in 0..TABLE_COLUMN_COUNT_V0 {
+            let cell_width_pt = row[col_index]
+                .iter()
+                .map(|segment| segment.advance_pt)
+                .sum::<f32>();
+            let col_content_width_pt = col_max_width_pt[col_index];
+            let align_offset_pt = match col_index {
+                0 => 0.0,
+                1 => (col_content_width_pt - cell_width_pt) * 0.5,
+                _ => col_content_width_pt - cell_width_pt,
+            };
+            let x_pt = col_left_x + TABLE_CELL_PADDING_PT_V0 + align_offset_pt.max(0.0);
+            emit_render_segments_with_superscript_v0(
+                out,
+                &row[col_index],
+                x_pt,
+                *y,
+                FONT_SIZE_PT_V0,
+            );
+            col_left_x += col_content_width_pt + (TABLE_CELL_PADDING_PT_V0 * 2.0);
+        }
+        out.extend_from_slice(b"\n");
+        *y -= LEADING_PT_V0;
+    }
+    Some(())
+}
+
+fn emit_figure_block_v0(
+    out: &mut Vec<u8>,
+    caption_glyphs: &[GlyphPlanV0],
+    y: &mut f32,
+    min_body_y_pt: f32,
+) -> Option<()> {
+    if *y < min_body_y_pt {
+        return None;
+    }
+
+    let placeholder_segments = placeholder_segments_v0();
+    let placeholder_render_segments = split_superscript_segments_v0(&placeholder_segments);
+    let placeholder_width_pt = placeholder_render_segments
+        .iter()
+        .map(|segment| segment.advance_pt)
+        .sum::<f32>();
+    let placeholder_x_pt = centered_line_x_v0(placeholder_width_pt);
+    emit_render_segments_with_superscript_v0(
+        out,
+        &placeholder_render_segments,
+        placeholder_x_pt,
+        *y,
+        FONT_SIZE_PT_V0,
+    );
+    out.extend_from_slice(b"\n");
+    *y -= LEADING_PT_V0;
+
+    if *y < min_body_y_pt {
+        return None;
+    }
+    let caption_segments = parse_styled_segments_v0(caption_glyphs)?;
+    let caption_render_segments = split_superscript_segments_v0(&caption_segments);
+    if caption_render_segments
+        .iter()
+        .any(|segment| segment.superscript || segment.is_link)
+    {
+        return None;
+    }
+    let caption_width_pt = caption_render_segments
+        .iter()
+        .map(|segment| segment.advance_pt)
+        .sum::<f32>();
+    let caption_x_pt = centered_line_x_v0(caption_width_pt);
+    emit_render_segments_with_superscript_v0(
+        out,
+        &caption_render_segments,
+        caption_x_pt,
+        *y,
+        FIGURE_CAPTION_FONT_SIZE_PT_V0,
+    );
+    out.extend_from_slice(b"\n");
+    *y -= LEADING_PT_V0;
+    Some(())
 }
 
 fn glyphs_advance_pt_v0(glyphs: &[GlyphPlanV0]) -> f32 {
@@ -837,11 +1059,40 @@ fn build_page_content_stream_v0(
     let mut current_style = PdfTextStyleV0::Regular;
     let mut link_active = false;
     let mut active_link_uri = None::<Vec<u8>>;
-    for (line_index, line) in lines.iter().enumerate() {
+    let mut line_index = 0usize;
+    while line_index < lines.len() {
+        let line = &lines[line_index];
         if y < MARGIN_PT_V0 {
             break;
         }
         if y < min_body_y_pt {
+            return None;
+        }
+        if line_index >= title_block_len && has_table_row_prefix_v0(&line.glyphs) {
+            let mut table_end = line_index;
+            while table_end < lines.len() && has_table_row_prefix_v0(&lines[table_end].glyphs) {
+                table_end += 1;
+            }
+            emit_table_block_v0(&mut out, &lines[line_index..table_end], &mut y, min_body_y_pt)?;
+            previous_rendered_line_was_empty = false;
+            skip_indent_after_title_block = false;
+            active_hang_indent_pt = 0.0;
+            active_quote_indent_pt = 0.0;
+            line_index = table_end;
+            continue;
+        }
+        if line_index >= title_block_len && has_figure_box_prefix_v0(&line.glyphs) {
+            let caption_line = lines.get(line_index + 1)?;
+            let caption_glyphs = parse_figure_caption_line_v0(&caption_line.glyphs)?;
+            emit_figure_block_v0(&mut out, &caption_glyphs, &mut y, min_body_y_pt)?;
+            previous_rendered_line_was_empty = false;
+            skip_indent_after_title_block = false;
+            active_hang_indent_pt = 0.0;
+            active_quote_indent_pt = 0.0;
+            line_index += 2;
+            continue;
+        }
+        if line_index >= title_block_len && has_figure_caption_prefix_v0(&line.glyphs) {
             return None;
         }
         let quote_prefix_advance_pt = if line_index >= title_block_len {
@@ -1023,6 +1274,7 @@ fn build_page_content_stream_v0(
         if title_block_len > 0 && line_index + 1 == title_block_len {
             y -= TITLE_EXTRA_GAP_PT_V0;
         }
+        line_index += 1;
     }
     if !style_stack.is_empty() || link_active {
         return None;
