@@ -142,6 +142,19 @@ fn typeset_minimal_enumerate_emits_double_digit_items() {
 }
 
 #[test]
+fn typeset_minimal_inline_wrapper_boundaries_preserve_expected_spacing() {
+    let main = b"\\documentclass{article}\\begin{document}word\\emph{mid}word word \\emph{lead} trail,\\textbf{bold}!\\end{document}";
+    let body = extract_typeset_body(main);
+    let text = String::from_utf8(body).expect("body should be valid utf8");
+    assert!(
+        text.contains("word[mid]word word [lead] trail,{bold}!"),
+        "body={text:?}"
+    );
+    assert!(!text.contains("word [mid]word"), "body={text:?}");
+    assert!(!text.contains("word[lead]"), "body={text:?}");
+}
+
+#[test]
 fn typeset_minimal_rejects_nested_lists() {
     let main = b"\\documentclass{article}\\begin{document}\\begin{itemize}\\item Outer\\begin{enumerate}\\item Inner\\end{enumerate}\\end{itemize}\\end{document}";
     let result = compile_typeset(main);

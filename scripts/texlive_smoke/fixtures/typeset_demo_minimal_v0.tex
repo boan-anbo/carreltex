@@ -16,6 +16,8 @@
 \section{Overview}
 Hello, world. This first paragraph includes \emph{emphasis} and \textbf{bold} in supported inline forms.
 This gap-stress sentence keeps a styled run in the middle: alpha beta gamma \emph{delta epsilon} zeta eta theta and \textbf{iota kappa} lambda.
+This inline boundary stress keeps wrappers tight: word\emph{mid}word and word \emph{lead} trail, \textbf{bold}!
+This punctuation stress keeps spacing stable at boundaries: edge,\emph{core}, tail and edge \textbf{core}!
 
 \subsection{Demonstration}
 This second paragraph is intentionally plain text and separated by a blank line so paragraph flow,\linebreak
@@ -42,9 +44,9 @@ first-line indentation, and width-sensitive wrapping are visible in the PDF prev
 
 \subsection{Quote}
 \begin{quote}
-This quoted paragraph is intentionally long so width-based wrapping produces continuation lines in the preview while preserving a deterministic left indent for each logical quote line.
+This quoted paragraph is intentionally long so width-based wrapping produces continuation lines in the preview while preserving a deterministic left indent for each logical quote line with \emph{inline emphasis} and \textbf{bold emphasis}.
 
-This is a second quoted paragraph to confirm paragraph breaks are preserved inside the quote environment.
+This is a second quoted paragraph to confirm paragraph breaks are preserved inside the quote environment and quote indentation remains stable.
 \end{quote}
 
 \subsection{Centering}
