@@ -14,6 +14,8 @@ const rootDir = path.resolve(__dirname, '..');
 
 const DEFAULT_SOURCE_DATE_EPOCH_V0 = 1_700_000_000;
 const MAX_ITERS_V0 = 3;
+const FIXEDPOINT_SUMMARY_SCHEMA_V0 = 'ondemand_fixedpoint_summary_v0';
+const FIXEDPOINT_SUMMARY_VERSION_V0 = 2;
 const PHASE2_PROBE_CASE_IDS_V0 = [
   'typeset_demo_cjk_probe_v0',
   'typeset_demo_math_probe_v0',
@@ -178,6 +180,36 @@ function canonicalizeProbeCaseChecksV0(probeChecks) {
   return [...probeChecks].sort((left, right) => `${left.case_id}`.localeCompare(`${right.case_id}`));
 }
 
+function buildIterationRowsV0(iterations) {
+  const rows = iterations.map((iter) => ({
+    iteration: iter.iteration,
+    resolved_resources_count: iter.resolved_resources_count,
+    found: iter.found,
+    missing: iter.missing,
+    request_count: iter.request_count,
+    status_counts: iter.status_counts,
+  }));
+  rows.sort((left, right) => left.iteration - right.iteration);
+  return rows;
+}
+
+function buildProbeCaseIndexV0(probeChecks) {
+  const sorted = canonicalizeProbeCaseChecksV0(probeChecks);
+  const index = {};
+  for (const entry of sorted) {
+    index[entry.case_id] = {
+      expected_status: entry.expected_status,
+      actual_status: entry.actual_status,
+      expected_vs_actual: entry.expected_vs_actual,
+      resource_hints_items: entry.resource_hints_items,
+      resource_hints_sha256: entry.resource_hints_sha256,
+      resolved_resources_count: entry.resolved_resources_count,
+      hint_type_counts: entry.hint_type_counts,
+    };
+  }
+  return index;
+}
+
 async function buildProbeCaseTableV0(galleryOutDir, report) {
   const statuses = Array.isArray(report.statuses) ? report.statuses : [];
   const probeChecks = [];
@@ -238,6 +270,8 @@ function buildMonotonicityTransitionsV0(iterations) {
       to_iteration: current.iteration,
       resolved_delta: resolvedDelta,
       missing_delta: missingDelta,
+      found_delta: current.found - previous.found,
+      request_delta: current.request_count - previous.request_count,
       resolved_non_decreasing: resolvedDelta >= 0,
       missing_non_increasing: missingDelta <= 0,
       improvement_or_fixedpoint: resolvedDelta > 0 || missingDelta < 0 || (resolvedDelta === 0 && missingDelta === 0),
@@ -246,6 +280,55 @@ function buildMonotonicityTransitionsV0(iterations) {
     });
   }
   return transitions;
+}
+
+function assertMonotonicityTransitionsV0(iterations, transitions) {
+  assertV0(Array.isArray(transitions), 'monotonicity transitions must be array');
+  assertV0(transitions.length === Math.max(0, iterations.length - 1), 'monotonicity transition length mismatch');
+  let sawImprovement = false;
+  let sawFixedpoint = false;
+  for (let i = 0; i < transitions.length; i += 1) {
+    const transition = transitions[i];
+    const previous = iterations[i];
+    const current = iterations[i + 1];
+    assertV0(transition.from_iteration === previous.iteration, `monotonicity from_iteration mismatch at ${i + 1}`);
+    assertV0(transition.to_iteration === current.iteration, `monotonicity to_iteration mismatch at ${i + 1}`);
+    assertV0(
+      transition.resolved_delta === current.resolved_resources_count - previous.resolved_resources_count,
+      `monotonicity resolved_delta mismatch at ${i + 1}`,
+    );
+    assertV0(
+      transition.missing_delta === current.missing - previous.missing,
+      `monotonicity missing_delta mismatch at ${i + 1}`,
+    );
+    assertV0(
+      transition.found_delta === current.found - previous.found,
+      `monotonicity found_delta mismatch at ${i + 1}`,
+    );
+    assertV0(
+      transition.request_delta === current.request_count - previous.request_count,
+      `monotonicity request_delta mismatch at ${i + 1}`,
+    );
+    assertV0(transition.resolved_non_decreasing, `monotonicity resolved regression at ${i + 1}`);
+    assertV0(transition.missing_non_increasing, `monotonicity missing regression at ${i + 1}`);
+    assertV0(transition.improvement_or_fixedpoint, `monotonicity neither improved nor fixedpoint at ${i + 1}`);
+    if (transition.improvement) {
+      sawImprovement = true;
+    }
+    if (transition.fixedpoint_step) {
+      sawFixedpoint = true;
+      assertV0(i === transitions.length - 1, 'fixedpoint step must be final transition');
+    } else {
+      assertV0(transition.improvement, `transition ${i + 1} before fixedpoint must improve`);
+    }
+  }
+  assertV0(sawImprovement, 'fixedpoint run must contain at least one improvement step');
+  assertV0(sawFixedpoint, 'fixedpoint run must contain one fixedpoint step');
+  return {
+    transitions,
+    saw_improvement: sawImprovement,
+    reached_fixedpoint: sawFixedpoint,
+  };
 }
 
 async function runFixedpointPassV0(outDir, sourceDateEpoch) {
@@ -384,35 +467,47 @@ async function runFixedpointPassV0(outDir, sourceDateEpoch) {
   );
 
   const monotonicityTransitions = buildMonotonicityTransitionsV0(iterations);
-  const monotonicity = {
-    transitions: monotonicityTransitions,
-    saw_improvement: monotonicityTransitions.some((item) => item.improvement),
-    reached_fixedpoint: monotonicityTransitions.some((item) => item.fixedpoint_step),
-  };
-  assertV0(monotonicity.saw_improvement, 'fixedpoint run must contain at least one improvement step');
-  assertV0(monotonicity.reached_fixedpoint, 'fixedpoint run must contain at least one fixedpoint step');
-  for (const transition of monotonicityTransitions) {
-    assertV0(transition.resolved_non_decreasing, 'fixedpoint transition resolved regression');
-    assertV0(transition.missing_non_increasing, 'fixedpoint transition missing regression');
-    assertV0(transition.improvement_or_fixedpoint, 'fixedpoint transition must improve or stabilize');
-  }
+  const monotonicity = assertMonotonicityTransitionsV0(iterations, monotonicityTransitions);
+  const iterationRows = buildIterationRowsV0(iterations);
+  const phase2ProbeRows = canonicalizeProbeCaseChecksV0(phase2ProbeChecks);
+  const phase2ProbeCaseIndex = buildProbeCaseIndexV0(phase2ProbeRows);
 
   return {
-    schema: 'ondemand_fixedpoint_summary_v0',
+    summary_schema: FIXEDPOINT_SUMMARY_SCHEMA_V0,
+    summary_version: FIXEDPOINT_SUMMARY_VERSION_V0,
+    schema: FIXEDPOINT_SUMMARY_SCHEMA_V0,
     source_date_epoch: sourceDateEpoch,
     store_path: storeDir,
     iterations,
+    iteration_rows: iterationRows,
     monotonicity,
     fixedpoint_iteration: fixedpointIteration,
     fixedpoint_resolved_resources_count: finalIter.resolved_resources_count,
     fixedpoint_missing_count: finalIter.missing,
     phase2_probe_checks: phase2ProbeChecks,
+    phase2_probe_rows: phase2ProbeRows,
+    phase2_probe_case_index: phase2ProbeCaseIndex,
     phase2_status_counts: phase2StatusCounts,
     phase2_resolved_resources_count: phase2ResolvedResources,
     fixedpoint_gallery_relpath: path.relative(runRoot, fixedpointGalleryOutDir),
     phase2_gallery_relpath: path.relative(runRoot, phase2GalleryOutDir),
     final_status: 'PASS',
   };
+}
+
+function canonicalizeObjectV0(value) {
+  if (Array.isArray(value)) {
+    return value.map((item) => canonicalizeObjectV0(item));
+  }
+  if (!value || typeof value !== 'object') {
+    return value;
+  }
+  const sortedKeys = Object.keys(value).sort((a, b) => a.localeCompare(b));
+  const out = {};
+  for (const key of sortedKeys) {
+    out[key] = canonicalizeObjectV0(value[key]);
+  }
+  return out;
 }
 
 function canonicalSummaryPayloadV0(summary) {
@@ -423,6 +518,15 @@ function canonicalSummaryPayloadV0(summary) {
       request_list_sha256: '<request_list_sha256>',
     }))
     : [];
+  const iterationRows = Array.isArray(summary.iteration_rows)
+    ? summary.iteration_rows.map((row) => ({ ...row }))
+    : [];
+  const phase2ProbeRows = Array.isArray(summary.phase2_probe_rows)
+    ? summary.phase2_probe_rows.map((entry) => ({ ...entry }))
+    : [];
+  const phase2ProbeCaseIndex = summary.phase2_probe_case_index && typeof summary.phase2_probe_case_index === 'object'
+    ? { ...summary.phase2_probe_case_index }
+    : {};
   const transitions = Array.isArray(summary?.monotonicity?.transitions)
     ? summary.monotonicity.transitions.map((item) => ({ ...item }))
     : [];
@@ -435,8 +539,12 @@ function canonicalSummaryPayloadV0(summary) {
     ...summary,
     store_path: '<store_path>',
     iterations,
+    iteration_rows: iterationRows,
+    phase2_probe_rows: phase2ProbeRows,
+    phase2_probe_case_index: phase2ProbeCaseIndex,
     monotonicity,
   };
+  return canonicalizeObjectV0(base);
 }
 
 async function runFixedpointProofV0(outDir) {
@@ -460,7 +568,6 @@ async function runFixedpointProofV0(outDir) {
   assertV0(canonicalShaA === canonicalShaB, 'ondemand fixedpoint summary must be deterministic across reruns');
 
   const summary = {
-    version: 1,
     ...summaryA,
     determinism: {
       reruns: 2,
