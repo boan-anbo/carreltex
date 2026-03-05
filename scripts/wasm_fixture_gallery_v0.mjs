@@ -211,6 +211,16 @@ async function loadFixtureCasesV0() {
       mode: 'typeset',
       fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_resource_hints_probe_v0.tex',
     },
+    {
+      id: 'typeset_demo_nested_path_probe_v0',
+      mode: 'typeset',
+      fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_nested_path_probe_v0.tex',
+    },
+    {
+      id: 'typeset_demo_graphics_opts_probe_v0',
+      mode: 'typeset',
+      fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_graphics_opts_probe_v0.tex',
+    },
   ];
 
   const okFixtureDir = path.join(rootDir, 'scripts', 'wasm_smoke_js', 'fixtures');
@@ -460,6 +470,52 @@ function ensureDefaultExtensionV0(value, extension) {
   return `${value}.${extension}`;
 }
 
+function normalizePathHintTokenV0(rawValue, hintType) {
+  if (typeof rawValue !== 'string') {
+    return null;
+  }
+  const trimmed = rawValue.trim();
+  if (trimmed.length === 0) {
+    return null;
+  }
+  const normalizedSeparators = trimmed.replace(/\\/g, '/');
+  const segments = normalizedSeparators
+    .split('/')
+    .map((segment) => segment.trim())
+    .filter((segment) => segment.length > 0 && segment !== '.');
+  if (segments.length === 0) {
+    return null;
+  }
+  if (segments.some((segment) => segment === '..' || segment.includes('..'))) {
+    throw new Error(`resource_hints_v0 ${hintType} has unsafe path token '${trimmed}'`);
+  }
+  const normalized = segments.join('__');
+  if (!isSafeResolverTokenV0(normalized)) {
+    throw new Error(`resource_hints_v0 ${hintType} normalized token is unsafe '${normalized}'`);
+  }
+  return normalized;
+}
+
+function parseOptionAssignmentsV0(rawValue) {
+  const assignments = new Map();
+  for (const item of splitCommaValuesV0(rawValue)) {
+    const equalsIndex = item.indexOf('=');
+    if (equalsIndex <= 0 || equalsIndex === item.length - 1) {
+      continue;
+    }
+    const key = item.slice(0, equalsIndex).trim().toLowerCase();
+    let value = item.slice(equalsIndex + 1).trim();
+    while (value.length >= 2 && value.startsWith('{') && value.endsWith('}')) {
+      value = value.slice(1, -1).trim();
+    }
+    if (key.length === 0 || value.length === 0) {
+      continue;
+    }
+    assignments.set(key, value);
+  }
+  return assignments;
+}
+
 function addBibEntryV0(entries, entry) {
   const value = entry.kind === 'cite_key' ? entry.key : entry.value;
   const valueBytes = Buffer.from(value, 'utf8');
@@ -631,8 +687,12 @@ function extractResourceHintEntriesFromSourceV0(sourceBytes) {
 
   const addHintValues = (hintType, values, startByte, endByte, defaultExtension = null) => {
     for (const rawValue of values) {
-      const normalized = defaultExtension ? ensureDefaultExtensionV0(rawValue, defaultExtension) : rawValue;
-      const dedupeKey = `${hintType}\u0000${normalized}`;
+      const normalizedPath = normalizePathHintTokenV0(rawValue, hintType);
+      if (!normalizedPath) {
+        continue;
+      }
+      const normalized = defaultExtension ? ensureDefaultExtensionV0(normalizedPath, defaultExtension) : normalizedPath;
+      const dedupeKey = `${hintType}\u0000${normalized.toLowerCase()}`;
       if (seen.has(dedupeKey)) {
         continue;
       }
@@ -686,6 +746,7 @@ function extractResourceHintEntriesFromSourceV0(sourceBytes) {
     if (command === 'includegraphics') {
       let next = commandIndex;
       const optionsGroup = readBracketGroupV0(sourceBytes, next);
+      const graphicsOptions = optionsGroup.ok ? parseOptionAssignmentsV0(optionsGroup.value) : new Map();
       if (optionsGroup.ok) {
         next = optionsGroup.next;
       }
@@ -694,7 +755,17 @@ function extractResourceHintEntriesFromSourceV0(sourceBytes) {
         index = commandIndex;
         continue;
       }
-      addHintValues('graphics_path', splitCommaValuesV0(graphicsGroup.value), index, graphicsGroup.next);
+      const extRaw = (graphicsOptions.get('ext') ?? graphicsOptions.get('extension') ?? '').trim();
+      const extNormalized = /^[a-z0-9]+$/i.test(extRaw.replace(/^\./, '')) ? extRaw.replace(/^\./, '') : '';
+      const dirRaw = (graphicsOptions.get('dir') ?? graphicsOptions.get('path') ?? '').trim();
+      const dirNormalized = normalizePathHintTokenV0(dirRaw, 'graphics_path');
+      const candidates = [];
+      for (const value of splitCommaValuesV0(graphicsGroup.value)) {
+        const withDir = dirNormalized ? `${dirNormalized}/${value}` : value;
+        const withExt = extNormalized.length > 0 ? ensureDefaultExtensionV0(withDir, extNormalized) : withDir;
+        candidates.push(withExt);
+      }
+      addHintValues('graphics_path', candidates, index, graphicsGroup.next);
       index = graphicsGroup.next;
       continue;
     }
