@@ -94,6 +94,15 @@ if (typeof tocShaFirst !== 'string' || !/^[0-9a-f]{64}$/.test(tocShaFirst)) {
   console.error('FAIL: expected toc artifact sha256 in first summary');
   process.exit(1);
 }
+const tocArtifactFirst = JSON.parse(fs.readFileSync(tocPath, 'utf8'));
+if (!Array.isArray(tocArtifactFirst?.entries)) {
+  console.error('FAIL: expected toc_v0.entries array in first-run artifact');
+  process.exit(1);
+}
+if (tocArtifactFirst.entries.length <= 0) {
+  console.error('FAIL: expected non-empty toc_v0.entries for toc probe');
+  process.exit(1);
+}
 fs.writeFileSync(firstRunShaPath('toc_v0'), `${tocShaFirst}\n`);
 
 const bibSummary = JSON.parse(
@@ -348,6 +357,13 @@ if (!tocArtifact || tocArtifact.present !== true) {
 const tocShaSecond = tocArtifact.artifact_sha256;
 if (tocShaSecond !== tocShaFirst) {
   console.error('FAIL: toc_v0 artifact sha256 must be stable across reruns');
+  process.exit(1);
+}
+const tocArtifactSecond = JSON.parse(
+  fs.readFileSync(path.join(outDir, 'typeset_demo_toc_probe_v0', 'toc_v0.json'), 'utf8'),
+);
+if (!Array.isArray(tocArtifactSecond?.entries) || tocArtifactSecond.entries.length <= 0) {
+  console.error('FAIL: expected non-empty toc_v0.entries after rerun');
   process.exit(1);
 }
 
