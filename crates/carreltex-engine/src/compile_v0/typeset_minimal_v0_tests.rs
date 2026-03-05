@@ -130,6 +130,25 @@ fn typeset_minimal_rejects_nested_lists() {
 }
 
 #[test]
+fn typeset_minimal_quote_environment_prefixes_each_line() {
+    let main = b"\\documentclass{article}\n\\begin{document}\nBefore.\n\\begin{quote}\nQuoted one\\linebreak Quoted two\n\nNew paragraph\n\\end{quote}\nAfter.\n\\end{document}\n";
+    let body = extract_typeset_body(main);
+    let text = String::from_utf8(body).expect("body should be valid utf8");
+    assert!(
+        text.contains("Before.\n\n> Quoted one\n> Quoted two\n\n> New paragraph\n\nAfter."),
+        "body={text:?}"
+    );
+}
+
+#[test]
+fn typeset_minimal_rejects_nested_quote_environment() {
+    let main = b"\\documentclass{article}\\begin{document}\\begin{quote}Outer\\begin{quote}Inner\\end{quote}\\end{quote}\\end{document}";
+    let result = compile_typeset(main);
+    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert!(result.main_xdv_bytes.is_empty());
+}
+
+#[test]
 fn typeset_minimal_long_paragraph_wraps_to_multiple_lines() {
     let main = b"\\documentclass{article}\\begin{document}This is a long paragraph that should wrap deterministically to multiple physical lines in the minimal typeset pipeline when width-based layout is enabled and the content exceeds the configured line width for the page body area.\\end{document}";
     let result = compile_typeset(main);
