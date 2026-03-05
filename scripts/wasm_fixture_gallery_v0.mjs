@@ -309,6 +309,7 @@ async function runCaseV0(
 
 async function run() {
   const outDir = path.resolve(process.argv[2] ?? path.join(rootDir, 'target', 'wasm_fixture_gallery_v0'));
+  const storeDir = path.resolve(process.env.TEXLIVE_STORE_DIR_V0 ?? path.join(rootDir, 'target', 'texlive_store_v0'));
   const sourceDateEpochRaw = process.env.SOURCE_DATE_EPOCH ?? `${DEFAULT_SOURCE_DATE_EPOCH_V0}`;
   const sourceDateEpoch = Number.parseInt(sourceDateEpochRaw, 10);
   if (!Number.isInteger(sourceDateEpoch) || sourceDateEpoch <= 0) {
@@ -328,7 +329,7 @@ async function run() {
     backend: process.env.TEXLIVE_RESOLVER_BACKEND_V0,
     endpoint: process.env.TEXLIVE_ENDPOINT,
     rootDir,
-    storeDir: path.join(rootDir, 'target', 'texlive_store_v0'),
+    storeDir,
   });
   const configHash = buildConfigHashV0(cases, sourceDateEpoch, resolver.resolverId);
 
@@ -359,8 +360,13 @@ async function run() {
     engine_rev: engineRev,
     source_date_epoch: sourceDateEpoch,
     resolver_id: resolver.resolverId,
+    store_dir: storeDir,
     config_hash: configHash,
     case_count: summaries.length,
+    resolved_resources_count: summaries.reduce(
+      (sum, summary) => sum + (Array.isArray(summary.resolved_resources) ? summary.resolved_resources.length : 0),
+      0,
+    ),
     statuses: summaries.map((summary) => ({
       case_id: summary.case_id,
       status: summary.status,
