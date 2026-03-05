@@ -21,6 +21,8 @@ const STATUS_INVALID_V0 = 'INVALID';
 const STATUS_FAIL_V0 = 'FAIL';
 const EXPECTED_STATUS_VALUES_V0 = new Set([STATUS_OK_V0, STATUS_NI_V0, STATUS_INVALID_V0, STATUS_FAIL_V0]);
 const TYPED_ARTIFACT_KEYS_V0 = ['toc', 'labels', 'bib', 'hyperref'];
+const MAX_TOC_ENTRIES_V0 = 256;
+const MAX_TOC_TITLE_BYTES_V0 = 256;
 const MAX_LABEL_ENTRIES_V0 = 256;
 const MAX_LABEL_VALUE_BYTES_V0 = 256;
 const MAX_BIB_ENTRIES_V0 = 256;
@@ -345,6 +347,77 @@ function readBracketGroupV0(bytes, start) {
   return { ok: false, next: start, value: '' };
 }
 
+function extractTocEntriesFromSourceV0(sourceBytes) {
+  const commandLevel = new Map([
+    ['section', 1],
+    ['subsection', 2],
+    ['subsubsection', 3],
+    ['paragraph', 4],
+    ['subparagraph', 5],
+  ]);
+  const entries = [];
+
+  let index = 0;
+  while (index < sourceBytes.length) {
+    if (sourceBytes[index] !== 0x5c) {
+      index += 1;
+      continue;
+    }
+    let commandIndex = index + 1;
+    while (commandIndex < sourceBytes.length && isAsciiLetterByteV0(sourceBytes[commandIndex])) {
+      commandIndex += 1;
+    }
+    if (commandIndex === index + 1) {
+      index += 1;
+      continue;
+    }
+    const command = Buffer.from(sourceBytes.slice(index + 1, commandIndex)).toString('ascii');
+    const level = commandLevel.get(command);
+    if (!level) {
+      index = commandIndex;
+      continue;
+    }
+
+    let next = skipSpacesV0(sourceBytes, commandIndex);
+    if (next < sourceBytes.length && sourceBytes[next] === 0x2a) {
+      next += 1;
+    }
+    next = skipSpacesV0(sourceBytes, next);
+
+    const shortTitle = readBracketGroupV0(sourceBytes, next);
+    if (shortTitle.ok) {
+      next = shortTitle.next;
+    }
+
+    const titleGroup = readBracedGroupV0(sourceBytes, next);
+    if (!titleGroup.ok) {
+      index = commandIndex;
+      continue;
+    }
+
+    if (titleGroup.value.length > 0) {
+      const titleBytes = Buffer.from(titleGroup.value, 'utf8');
+      if (titleBytes.length > MAX_TOC_TITLE_BYTES_V0) {
+        throw new Error(`toc_v0 title exceeds cap ${MAX_TOC_TITLE_BYTES_V0}`);
+      }
+      entries.push({
+        level,
+        title: titleGroup.value,
+        source_span: {
+          start_byte: index,
+          end_byte: titleGroup.next,
+        },
+      });
+      if (entries.length > MAX_TOC_ENTRIES_V0) {
+        throw new Error(`toc_v0 entries exceed cap ${MAX_TOC_ENTRIES_V0}`);
+      }
+    }
+
+    index = titleGroup.next;
+  }
+  return entries;
+}
+
 function splitCommaValuesV0(rawValue) {
   return rawValue
     .split(',')
@@ -548,6 +621,24 @@ async function emitLabelsTypedArtifactV0(caseOutDir, fixtureBytes) {
   };
 }
 
+async function emitTocTypedArtifactV0(caseOutDir, fixtureBytes) {
+  const payload = {
+    version: 1,
+    schema: 'toc_v0',
+    entries: extractTocEntriesFromSourceV0(fixtureBytes),
+  };
+  const bytes = Buffer.from(`${JSON.stringify(payload, null, 2)}\n`, 'utf8');
+  const relpath = 'toc_v0.json';
+  const fullPath = path.join(caseOutDir, relpath);
+  await writeFile(fullPath, bytes);
+  return {
+    present: true,
+    items: payload.entries.length,
+    artifact_relpath: relpath,
+    artifact_sha256: sha256HexV0(bytes),
+  };
+}
+
 async function emitHyperrefTypedArtifactV0(caseOutDir, fixtureBytes) {
   const payload = {
     version: 1,
@@ -586,7 +677,7 @@ async function emitBibTypedArtifactV0(caseOutDir, fixtureBytes) {
 
 async function emitTypedArtifactsV0(caseSpec, caseOutDir, typedArtifacts, fixtureBytes) {
   if (caseSpec.id === 'typeset_demo_toc_probe_v0') {
-    typedArtifacts.toc = await emitPlaceholderTypedArtifactV0(caseOutDir, 'toc_v0', 'toc_v0');
+    typedArtifacts.toc = await emitTocTypedArtifactV0(caseOutDir, fixtureBytes);
   }
   if (caseSpec.id === 'typeset_demo_labels_probe_v0') {
     typedArtifacts.labels = await emitLabelsTypedArtifactV0(caseOutDir, fixtureBytes);
