@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "cases": [
+    {
+      "id": "typeset_demo_minimal_v0",
+      "tags": ["typeset", "minimal", "wasm", "baseline"],
+      "expected_status": "OK",
+      "purpose": "Minimal supported typeset slice with title block and core typography."
+    },
+    {
+      "id": "typeset_demo_capabilities_v0",
+      "tags": ["typeset", "capabilities", "negative", "ni"],
+      "expected_status": "NI",
+      "purpose": "Capability-heavy fixture expected to remain not-implemented in minimal lane."
+    },
+    {
+      "id": "ok_demo_capabilities_v0",
+      "tags": ["ok", "capabilities", "surface"],
+      "expected_status": "OK",
+      "purpose": "Strict OK extraction capability smoke fixture."
+    },
+    {
+      "id": "ok_demo_v0",
+      "tags": ["ok", "minimal", "smoke"],
+      "expected_status": "OK",
+      "purpose": "Small strict OK smoke fixture."
+    }
+  ]
+}
