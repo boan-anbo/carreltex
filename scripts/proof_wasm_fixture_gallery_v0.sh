@@ -75,6 +75,8 @@ printf 'fixture-bytes-for-fooopts-sty\n' > "$FIXTURE_SOURCE_DIR/xetex/sty/fooopt
 printf 'fixture-bytes-for-baropts-sty\n' > "$FIXTURE_SOURCE_DIR/xetex/sty/baropts.sty"
 printf 'fixture-bytes-for-natbib-sty\n' > "$FIXTURE_SOURCE_DIR/xetex/sty/natbib.sty"
 printf 'fixture-bytes-for-memoir-cls\n' > "$FIXTURE_SOURCE_DIR/xetex/cls/memoir.cls"
+printf 'fixture-bytes-for-classoptsdemo-cls\n' > "$FIXTURE_SOURCE_DIR/xetex/cls/classoptsdemo.cls"
+printf 'fixture-bytes-for-memoirplus-cls\n' > "$FIXTURE_SOURCE_DIR/xetex/cls/memoirplus.cls"
 printf 'fixture-bytes-for-found-sans\n' > "$FIXTURE_SOURCE_DIR/fontconfig/public/FoundSans"
 
 cat > "$REQUEST_LIST" <<'JSON'
@@ -197,6 +199,27 @@ const requireWithOptionsPackageRequest = listA.requests.find(
 );
 if (!requireWithOptionsPackageRequest) {
   console.error('FAIL: request list must include package hint request for baropts.sty');
+  process.exit(1);
+}
+const classOptionsRequest = listA.requests.find(
+  (request) => request.kind === 'texmf' && request.format === 'cls' && request.name === 'classoptsdemo.cls' && request.variant === 'typeset',
+);
+if (!classOptionsRequest) {
+  console.error('FAIL: request list must include class hint request for classoptsdemo.cls');
+  process.exit(1);
+}
+const memoirClassRequest = listA.requests.find(
+  (request) => request.kind === 'texmf' && request.format === 'cls' && request.name === 'memoir.cls' && request.variant === 'typeset',
+);
+if (!memoirClassRequest) {
+  console.error('FAIL: request list must include class hint request for memoir.cls');
+  process.exit(1);
+}
+const memoirPlusClassRequest = listA.requests.find(
+  (request) => request.kind === 'texmf' && request.format === 'cls' && request.name === 'memoirplus.cls' && request.variant === 'typeset',
+);
+if (!memoirPlusClassRequest) {
+  console.error('FAIL: request list must include class hint request for memoirplus.cls');
   process.exit(1);
 }
 const bibRequest = listA.requests.find(
@@ -591,6 +614,46 @@ if (pkgoptArtifactFirst.entries.length <= 0) {
 assertEntrySourceSpans('typeset_demo_pkgopt_probe_v0', 'pkgopt_v0', pkgoptArtifactFirst.entries);
 fs.writeFileSync(firstRunShaPath('pkgopt_v0'), `${pkgoptShaFirst}\n`);
 
+const documentclassPkgoptSummary = JSON.parse(
+  fs.readFileSync(path.join(outDir, 'typeset_demo_documentclass_opts_probe_v0', 'summary.json'), 'utf8'),
+);
+if (documentclassPkgoptSummary?.typed_artifacts?.pkgopt?.present !== true) {
+  console.error('FAIL: expected pkgopt typed artifact present for documentclass opts probe after first run');
+  process.exit(1);
+}
+const documentclassPkgoptArtifact = JSON.parse(
+  fs.readFileSync(path.join(outDir, 'typeset_demo_documentclass_opts_probe_v0', 'pkgopt_v0.json'), 'utf8'),
+);
+if (!Array.isArray(documentclassPkgoptArtifact?.entries) || documentclassPkgoptArtifact.entries.length <= 0) {
+  console.error('FAIL: expected non-empty pkgopt_v0.entries for documentclass opts probe');
+  process.exit(1);
+}
+assertEntrySourceSpans('typeset_demo_documentclass_opts_probe_v0', 'pkgopt_v0', documentclassPkgoptArtifact.entries);
+if (!documentclassPkgoptArtifact.entries.some((entry) => entry.package === 'memoir')) {
+  console.error('FAIL: expected documentclass opts probe pkgopt entries to include memoir target');
+  process.exit(1);
+}
+
+const passOptionsClassPkgoptSummary = JSON.parse(
+  fs.readFileSync(path.join(outDir, 'typeset_demo_passoptionstoclass_probe_v0', 'summary.json'), 'utf8'),
+);
+if (passOptionsClassPkgoptSummary?.typed_artifacts?.pkgopt?.present !== true) {
+  console.error('FAIL: expected pkgopt typed artifact present for passoptionstoclass probe after first run');
+  process.exit(1);
+}
+const passOptionsClassPkgoptArtifact = JSON.parse(
+  fs.readFileSync(path.join(outDir, 'typeset_demo_passoptionstoclass_probe_v0', 'pkgopt_v0.json'), 'utf8'),
+);
+if (!Array.isArray(passOptionsClassPkgoptArtifact?.entries) || passOptionsClassPkgoptArtifact.entries.length <= 0) {
+  console.error('FAIL: expected non-empty pkgopt_v0.entries for passoptionstoclass probe');
+  process.exit(1);
+}
+assertEntrySourceSpans('typeset_demo_passoptionstoclass_probe_v0', 'pkgopt_v0', passOptionsClassPkgoptArtifact.entries);
+if (!passOptionsClassPkgoptArtifact.entries.some((entry) => entry.package === 'memoir')) {
+  console.error('FAIL: expected passoptionstoclass probe pkgopt entries to include memoir target');
+  process.exit(1);
+}
+
 const graphicsSummary = JSON.parse(
   fs.readFileSync(path.join(outDir, 'typeset_demo_graphics_probe_v0', 'summary.json'), 'utf8'),
 );
@@ -728,6 +791,9 @@ const requiredEntries = [
   ['texmf', 'sty', 'foo__bar.sty', 'typeset'],
   ['texmf', 'sty', 'fooopts.sty', 'typeset'],
   ['texmf', 'sty', 'baropts.sty', 'typeset'],
+  ['texmf', 'cls', 'classoptsdemo.cls', 'typeset'],
+  ['texmf', 'cls', 'memoir.cls', 'typeset'],
+  ['texmf', 'cls', 'memoirplus.cls', 'typeset'],
   ['texmf', 'bib', 'refs.bib', 'typeset'],
   ['texmf', 'bib', 'styleprobe_refs.bib', 'typeset'],
   ['texmf', 'bib', 'multiadd_refs.bib', 'typeset'],
@@ -956,13 +1022,18 @@ if (!(resolvedCount > resolvedCountFirst)) {
   );
   process.exit(1);
 }
-if (resolvedCount < 34) {
-  console.error(`FAIL: expected resolved_resources_count >= 34 after package-option seam expansion, got ${resolvedCount}`);
+if (resolvedCount < 36) {
+  console.error(`FAIL: expected resolved_resources_count >= 36 after class-option seam expansion, got ${resolvedCount}`);
   process.exit(1);
 }
 const okStatuses = statuses.filter((entry) => entry.status === 'OK');
 if (okStatuses.length <= 0) {
   console.error('FAIL: expected at least one OK case in fixture gallery report');
+  process.exit(1);
+}
+const documentclassInvalidStatus = statuses.find((entry) => entry.case_id === 'typeset_demo_documentclass_invalid_probe_v0');
+if (!documentclassInvalidStatus || documentclassInvalidStatus.status !== 'INVALID') {
+  console.error('FAIL: expected typeset_demo_documentclass_invalid_probe_v0 status INVALID');
   process.exit(1);
 }
 for (const status of okStatuses) {
@@ -1191,7 +1262,7 @@ for (const status of statuses) {
 
 console.log(`PASS: resolved_resources_count ${resolvedCount}`);
 console.log(`PASS: resolved_resources_count increased from ${resolvedCountFirst} to ${resolvedCount}`);
-console.log('PASS: resolved_resources_count meets floor >= 34');
+console.log('PASS: resolved_resources_count meets floor >= 36');
 console.log(`PASS: baseline_match MATCH for all OK cases (${okStatuses.length})`);
 console.log(`PASS: typed_artifacts keys ${requiredTypedKeys.join(',')}`);
 console.log('PASS: typed_artifacts_version gate 1');
