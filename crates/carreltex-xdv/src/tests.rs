@@ -279,6 +279,23 @@ fn tm_x_for_line_containing_text_v0(pdf: &[u8], needle: &str) -> Option<f32> {
     None
 }
 
+fn tm_position_for_line_containing_text_v0(pdf: &[u8], needle: &str) -> Option<(f32, f32)> {
+    let text = String::from_utf8_lossy(pdf);
+    for line in text.lines() {
+        if !line.contains(needle) || !line.contains(" Tm ") {
+            continue;
+        }
+        let fields = line.split_whitespace().collect::<Vec<_>>();
+        if fields.len() < 7 || fields[6] != "Tm" {
+            continue;
+        }
+        let x_pt = fields[4].parse::<f32>().ok()?;
+        let y_pt = fields[5].parse::<f32>().ok()?;
+        return Some((x_pt, y_pt));
+    }
+    None
+}
+
 fn expected_center_x_pt_v0(width_sp: u32) -> f32 {
     let width_pt = (width_sp as f32) / 65_536.0;
     ((612.0 - width_pt) * 0.5).clamp(72.0, 612.0 - 72.0)
@@ -350,6 +367,53 @@ fn pdf_renderer_centers_title_block_lines_within_epsilon_v0() {
     assert!(
         (date_x - expected_date_x).abs() <= epsilon_pt,
         "date x mismatch: actual={date_x}, expected={expected_date_x}"
+    );
+}
+
+#[test]
+fn pdf_renderer_paragraph_indent_and_line_gap_invariants_v0() {
+    let demo_text = b"Title\nAuthor\n2026-03-05\n\nFirst body paragraph line.\n\nSecond paragraph line.";
+    let xdv = write_dvi_v2_text_page_v0(demo_text).expect("writer should accept demo text");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+
+    let (first_x, first_y) = tm_position_for_line_containing_text_v0(&pdf, "(First body paragraph line.)")
+        .expect("first body line position");
+    let (second_x, second_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "(Second paragraph line.)")
+            .expect("second paragraph line position");
+
+    assert!((first_x - 72.0).abs() <= 0.02, "first paragraph x mismatch: {first_x}");
+    assert!(
+        (second_x - 96.0).abs() <= 0.02,
+        "indented paragraph x mismatch: {second_x}"
+    );
+    assert!(
+        (first_y - second_y - 28.0).abs() <= 0.02,
+        "paragraph y-gap mismatch: first_y={first_y}, second_y={second_y}"
+    );
+}
+
+#[test]
+fn pdf_renderer_section_heading_spacing_invariants_v0() {
+    let demo_text =
+        b"Title\nAuthor\n2026-03-05\n\nIntro paragraph.\n\n{Section Heading}\n\nBody after heading.";
+    let xdv = write_dvi_v2_text_page_v0(demo_text).expect("writer should accept heading text");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+
+    let (_, intro_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "(Intro paragraph.)").expect("intro position");
+    let (_, heading_y) = tm_position_for_line_containing_text_v0(&pdf, "(Section Heading)")
+        .expect("heading position");
+    let (_, body_y) = tm_position_for_line_containing_text_v0(&pdf, "(Body after heading.)")
+        .expect("body position");
+
+    assert!(
+        (intro_y - heading_y - 28.0).abs() <= 0.02,
+        "intro->heading y-gap mismatch: intro_y={intro_y}, heading_y={heading_y}"
+    );
+    assert!(
+        (heading_y - body_y - 28.0).abs() <= 0.02,
+        "heading->body y-gap mismatch: heading_y={heading_y}, body_y={body_y}"
     );
 }
 
