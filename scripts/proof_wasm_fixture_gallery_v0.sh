@@ -75,6 +75,7 @@ printf 'fixture-bytes-for-fooopts-sty\n' > "$FIXTURE_SOURCE_DIR/xetex/sty/fooopt
 printf 'fixture-bytes-for-baropts-sty\n' > "$FIXTURE_SOURCE_DIR/xetex/sty/baropts.sty"
 printf 'fixture-bytes-for-natbib-sty\n' > "$FIXTURE_SOURCE_DIR/xetex/sty/natbib.sty"
 printf 'fixture-bytes-for-memoir-cls\n' > "$FIXTURE_SOURCE_DIR/xetex/cls/memoir.cls"
+printf 'fixture-bytes-for-classoptsdemo-cls\n' > "$FIXTURE_SOURCE_DIR/xetex/cls/classoptsdemo.cls"
 printf 'fixture-bytes-for-found-sans\n' > "$FIXTURE_SOURCE_DIR/fontconfig/public/FoundSans"
 
 cat > "$REQUEST_LIST" <<'JSON'
@@ -197,6 +198,13 @@ const requireWithOptionsPackageRequest = listA.requests.find(
 );
 if (!requireWithOptionsPackageRequest) {
   console.error('FAIL: request list must include package hint request for baropts.sty');
+  process.exit(1);
+}
+const classOptionsRequest = listA.requests.find(
+  (request) => request.kind === 'texmf' && request.format === 'cls' && request.name === 'classoptsdemo.cls' && request.variant === 'typeset',
+);
+if (!classOptionsRequest) {
+  console.error('FAIL: request list must include class hint request for classoptsdemo.cls');
   process.exit(1);
 }
 const bibRequest = listA.requests.find(
@@ -728,6 +736,7 @@ const requiredEntries = [
   ['texmf', 'sty', 'foo__bar.sty', 'typeset'],
   ['texmf', 'sty', 'fooopts.sty', 'typeset'],
   ['texmf', 'sty', 'baropts.sty', 'typeset'],
+  ['texmf', 'cls', 'classoptsdemo.cls', 'typeset'],
   ['texmf', 'bib', 'refs.bib', 'typeset'],
   ['texmf', 'bib', 'styleprobe_refs.bib', 'typeset'],
   ['texmf', 'bib', 'multiadd_refs.bib', 'typeset'],
