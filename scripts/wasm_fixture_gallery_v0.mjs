@@ -249,23 +249,38 @@ function buildTypedArtifactsPlaceholderV0() {
 }
 
 async function emitTypedArtifactsV0(caseSpec, caseOutDir, typedArtifacts) {
-  if (caseSpec.id !== 'typeset_demo_labels_probe_v0') {
-    return;
+  if (caseSpec.id === 'typeset_demo_toc_probe_v0') {
+    const tocPayload = {
+      version: 1,
+      schema: 'toc_v0',
+      entries: [],
+    };
+    const tocBytes = Buffer.from(`${JSON.stringify(tocPayload, null, 2)}\n`, 'utf8');
+    const tocPath = path.join(caseOutDir, 'toc_v0.json');
+    await writeFile(tocPath, tocBytes);
+    typedArtifacts.toc = {
+      present: true,
+      items: tocPayload.entries.length,
+      artifact_relpath: 'toc_v0.json',
+      artifact_sha256: sha256HexV0(tocBytes),
+    };
   }
-  const labelsPayload = {
-    version: 1,
-    schema: 'labels_v0',
-    entries: [],
-  };
-  const labelsBytes = Buffer.from(`${JSON.stringify(labelsPayload, null, 2)}\n`, 'utf8');
-  const labelsPath = path.join(caseOutDir, 'labels_v0.json');
-  await writeFile(labelsPath, labelsBytes);
-  typedArtifacts.labels = {
-    present: true,
-    items: labelsPayload.entries.length,
-    artifact_relpath: 'labels_v0.json',
-    artifact_sha256: sha256HexV0(labelsBytes),
-  };
+  if (caseSpec.id === 'typeset_demo_labels_probe_v0') {
+    const labelsPayload = {
+      version: 1,
+      schema: 'labels_v0',
+      entries: [],
+    };
+    const labelsBytes = Buffer.from(`${JSON.stringify(labelsPayload, null, 2)}\n`, 'utf8');
+    const labelsPath = path.join(caseOutDir, 'labels_v0.json');
+    await writeFile(labelsPath, labelsBytes);
+    typedArtifacts.labels = {
+      present: true,
+      items: labelsPayload.entries.length,
+      artifact_relpath: 'labels_v0.json',
+      artifact_sha256: sha256HexV0(labelsBytes),
+    };
+  }
 }
 
 async function computeBaselineMatchV0(caseId, artifactSha256, baselineDir) {
