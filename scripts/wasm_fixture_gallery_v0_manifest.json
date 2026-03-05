@@ -122,6 +122,24 @@
       "purpose": "Probes PassOptionsToClass plus documentclass options seams for class_file hints and pkgopt artifact extraction."
     },
     {
+      "id": "typeset_demo_documentclass_opts_probe_v0",
+      "tags": ["typeset", "class", "pkgopt", "documentclass", "options", "probe", "ni"],
+      "expected_status": "NI",
+      "purpose": "Probes documentclass option hints for class_file requests and class-target pkgopt extraction."
+    },
+    {
+      "id": "typeset_demo_passoptionstoclass_probe_v0",
+      "tags": ["typeset", "class", "pkgopt", "passoptionstoclass", "probe", "ni"],
+      "expected_status": "NI",
+      "purpose": "Probes PassOptionsToClass hints and class-target pkgopt extraction with deterministic ordering."
+    },
+    {
+      "id": "typeset_demo_documentclass_invalid_probe_v0",
+      "tags": ["typeset", "class", "invalid", "unsafe-path", "probe"],
+      "expected_status": "INVALID",
+      "purpose": "Probes fail-closed class-file hint normalization on unsafe documentclass paths."
+    },
+    {
       "id": "typeset_demo_package_require_invalid_probe_v0",
       "tags": ["typeset", "packages", "requirepackage", "unsafe-path", "probe", "invalid"],
       "expected_status": "INVALID",
