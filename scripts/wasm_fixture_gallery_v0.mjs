@@ -890,6 +890,106 @@ async function emitTypedArtifactsV0(caseSpec, caseOutDir, typedArtifacts, fixtur
   }
 }
 
+async function buildResourceHintsRollupV0(outDir, summaries) {
+  const entries = [];
+  const seen = new Set();
+  const sortedSummaries = [...summaries].sort((left, right) => left.case_id.localeCompare(right.case_id));
+
+  for (const summary of sortedSummaries) {
+    const caseId = summary.case_id;
+    const typedArtifacts = summary.typed_artifacts ?? {};
+
+    const graphicsRelpath = typedArtifacts.graphics?.artifact_relpath;
+    if (typedArtifacts.graphics?.present === true && typeof graphicsRelpath === 'string' && graphicsRelpath.length > 0) {
+      const graphicsBytes = await readFile(path.join(outDir, caseId, graphicsRelpath));
+      const graphicsPayload = JSON.parse(graphicsBytes.toString('utf8'));
+      const graphicsEntries = Array.isArray(graphicsPayload?.entries) ? graphicsPayload.entries : [];
+      for (const entry of graphicsEntries) {
+        const value = typeof entry?.path === 'string' ? entry.path : '';
+        if (!value) {
+          continue;
+        }
+        const dedupeKey = `${caseId}\x1fgraphics_path\x1f${value}`;
+        if (seen.has(dedupeKey)) {
+          continue;
+        }
+        seen.add(dedupeKey);
+        entries.push({
+          case_id: caseId,
+          hint_type: 'graphics_path',
+          value,
+        });
+      }
+    }
+
+    const bibRelpath = typedArtifacts.bib?.artifact_relpath;
+    if (typedArtifacts.bib?.present === true && typeof bibRelpath === 'string' && bibRelpath.length > 0) {
+      const bibBytes = await readFile(path.join(outDir, caseId, bibRelpath));
+      const bibPayload = JSON.parse(bibBytes.toString('utf8'));
+      const bibEntries = Array.isArray(bibPayload?.entries) ? bibPayload.entries : [];
+      for (const entry of bibEntries) {
+        if (entry?.kind !== 'resource_hint') {
+          continue;
+        }
+        const value = typeof entry?.value === 'string' ? entry.value : '';
+        if (!value) {
+          continue;
+        }
+        const dedupeKey = `${caseId}\x1fbib_resource\x1f${value}`;
+        if (seen.has(dedupeKey)) {
+          continue;
+        }
+        seen.add(dedupeKey);
+        entries.push({
+          case_id: caseId,
+          hint_type: 'bib_resource',
+          value,
+        });
+      }
+    }
+
+    const hyperrefRelpath = typedArtifacts.hyperref?.artifact_relpath;
+    if (typedArtifacts.hyperref?.present === true && typeof hyperrefRelpath === 'string' && hyperrefRelpath.length > 0) {
+      const hyperrefBytes = await readFile(path.join(outDir, caseId, hyperrefRelpath));
+      const hyperrefPayload = JSON.parse(hyperrefBytes.toString('utf8'));
+      const hyperrefEntries = Array.isArray(hyperrefPayload?.entries) ? hyperrefPayload.entries : [];
+      for (const entry of hyperrefEntries) {
+        const value = typeof entry?.target === 'string' ? entry.target : '';
+        if (!value) {
+          continue;
+        }
+        const dedupeKey = `${caseId}\x1fhyperref_url\x1f${value}`;
+        if (seen.has(dedupeKey)) {
+          continue;
+        }
+        seen.add(dedupeKey);
+        entries.push({
+          case_id: caseId,
+          hint_type: 'hyperref_url',
+          value,
+        });
+      }
+    }
+  }
+
+  entries.sort((left, right) => {
+    const caseCmp = left.case_id.localeCompare(right.case_id);
+    if (caseCmp !== 0) {
+      return caseCmp;
+    }
+    const typeCmp = left.hint_type.localeCompare(right.hint_type);
+    if (typeCmp !== 0) {
+      return typeCmp;
+    }
+    return left.value.localeCompare(right.value);
+  });
+
+  return {
+    version: 1,
+    entries,
+  };
+}
+
 async function computeBaselineMatchV0(caseId, artifactSha256, baselineDir) {
   if (!baselineDir) {
     return null;
@@ -1186,6 +1286,7 @@ async function run() {
         return [key, sha256HexV0(Buffer.from(JSON.stringify(digestPayload), 'utf8'))];
       }),
     ),
+    resource_hints_v0: await buildResourceHintsRollupV0(outDir, summaries),
     statuses: summaries.map((summary) => ({
       typed_artifacts_version: summary.typed_artifacts_version,
       case_id: summary.case_id,
