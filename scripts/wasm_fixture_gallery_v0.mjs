@@ -35,6 +35,18 @@ const MAX_GRAPHICS_ENTRIES_V0 = 256;
 const MAX_GRAPHICS_PATH_BYTES_V0 = 256;
 const MAX_RESOURCE_HINT_ENTRIES_V0 = 512;
 const MAX_RESOURCE_HINT_VALUE_BYTES_V0 = 256;
+const RESOURCE_HINTS_V0_VERSION = 1;
+const RESOURCE_HINT_TYPE_ALLOWLIST_V0 = new Set([
+  'tex_input',
+  'tex_include',
+  'tex_includeonly',
+  'package_file',
+  'class_file',
+  'graphics_path',
+  'bib_resource',
+  'bib_style',
+  'hyperref_url',
+]);
 
 function sha256HexV0(bytes) {
   return createHash('sha256').update(bytes).digest('hex');
@@ -330,6 +342,11 @@ async function loadFixtureCasesV0() {
       id: 'typeset_demo_graphics_opts_probe_v0',
       mode: 'typeset',
       fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_graphics_opts_probe_v0.tex',
+    },
+    {
+      id: 'typeset_demo_resource_hints_invalid_probe_v0',
+      mode: 'typeset',
+      fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_resource_hints_invalid_probe_v0.tex',
     },
   ];
 
@@ -952,13 +969,14 @@ function extractGraphicsEntriesFromSourceV0(sourceBytes) {
   return entries;
 }
 
-function addResourceHintEntryV0(entries, sourceBytes, hintType, value, startByte, endByte) {
+function addResourceHintEntryV0(entries, sourceBytes, caseId, hintType, value, startByte, endByte) {
   const valueBytes = Buffer.from(value, 'utf8');
   if (valueBytes.length > MAX_RESOURCE_HINT_VALUE_BYTES_V0) {
     throw new Error(`resource_hints_v0 value exceeds cap ${MAX_RESOURCE_HINT_VALUE_BYTES_V0}`);
   }
   entries.push({
     kind: 'resource_hint',
+    case_id: caseId,
     hint_type: hintType,
     value,
     source_span: buildSourceSpanV0(sourceBytes, startByte, endByte, 'resource_hints_v0'),
@@ -968,7 +986,7 @@ function addResourceHintEntryV0(entries, sourceBytes, hintType, value, startByte
   }
 }
 
-function extractResourceHintEntriesFromSourceV0(sourceBytes) {
+function extractResourceHintEntriesFromSourceV0(sourceBytes, caseId) {
   const entries = [];
   const seen = new Set();
   let graphicspathPrefixes = [];
@@ -993,7 +1011,7 @@ function extractResourceHintEntriesFromSourceV0(sourceBytes) {
           continue;
         }
         seen.add(dedupeKey);
-        addResourceHintEntryV0(entries, sourceBytes, hintType, normalizedUrl, startByte, endByte);
+        addResourceHintEntryV0(entries, sourceBytes, caseId, hintType, normalizedUrl, startByte, endByte);
         continue;
       }
       let normalizedPath;
@@ -1014,7 +1032,7 @@ function extractResourceHintEntriesFromSourceV0(sourceBytes) {
         continue;
       }
       seen.add(dedupeKey);
-      addResourceHintEntryV0(entries, sourceBytes, hintType, normalized, startByte, endByte);
+      addResourceHintEntryV0(entries, sourceBytes, caseId, hintType, normalized, startByte, endByte);
     }
   };
 
@@ -1265,6 +1283,34 @@ function extractResourceHintEntriesFromSourceV0(sourceBytes) {
   }
 
   return entries;
+}
+
+function validateResourceHintEntriesV0(entries, fixtureBytes, caseId) {
+  if (!Array.isArray(entries)) {
+    throw new Error(`resource_hints_v0 entries must be array for case ${caseId}`);
+  }
+  for (const [index, entry] of entries.entries()) {
+    if (entry?.kind !== 'resource_hint') {
+      throw new Error(`resource_hints_v0 entry[${index}] invalid kind for case ${caseId}`);
+    }
+    if (entry?.case_id !== caseId) {
+      throw new Error(`resource_hints_v0 entry[${index}] missing/invalid case_id for case ${caseId}`);
+    }
+    const hintType = typeof entry?.hint_type === 'string' ? entry.hint_type : '';
+    if (!RESOURCE_HINT_TYPE_ALLOWLIST_V0.has(hintType)) {
+      throw new Error(`resource_hints_v0 entry[${index}] unknown hint_type '${hintType}' for case ${caseId}`);
+    }
+    if (typeof entry?.value !== 'string' || entry.value.trim() === '') {
+      throw new Error(`resource_hints_v0 entry[${index}] missing value for case ${caseId}`);
+    }
+    const sourceSpan = entry?.source_span;
+    if (!sourceSpan || !Number.isInteger(sourceSpan.start_byte) || !Number.isInteger(sourceSpan.end_byte)) {
+      throw new Error(`resource_hints_v0 entry[${index}] missing source_span for case ${caseId}`);
+    }
+    if (sourceSpan.start_byte < 0 || sourceSpan.end_byte <= sourceSpan.start_byte || sourceSpan.end_byte > fixtureBytes.length) {
+      throw new Error(`resource_hints_v0 entry[${index}] source_span out of bounds for case ${caseId}`);
+    }
+  }
 }
 
 function extractBibEntriesFromSourceV0(sourceBytes) {
@@ -1562,10 +1608,14 @@ async function emitGraphicsTypedArtifactV0(caseOutDir, fixtureBytes) {
 }
 
 async function emitResourceHintsArtifactV0(caseOutDir, fixtureBytes, mode) {
+  const caseId = path.basename(caseOutDir);
+  const entries = mode === 'typeset' ? extractResourceHintEntriesFromSourceV0(fixtureBytes, caseId) : [];
+  validateResourceHintEntriesV0(entries, fixtureBytes, caseId);
   const payload = {
-    version: 1,
+    version: RESOURCE_HINTS_V0_VERSION,
+    resource_hints_v0_version: RESOURCE_HINTS_V0_VERSION,
     schema: 'resource_hints_v0',
-    entries: mode === 'typeset' ? extractResourceHintEntriesFromSourceV0(fixtureBytes) : [],
+    entries,
   };
   const bytes = Buffer.from(`${JSON.stringify(payload, null, 2)}\n`, 'utf8');
   const relpath = 'resource_hints_v0.json';
@@ -1581,7 +1631,8 @@ async function emitResourceHintsArtifactV0(caseOutDir, fixtureBytes, mode) {
 
 async function emitEmptyResourceHintsArtifactV0(caseOutDir) {
   const payload = {
-    version: 1,
+    version: RESOURCE_HINTS_V0_VERSION,
+    resource_hints_v0_version: RESOURCE_HINTS_V0_VERSION,
     schema: 'resource_hints_v0',
     entries: [],
   };
@@ -1642,25 +1693,38 @@ async function buildResourceHintsRollupV0(outDir, summaries) {
 
     const bytes = await readFile(path.join(outDir, caseId, relpath));
     const payload = JSON.parse(bytes.toString('utf8'));
-    if (payload?.version !== 1 || payload?.schema !== 'resource_hints_v0' || !Array.isArray(payload?.entries)) {
+    if (
+      payload?.version !== RESOURCE_HINTS_V0_VERSION
+      || payload?.resource_hints_v0_version !== RESOURCE_HINTS_V0_VERSION
+      || payload?.schema !== 'resource_hints_v0'
+      || !Array.isArray(payload?.entries)
+    ) {
       throw new Error(`invalid resource_hints_v0 artifact for case ${caseId}`);
     }
+    const fixtureBytes = await readFile(path.join(outDir, caseId, 'main.tex'));
+    validateResourceHintEntriesV0(payload.entries, fixtureBytes, caseId);
 
     for (const entry of payload.entries) {
       const hintType = typeof entry?.hint_type === 'string' ? entry.hint_type : '';
       const value = typeof entry?.value === 'string' ? entry.value : '';
+      const sourceSpan = entry?.source_span;
       if (!hintType || !value) {
         continue;
       }
-      const dedupeKey = `${caseId}\x1f${hintType}\x1f${value}`;
+      const dedupeKey = `${caseId}\x1f${hintType}\x1f${value}\x1f${sourceSpan.start_byte}\x1f${sourceSpan.end_byte}`;
       if (seen.has(dedupeKey)) {
         continue;
       }
       seen.add(dedupeKey);
       entries.push({
+        kind: 'resource_hint',
         case_id: caseId,
         hint_type: hintType,
         value,
+        source_span: {
+          start_byte: sourceSpan.start_byte,
+          end_byte: sourceSpan.end_byte,
+        },
       });
     }
   }
@@ -1678,7 +1742,8 @@ async function buildResourceHintsRollupV0(outDir, summaries) {
   });
 
   return {
-    version: 1,
+    version: RESOURCE_HINTS_V0_VERSION,
+    resource_hints_v0_version: RESOURCE_HINTS_V0_VERSION,
     entries,
   };
 }

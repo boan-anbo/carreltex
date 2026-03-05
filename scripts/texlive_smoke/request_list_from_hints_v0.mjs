@@ -129,7 +129,12 @@ export async function buildRequestListFromHintsV0(options = {}) {
     throw new Error(`report typed_artifacts_version must be 1, got ${String(report?.typed_artifacts_version)}`);
   }
   const resourceHints = report?.resource_hints_v0;
-  if (!resourceHints || typeof resourceHints !== 'object' || resourceHints.version !== 1) {
+  if (
+    !resourceHints
+    || typeof resourceHints !== 'object'
+    || resourceHints.version !== 1
+    || resourceHints.resource_hints_v0_version !== 1
+  ) {
     throw new Error('report.resource_hints_v0 must exist with version=1');
   }
   if (!Array.isArray(resourceHints.entries)) {

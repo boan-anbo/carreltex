@@ -98,6 +98,12 @@
       "purpose": "Probes input/include resource-hint seam for deterministic on-demand request generation."
     },
     {
+      "id": "typeset_demo_resource_hints_invalid_probe_v0",
+      "tags": ["typeset", "resource-hints", "invalid", "unsafe-path", "probe"],
+      "expected_status": "INVALID",
+      "purpose": "Synthetic negative probe: rejects unsafe hint value ../evil under schema-gated resource_hints_v0 validation."
+    },
+    {
       "id": "typeset_demo_input_probe_v0",
       "tags": ["typeset", "input", "probe", "ni"],
       "expected_status": "NI",
