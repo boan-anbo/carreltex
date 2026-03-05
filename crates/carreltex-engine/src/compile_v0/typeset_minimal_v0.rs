@@ -366,7 +366,13 @@ fn consume_simple_bracket_non_empty(tokens: &[TokenV0], index: usize) -> Option<
     let mut saw_non_space = false;
     while let Some(token) = tokens.get(cursor) {
         match token {
-            TokenV0::Char(b']') => return if saw_non_space { Some(cursor + 1) } else { None },
+            TokenV0::Char(b']') => {
+                return if saw_non_space {
+                    Some(cursor + 1)
+                } else {
+                    None
+                }
+            }
             TokenV0::Char(_) => saw_non_space = true,
             TokenV0::Space => {}
             _ => return None,
@@ -465,8 +471,7 @@ fn is_safe_math_payload_char_v0(byte: u8) -> bool {
     (0x20..=0x7e).contains(&byte)
         && !matches!(
             byte,
-            b'$'
-                | b'\\'
+            b'$' | b'\\'
                 | ITALIC_START_MARKER_V0
                 | ITALIC_END_MARKER_V0
                 | BOLD_START_MARKER_V0
@@ -476,7 +481,11 @@ fn is_safe_math_payload_char_v0(byte: u8) -> bool {
         )
 }
 
-fn consume_inline_math_command_v0(tokens: &[TokenV0], index: usize, out: &mut Vec<u8>) -> Option<usize> {
+fn consume_inline_math_command_v0(
+    tokens: &[TokenV0],
+    index: usize,
+    out: &mut Vec<u8>,
+) -> Option<usize> {
     if !matches!(tokens.get(index), Some(TokenV0::Char(b'$'))) {
         return None;
     }
@@ -509,7 +518,11 @@ fn consume_inline_math_command_v0(tokens: &[TokenV0], index: usize, out: &mut Ve
     }
 }
 
-fn consume_display_math_command_v0(tokens: &[TokenV0], index: usize, out: &mut Vec<u8>) -> Option<usize> {
+fn consume_display_math_command_v0(
+    tokens: &[TokenV0],
+    index: usize,
+    out: &mut Vec<u8>,
+) -> Option<usize> {
     if !matches!(
         tokens.get(index),
         Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"["
@@ -845,7 +858,9 @@ fn consume_fragment_token_v0(
             out.extend_from_slice(REF_MARKER_SUFFIX_V0);
             Some(next)
         }
-        TokenV0::ControlSeq(name) if name.as_slice() == b"protect" || name.as_slice() == b"relax" => {
+        TokenV0::ControlSeq(name)
+            if name.as_slice() == b"protect" || name.as_slice() == b"relax" =>
+        {
             Some(index + 1)
         }
         TokenV0::ControlSeq(name) if name.as_slice() == b"emph" || name.as_slice() == b"textbf" => {
@@ -856,7 +871,14 @@ fn consume_fragment_token_v0(
             };
             let (group_start, group_end, next) = consume_group_bounds(tokens, index + 1)?;
             out.push(style_markers.0);
-            consume_fragment_range_v0(tokens, group_start, group_end, out, allow_and, allow_hard_break)?;
+            consume_fragment_range_v0(
+                tokens,
+                group_start,
+                group_end,
+                out,
+                allow_and,
+                allow_hard_break,
+            )?;
             out.push(style_markers.1);
             Some(next)
         }
@@ -1071,7 +1093,11 @@ fn consume_includegraphics_path_v0(tokens: &[TokenV0], index: usize) -> Option<(
     Some((normalized, next))
 }
 
-fn consume_tabular_environment_v0(tokens: &[TokenV0], index: usize, out: &mut Vec<u8>) -> Option<usize> {
+fn consume_tabular_environment_v0(
+    tokens: &[TokenV0],
+    index: usize,
+    out: &mut Vec<u8>,
+) -> Option<usize> {
     let (env_name, mut cursor) = consume_env_name_command_v0(tokens, index, BEGIN_CONTROL_V0)?;
     if env_name.as_slice() != TABULAR_ENV_V0 {
         return None;
@@ -1122,7 +1148,9 @@ fn consume_tabular_environment_v0(tokens: &[TokenV0], index: usize, out: &mut Ve
                     row.push(core::mem::take(&mut cell));
                     cursor += 1;
                 }
-                Some(TokenV0::ControlSeq(name)) if is_hard_line_break_control_v0(name.as_slice()) => {
+                Some(TokenV0::ControlSeq(name))
+                    if is_hard_line_break_control_v0(name.as_slice()) =>
+                {
                     trim_trailing_spaces(&mut cell);
                     if cell.windows(2).any(|window| window == b"||") {
                         return None;
@@ -1201,7 +1229,14 @@ fn consume_figure_environment_v0(
                 }
                 let (group_start, group_end, next) = consume_group_bounds(tokens, cursor + 1)?;
                 let mut value = Vec::<u8>::new();
-                consume_fragment_range_v0(tokens, group_start, group_end, &mut value, false, false)?;
+                consume_fragment_range_v0(
+                    tokens,
+                    group_start,
+                    group_end,
+                    &mut value,
+                    false,
+                    false,
+                )?;
                 trim_trailing_spaces(&mut value);
                 if value.is_empty() {
                     return None;
@@ -1289,7 +1324,9 @@ fn consume_list_environment_with_depth_v0(
 
                 loop {
                     match tokens.get(cursor) {
-                        Some(TokenV0::ControlSeq(name)) if name.as_slice() == ITEM_CONTROL_V0 => break,
+                        Some(TokenV0::ControlSeq(name)) if name.as_slice() == ITEM_CONTROL_V0 => {
+                            break
+                        }
                         Some(TokenV0::ControlSeq(name)) if name.as_slice() == BEGIN_CONTROL_V0 => {
                             let (nested_env, _) =
                                 consume_env_name_command_v0(tokens, cursor, BEGIN_CONTROL_V0)?;
@@ -1298,7 +1335,12 @@ fn consume_list_environment_with_depth_v0(
                             {
                                 return None;
                             }
-                            cursor = consume_list_environment_with_depth_v0(tokens, cursor, out, depth + 1)?;
+                            cursor = consume_list_environment_with_depth_v0(
+                                tokens,
+                                cursor,
+                                out,
+                                depth + 1,
+                            )?;
                         }
                         Some(TokenV0::ControlSeq(name)) if name.as_slice() == END_CONTROL_V0 => {
                             let (end_env, next) =
@@ -1331,7 +1373,11 @@ fn consume_list_environment_with_depth_v0(
     }
 }
 
-fn consume_list_environment_v0(tokens: &[TokenV0], index: usize, out: &mut Vec<u8>) -> Option<usize> {
+fn consume_list_environment_v0(
+    tokens: &[TokenV0],
+    index: usize,
+    out: &mut Vec<u8>,
+) -> Option<usize> {
     consume_list_environment_with_depth_v0(tokens, index, out, 0)
 }
 
@@ -1389,7 +1435,11 @@ fn prefix_right_lines_v0(content: &[u8]) -> Vec<u8> {
     out
 }
 
-fn consume_quote_environment_v0(tokens: &[TokenV0], index: usize, out: &mut Vec<u8>) -> Option<usize> {
+fn consume_quote_environment_v0(
+    tokens: &[TokenV0],
+    index: usize,
+    out: &mut Vec<u8>,
+) -> Option<usize> {
     let (env_name, mut cursor) = consume_env_name_command_v0(tokens, index, BEGIN_CONTROL_V0)?;
     if env_name.as_slice() != QUOTE_ENV_V0 {
         return None;
@@ -1425,7 +1475,11 @@ fn consume_quote_environment_v0(tokens: &[TokenV0], index: usize, out: &mut Vec<
     }
 }
 
-fn consume_center_environment_v0(tokens: &[TokenV0], index: usize, out: &mut Vec<u8>) -> Option<usize> {
+fn consume_center_environment_v0(
+    tokens: &[TokenV0],
+    index: usize,
+    out: &mut Vec<u8>,
+) -> Option<usize> {
     let (env_name, mut cursor) = consume_env_name_command_v0(tokens, index, BEGIN_CONTROL_V0)?;
     if env_name.as_slice() != CENTER_ENV_V0 {
         return None;
@@ -1461,7 +1515,11 @@ fn consume_center_environment_v0(tokens: &[TokenV0], index: usize, out: &mut Vec
     }
 }
 
-fn consume_centerline_command_v0(tokens: &[TokenV0], index: usize, out: &mut Vec<u8>) -> Option<usize> {
+fn consume_centerline_command_v0(
+    tokens: &[TokenV0],
+    index: usize,
+    out: &mut Vec<u8>,
+) -> Option<usize> {
     if !matches!(
         tokens.get(index),
         Some(TokenV0::ControlSeq(name)) if name.as_slice() == CENTERLINE_CONTROL_V0
@@ -1519,14 +1577,19 @@ fn consume_flushright_environment_v0(
                 cursor += 1;
             }
             Some(_) => {
-                cursor = consume_fragment_token_v0(tokens, cursor, &mut right_aligned, false, true)?;
+                cursor =
+                    consume_fragment_token_v0(tokens, cursor, &mut right_aligned, false, true)?;
             }
             None => return None,
         }
     }
 }
 
-fn consume_rightline_command_v0(tokens: &[TokenV0], index: usize, out: &mut Vec<u8>) -> Option<usize> {
+fn consume_rightline_command_v0(
+    tokens: &[TokenV0],
+    index: usize,
+    out: &mut Vec<u8>,
+) -> Option<usize> {
     if !matches!(
         tokens.get(index),
         Some(TokenV0::ControlSeq(name)) if name.as_slice() == RIGHTLINE_CONTROL_V0
@@ -1535,7 +1598,14 @@ fn consume_rightline_command_v0(tokens: &[TokenV0], index: usize, out: &mut Vec<
     }
     let (group_start, group_end, next) = consume_group_bounds(tokens, index + 1)?;
     let mut right_aligned = Vec::new();
-    consume_fragment_range_v0(tokens, group_start, group_end, &mut right_aligned, false, true)?;
+    consume_fragment_range_v0(
+        tokens,
+        group_start,
+        group_end,
+        &mut right_aligned,
+        false,
+        true,
+    )?;
     trim_trailing_spaces(&mut right_aligned);
     if right_aligned.is_empty() {
         return None;
@@ -1551,7 +1621,11 @@ fn consume_rightline_command_v0(tokens: &[TokenV0], index: usize, out: &mut Vec<
     Some(next)
 }
 
-fn consume_body_environment_v0(tokens: &[TokenV0], index: usize, out: &mut Vec<u8>) -> Option<usize> {
+fn consume_body_environment_v0(
+    tokens: &[TokenV0],
+    index: usize,
+    out: &mut Vec<u8>,
+) -> Option<usize> {
     let (env_name, _) = consume_env_name_command_v0(tokens, index, BEGIN_CONTROL_V0)?;
     if env_name.as_slice() == ITEMIZE_ENV_V0 || env_name.as_slice() == ENUMERATE_ENV_V0 {
         return consume_list_environment_v0(tokens, index, out);
@@ -1616,8 +1690,7 @@ fn is_safe_href_url_byte_v0(byte: u8) -> bool {
     byte.is_ascii_alphanumeric()
         || matches!(
             byte,
-            b':'
-                | b'/'
+            b':' | b'/'
                 | b'?'
                 | b'#'
                 | b'['
@@ -1660,7 +1733,11 @@ fn normalize_bib_resource_name_v0(raw_path: &[u8]) -> Option<Vec<u8>> {
     if raw_path.contains(&b'\\') || raw_path.contains(&b':') {
         return None;
     }
-    if !raw_path.iter().copied().all(is_safe_bib_resource_path_byte_v0) {
+    if !raw_path
+        .iter()
+        .copied()
+        .all(is_safe_bib_resource_path_byte_v0)
+    {
         return None;
     }
 
@@ -1778,10 +1855,9 @@ fn consume_package_declaration_noop_v0(tokens: &[TokenV0], index: usize) -> Opti
         if package.is_empty()
             || package.starts_with(b"/")
             || package.windows(2).any(|window| window == b"..")
-            || !package
-                .iter()
-                .copied()
-                .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'/' | b'.' | b'_' | b'-'))
+            || !package.iter().copied().all(|byte| {
+                byte.is_ascii_alphanumeric() || matches!(byte, b'/' | b'.' | b'_' | b'-')
+            })
         {
             return None;
         }
@@ -1897,9 +1973,7 @@ fn extract_bib_title_field_v0(entry_body: &[u8]) -> Option<Vec<u8>> {
     None
 }
 
-pub(crate) fn parse_minimal_bib_entries_v0(
-    bib_bytes: &[u8],
-) -> Option<BTreeMap<Vec<u8>, Vec<u8>>> {
+pub(crate) fn parse_minimal_bib_entries_v0(bib_bytes: &[u8]) -> Option<BTreeMap<Vec<u8>, Vec<u8>>> {
     let mut entries = BTreeMap::<Vec<u8>, Vec<u8>>::new();
     let mut index = 0usize;
 
@@ -2067,7 +2141,10 @@ fn apply_crossref_pass_v1(
                 return None;
             }
             let key = body[key_start..key_end].to_vec();
-            let resolved_anchor_id = artifacts.labels_by_key.get(&key).map(|entry| entry.anchor_id);
+            let resolved_anchor_id = artifacts
+                .labels_by_key
+                .get(&key)
+                .map(|entry| entry.anchor_id);
             if let Some(anchor_id) = resolved_anchor_id {
                 if let Some(label) = artifacts.labels_by_key.get(&key) {
                     if matches!(label.kind, LabelKindV0::Heading)
@@ -2316,7 +2393,8 @@ fn consume_thebibliography_environment_v0(
         return None;
     }
 
-    let (width_group_start, width_group_end, width_group_next) = consume_group_bounds(tokens, cursor)?;
+    let (width_group_start, width_group_end, width_group_next) =
+        consume_group_bounds(tokens, cursor)?;
     let width_hint = parse_char_space_group_trimmed_v0(tokens, width_group_start, width_group_end)?;
     if width_hint.is_empty() {
         return None;
@@ -2346,7 +2424,9 @@ fn consume_thebibliography_environment_v0(
         }
 
         let (key, next_after_key) = parse_label_or_ref_key_group_v0(tokens, cursor)?;
-        if local_items.iter().any(|item| item.key == key) || bibitems.iter().any(|item| item.key == key) {
+        if local_items.iter().any(|item| item.key == key)
+            || bibitems.iter().any(|item| item.key == key)
+        {
             return None;
         }
         cursor = next_after_key;
@@ -2356,9 +2436,12 @@ fn consume_thebibliography_environment_v0(
             match tokens.get(cursor) {
                 Some(TokenV0::ControlSeq(name)) if name.as_slice() == BIBITEM_CONTROL_V0 => break,
                 Some(TokenV0::ControlSeq(name)) if name.as_slice() == END_CONTROL_V0 => break,
-                Some(TokenV0::ControlSeq(name)) if name.as_slice() == BEGIN_CONTROL_V0 => return None,
+                Some(TokenV0::ControlSeq(name)) if name.as_slice() == BEGIN_CONTROL_V0 => {
+                    return None
+                }
                 Some(_) => {
-                    cursor = consume_fragment_token_v0(tokens, cursor, &mut item_text, false, true)?;
+                    cursor =
+                        consume_fragment_token_v0(tokens, cursor, &mut item_text, false, true)?;
                 }
                 None => return None,
             }
@@ -2516,7 +2599,9 @@ pub(crate) fn extract_typeset_minimal_text_body_with_external_bib_v0(
                 index = consume_document_env_command_v0(tokens, index, BEGIN_CONTROL_V0)?;
                 break;
             }
-            Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"protect" || name.as_slice() == b"relax" => {
+            Some(TokenV0::ControlSeq(name))
+                if name.as_slice() == b"protect" || name.as_slice() == b"relax" =>
+            {
                 index += 1;
             }
             Some(TokenV0::Space) => index += 1,
@@ -2612,13 +2697,19 @@ pub(crate) fn extract_typeset_minimal_text_body_with_external_bib_v0(
             }
             Some(TokenV0::ControlSeq(name)) if name.as_slice() == FOOTNOTE_CONTROL_V0 => {
                 saw_body_content_after_maketitle = true;
-                maybe_emit_pending_noindent_prefix_v0(&mut body, &mut pending_noindent_after_heading);
+                maybe_emit_pending_noindent_prefix_v0(
+                    &mut body,
+                    &mut pending_noindent_after_heading,
+                );
                 pending_label_target = None;
                 index = consume_footnote_command_v0(tokens, index, &mut body, &mut footnotes)?;
             }
             Some(TokenV0::ControlSeq(name)) if name.as_slice() == HREF_CONTROL_V0 => {
                 saw_body_content_after_maketitle = true;
-                maybe_emit_pending_noindent_prefix_v0(&mut body, &mut pending_noindent_after_heading);
+                maybe_emit_pending_noindent_prefix_v0(
+                    &mut body,
+                    &mut pending_noindent_after_heading,
+                );
                 pending_label_target = None;
                 index = consume_href_command_v0(tokens, index, &mut body, &mut href_urls)?;
             }
@@ -2633,13 +2724,19 @@ pub(crate) fn extract_typeset_minimal_text_body_with_external_bib_v0(
             }
             Some(TokenV0::ControlSeq(name)) if name.as_slice() == REF_CONTROL_V0 => {
                 saw_body_content_after_maketitle = true;
-                maybe_emit_pending_noindent_prefix_v0(&mut body, &mut pending_noindent_after_heading);
+                maybe_emit_pending_noindent_prefix_v0(
+                    &mut body,
+                    &mut pending_noindent_after_heading,
+                );
                 pending_label_target = None;
                 index = consume_ref_command_v0(tokens, index, &mut body)?;
             }
             Some(TokenV0::ControlSeq(name)) if name.as_slice() == CITE_CONTROL_V0 => {
                 saw_body_content_after_maketitle = true;
-                maybe_emit_pending_noindent_prefix_v0(&mut body, &mut pending_noindent_after_heading);
+                maybe_emit_pending_noindent_prefix_v0(
+                    &mut body,
+                    &mut pending_noindent_after_heading,
+                );
                 pending_label_target = None;
                 index = consume_cite_command_v0(tokens, index, &mut body)?;
             }
@@ -2648,7 +2745,10 @@ pub(crate) fn extract_typeset_minimal_text_body_with_external_bib_v0(
                     || name.as_slice() == BIBLIOGRAPHY_CONTROL_V0 =>
             {
                 saw_body_content_after_maketitle = true;
-                maybe_emit_pending_noindent_prefix_v0(&mut body, &mut pending_noindent_after_heading);
+                maybe_emit_pending_noindent_prefix_v0(
+                    &mut body,
+                    &mut pending_noindent_after_heading,
+                );
                 pending_label_target = None;
                 if name.as_slice() == BIBLIOGRAPHY_CONTROL_V0 {
                     bibliography_render_requested = true;
@@ -2658,14 +2758,15 @@ pub(crate) fn extract_typeset_minimal_text_body_with_external_bib_v0(
             }
             Some(TokenV0::ControlSeq(name)) if name.as_slice() == PRINTBIBLIOGRAPHY_CONTROL_V0 => {
                 saw_body_content_after_maketitle = true;
-                maybe_emit_pending_noindent_prefix_v0(&mut body, &mut pending_noindent_after_heading);
+                maybe_emit_pending_noindent_prefix_v0(
+                    &mut body,
+                    &mut pending_noindent_after_heading,
+                );
                 pending_label_target = None;
                 bibliography_render_requested = true;
                 index += 1;
             }
-            Some(TokenV0::ControlSeq(name))
-                if name.as_slice() == BIBLIOGRAPHYSTYLE_CONTROL_V0 =>
-            {
+            Some(TokenV0::ControlSeq(name)) if name.as_slice() == BIBLIOGRAPHYSTYLE_CONTROL_V0 => {
                 saw_body_content_after_maketitle = true;
                 pending_label_target = None;
                 index = consume_bibliographystyle_command_v0(tokens, index)?;
@@ -2698,7 +2799,10 @@ pub(crate) fn extract_typeset_minimal_text_body_with_external_bib_v0(
             }
             Some(_) => {
                 saw_body_content_after_maketitle = true;
-                maybe_emit_pending_noindent_prefix_v0(&mut body, &mut pending_noindent_after_heading);
+                maybe_emit_pending_noindent_prefix_v0(
+                    &mut body,
+                    &mut pending_noindent_after_heading,
+                );
                 pending_label_target = None;
                 index = consume_fragment_token_v0(tokens, index, &mut body, false, true)?;
             }
@@ -2720,11 +2824,8 @@ pub(crate) fn extract_typeset_minimal_text_body_with_external_bib_v0(
     body = normalize_tex_ellipsis_v0(&body);
     body = normalize_bracket_spacing_v0(&body);
     body = normalize_wrapper_marker_spacing_v0(&body);
-    let crossref_artifacts = build_crossref_artifacts_v1(
-        &labels_by_key,
-        &toc_entries,
-        !href_urls.is_empty(),
-    )?;
+    let crossref_artifacts =
+        build_crossref_artifacts_v1(&labels_by_key, &toc_entries, !href_urls.is_empty())?;
     body = apply_crossref_pass_v1(
         &body,
         &crossref_artifacts,
@@ -2757,7 +2858,10 @@ pub(crate) fn extract_typeset_minimal_text_body_with_external_bib_v0(
         }
     }
     for item in &bibitems {
-        if bibliography_entries_by_key.insert(item.key.clone(), item.clone()).is_some() {
+        if bibliography_entries_by_key
+            .insert(item.key.clone(), item.clone())
+            .is_some()
+        {
             return None;
         }
     }
@@ -2807,7 +2911,13 @@ pub(crate) fn extract_typeset_minimal_text_body_with_external_bib_v0(
             body.push(b' ');
             body.extend_from_slice(entry.anchor_id.to_string().as_bytes());
             body.push(b' ');
-            body.extend_from_slice(&entry.title);
+            if crossref_artifacts.hyperref_enabled {
+                body.push(LINK_START_MARKER_V0);
+                body.extend_from_slice(&entry.title);
+                body.push(LINK_END_MARKER_V0);
+            } else {
+                body.extend_from_slice(&entry.title);
+            }
             push_newline(&mut body);
         }
     }
