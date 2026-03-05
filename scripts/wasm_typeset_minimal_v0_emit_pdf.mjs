@@ -17,7 +17,7 @@ function maxTmGapPtV0(pdfBytes) {
   let maxGapPt = 0;
   for (const line of text.split('\n')) {
     const fields = line.trim().split(/\s+/).filter((field) => field.length > 0);
-    const xs = [];
+    const segments = [];
     for (let index = 0; index + 6 < fields.length; index += 1) {
       if (
         fields[index] === '1' &&
@@ -30,12 +30,35 @@ function maxTmGapPtV0(pdfBytes) {
         if (!Number.isFinite(parsedX)) {
           throw new Error(`invalid Tm x field: ${fields[index + 4]}`);
         }
-        xs.push(parsedX);
+        let textToken = '';
+        let cursor = index + 7;
+        while (cursor < fields.length) {
+          if (
+            fields[cursor] === '1' &&
+            cursor + 6 < fields.length &&
+            fields[cursor + 1] === '0' &&
+            fields[cursor + 2] === '0' &&
+            fields[cursor + 3] === '1' &&
+            fields[cursor + 6] === 'Tm'
+          ) {
+            break;
+          }
+          if (fields[cursor].startsWith('(') && fields[cursor].endsWith(')')) {
+            textToken = fields[cursor].slice(1, -1);
+          }
+          cursor += 1;
+        }
+        segments.push({ x: parsedX, text: textToken });
       }
     }
-    if (xs.length < 2) continue;
-    for (let index = 1; index < xs.length; index += 1) {
-      const gapPt = xs[index] - xs[index - 1];
+    if (segments.length < 2) continue;
+    for (let index = 1; index < segments.length; index += 1) {
+      const previous = segments[index - 1];
+      const current = segments[index];
+      if (previous.text === '-' || /^\d+\.$/.test(previous.text)) {
+        continue;
+      }
+      const gapPt = current.x - previous.x;
       if (gapPt > maxGapPt) {
         maxGapPt = gapPt;
       }
