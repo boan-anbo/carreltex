@@ -74,6 +74,9 @@ printf 'fixture-bytes-for-foo-bar-sty\n' > "$FIXTURE_SOURCE_DIR/xetex/sty/foo__b
 printf 'fixture-bytes-for-fooopts-sty\n' > "$FIXTURE_SOURCE_DIR/xetex/sty/fooopts.sty"
 printf 'fixture-bytes-for-baropts-sty\n' > "$FIXTURE_SOURCE_DIR/xetex/sty/baropts.sty"
 printf 'fixture-bytes-for-pkgoptsdemo-sty\n' > "$FIXTURE_SOURCE_DIR/xetex/sty/pkgoptsdemo.sty"
+printf 'fixture-bytes-for-packmulti-a-sty\n' > "$FIXTURE_SOURCE_DIR/xetex/sty/packmulti__a.sty"
+printf 'fixture-bytes-for-packmulti-b-sty\n' > "$FIXTURE_SOURCE_DIR/xetex/sty/packmulti__b.sty"
+printf 'fixture-bytes-for-packmulti-c-sty\n' > "$FIXTURE_SOURCE_DIR/xetex/sty/packmulti__c.sty"
 printf 'fixture-bytes-for-natbib-sty\n' > "$FIXTURE_SOURCE_DIR/xetex/sty/natbib.sty"
 printf 'fixture-bytes-for-memoir-cls\n' > "$FIXTURE_SOURCE_DIR/xetex/cls/memoir.cls"
 printf 'fixture-bytes-for-classoptsdemo-cls\n' > "$FIXTURE_SOURCE_DIR/xetex/cls/classoptsdemo.cls"
@@ -210,6 +213,27 @@ if (!usepackageMultiOptionsRequest) {
   console.error('FAIL: request list must include package hint request for pkgoptsdemo.sty');
   process.exit(1);
 }
+const usepackageMultipackageRequestA = listA.requests.find(
+  (request) => request.kind === 'texmf' && request.name === 'packmulti__a.sty' && request.variant === 'typeset',
+);
+if (!usepackageMultipackageRequestA) {
+  console.error('FAIL: request list must include package hint request for packmulti__a.sty');
+  process.exit(1);
+}
+const usepackageMultipackageRequestB = listA.requests.find(
+  (request) => request.kind === 'texmf' && request.name === 'packmulti__b.sty' && request.variant === 'typeset',
+);
+if (!usepackageMultipackageRequestB) {
+  console.error('FAIL: request list must include package hint request for packmulti__b.sty');
+  process.exit(1);
+}
+const requireMultipackageRequestC = listA.requests.find(
+  (request) => request.kind === 'texmf' && request.name === 'packmulti__c.sty' && request.variant === 'typeset',
+);
+if (!requireMultipackageRequestC) {
+  console.error('FAIL: request list must include package hint request for packmulti__c.sty');
+  process.exit(1);
+}
 const classOptionsRequest = listA.requests.find(
   (request) => request.kind === 'texmf' && request.format === 'cls' && request.name === 'classoptsdemo.cls' && request.variant === 'typeset',
 );
@@ -328,6 +352,10 @@ if (listA.requests.some((request) => request.name === 'bad__danger_graphic.pdf' 
 }
 if (listA.requests.some((request) => request.name === 'evil.sty' || request.name === 'evil__pkg.sty')) {
   console.error('FAIL: request list must fail-closed for unsafe usepackage entries');
+  process.exit(1);
+}
+if (listA.requests.some((request) => request.name === 'evilpkg.sty')) {
+  console.error('FAIL: request list must fail-closed for unsafe usepackage multipackage entries');
   process.exit(1);
 }
 const nestedBibRequest = listA.requests.find(
@@ -735,6 +763,43 @@ if (JSON.stringify(usepackageMultiEntry.options) !== JSON.stringify(['table', 'd
   process.exit(1);
 }
 
+const multipackagePkgoptSummary = JSON.parse(
+  fs.readFileSync(path.join(outDir, 'typeset_demo_usepackage_multipackage_probe_v0', 'summary.json'), 'utf8'),
+);
+if (multipackagePkgoptSummary?.typed_artifacts?.pkgopt?.present !== true) {
+  console.error('FAIL: expected pkgopt typed artifact present for usepackage multipackage probe after first run');
+  process.exit(1);
+}
+const multipackagePkgoptArtifact = JSON.parse(
+  fs.readFileSync(path.join(outDir, 'typeset_demo_usepackage_multipackage_probe_v0', 'pkgopt_v0.json'), 'utf8'),
+);
+if (!Array.isArray(multipackagePkgoptArtifact?.entries) || multipackagePkgoptArtifact.entries.length <= 0) {
+  console.error('FAIL: expected non-empty pkgopt_v0.entries for usepackage multipackage probe');
+  process.exit(1);
+}
+assertEntrySourceSpans('typeset_demo_usepackage_multipackage_probe_v0', 'pkgopt_v0', multipackagePkgoptArtifact.entries);
+const multipackageUseA = multipackagePkgoptArtifact.entries.find(
+  (entry) => entry.command === 'usepackage' && entry.package === 'packmulti/a',
+);
+if (!multipackageUseA || JSON.stringify(multipackageUseA.options) !== JSON.stringify(['optc', 'opta'])) {
+  console.error('FAIL: expected usepackage multipackage entry for packmulti/a with options [optc,opta]');
+  process.exit(1);
+}
+const multipackageUseB = multipackagePkgoptArtifact.entries.find(
+  (entry) => entry.command === 'usepackage' && entry.package === 'packmulti/b',
+);
+if (!multipackageUseB || JSON.stringify(multipackageUseB.options) !== JSON.stringify(['optc', 'opta'])) {
+  console.error('FAIL: expected usepackage multipackage entry for packmulti/b with options [optc,opta]');
+  process.exit(1);
+}
+const multipackageRequireC = multipackagePkgoptArtifact.entries.find(
+  (entry) => entry.command === 'RequirePackage' && entry.package === 'packmulti/c',
+);
+if (!multipackageRequireC || JSON.stringify(multipackageRequireC.options) !== JSON.stringify(['optb', 'opta'])) {
+  console.error('FAIL: expected RequirePackage multipackage entry for packmulti/c with options [optb,opta]');
+  process.exit(1);
+}
+
 const graphicsSummary = JSON.parse(
   fs.readFileSync(path.join(outDir, 'typeset_demo_graphics_probe_v0', 'summary.json'), 'utf8'),
 );
@@ -873,6 +938,9 @@ const requiredEntries = [
   ['texmf', 'sty', 'fooopts.sty', 'typeset'],
   ['texmf', 'sty', 'baropts.sty', 'typeset'],
   ['texmf', 'sty', 'pkgoptsdemo.sty', 'typeset'],
+  ['texmf', 'sty', 'packmulti__a.sty', 'typeset'],
+  ['texmf', 'sty', 'packmulti__b.sty', 'typeset'],
+  ['texmf', 'sty', 'packmulti__c.sty', 'typeset'],
   ['texmf', 'cls', 'classoptsdemo.cls', 'typeset'],
   ['texmf', 'cls', 'classoptsmulti.cls', 'typeset'],
   ['texmf', 'cls', 'memoir.cls', 'typeset'],
@@ -1105,8 +1173,8 @@ if (!(resolvedCount > resolvedCountFirst)) {
   );
   process.exit(1);
 }
-if (resolvedCount < 39) {
-  console.error(`FAIL: expected resolved_resources_count >= 39 after usepackage-option normalization expansion, got ${resolvedCount}`);
+if (resolvedCount < 42) {
+  console.error(`FAIL: expected resolved_resources_count >= 42 after multipackage package-option expansion, got ${resolvedCount}`);
   process.exit(1);
 }
 const okStatuses = statuses.filter((entry) => entry.status === 'OK');
@@ -1127,6 +1195,11 @@ if (!documentclassEmptyOptsInvalidStatus || documentclassEmptyOptsInvalidStatus.
 const usepackageEmptyOptsInvalidStatus = statuses.find((entry) => entry.case_id === 'typeset_demo_usepackage_emptyopts_invalid_probe_v0');
 if (!usepackageEmptyOptsInvalidStatus || usepackageEmptyOptsInvalidStatus.status !== 'INVALID') {
   console.error('FAIL: expected typeset_demo_usepackage_emptyopts_invalid_probe_v0 status INVALID');
+  process.exit(1);
+}
+const usepackageMultipackageInvalidStatus = statuses.find((entry) => entry.case_id === 'typeset_demo_usepackage_multipackage_invalid_probe_v0');
+if (!usepackageMultipackageInvalidStatus || usepackageMultipackageInvalidStatus.status !== 'INVALID') {
+  console.error('FAIL: expected typeset_demo_usepackage_multipackage_invalid_probe_v0 status INVALID');
   process.exit(1);
 }
 for (const status of okStatuses) {
@@ -1355,7 +1428,7 @@ for (const status of statuses) {
 
 console.log(`PASS: resolved_resources_count ${resolvedCount}`);
 console.log(`PASS: resolved_resources_count increased from ${resolvedCountFirst} to ${resolvedCount}`);
-console.log('PASS: resolved_resources_count meets floor >= 39');
+console.log('PASS: resolved_resources_count meets floor >= 42');
 console.log(`PASS: baseline_match MATCH for all OK cases (${okStatuses.length})`);
 console.log(`PASS: typed_artifacts keys ${requiredTypedKeys.join(',')}`);
 console.log('PASS: typed_artifacts_version gate 1');
