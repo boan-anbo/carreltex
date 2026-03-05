@@ -123,6 +123,15 @@ if (typeof hyperrefShaFirst !== 'string' || !/^[0-9a-f]{64}$/.test(hyperrefShaFi
   console.error('FAIL: expected hyperref artifact sha256 in first summary');
   process.exit(1);
 }
+const hyperrefArtifactFirst = JSON.parse(fs.readFileSync(hyperrefPath, 'utf8'));
+if (!Array.isArray(hyperrefArtifactFirst?.links)) {
+  console.error('FAIL: expected hyperref_v0.links array in first-run artifact');
+  process.exit(1);
+}
+if (hyperrefArtifactFirst.links.length <= 0) {
+  console.error('FAIL: expected hyperref_v0.links to include at least one link in probe fixture');
+  process.exit(1);
+}
 fs.writeFileSync(firstRunShaPath('hyperref_v0'), `${hyperrefShaFirst}\n`);
 NODE
 
@@ -342,6 +351,13 @@ if (!hyperrefArtifact || hyperrefArtifact.present !== true) {
 const hyperrefShaSecond = hyperrefArtifact.artifact_sha256;
 if (hyperrefShaSecond !== hyperrefShaFirst) {
   console.error('FAIL: hyperref_v0 artifact sha256 must be stable across reruns');
+  process.exit(1);
+}
+const hyperrefArtifactSecond = JSON.parse(
+  fs.readFileSync(path.join(outDir, 'typeset_demo_hyperref_probe_v0', 'hyperref_v0.json'), 'utf8'),
+);
+if (!Array.isArray(hyperrefArtifactSecond?.links) || hyperrefArtifactSecond.links.length <= 0) {
+  console.error('FAIL: expected non-empty hyperref_v0.links array after rerun');
   process.exit(1);
 }
 
