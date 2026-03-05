@@ -224,6 +224,30 @@ fn pdf_renderer_keeps_multi_space_line_unwrapped_under_width_limit_v0() {
 }
 
 #[test]
+fn pdf_renderer_applies_hanging_indent_for_list_continuation_v0() {
+    let xdv = write_dvi_v2_text_page_v0(b"- item\ncontinuation").expect("writer should accept text");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+
+    let pdf_text = String::from_utf8_lossy(&pdf);
+    let mut xs = Vec::<f32>::new();
+    for line in pdf_text.lines() {
+        if !line.contains(" Tm ") {
+            continue;
+        }
+        let fields = line.split_whitespace().collect::<Vec<_>>();
+        if fields.len() < 7 || fields[6] != "Tm" {
+            continue;
+        }
+        if let Ok(x_pt) = fields[4].parse::<f32>() {
+            xs.push(x_pt);
+        }
+    }
+    assert!(xs.len() >= 2, "expected at least two text lines, got {xs:?}");
+    assert!((xs[0] - 72.0).abs() <= 0.02, "first list line x={}", xs[0]);
+    assert!(xs[1] > xs[0], "continuation should hang-indent: {xs:?}");
+}
+
+#[test]
 fn parse_roundtrips_writer_layout_for_wrap_and_paging() {
     let text = b"word word word word word word word word word word";
     let layout = plan_layout_v0(text, 65_536, 786_432, 10, 1).expect("layout plan");
