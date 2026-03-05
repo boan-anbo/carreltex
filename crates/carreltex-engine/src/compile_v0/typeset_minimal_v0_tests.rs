@@ -692,6 +692,17 @@ fn typeset_minimal_figure_ordinals_stay_stable_with_interleaved_headings() {
 }
 
 #[test]
+fn typeset_minimal_figure_refs_with_hyperref_emit_anchor_links_in_order() {
+    let main = b"\\documentclass{article}\\begin{document}\\section{One}\\begin{figure}\\caption{First}\\end{figure}\\label{fig:first}\\subsection{Two}\\begin{figure}\\caption{Second}\\end{figure}\\label{fig:second}Refs: \\ref{fig:first}, \\ref{fig:second}.\\href{https://example.com}{link}\\end{document}";
+    let body = extract_typeset_body(main);
+    let text = String::from_utf8(body).expect("body should be valid utf8");
+    assert!(text.contains("Refs: <1>, <2>."), "body={text:?}");
+    assert!(text.contains("!ra 1 2"), "body={text:?}");
+    assert!(text.contains("!ra 2 4"), "body={text:?}");
+    assert!(text.contains("!u 3 https://example.com"), "body={text:?}");
+}
+
+#[test]
 fn typeset_minimal_rejects_figure_includegraphics_optional_args() {
     let main = b"\\documentclass{article}\\begin{document}\\begin{figure}\\includegraphics[width=0.5\\textwidth]{demo.png}\\caption{Nope}\\end{figure}\\end{document}";
     let result = compile_typeset(main);

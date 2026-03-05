@@ -2340,6 +2340,46 @@ fn pdf_renderer_emits_figref_annotation_targeting_figure_anchor_v0() {
 }
 
 #[test]
+fn pdf_renderer_multi_figure_ref_annotations_follow_ordinal_order_v1() {
+    let xdv = write_dvi_v2_text_page_v0(
+        b"Prelude.\n\n@S {Intro}\n\n!gbox\n!gcap Figure 1: First caption.\n\n!gbox\n!gcap Figure 2: Second caption.\n\nSee <1> and <2>.\n\n!l fig:first 2 figure 1 -\n!l fig:second 3 figure 2 -\n!r fig:first 11 2\n!r fig:second 11 3\n!ra 1 2\n!ra 2 3",
+    )
+    .expect("writer should accept multi-figure cross-ref marker lines");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+    let pdf_text = String::from_utf8_lossy(&pdf);
+    assert!(
+        pdf_text.contains("(Figure 1: First caption.) Tj"),
+        "first figure caption should render numbered prefix: {pdf_text}"
+    );
+    assert!(
+        pdf_text.contains("(Figure 2: Second caption.) Tj"),
+        "second figure caption should render numbered prefix: {pdf_text}"
+    );
+    assert!(
+        pdf_text.contains("(See ) Tj")
+            && pdf_text.contains("(1) Tj")
+            && pdf_text.contains("(2) Tj"),
+        "ref line should render both resolved ordinals: {pdf_text}"
+    );
+
+    let page_one = parse_pdf_object_body_v0(&pdf, 3).expect("page object");
+    let annots = parse_pdf_ref_ids_v0(&page_one, "/Annots");
+    assert_eq!(annots.len(), 2, "expected two figure ref annotations");
+    let first_annot = parse_pdf_object_body_v0(&pdf, annots[0]).expect("first annotation");
+    let second_annot = parse_pdf_object_body_v0(&pdf, annots[1]).expect("second annotation");
+    assert_eq!(
+        parse_pdf_annotation_dest_page_id_v0(&first_annot),
+        Some(3),
+        "first figure ref should target page containing first figure anchor"
+    );
+    assert_eq!(
+        parse_pdf_annotation_dest_page_id_v0(&second_annot),
+        Some(3),
+        "second figure ref should target page containing second figure anchor"
+    );
+}
+
+#[test]
 fn pdf_renderer_rejects_ref_annotation_target_with_missing_anchor_v0() {
     let xdv = write_dvi_v2_text_page_v0(b"See <1> only.\n\n!r sec:intro 1 1\n!ra 1 1")
         .expect("writer should accept marker lines");
@@ -2347,6 +2387,19 @@ fn pdf_renderer_rejects_ref_annotation_target_with_missing_anchor_v0() {
     assert!(
         pdf.is_none(),
         "renderer should fail-closed when ref target anchor is missing"
+    );
+}
+
+#[test]
+fn pdf_renderer_rejects_figure_label_metadata_with_zero_ordinal_v1() {
+    let xdv = write_dvi_v2_text_page_v0(
+        b"Prelude.\n\n!gbox\n!gcap Figure 1: Caption.\n\n!l fig:bad 1 figure 0 -",
+    )
+    .expect("writer should accept marker lines");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv);
+    assert!(
+        pdf.is_none(),
+        "renderer should fail-closed when figure label metadata carries zero ordinal"
     );
 }
 
