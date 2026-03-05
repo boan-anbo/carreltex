@@ -238,6 +238,24 @@
       "purpose": "Probes multi-package usepackage/RequirePackage hints and per-package pkgopt extraction with path normalization."
     },
     {
+      "id": "typeset_demo_usepackage_capture_probe_v1",
+      "tags": ["typeset", "packages", "usepackage", "options", "hyperref", "probe", "ni"],
+      "expected_status": "NI",
+      "purpose": "Captures usepackage options into packages_v1 for deterministic request mapping and stable sha gates."
+    },
+    {
+      "id": "typeset_demo_usepackage_multi_capture_probe_v1",
+      "tags": ["typeset", "packages", "usepackage", "multi-package", "probe", "ni"],
+      "expected_status": "NI",
+      "purpose": "Captures comma-list usepackage declarations into deterministic per-package packages_v1 entries."
+    },
+    {
+      "id": "typeset_demo_usepackage_opts_normalize_probe_v1",
+      "tags": ["typeset", "packages", "usepackage", "options", "normalize", "probe", "ni"],
+      "expected_status": "NI",
+      "purpose": "Captures whitespace-normalized usepackage options into stable packages_v1 entries."
+    },
+    {
       "id": "typeset_demo_usepackage_multipackage_invalid_probe_v0",
       "tags": ["typeset", "packages", "invalid", "usepackage", "multi-package", "unsafe-path", "probe"],
       "expected_status": "INVALID",
