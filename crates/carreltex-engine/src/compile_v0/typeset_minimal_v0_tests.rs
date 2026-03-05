@@ -274,6 +274,44 @@ fn typeset_minimal_toc_anchor_ids_follow_document_order_even_when_levels_change(
 }
 
 #[test]
+fn typeset_minimal_labels_and_refs_emit_metadata_and_resolve_inline_values() {
+    let main = b"\\documentclass{article}\\title{T}\\author{A}\\date{D}\\begin{document}\\maketitle\\section{Intro}\\label{sec:intro}See \\ref{sec:intro} and \\ref{sec:missing}.\\begin{figure}\\caption{Figure caption}\\end{figure}\\label{fig:cap}Figure \\ref{fig:cap}.\\end{document}";
+    let body = extract_typeset_body(main);
+    let text = String::from_utf8(body).expect("body should be valid utf8");
+    assert!(text.contains("See 1 and ??."), "body={text:?}");
+    assert!(text.contains("Figure 2."), "body={text:?}");
+    assert!(text.contains("!l sec:intro 1 heading 1 Intro"), "body={text:?}");
+    assert!(text.contains("!l fig:cap 2 figure 0 -"), "body={text:?}");
+    assert!(text.contains("!r sec:intro "), "body={text:?}");
+    assert!(text.contains("!r sec:missing "), "body={text:?}");
+    assert!(text.contains("!r fig:cap "), "body={text:?}");
+}
+
+#[test]
+fn typeset_minimal_rejects_label_not_immediately_after_heading_or_figure() {
+    let main = b"\\documentclass{article}\\begin{document}\\section{Intro}Body first.\\label{sec:intro}\\end{document}";
+    let result = compile_typeset(main);
+    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert!(result.main_xdv_bytes.is_empty());
+}
+
+#[test]
+fn typeset_minimal_rejects_duplicate_label_keys() {
+    let main = b"\\documentclass{article}\\begin{document}\\section{A}\\label{dup:key}\\subsection{B}\\label{dup:key}\\end{document}";
+    let result = compile_typeset(main);
+    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert!(result.main_xdv_bytes.is_empty());
+}
+
+#[test]
+fn typeset_minimal_rejects_label_with_unsafe_key_bytes() {
+    let main = b"\\documentclass{article}\\begin{document}\\section{A}\\label{../bad}\\end{document}";
+    let result = compile_typeset(main);
+    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert!(result.main_xdv_bytes.is_empty());
+}
+
+#[test]
 fn typeset_minimal_heading_at_start_has_no_leading_blank_lines() {
     let main =
         b"\\documentclass{article}\\begin{document}\\paragraph{Lead in}Body text.\\end{document}";
