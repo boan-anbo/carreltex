@@ -1895,6 +1895,54 @@ fn pdf_renderer_link_style_near_punctuation_stays_single_matrix_v0() {
 }
 
 #[test]
+fn pdf_renderer_inline_math_placeholder_keeps_single_text_matrix_v0() {
+    let xdv = write_dvi_v2_text_page_v0(b"Before MATH after.")
+        .expect("writer should accept inline math placeholder line");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+    let pdf_text = String::from_utf8_lossy(&pdf);
+    assert!(
+        pdf_text.contains("(Before MATH after.)"),
+        "inline math placeholder line should render: {pdf_text}"
+    );
+    let tm_count = tm_count_for_line_containing_v0(&pdf, "(Before MATH after.)");
+    assert_eq!(tm_count, 1, "inline placeholder line should use a single Tm");
+}
+
+#[test]
+fn pdf_renderer_display_math_placeholder_line_is_centered_v0() {
+    let xdv = write_dvi_v2_text_page_v0(b"Before.\n\n^ MATH DISPLAY\n\nAfter.")
+        .expect("writer should accept display math placeholder marker line");
+    let layout = parse_dvi_v2_text_page_to_layout_v0(&xdv, 786_432).expect("layout parse");
+    let display_line = layout.pages[0]
+        .lines
+        .iter()
+        .find(|line| {
+            line.glyphs.len() >= 2
+                && line.glyphs[0].byte == b'^'
+                && line.glyphs[1].byte == b' '
+        })
+        .expect("display line with center prefix should exist");
+    let display_width_pt: f32 = display_line.glyphs[2..]
+        .iter()
+        .map(|glyph| glyph.advance_sp as f32 / 65_536.0)
+        .sum();
+    let expected_x_pt = ((612.0 - display_width_pt) * 0.5).clamp(72.0, 540.0);
+
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+    let pdf_text = String::from_utf8_lossy(&pdf);
+    assert!(
+        !pdf_text.contains("^ MATH DISPLAY"),
+        "internal center prefix should be hidden in pdf output: {pdf_text}"
+    );
+    let (actual_x_pt, _) = tm_position_for_line_containing_text_v0(&pdf, "(MATH DISPLAY)")
+        .expect("display placeholder x coordinate");
+    assert!(
+        (actual_x_pt - expected_x_pt).abs() <= 0.05,
+        "display placeholder should be centered: actual={actual_x_pt} expected={expected_x_pt}"
+    );
+}
+
+#[test]
 fn pdf_renderer_emits_link_annotation_with_in_bounds_rect_v0() {
     let xdv =
         write_dvi_v2_text_page_v0(b"Visit <{Example link}> now.\n\n!u 1 https://example.com")
