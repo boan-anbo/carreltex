@@ -698,6 +698,21 @@ fn parse_pdf_annotation_dest_page_id_v0(body: &str) -> Option<u32> {
     fields[0].parse::<u32>().ok()
 }
 
+fn parse_pdf_annotation_dest_xyz_v0(body: &str) -> Option<(u32, f32, f32)> {
+    let marker = "/Dest [";
+    let start = body.find(marker)? + marker.len();
+    let end = body[start..].find(']')? + start;
+    let fields = body[start..end].split_whitespace().collect::<Vec<_>>();
+    if fields.len() < 6 || fields[1] != "0" || fields[2] != "R" || fields[3] != "/XYZ" {
+        return None;
+    }
+    let page_id = fields[0].parse::<u32>().ok()?;
+    let x_pt = fields[4].parse::<f32>().ok()?;
+    let y_token = fields[5].trim_end_matches(']');
+    let y_pt = y_token.parse::<f32>().ok()?;
+    Some((page_id, x_pt, y_pt))
+}
+
 fn parse_pdf_action_uri_v0(body: &str) -> Option<String> {
     let marker = "/URI (";
     let start = body.find(marker)? + marker.len();
@@ -2971,6 +2986,40 @@ fn pdf_renderer_emits_toc_link_annotations_targeting_heading_anchors_v0() {
             "annotation rect must stay within page bounds: {rect:?}"
         );
     }
+}
+
+#[test]
+fn pdf_renderer_toc_annotation_destination_order_is_stable_v2() {
+    let xdv = write_dvi_v2_text_page_v0(
+        b"Prelude.\n\n!toc\n\n@S {Intro section}\n\n@s {Detail section}\n\n!toc 1 1 <Intro section>\n!toc 2 2 <Detail section>",
+    ).expect("writer should accept toc metadata and heading lines");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+
+    let page_one = parse_pdf_object_body_v0(&pdf, 3).expect("page object");
+    let annots = parse_pdf_ref_ids_v0(&page_one, "/Annots");
+    assert_eq!(annots.len(), 2, "expected two toc annotations");
+
+    let destinations = annots
+        .iter()
+        .map(|id| {
+            let body = parse_pdf_object_body_v0(&pdf, *id).expect("annotation body");
+            parse_pdf_annotation_dest_xyz_v0(&body).expect("annotation destination")
+        })
+        .collect::<Vec<_>>();
+    for (page_id, _, _) in &destinations {
+        assert_eq!(
+            *page_id,
+            3,
+            "toc annotations should target page containing heading anchors"
+        );
+    }
+
+    let (_, _, section_y) = destinations[0];
+    let (_, _, subsection_y) = destinations[1];
+    assert!(
+        section_y > subsection_y,
+        "section anchor should appear above subsection anchor: {destinations:?}"
+    );
 }
 
 #[test]
