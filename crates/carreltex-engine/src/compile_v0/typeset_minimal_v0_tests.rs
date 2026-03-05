@@ -288,6 +288,21 @@ fn typeset_minimal_labels_and_refs_emit_metadata_and_resolve_inline_values() {
 }
 
 #[test]
+fn typeset_minimal_crossref_pass_v1_wraps_resolved_refs_as_links_when_hyperref_is_present() {
+    let main = b"\\documentclass{article}\\begin{document}\\section{Intro}\\label{sec:intro}See \\ref{sec:intro} and \\ref{sec:missing} with \\href{https://example.com}{link}.\\end{document}";
+    let body = extract_typeset_body(main);
+    let text = String::from_utf8(body).expect("body should be valid utf8");
+    assert!(
+        text.contains("~ See <1> and ?? with <{link}>."),
+        "body={text:?}"
+    );
+    assert!(text.contains("!r sec:intro 3 1"), "body={text:?}");
+    assert!(text.contains("!r sec:missing 3 0"), "body={text:?}");
+    assert!(text.contains("!ra 1 1"), "body={text:?}");
+    assert!(text.contains("!u 2 https://example.com"), "body={text:?}");
+}
+
+#[test]
 fn typeset_minimal_rejects_label_not_immediately_after_heading_or_figure() {
     let main = b"\\documentclass{article}\\begin{document}\\section{Intro}Body first.\\label{sec:intro}\\end{document}";
     let result = compile_typeset(main);
@@ -377,6 +392,16 @@ fn typeset_minimal_lists_emit_expected_itemize_and_enumerate_lines() {
         text.contains("Before.\n\n- First [item]\n- Second item\n\n1. One\n2. Two\n\nAfter."),
         "body={text:?}"
     );
+}
+
+#[test]
+fn typeset_minimal_refs_resolve_inside_list_and_quote_content() {
+    let main = b"\\documentclass{article}\\begin{document}\\section{Intro}\\label{sec:intro}\\begin{itemize}\\item Item ref \\ref{sec:intro}\\end{itemize}\\begin{quote}Quote ref \\ref{sec:intro}.\\end{quote}\\end{document}";
+    let body = extract_typeset_body(main);
+    let text = String::from_utf8(body).expect("body should be valid utf8");
+    assert!(text.contains("- Item ref 1"), "body={text:?}");
+    assert!(text.contains("> Quote ref 1."), "body={text:?}");
+    assert!(text.contains("!r sec:intro "), "body={text:?}");
 }
 
 #[test]
