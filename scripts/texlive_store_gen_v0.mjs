@@ -10,6 +10,7 @@ const __dirname = path.dirname(__filename);
 const rootDirDefaultV0 = path.resolve(__dirname, '..');
 
 const DEFAULT_SOURCE_DATE_EPOCH_V0 = 1_700_000_000;
+const STORE_BACKEND_FIXTURE_DIR_V0 = 'fixture_dir_v0';
 
 function sha256HexV0(bytes) {
   return createHash('sha256').update(bytes).digest('hex');
@@ -38,6 +39,12 @@ function normalizeStableIdV0(stableId, sha256) {
     return stableId;
   }
   return `sha256:${sha256}`;
+}
+
+function buildFixtureStableIdV0(request, sha256) {
+  const variantPart = request.variant === '' ? 'default' : request.variant;
+  const candidate = `fixture_${request.kind}_${request.format}_${variantPart}_${request.name}`;
+  return normalizeStableIdV0(candidate, sha256);
 }
 
 function requestKeyV0(request) {
@@ -101,6 +108,88 @@ async function loadRequestListV0(requestListPath) {
   return requestsRaw.map((rawRequest, index) => normalizeRequestV0(rawRequest, index));
 }
 
+async function createFixtureDirResolverV0(options = {}) {
+  const sourceDir = options.sourceDir;
+  if (typeof sourceDir !== 'string' || sourceDir.trim() === '') {
+    throw new Error('fixture_dir_v0 backend requires sourceDir');
+  }
+  const sourceDirResolved = path.resolve(sourceDir);
+  const resolverConfigHash = sha256HexV0(
+    Buffer.from(
+      JSON.stringify({
+        backend: STORE_BACKEND_FIXTURE_DIR_V0,
+        sourceDir: sourceDirResolved,
+      }),
+      'utf8',
+    ),
+  );
+  const resolverId = `fixture-dir-v0:${resolverConfigHash}`;
+  const cache = new Map();
+
+  async function resolve(request) {
+    const kind = request?.kind;
+    const format = request?.format;
+    const name = request?.name;
+    const variant = normalizeVariantV0(request?.variant);
+    const requestResolverId = request?.resolver_id;
+    if (!isSafeTokenV0(kind) || !isSafeTokenV0(format) || !isSafeTokenV0(name) || variant === null) {
+      return { tag: 'NotFound', cache_hit: false };
+    }
+    if (requestResolverId !== resolverId) {
+      return { tag: 'NotFound', cache_hit: false };
+    }
+
+    const key = requestKeyV0({ kind, format, name, variant });
+    const cached = cache.get(key);
+    if (cached) {
+      if (cached.tag === 'Found') {
+        return {
+          tag: 'Found',
+          bytes: cached.bytes,
+          sha256: cached.sha256,
+          stable_id: cached.stable_id,
+          cache_hit: true,
+        };
+      }
+      return { tag: 'NotFound', cache_hit: true };
+    }
+
+    const relPath = kind === 'fontconfig'
+      ? path.join('fontconfig', variant, name)
+      : path.join('xetex', format, name);
+    const fullPath = path.join(sourceDirResolved, relPath);
+    const bytes = await readFile(fullPath).catch(() => null);
+    if (!bytes || bytes.length === 0) {
+      cache.set(key, { tag: 'NotFound' });
+      return { tag: 'NotFound', cache_hit: false };
+    }
+
+    const payload = new Uint8Array(bytes);
+    const sha256 = sha256HexV0(payload);
+    const stableId = buildFixtureStableIdV0({ kind, format, name, variant }, sha256);
+    const found = {
+      tag: 'Found',
+      bytes: payload,
+      sha256,
+      stable_id: stableId,
+    };
+    cache.set(key, found);
+    return {
+      tag: 'Found',
+      bytes: found.bytes,
+      sha256: found.sha256,
+      stable_id: found.stable_id,
+      cache_hit: false,
+    };
+  }
+
+  return {
+    backend: STORE_BACKEND_FIXTURE_DIR_V0,
+    resolverId,
+    resolve,
+  };
+}
+
 export async function generateTexliveStoreV0(options = {}) {
   const rootDir = path.resolve(options.rootDir ?? rootDirDefaultV0);
   const requestListPath = path.resolve(options.requestListPath);
@@ -116,14 +205,18 @@ export async function generateTexliveStoreV0(options = {}) {
   await mkdir(blobsDir, { recursive: true });
 
   const requests = await loadRequestListV0(requestListPath);
-  const resolver = await createOnDemandResolverV0({
-    rootDir,
-    storeDir,
-    backend: options.backend,
-    endpoint: options.endpoint,
-    timeoutMs: options.timeoutMs,
-    fetchImpl: options.fetchImpl,
-  });
+  const backend = options.backend ?? process.env.TEXLIVE_RESOLVER_BACKEND_V0;
+  const sourceDir = options.sourceDir ?? process.env.TEXLIVE_STORE_SOURCE_DIR_V0;
+  const resolver = backend === STORE_BACKEND_FIXTURE_DIR_V0
+    ? await createFixtureDirResolverV0({ sourceDir })
+    : await createOnDemandResolverV0({
+      rootDir,
+      storeDir,
+      backend,
+      endpoint: options.endpoint,
+      timeoutMs: options.timeoutMs,
+      fetchImpl: options.fetchImpl,
+    });
 
   const entryMap = new Map();
   const missing = [];
