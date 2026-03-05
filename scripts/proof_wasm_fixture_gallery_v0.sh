@@ -244,6 +244,10 @@ assertEntrySourceSpans('typeset_demo_graphics_probe_v0', 'graphics_v0', graphics
 fs.writeFileSync(firstRunShaPath('graphics_v0'), `${graphicsShaFirst}\n`);
 
 const report = JSON.parse(fs.readFileSync(path.join(outDir, 'report.json'), 'utf8'));
+if (report?.typed_artifacts_version !== 1) {
+  console.error('FAIL: expected report.typed_artifacts_version=1 after first run');
+  process.exit(1);
+}
 const typedArtifactShaMap = report?.typed_artifact_sha256;
 if (!typedArtifactShaMap || typeof typedArtifactShaMap !== 'object') {
   console.error('FAIL: expected report.typed_artifact_sha256 map after first run');
@@ -372,6 +376,10 @@ const outDir = process.argv[2];
 const report = JSON.parse(fs.readFileSync(path.join(outDir, 'report.json'), 'utf8'));
 const statuses = Array.isArray(report.statuses) ? report.statuses : [];
 const resolvedCount = Number(report.resolved_resources_count ?? 0);
+if (report?.typed_artifacts_version !== 1) {
+  console.error('FAIL: expected report.typed_artifacts_version=1 after rerun');
+  process.exit(1);
+}
 const requiredTypedKeys = ['toc', 'labels', 'bib', 'hyperref', 'pkgopt', 'graphics'];
 const labelsShaFirst = fs.readFileSync(path.join(`${outDir}_baseline`, 'labels_v0_first.sha256'), 'utf8').trim();
 const tocShaFirst = fs.readFileSync(path.join(`${outDir}_baseline`, 'toc_v0_first.sha256'), 'utf8').trim();
@@ -397,6 +405,10 @@ for (const status of okStatuses) {
 }
 
 for (const status of statuses) {
+  if (status?.typed_artifacts_version !== 1) {
+    console.error(`FAIL: case ${status.case_id} status missing typed_artifacts_version=1`);
+    process.exit(1);
+  }
   const typedPresence = status.typed_artifacts_presence;
   if (!typedPresence || typeof typedPresence !== 'object') {
     console.error(`FAIL: case ${status.case_id} missing typed_artifacts_presence`);
@@ -410,6 +422,10 @@ for (const status of statuses) {
   }
   const summaryPath = path.join(outDir, status.case_id, 'summary.json');
   const summary = JSON.parse(fs.readFileSync(summaryPath, 'utf8'));
+  if (summary?.typed_artifacts_version !== 1) {
+    console.error(`FAIL: case ${status.case_id} summary missing typed_artifacts_version=1`);
+    process.exit(1);
+  }
   const typedArtifacts = summary.typed_artifacts;
   if (!typedArtifacts || typeof typedArtifacts !== 'object') {
     console.error(`FAIL: case ${status.case_id} missing typed_artifacts`);
@@ -604,6 +620,7 @@ for (const status of statuses) {
 console.log(`PASS: resolved_resources_count ${resolvedCount}`);
 console.log(`PASS: baseline_match MATCH for all OK cases (${okStatuses.length})`);
 console.log(`PASS: typed_artifacts keys ${requiredTypedKeys.join(',')}`);
+console.log('PASS: typed_artifacts_version gate 1');
 console.log(`PASS: labels_v0 sha stable ${labelsShaSecond}`);
 console.log(`PASS: toc_v0 sha stable ${tocShaSecond}`);
 console.log(`PASS: bib_v0 sha stable ${bibShaSecond}`);
