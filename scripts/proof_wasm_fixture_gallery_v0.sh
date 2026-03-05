@@ -27,6 +27,8 @@ rm -rf "$OUT_DIR" "$STORE_DIR" "$HINT_STORE_DIR_A" "$HINT_STORE_DIR_B" "$FIXTURE
 mkdir -p \
   "$OUT_DIR" \
   "$FIXTURE_SOURCE_DIR/xetex/tex" \
+  "$FIXTURE_SOURCE_DIR/xetex/tex/sections" \
+  "$FIXTURE_SOURCE_DIR/xetex/tex/chapters" \
   "$FIXTURE_SOURCE_DIR/xetex/bib" \
   "$FIXTURE_SOURCE_DIR/xetex/bst" \
   "$FIXTURE_SOURCE_DIR/xetex/png" \
@@ -42,6 +44,10 @@ printf 'fixture-bytes-for-chapter-intro\n' > "$FIXTURE_SOURCE_DIR/xetex/tex/chap
 printf 'fixture-bytes-for-chapter-appendix\n' > "$FIXTURE_SOURCE_DIR/xetex/tex/chapter_appendix.tex"
 printf 'fixture-bytes-for-chapters-intro\n' > "$FIXTURE_SOURCE_DIR/xetex/tex/chapters__intro.tex"
 printf 'fixture-bytes-for-chapters-appendix\n' > "$FIXTURE_SOURCE_DIR/xetex/tex/chapters__appendix.tex"
+printf 'fixture-bytes-for-sections-intro-nested\n' > "$FIXTURE_SOURCE_DIR/xetex/tex/sections/intro.tex"
+printf 'fixture-bytes-for-chapters-ch1-nested\n' > "$FIXTURE_SOURCE_DIR/xetex/tex/chapters/ch1.tex"
+printf 'fixture-bytes-for-sections-intro-normalized\n' > "$FIXTURE_SOURCE_DIR/xetex/tex/sections__intro.tex"
+printf 'fixture-bytes-for-chapters-ch1-normalized\n' > "$FIXTURE_SOURCE_DIR/xetex/tex/chapters__ch1.tex"
 printf 'fixture-bytes-for-demo-png\n' > "$FIXTURE_SOURCE_DIR/xetex/png/demo.png"
 printf 'fixture-bytes-for-probe-figure-png\n' > "$FIXTURE_SOURCE_DIR/xetex/png/probe-figure.png"
 printf 'fixture-bytes-for-figs-diagram-pdf\n' > "$FIXTURE_SOURCE_DIR/xetex/pdf/figs__diagram.pdf"
@@ -179,6 +185,20 @@ const nestedIncludeRequest = listA.requests.find(
 );
 if (!nestedIncludeRequest) {
   console.error('FAIL: request list must include nested include hint request for chapters__appendix.tex');
+  process.exit(1);
+}
+const inputProbeRequest = listA.requests.find(
+  (request) => request.kind === 'texmf' && request.format === 'tex' && request.name === 'sections__intro.tex' && request.variant === 'typeset',
+);
+if (!inputProbeRequest) {
+  console.error('FAIL: request list must include input probe hint request for sections__intro.tex');
+  process.exit(1);
+}
+const includeProbeRequest = listA.requests.find(
+  (request) => request.kind === 'texmf' && request.format === 'tex' && request.name === 'chapters__ch1.tex' && request.variant === 'typeset',
+);
+if (!includeProbeRequest) {
+  console.error('FAIL: request list must include include probe hint request for chapters__ch1.tex');
   process.exit(1);
 }
 const graphicsOptsRequest = listA.requests.find(
@@ -617,6 +637,8 @@ const requiredEntries = [
   ['texmf', 'tex', 'chapter_appendix.tex', 'typeset'],
   ['texmf', 'tex', 'chapters__intro.tex', 'typeset'],
   ['texmf', 'tex', 'chapters__appendix.tex', 'typeset'],
+  ['texmf', 'tex', 'sections__intro.tex', 'typeset'],
+  ['texmf', 'tex', 'chapters__ch1.tex', 'typeset'],
   ['texmf', 'sty', 'xcolor.sty', 'typeset'],
   ['texmf', 'bib', 'refs.bib', 'typeset'],
   ['texmf', 'bib', 'styleprobe_refs.bib', 'typeset'],
@@ -840,6 +862,10 @@ if (!(resolvedCount > resolvedCountFirst)) {
   console.error(
     `FAIL: expected resolved_resources_count to increase after hint-driven store (${resolvedCountFirst} -> ${resolvedCount})`,
   );
+  process.exit(1);
+}
+if (resolvedCount < 25) {
+  console.error(`FAIL: expected resolved_resources_count >= 25 after input/include hint expansion, got ${resolvedCount}`);
   process.exit(1);
 }
 const okStatuses = statuses.filter((entry) => entry.status === 'OK');
@@ -1073,6 +1099,7 @@ for (const status of statuses) {
 
 console.log(`PASS: resolved_resources_count ${resolvedCount}`);
 console.log(`PASS: resolved_resources_count increased from ${resolvedCountFirst} to ${resolvedCount}`);
+console.log('PASS: resolved_resources_count meets floor >= 25');
 console.log(`PASS: baseline_match MATCH for all OK cases (${okStatuses.length})`);
 console.log(`PASS: typed_artifacts keys ${requiredTypedKeys.join(',')}`);
 console.log('PASS: typed_artifacts_version gate 1');
