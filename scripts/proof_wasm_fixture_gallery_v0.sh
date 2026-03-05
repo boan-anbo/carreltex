@@ -60,6 +60,9 @@ printf 'fixture-bytes-for-figs-demo-graphic-pdf\n' > "$FIXTURE_SOURCE_DIR/xetex/
 printf 'fixture-bytes-for-plots-demo-graphic-pdf\n' > "$FIXTURE_SOURCE_DIR/xetex/pdf/plots__demo_graphic.pdf"
 printf 'fixture-bytes-for-figs-banner-graphic-pdf\n' > "$FIXTURE_SOURCE_DIR/xetex/pdf/figs__banner_graphic.pdf"
 printf 'fixture-bytes-for-figs-sub-banner-graphic-pdf\n' > "$FIXTURE_SOURCE_DIR/xetex/pdf/figs__sub__banner_graphic.pdf"
+printf 'fixture-bytes-for-assets-figs-multi-probe-pdf\n' > "$FIXTURE_SOURCE_DIR/xetex/pdf/assets__figs__multi_probe.pdf"
+printf 'fixture-bytes-for-assets-plots-multi-probe-pdf\n' > "$FIXTURE_SOURCE_DIR/xetex/pdf/assets__plots__multi_probe.pdf"
+printf 'fixture-bytes-for-assets-hires-chart-pdf\n' > "$FIXTURE_SOURCE_DIR/xetex/pdf/assets__hires__chart.pdf"
 printf 'fixture-bytes-for-refs-bib\n' > "$FIXTURE_SOURCE_DIR/xetex/bib/refs.bib"
 printf 'fixture-bytes-for-styleprobe-refs-bib\n' > "$FIXTURE_SOURCE_DIR/xetex/bib/styleprobe_refs.bib"
 printf 'fixture-bytes-for-multiadd-refs-bib\n' > "$FIXTURE_SOURCE_DIR/xetex/bib/multiadd_refs.bib"
@@ -346,8 +349,33 @@ if (!graphicspathExplicitRequestB) {
   console.error('FAIL: request list must include explicit-ext graphicspath hint request for figs__sub__banner_graphic.pdf');
   process.exit(1);
 }
+const graphicsMultipathRequestA = listA.requests.find(
+  (request) => request.kind === 'texmf' && request.format === 'pdf' && request.name === 'assets__figs__multi_probe.pdf' && request.variant === 'typeset',
+);
+if (!graphicsMultipathRequestA) {
+  console.error('FAIL: request list must include multipath graphicspath hint request for assets__figs__multi_probe.pdf');
+  process.exit(1);
+}
+const graphicsMultipathRequestB = listA.requests.find(
+  (request) => request.kind === 'texmf' && request.format === 'pdf' && request.name === 'assets__plots__multi_probe.pdf' && request.variant === 'typeset',
+);
+if (!graphicsMultipathRequestB) {
+  console.error('FAIL: request list must include multipath graphicspath hint request for assets__plots__multi_probe.pdf');
+  process.exit(1);
+}
+const graphicsTypePathRequest = listA.requests.find(
+  (request) => request.kind === 'texmf' && request.format === 'pdf' && request.name === 'assets__hires__chart.pdf' && request.variant === 'typeset',
+);
+if (!graphicsTypePathRequest) {
+  console.error('FAIL: request list must include includegraphics type/path hint request for assets__hires__chart.pdf');
+  process.exit(1);
+}
 if (listA.requests.some((request) => request.name === 'bad__danger_graphic.pdf' || request.name === 'abs__danger_graphic.pdf')) {
   console.error('FAIL: request list must fail-closed for unsafe graphicspath entries');
+  process.exit(1);
+}
+if (listA.requests.some((request) => request.name === 'unsafe__bad_chart.pdf')) {
+  console.error('FAIL: request list must fail-closed for unsafe includegraphics option path entries');
   process.exit(1);
 }
 if (listA.requests.some((request) => request.name === 'evil.sty' || request.name === 'evil__pkg.sty')) {
@@ -962,6 +990,9 @@ const requiredEntries = [
   ['texmf', 'pdf', 'plots__demo_graphic.pdf', 'typeset'],
   ['texmf', 'pdf', 'figs__banner_graphic.pdf', 'typeset'],
   ['texmf', 'pdf', 'figs__sub__banner_graphic.pdf', 'typeset'],
+  ['texmf', 'pdf', 'assets__figs__multi_probe.pdf', 'typeset'],
+  ['texmf', 'pdf', 'assets__plots__multi_probe.pdf', 'typeset'],
+  ['texmf', 'pdf', 'assets__hires__chart.pdf', 'typeset'],
   ['fontconfig', 'name', 'FoundSans', 'public'],
 ];
 for (const [kind, format, name, variant] of requiredEntries) {
@@ -1173,8 +1204,8 @@ if (!(resolvedCount > resolvedCountFirst)) {
   );
   process.exit(1);
 }
-if (resolvedCount < 42) {
-  console.error(`FAIL: expected resolved_resources_count >= 42 after multipackage package-option expansion, got ${resolvedCount}`);
+if (resolvedCount < 45) {
+  console.error(`FAIL: expected resolved_resources_count >= 45 after includegraphics multipath expansion, got ${resolvedCount}`);
   process.exit(1);
 }
 const okStatuses = statuses.filter((entry) => entry.status === 'OK');
@@ -1200,6 +1231,11 @@ if (!usepackageEmptyOptsInvalidStatus || usepackageEmptyOptsInvalidStatus.status
 const usepackageMultipackageInvalidStatus = statuses.find((entry) => entry.case_id === 'typeset_demo_usepackage_multipackage_invalid_probe_v0');
 if (!usepackageMultipackageInvalidStatus || usepackageMultipackageInvalidStatus.status !== 'INVALID') {
   console.error('FAIL: expected typeset_demo_usepackage_multipackage_invalid_probe_v0 status INVALID');
+  process.exit(1);
+}
+const graphicsOptionsInvalidStatus = statuses.find((entry) => entry.case_id === 'typeset_demo_graphics_opts_invalid_probe_v0');
+if (!graphicsOptionsInvalidStatus || graphicsOptionsInvalidStatus.status !== 'INVALID') {
+  console.error('FAIL: expected typeset_demo_graphics_opts_invalid_probe_v0 status INVALID');
   process.exit(1);
 }
 for (const status of okStatuses) {
@@ -1428,7 +1464,7 @@ for (const status of statuses) {
 
 console.log(`PASS: resolved_resources_count ${resolvedCount}`);
 console.log(`PASS: resolved_resources_count increased from ${resolvedCountFirst} to ${resolvedCount}`);
-console.log('PASS: resolved_resources_count meets floor >= 42');
+console.log('PASS: resolved_resources_count meets floor >= 45');
 console.log(`PASS: baseline_match MATCH for all OK cases (${okStatuses.length})`);
 console.log(`PASS: typed_artifacts keys ${requiredTypedKeys.join(',')}`);
 console.log('PASS: typed_artifacts_version gate 1');

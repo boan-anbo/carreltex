@@ -1,0 +1,13 @@
+\documentclass{article}
+\usepackage{graphicx}
+\graphicspath{{assets/figs/}{assets/plots/}}
+
+\title{CarrelTeX Graphics Invalid Options Probe}
+\author{Fixture Bot}
+\date{2026-03-05}
+
+\begin{document}
+\maketitle
+
+\includegraphics[path=../unsafe,ext=pdf,width=0.5\textwidth]{bad_chart}
+\end{document}
