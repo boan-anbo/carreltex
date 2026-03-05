@@ -128,6 +128,12 @@
       "purpose": "Probes documentclass option hints for class_file requests and class-target pkgopt extraction."
     },
     {
+      "id": "typeset_demo_documentclass_opts_multi_probe_v0",
+      "tags": ["typeset", "class", "pkgopt", "documentclass", "options", "whitespace", "dedupe", "probe", "ni"],
+      "expected_status": "NI",
+      "purpose": "Probes documentclass/PassOptionsToClass option normalization with deduped stable ordering."
+    },
+    {
       "id": "typeset_demo_passoptionstoclass_probe_v0",
       "tags": ["typeset", "class", "pkgopt", "passoptionstoclass", "probe", "ni"],
       "expected_status": "NI",
@@ -138,6 +144,12 @@
       "tags": ["typeset", "class", "invalid", "unsafe-path", "probe"],
       "expected_status": "INVALID",
       "purpose": "Probes fail-closed class-file hint normalization on unsafe documentclass paths."
+    },
+    {
+      "id": "typeset_demo_documentclass_emptyopts_invalid_probe_v0",
+      "tags": ["typeset", "class", "invalid", "options", "empty-entry", "probe"],
+      "expected_status": "INVALID",
+      "purpose": "Probes fail-closed class option parsing on empty comma-separated option entries."
     },
     {
       "id": "typeset_demo_package_require_invalid_probe_v0",
