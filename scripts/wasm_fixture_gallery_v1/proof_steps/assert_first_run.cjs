@@ -387,6 +387,53 @@ if (graphicsArtifactFirst.entries.length <= 0) {
 assertEntrySourceSpans('typeset_demo_graphics_probe_v0', 'graphics_v0', graphicsArtifactFirst.entries);
 fs.writeFileSync(firstRunShaPath('graphics_v0'), `${graphicsShaFirst}\n`);
 
+const mathSummary = JSON.parse(
+  fs.readFileSync(path.join(outDir, 'typeset_demo_minimal_v0', 'summary.json'), 'utf8'),
+);
+if (mathSummary?.typed_artifacts?.math?.present !== true) {
+  console.error('FAIL: expected math typed artifact present for minimal demo after first run');
+  process.exit(1);
+}
+const mathPath = path.join(outDir, 'typeset_demo_minimal_v0', 'math_v1.json');
+if (!fs.existsSync(mathPath)) {
+  console.error('FAIL: expected math_v1.json artifact after first run');
+  process.exit(1);
+}
+const mathShaFirst = mathSummary.typed_artifacts.math.artifact_sha256;
+if (typeof mathShaFirst !== 'string' || !/^[0-9a-f]{64}$/.test(mathShaFirst)) {
+  console.error('FAIL: expected math artifact sha256 in first summary');
+  process.exit(1);
+}
+const mathArtifactFirst = JSON.parse(fs.readFileSync(mathPath, 'utf8'));
+if (!Array.isArray(mathArtifactFirst?.entries)) {
+  console.error('FAIL: expected math_v1.entries array in first-run artifact');
+  process.exit(1);
+}
+if (mathArtifactFirst?.schema !== 'math_v1') {
+  console.error('FAIL: expected math_v1 schema in first-run artifact');
+  process.exit(1);
+}
+if (mathArtifactFirst.entries.length <= 0) {
+  console.error('FAIL: expected non-empty math_v1.entries for minimal demo');
+  process.exit(1);
+}
+for (const [index, entry] of mathArtifactFirst.entries.entries()) {
+  if (entry?.kind !== 'inline' && entry?.kind !== 'display') {
+    console.error(`FAIL: math_v1.entries[${index}] has invalid kind`);
+    process.exit(1);
+  }
+  if (!Number.isInteger(entry?.line_index) || entry.line_index <= 0) {
+    console.error(`FAIL: math_v1.entries[${index}] has invalid line_index`);
+    process.exit(1);
+  }
+  if (typeof entry?.payload_sha256 !== 'string' || !/^[0-9a-f]{64}$/.test(entry.payload_sha256)) {
+    console.error(`FAIL: math_v1.entries[${index}] has invalid payload_sha256`);
+    process.exit(1);
+  }
+}
+assertEntrySourceSpans('typeset_demo_minimal_v0', 'math_v1', mathArtifactFirst.entries);
+fs.writeFileSync(firstRunShaPath('math_v1'), `${mathShaFirst}\n`);
+
 const report = JSON.parse(fs.readFileSync(path.join(outDir, 'report.json'), 'utf8'));
 if (report?.typed_artifacts_version !== 1) {
   console.error('FAIL: expected report.typed_artifacts_version=1 after first run');
@@ -467,7 +514,7 @@ if (!typedArtifactShaMap || typeof typedArtifactShaMap !== 'object') {
   console.error('FAIL: expected report.typed_artifact_sha256 map after first run');
   process.exit(1);
 }
-const typedKeys = ['toc', 'labels', 'bib', 'hyperref', 'pkgopt', 'graphics'];
+const typedKeys = ['toc', 'labels', 'bib', 'hyperref', 'pkgopt', 'graphics', 'math'];
 for (const key of typedKeys) {
   const value = typedArtifactShaMap[key];
   if (typeof value !== 'string' || !/^[0-9a-f]{64}$/.test(value)) {

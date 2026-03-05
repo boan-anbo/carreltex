@@ -23,7 +23,7 @@ const STATUS_FAIL_V0 = 'FAIL';
 const STATUS_MISMATCH_V0 = 'MISMATCH';
 const EXPECTED_STATUS_VALUES_V0 = new Set([STATUS_OK_V0, STATUS_NI_V0, STATUS_INVALID_V0, STATUS_FAIL_V0]);
 const DEFAULT_ONDEMAND_FIXEDPOINT_MAX_ITERS_V1 = 3;
-const TYPED_ARTIFACT_KEYS_V0 = ['toc', 'labels', 'refs', 'bib', 'bibitems', 'cites', 'hyperref', 'pkgopt', 'graphics'];
+const TYPED_ARTIFACT_KEYS_V0 = ['toc', 'labels', 'refs', 'bib', 'bibitems', 'cites', 'hyperref', 'pkgopt', 'graphics', 'math'];
 const TYPED_ARTIFACTS_VERSION_V0 = 1;
 const MAX_TOC_ENTRIES_V0 = 256;
 const MAX_TOC_TITLE_BYTES_V0 = 256;
@@ -38,6 +38,8 @@ const MAX_PKGOPT_VALUE_BYTES_V0 = 256;
 const MAX_PKGOPT_OPTIONS_PER_ENTRY_V0 = 64;
 const MAX_GRAPHICS_ENTRIES_V0 = 256;
 const MAX_GRAPHICS_PATH_BYTES_V0 = 256;
+const MAX_MATH_ENTRIES_V0 = 256;
+const MAX_MATH_PAYLOAD_BYTES_V0 = 1024;
 const MAX_RESOURCE_HINT_ENTRIES_V0 = 512;
 const MAX_RESOURCE_HINT_VALUE_BYTES_V0 = 256;
 const RESOURCE_HINTS_V0_VERSION = 1;
@@ -999,6 +1001,164 @@ function extractTocEntriesFromSourceV0(sourceBytes) {
     }
 
     index = titleGroup.next;
+  }
+  return entries;
+}
+
+function isMathPayloadWhitespaceByteV0(byte) {
+  return byte === 0x20 || byte === 0x09 || byte === 0x0a || byte === 0x0d;
+}
+
+function isSafeMathPayloadByteV0(byte) {
+  return byte >= 0x20
+    && byte <= 0x7e
+    && byte !== 0x24
+    && byte !== 0x5c
+    && byte !== 0x5b
+    && byte !== 0x5d
+    && byte !== 0x7b
+    && byte !== 0x7d
+    && byte !== 0x3c
+    && byte !== 0x3e;
+}
+
+function pushMathPayloadSpaceV0(payloadBytes) {
+  if (payloadBytes.length > 0 && payloadBytes[payloadBytes.length - 1] !== 0x20) {
+    payloadBytes.push(0x20);
+  }
+}
+
+function trimMathPayloadTrailingSpaceV0(payloadBytes) {
+  while (payloadBytes.length > 0 && payloadBytes[payloadBytes.length - 1] === 0x20) {
+    payloadBytes.pop();
+  }
+}
+
+function addMathEntryV1(entries, kind, payloadBytes, lineIndex, sourceBytes, startByte, endByte) {
+  trimMathPayloadTrailingSpaceV0(payloadBytes);
+  if (payloadBytes.length === 0) {
+    throw new Error('math_v1 payload must be non-empty');
+  }
+  if (payloadBytes.length > MAX_MATH_PAYLOAD_BYTES_V0) {
+    throw new Error(`math_v1 payload exceeds cap ${MAX_MATH_PAYLOAD_BYTES_V0}`);
+  }
+  if (!Number.isInteger(lineIndex) || lineIndex <= 0) {
+    throw new Error('math_v1 line_index must be a positive integer');
+  }
+  const payload = Uint8Array.from(payloadBytes);
+  entries.push({
+    kind,
+    payload_sha256: sha256HexV0(payload),
+    line_index: lineIndex,
+    source_span: buildSourceSpanV0(sourceBytes, startByte, endByte, 'math_v1'),
+  });
+  if (entries.length > MAX_MATH_ENTRIES_V0) {
+    throw new Error(`math_v1 entries exceed cap ${MAX_MATH_ENTRIES_V0}`);
+  }
+}
+
+function extractMathEntriesFromSourceV1(sourceBytes) {
+  const entries = [];
+  let index = 0;
+  let lineIndex = 1;
+  while (index < sourceBytes.length) {
+    const byte = sourceBytes[index];
+
+    if (byte === 0x0a) {
+      lineIndex += 1;
+      index += 1;
+      continue;
+    }
+    if (byte === 0x0d) {
+      if (index + 1 < sourceBytes.length && sourceBytes[index + 1] === 0x0a) {
+        index += 1;
+      }
+      lineIndex += 1;
+      index += 1;
+      continue;
+    }
+
+    if (byte === 0x24) {
+      const startByte = index;
+      const startLineIndex = lineIndex;
+      const payloadBytes = [];
+      let cursor = index + 1;
+      let closed = false;
+      while (cursor < sourceBytes.length) {
+        const current = sourceBytes[cursor];
+        if (current === 0x24) {
+          addMathEntryV1(entries, 'inline', payloadBytes, startLineIndex, sourceBytes, startByte, cursor + 1);
+          cursor += 1;
+          index = cursor;
+          closed = true;
+          break;
+        }
+        if (isMathPayloadWhitespaceByteV0(current)) {
+          pushMathPayloadSpaceV0(payloadBytes);
+          if (current === 0x0a) {
+            lineIndex += 1;
+          } else if (current === 0x0d) {
+            if (cursor + 1 < sourceBytes.length && sourceBytes[cursor + 1] === 0x0a) {
+              cursor += 1;
+            }
+            lineIndex += 1;
+          }
+          cursor += 1;
+          continue;
+        }
+        if (!isSafeMathPayloadByteV0(current)) {
+          throw new Error(`math_v1 inline payload has unsupported byte 0x${current.toString(16).padStart(2, '0')}`);
+        }
+        payloadBytes.push(current);
+        cursor += 1;
+      }
+      if (!closed) {
+        throw new Error('math_v1 inline payload missing closing $ delimiter');
+      }
+      continue;
+    }
+
+    if (byte === 0x5c && index + 1 < sourceBytes.length && sourceBytes[index + 1] === 0x5b) {
+      const startByte = index;
+      const startLineIndex = lineIndex;
+      const payloadBytes = [];
+      let cursor = index + 2;
+      let closed = false;
+      while (cursor < sourceBytes.length) {
+        if (sourceBytes[cursor] === 0x5c && cursor + 1 < sourceBytes.length && sourceBytes[cursor + 1] === 0x5d) {
+          addMathEntryV1(entries, 'display', payloadBytes, startLineIndex, sourceBytes, startByte, cursor + 2);
+          cursor += 2;
+          index = cursor;
+          closed = true;
+          break;
+        }
+        const current = sourceBytes[cursor];
+        if (isMathPayloadWhitespaceByteV0(current)) {
+          pushMathPayloadSpaceV0(payloadBytes);
+          if (current === 0x0a) {
+            lineIndex += 1;
+          } else if (current === 0x0d) {
+            if (cursor + 1 < sourceBytes.length && sourceBytes[cursor + 1] === 0x0a) {
+              cursor += 1;
+            }
+            lineIndex += 1;
+          }
+          cursor += 1;
+          continue;
+        }
+        if (!isSafeMathPayloadByteV0(current)) {
+          throw new Error(`math_v1 display payload has unsupported byte 0x${current.toString(16).padStart(2, '0')}`);
+        }
+        payloadBytes.push(current);
+        cursor += 1;
+      }
+      if (!closed) {
+        throw new Error('math_v1 display payload missing closing \\] delimiter');
+      }
+      continue;
+    }
+
+    index += 1;
   }
   return entries;
 }
@@ -2432,6 +2592,24 @@ async function emitGraphicsTypedArtifactV0(caseOutDir, fixtureBytes) {
   };
 }
 
+async function emitMathTypedArtifactV0(caseOutDir, fixtureBytes) {
+  const payload = {
+    version: TYPED_ARTIFACTS_VERSION_V0,
+    schema: 'math_v1',
+    entries: extractMathEntriesFromSourceV1(fixtureBytes),
+  };
+  const bytes = Buffer.from(`${JSON.stringify(payload, null, 2)}\n`, 'utf8');
+  const relpath = 'math_v1.json';
+  const fullPath = path.join(caseOutDir, relpath);
+  await writeFile(fullPath, bytes);
+  return {
+    present: true,
+    items: payload.entries.length,
+    artifact_relpath: relpath,
+    artifact_sha256: sha256HexV0(bytes),
+  };
+}
+
 async function emitResourceHintsArtifactV0(caseOutDir, fixtureBytes, mode) {
   const caseId = path.basename(caseOutDir);
   const entries = mode === 'typeset' ? extractResourceHintEntriesFromSourceV0(fixtureBytes, caseId) : [];
@@ -2487,6 +2665,7 @@ async function emitTypedArtifactsV0(caseSpec, caseOutDir, typedArtifacts, fixtur
   if (caseSpec.id === 'typeset_demo_minimal_v0') {
     typedArtifacts.bibitems = await emitBibitemsTypedArtifactV0(caseOutDir, fixtureBytes);
     typedArtifacts.cites = await emitCitesTypedArtifactV0(caseOutDir, fixtureBytes);
+    typedArtifacts.math = await emitMathTypedArtifactV0(caseOutDir, fixtureBytes);
   }
   if (caseSpec.id === 'typeset_demo_hyperref_probe_v0') {
     typedArtifacts.hyperref = await emitHyperrefTypedArtifactV0(caseOutDir, fixtureBytes);
