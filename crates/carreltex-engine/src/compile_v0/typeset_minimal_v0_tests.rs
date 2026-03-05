@@ -8,10 +8,20 @@ use carreltex_core::{CompileStatus, Mount};
 use carreltex_xdv::parse_dvi_v2_text_page_to_layout_v0;
 
 fn compile_typeset(main: &[u8]) -> carreltex_core::CompileResultV0 {
+    compile_typeset_with_files(main, &[])
+}
+
+fn compile_typeset_with_files(
+    main: &[u8],
+    extra_files: &[(&[u8], &[u8])],
+) -> carreltex_core::CompileResultV0 {
     let mut mount = Mount::default();
     mount
         .add_file(b"main.tex", main)
         .expect("main.tex should mount");
+    for (path, bytes) in extra_files {
+        mount.add_file(path, bytes).expect("extra file should mount");
+    }
     compile_main_typeset_minimal_v0(&mut mount)
 }
 
@@ -320,28 +330,56 @@ fn typeset_minimal_rejects_duplicate_label_keys() {
 
 #[test]
 fn typeset_minimal_bibliography_and_cites_emit_block_and_metadata() {
-    let main = b"\\documentclass{article}\\begin{document}See \\cite{ref:a} and \\cite{missing}.\\begin{thebibliography}{9}\\bibitem{ref:a}Alpha source text.\\end{thebibliography}\\end{document}";
+    let main = b"\\documentclass{article}\\begin{document}See \\cite{ref:b} and \\cite{ref:a} then again \\cite{ref:b}.\\begin{thebibliography}{9}\\bibitem{ref:a}Alpha source text.\\bibitem{ref:b}Beta source text.\\end{thebibliography}\\end{document}";
     let body = extract_typeset_body(main);
     let text = String::from_utf8(body).expect("body should be valid utf8");
-    assert!(text.contains("See [1] and [?]."), "body={text:?}");
+    assert!(text.contains("See [1] and [2] then again [1]."), "body={text:?}");
     assert!(text.contains("@S {References}"), "body={text:?}");
-    assert!(text.contains("[1] Alpha source text."), "body={text:?}");
-    assert!(text.contains("!b ref:a 1 18"), "body={text:?}");
+    assert!(text.contains("[1] Beta source text."), "body={text:?}");
+    assert!(text.contains("[2] Alpha source text."), "body={text:?}");
+    assert!(text.contains("!b ref:b 1 17"), "body={text:?}");
+    assert!(text.contains("!b ref:a 2 18"), "body={text:?}");
+    assert!(text.contains("!c ref:b "), "body={text:?}");
     assert!(text.contains("!c ref:a "), "body={text:?}");
-    assert!(text.contains("!c missing "), "body={text:?}");
 }
 
 #[test]
-fn typeset_minimal_rejects_bibliography_command_stub() {
-    let main = b"\\documentclass{article}\\begin{document}\\bibliography{refs}\\end{document}";
+fn typeset_minimal_rejects_missing_cite_key_in_bibliography_fixedpoint() {
+    let main = b"\\documentclass{article}\\begin{document}See \\cite{ref:missing}.\\begin{thebibliography}{9}\\bibitem{ref:a}Alpha source text.\\end{thebibliography}\\end{document}";
     let result = compile_typeset(main);
     assert_eq!(result.status, CompileStatus::NotImplemented);
     assert!(result.main_xdv_bytes.is_empty());
 }
 
 #[test]
-fn typeset_minimal_rejects_bibliographystyle_command_stub() {
-    let main = b"\\documentclass{article}\\begin{document}\\bibliographystyle{plain}\\end{document}";
+fn typeset_minimal_resolves_cites_via_bibliography_resource_file() {
+    let main = b"\\documentclass{article}\\begin{document}See \\cite{ref:alpha} and \\cite{ref:beta}.\\bibliography{refs}\\end{document}";
+    let bib = br#"
+@article{ref:alpha, title={Alpha from local bib}}
+@book{ref:beta, title={Beta from local bib}}
+"#;
+    let result = compile_typeset_with_files(main, &[(b"refs.bib", bib)]);
+    assert_eq!(result.status, CompileStatus::Ok);
+    let layout =
+        parse_dvi_v2_text_page_to_layout_v0(&result.main_xdv_bytes, 917_504).expect("layout parse");
+    let lines = layout.pages[0]
+        .lines
+        .iter()
+        .map(|line| line.glyphs.iter().map(|glyph| glyph.byte).collect::<Vec<u8>>())
+        .collect::<Vec<Vec<u8>>>();
+    let text = lines
+        .iter()
+        .map(|line| String::from_utf8_lossy(line).to_string())
+        .collect::<Vec<String>>()
+        .join("\n");
+    assert!(text.contains("See [1] and [2]."), "text={text:?}");
+    assert!(text.contains("[1] Alpha from local bib"), "text={text:?}");
+    assert!(text.contains("[2] Beta from local bib"), "text={text:?}");
+}
+
+#[test]
+fn typeset_minimal_rejects_missing_bibliography_resource_file() {
+    let main = b"\\documentclass{article}\\begin{document}See \\cite{ref:alpha}.\\bibliography{missing_refs}\\end{document}";
     let result = compile_typeset(main);
     assert_eq!(result.status, CompileStatus::NotImplemented);
     assert!(result.main_xdv_bytes.is_empty());

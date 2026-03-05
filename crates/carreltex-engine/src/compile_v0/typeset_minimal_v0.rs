@@ -24,6 +24,10 @@ const RIGHTLINE_CONTROL_V0: &[u8] = b"rightline";
 const TABULAR_ENV_V0: &[u8] = b"tabular";
 const FIGURE_ENV_V0: &[u8] = b"figure";
 const THEBIBLIOGRAPHY_ENV_V0: &[u8] = b"thebibliography";
+const USEPACKAGE_CONTROL_V0: &[u8] = b"usepackage";
+const REQUIREPACKAGE_CONTROL_V0: &[u8] = b"RequirePackage";
+const ADDBIBRESOURCE_CONTROL_V0: &[u8] = b"addbibresource";
+const PRINTBIBLIOGRAPHY_CONTROL_V0: &[u8] = b"printbibliography";
 const CAPTION_CONTROL_V0: &[u8] = b"caption";
 const INCLUDEGRAPHICS_CONTROL_V0: &[u8] = b"includegraphics";
 const BIBITEM_CONTROL_V0: &[u8] = b"bibitem";
@@ -125,7 +129,6 @@ struct CrossRefArtifactsV1 {
 #[derive(Clone)]
 struct BibItemMetaV0 {
     key: Vec<u8>,
-    ordinal: u32,
     text: Vec<u8>,
     text_len: u32,
 }
@@ -1643,6 +1646,358 @@ fn is_safe_label_key_byte_v0(byte: u8) -> bool {
     byte.is_ascii_alphanumeric() || matches!(byte, b':' | b'-' | b'_' | b'.' | b'/')
 }
 
+fn is_safe_bib_resource_path_byte_v0(byte: u8) -> bool {
+    byte.is_ascii_alphanumeric() || matches!(byte, b'/' | b'.' | b'_' | b'-')
+}
+
+fn normalize_bib_resource_name_v0(raw_path: &[u8]) -> Option<Vec<u8>> {
+    if raw_path.is_empty() {
+        return None;
+    }
+    if raw_path.starts_with(b"/") || raw_path.starts_with(b"\\") {
+        return None;
+    }
+    if raw_path.contains(&b'\\') || raw_path.contains(&b':') {
+        return None;
+    }
+    if !raw_path.iter().copied().all(is_safe_bib_resource_path_byte_v0) {
+        return None;
+    }
+
+    let mut normalized_segments = Vec::<Vec<u8>>::new();
+    for segment in raw_path.split(|byte| *byte == b'/') {
+        if segment.is_empty() || segment == b"." || segment == b".." {
+            return None;
+        }
+        normalized_segments.push(segment.to_vec());
+    }
+    if normalized_segments.is_empty() {
+        return None;
+    }
+
+    let mut normalized = Vec::<u8>::new();
+    for (segment_index, segment) in normalized_segments.iter().enumerate() {
+        if segment_index > 0 {
+            normalized.push(b'/');
+        }
+        normalized.extend_from_slice(segment);
+    }
+    let has_explicit_extension = normalized
+        .rsplit(|byte| *byte == b'/')
+        .next()
+        .map(|last: &[u8]| last.contains(&b'.'))
+        .unwrap_or(false);
+    if has_explicit_extension {
+        if !normalized.ends_with(b".bib") {
+            return None;
+        }
+    } else {
+        normalized.extend_from_slice(b".bib");
+    }
+    Some(normalized)
+}
+
+fn split_bibliography_group_values_v0(raw_group: &[u8]) -> Option<Vec<Vec<u8>>> {
+    let mut values = Vec::<Vec<u8>>::new();
+    let mut segment_start = 0usize;
+    for (index, byte) in raw_group.iter().enumerate() {
+        if *byte == b',' {
+            let raw_segment = trim_horizontal_space_bytes_v0(&raw_group[segment_start..index]);
+            if raw_segment.is_empty() {
+                return None;
+            }
+            values.push(normalize_bib_resource_name_v0(raw_segment)?);
+            segment_start = index + 1;
+        }
+    }
+    let raw_tail = trim_horizontal_space_bytes_v0(&raw_group[segment_start..]);
+    if raw_tail.is_empty() {
+        return None;
+    }
+    values.push(normalize_bib_resource_name_v0(raw_tail)?);
+    Some(values)
+}
+
+fn parse_bibliography_resource_command_v0(
+    tokens: &[TokenV0],
+    index: usize,
+) -> Option<(Vec<Vec<u8>>, usize)> {
+    let command = match tokens.get(index) {
+        Some(TokenV0::ControlSeq(name)) => name.as_slice(),
+        _ => return None,
+    };
+    if command != ADDBIBRESOURCE_CONTROL_V0 && command != BIBLIOGRAPHY_CONTROL_V0 {
+        return None;
+    }
+    let mut cursor = index + 1;
+    if command == ADDBIBRESOURCE_CONTROL_V0 {
+        cursor = consume_simple_bracket_non_empty(tokens, cursor)?;
+    }
+    let (group_start, group_end, next) = consume_group_bounds(tokens, cursor)?;
+    let raw_group = parse_char_space_group_trimmed_v0(tokens, group_start, group_end)?;
+    let resources = if command == ADDBIBRESOURCE_CONTROL_V0 {
+        vec![normalize_bib_resource_name_v0(&raw_group)?]
+    } else {
+        split_bibliography_group_values_v0(&raw_group)?
+    };
+    Some((resources, next))
+}
+
+fn consume_bibliographystyle_command_v0(tokens: &[TokenV0], index: usize) -> Option<usize> {
+    if !matches!(
+        tokens.get(index),
+        Some(TokenV0::ControlSeq(name)) if name.as_slice() == BIBLIOGRAPHYSTYLE_CONTROL_V0
+    ) {
+        return None;
+    }
+    let (group_start, group_end, next) = consume_group_bounds(tokens, index + 1)?;
+    let style = parse_char_space_group_trimmed_v0(tokens, group_start, group_end)?;
+    if style.is_empty() {
+        return None;
+    }
+    Some(next)
+}
+
+fn consume_package_declaration_noop_v0(tokens: &[TokenV0], index: usize) -> Option<usize> {
+    if !matches!(
+        tokens.get(index),
+        Some(TokenV0::ControlSeq(name))
+            if name.as_slice() == USEPACKAGE_CONTROL_V0 || name.as_slice() == REQUIREPACKAGE_CONTROL_V0
+    ) {
+        return None;
+    }
+    let mut cursor = consume_simple_bracket_non_empty(tokens, index + 1)?;
+    let (group_start, group_end, next) = consume_group_bounds(tokens, cursor)?;
+    let raw_group = parse_char_space_group_trimmed_v0(tokens, group_start, group_end)?;
+    if raw_group.is_empty() {
+        return None;
+    }
+    let mut saw_package = false;
+    for raw_segment in raw_group.split(|byte| *byte == b',') {
+        let package = trim_horizontal_space_bytes_v0(raw_segment);
+        if package.is_empty()
+            || package.starts_with(b"/")
+            || package.windows(2).any(|window| window == b"..")
+            || !package
+                .iter()
+                .copied()
+                .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'/' | b'.' | b'_' | b'-'))
+        {
+            return None;
+        }
+        saw_package = true;
+    }
+    if !saw_package {
+        return None;
+    }
+    cursor = next;
+    Some(cursor)
+}
+
+fn skip_horizontal_space_bytes_v0(bytes: &[u8], mut index: usize) -> usize {
+    while index < bytes.len() && is_horizontal_space_v0(bytes[index]) {
+        index += 1;
+    }
+    index
+}
+
+fn normalize_bib_value_text_v0(raw: &[u8]) -> Option<Vec<u8>> {
+    let mut out = Vec::<u8>::new();
+    let mut saw_non_space = false;
+    let mut pending_space = false;
+    for byte in raw {
+        if matches!(*byte, b'{' | b'}' | b'"') {
+            continue;
+        }
+        if byte.is_ascii_whitespace() {
+            pending_space = saw_non_space;
+            continue;
+        }
+        if !byte.is_ascii_graphic() && !byte.is_ascii_alphanumeric() {
+            return None;
+        }
+        if pending_space {
+            out.push(b' ');
+            pending_space = false;
+        }
+        out.push(*byte);
+        saw_non_space = true;
+    }
+    trim_trailing_spaces(&mut out);
+    if out.is_empty() {
+        return None;
+    }
+    Some(out)
+}
+
+fn extract_bib_title_field_v0(entry_body: &[u8]) -> Option<Vec<u8>> {
+    let mut index = 0usize;
+    while index < entry_body.len() {
+        if !entry_body[index].is_ascii_alphabetic() {
+            index += 1;
+            continue;
+        }
+        let field_start = index;
+        while index < entry_body.len() && entry_body[index].is_ascii_alphabetic() {
+            index += 1;
+        }
+        let field_name = entry_body[field_start..index]
+            .iter()
+            .map(u8::to_ascii_lowercase)
+            .collect::<Vec<u8>>();
+        index = skip_horizontal_space_bytes_v0(entry_body, index);
+        if index >= entry_body.len() || entry_body[index] != b'=' {
+            continue;
+        }
+        index += 1;
+        index = skip_horizontal_space_bytes_v0(entry_body, index);
+        if field_name != b"title" {
+            while index < entry_body.len() && entry_body[index] != b',' {
+                index += 1;
+            }
+            continue;
+        }
+        if index >= entry_body.len() {
+            return None;
+        }
+        if entry_body[index] == b'{' {
+            let mut depth = 1usize;
+            let mut cursor = index + 1;
+            while cursor < entry_body.len() {
+                match entry_body[cursor] {
+                    b'{' => depth += 1,
+                    b'}' => {
+                        depth -= 1;
+                        if depth == 0 {
+                            return normalize_bib_value_text_v0(&entry_body[index + 1..cursor]);
+                        }
+                    }
+                    _ => {}
+                }
+                cursor += 1;
+            }
+            return None;
+        }
+        if entry_body[index] == b'"' {
+            let mut cursor = index + 1;
+            while cursor < entry_body.len() {
+                if entry_body[cursor] == b'"' && entry_body[cursor.saturating_sub(1)] != b'\\' {
+                    return normalize_bib_value_text_v0(&entry_body[index + 1..cursor]);
+                }
+                cursor += 1;
+            }
+            return None;
+        }
+        let mut cursor = index;
+        while cursor < entry_body.len() && entry_body[cursor] != b',' {
+            cursor += 1;
+        }
+        return normalize_bib_value_text_v0(&entry_body[index..cursor]);
+    }
+    None
+}
+
+pub(crate) fn parse_minimal_bib_entries_v0(
+    bib_bytes: &[u8],
+) -> Option<BTreeMap<Vec<u8>, Vec<u8>>> {
+    let mut entries = BTreeMap::<Vec<u8>, Vec<u8>>::new();
+    let mut index = 0usize;
+
+    while index < bib_bytes.len() {
+        if bib_bytes[index] == b'%' {
+            while index < bib_bytes.len() && bib_bytes[index] != b'\n' {
+                index += 1;
+            }
+            continue;
+        }
+        if bib_bytes[index] != b'@' {
+            index += 1;
+            continue;
+        }
+        index += 1;
+        index = skip_horizontal_space_bytes_v0(bib_bytes, index);
+        let type_start = index;
+        while index < bib_bytes.len() && bib_bytes[index].is_ascii_alphabetic() {
+            index += 1;
+        }
+        if index == type_start {
+            return None;
+        }
+        index = skip_horizontal_space_bytes_v0(bib_bytes, index);
+        if !matches!(bib_bytes.get(index), Some(b'{')) {
+            return None;
+        }
+        index += 1;
+        index = skip_horizontal_space_bytes_v0(bib_bytes, index);
+        let key_start = index;
+        while index < bib_bytes.len() && !matches!(bib_bytes[index], b',' | b'}') {
+            index += 1;
+        }
+        if index == key_start || !matches!(bib_bytes.get(index), Some(b',')) {
+            return None;
+        }
+        let key_raw = trim_horizontal_space_bytes_v0(&bib_bytes[key_start..index]);
+        if key_raw.is_empty()
+            || !key_raw.iter().copied().all(is_safe_label_key_byte_v0)
+            || key_raw.starts_with(b"/")
+            || key_raw.windows(2).any(|window| window == b"..")
+        {
+            return None;
+        }
+        index += 1;
+        let body_start = index;
+        let mut depth = 1usize;
+        while index < bib_bytes.len() {
+            match bib_bytes[index] {
+                b'{' => depth += 1,
+                b'}' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        break;
+                    }
+                }
+                _ => {}
+            }
+            index += 1;
+        }
+        if depth != 0 {
+            return None;
+        }
+        let entry_body = &bib_bytes[body_start..index];
+        let title = extract_bib_title_field_v0(entry_body).unwrap_or_else(|| key_raw.to_vec());
+        if title.is_empty() {
+            return None;
+        }
+        if entries.insert(key_raw.to_vec(), title).is_some() {
+            return None;
+        }
+        index += 1;
+    }
+
+    Some(entries)
+}
+
+pub(crate) fn collect_bibliography_resource_names_v0(tokens: &[TokenV0]) -> Option<Vec<Vec<u8>>> {
+    let mut resources = BTreeMap::<Vec<u8>, ()>::new();
+    let mut index = 0usize;
+    while index < tokens.len() {
+        match tokens.get(index) {
+            Some(TokenV0::ControlSeq(name))
+                if name.as_slice() == ADDBIBRESOURCE_CONTROL_V0
+                    || name.as_slice() == BIBLIOGRAPHY_CONTROL_V0 =>
+            {
+                let (resource_names, next) = parse_bibliography_resource_command_v0(tokens, index)?;
+                for resource in resource_names {
+                    resources.insert(resource, ());
+                }
+                index = next;
+            }
+            _ => index += 1,
+        }
+    }
+    Some(resources.into_keys().collect())
+}
+
 fn parse_label_or_ref_key_group_v0(tokens: &[TokenV0], index: usize) -> Option<(Vec<u8>, usize)> {
     let (group_start, group_end, next) = consume_group_bounds(tokens, index + 1)?;
     let mut key = Vec::<u8>::new();
@@ -1804,14 +2159,16 @@ fn assign_link_metadata_v1(
     Some((href_links, ref_links))
 }
 
-fn resolve_cite_markers_v0(
+fn resolve_cite_markers_fixedpoint_v0(
     body: &[u8],
-    bibitems_by_key: &BTreeMap<Vec<u8>, u32>,
+    bibliography_entries_by_key: &BTreeMap<Vec<u8>, BibItemMetaV0>,
     cite_occurrences: &mut Vec<CiteOccurrenceMetaV0>,
-) -> Option<Vec<u8>> {
+) -> Option<(Vec<u8>, Vec<BibItemMetaV0>)> {
     let mut out = Vec::<u8>::with_capacity(body.len());
     let mut index = 0usize;
     let mut line_index = 1u32;
+    let mut cite_key_order = Vec::<Vec<u8>>::new();
+    let mut cite_seen = BTreeMap::<Vec<u8>, ()>::new();
 
     while index < body.len() {
         if body[index..].starts_with(CITE_MARKER_PREFIX_V0) {
@@ -1830,20 +2187,26 @@ fn resolve_cite_markers_v0(
                 return None;
             }
             let key = body[key_start..key_end].to_vec();
-            let resolved_ordinal = bibitems_by_key.get(&key).copied();
+            if !cite_seen.contains_key(&key) {
+                cite_seen.insert(key.clone(), ());
+                cite_key_order.push(key.clone());
+            }
+            let position = cite_key_order
+                .iter()
+                .position(|candidate| candidate == &key)?
+                .checked_add(1)?;
+            let resolved_ordinal = u32::try_from(position).ok()?;
+            if !bibliography_entries_by_key.contains_key(&key) {
+                return None;
+            }
             cite_occurrences.push(CiteOccurrenceMetaV0 {
                 key,
                 line_index,
-                resolved_ordinal,
+                resolved_ordinal: Some(resolved_ordinal),
             });
-
-            if let Some(ordinal) = resolved_ordinal {
-                out.push(b'[');
-                out.extend_from_slice(ordinal.to_string().as_bytes());
-                out.push(b']');
-            } else {
-                out.extend_from_slice(b"[?]");
-            }
+            out.push(b'[');
+            out.extend_from_slice(resolved_ordinal.to_string().as_bytes());
+            out.push(b']');
             index = key_end + CITE_MARKER_SUFFIX_V0.len();
             continue;
         }
@@ -1855,7 +2218,17 @@ fn resolve_cite_markers_v0(
         }
         index += 1;
     }
-    Some(out)
+
+    let mut resolved_entries = Vec::<BibItemMetaV0>::new();
+    for key in &cite_key_order {
+        let entry = bibliography_entries_by_key.get(key)?;
+        resolved_entries.push(BibItemMetaV0 {
+            key: key.clone(),
+            text: entry.text.clone(),
+            text_len: entry.text_len,
+        });
+    }
+    Some((out, resolved_entries))
 }
 
 fn consume_label_command_v0(
@@ -1922,9 +2295,10 @@ fn emit_bibliography_block_v0(out: &mut Vec<u8>, items: &[BibItemMetaV0]) {
     out.extend_from_slice(b"References");
     out.push(BOLD_END_MARKER_V0);
     push_paragraph_break(out);
-    for item in items {
+    for (ordinal_index, item) in items.iter().enumerate() {
+        let ordinal = ordinal_index + 1;
         out.push(b'[');
-        out.extend_from_slice(item.ordinal.to_string().as_bytes());
+        out.extend_from_slice(ordinal.to_string().as_bytes());
         out.extend_from_slice(b"] ");
         out.extend_from_slice(&item.text);
         push_newline(out);
@@ -1935,7 +2309,6 @@ fn emit_bibliography_block_v0(out: &mut Vec<u8>, items: &[BibItemMetaV0]) {
 fn consume_thebibliography_environment_v0(
     tokens: &[TokenV0],
     index: usize,
-    out: &mut Vec<u8>,
     bibitems: &mut Vec<BibItemMetaV0>,
 ) -> Option<usize> {
     let (env_name, mut cursor) = consume_env_name_command_v0(tokens, index, BEGIN_CONTROL_V0)?;
@@ -1961,7 +2334,6 @@ fn consume_thebibliography_environment_v0(
             if end_env.as_slice() != THEBIBLIOGRAPHY_ENV_V0 || local_items.is_empty() {
                 return None;
             }
-            emit_bibliography_block_v0(out, &local_items);
             bibitems.extend(local_items);
             return Some(next);
         }
@@ -1995,17 +2367,9 @@ fn consume_thebibliography_environment_v0(
         if item_text.is_empty() {
             return None;
         }
-        let ordinal = u32::try_from(
-            bibitems
-                .len()
-                .checked_add(local_items.len())?
-                .checked_add(1)?,
-        )
-        .ok()?;
         let text_len = u32::try_from(item_text.len()).ok()?;
         local_items.push(BibItemMetaV0 {
             key,
-            ordinal,
             text: item_text,
             text_len,
         });
@@ -2102,6 +2466,14 @@ fn emit_maketitle_block_v0(out: &mut Vec<u8>, meta: &TitleMetaV0) {
 }
 
 pub(crate) fn extract_typeset_minimal_text_body_v0(tokens: &[TokenV0]) -> Option<Vec<u8>> {
+    let empty_external_bib_entries = BTreeMap::<Vec<u8>, Vec<u8>>::new();
+    extract_typeset_minimal_text_body_with_external_bib_v0(tokens, &empty_external_bib_entries)
+}
+
+pub(crate) fn extract_typeset_minimal_text_body_with_external_bib_v0(
+    tokens: &[TokenV0],
+    external_bib_entries: &BTreeMap<Vec<u8>, Vec<u8>>,
+) -> Option<Vec<u8>> {
     let mut index = skip_spaces(tokens, 0);
     index = consume_documentclass_v0(tokens, index)?;
 
@@ -2124,6 +2496,22 @@ pub(crate) fn extract_typeset_minimal_text_body_v0(tokens: &[TokenV0]) -> Option
                 meta.date = Some(value);
                 index = next;
             }
+            Some(TokenV0::ControlSeq(name))
+                if name.as_slice() == USEPACKAGE_CONTROL_V0
+                    || name.as_slice() == REQUIREPACKAGE_CONTROL_V0 =>
+            {
+                index = consume_package_declaration_noop_v0(tokens, index)?;
+            }
+            Some(TokenV0::ControlSeq(name))
+                if name.as_slice() == ADDBIBRESOURCE_CONTROL_V0
+                    || name.as_slice() == BIBLIOGRAPHY_CONTROL_V0 =>
+            {
+                let (_, next) = parse_bibliography_resource_command_v0(tokens, index)?;
+                index = next;
+            }
+            Some(TokenV0::ControlSeq(name)) if name.as_slice() == BIBLIOGRAPHYSTYLE_CONTROL_V0 => {
+                index = consume_bibliographystyle_command_v0(tokens, index)?;
+            }
             Some(TokenV0::ControlSeq(name)) if name.as_slice() == BEGIN_CONTROL_V0 => {
                 index = consume_document_env_command_v0(tokens, index, BEGIN_CONTROL_V0)?;
                 break;
@@ -2140,6 +2528,8 @@ pub(crate) fn extract_typeset_minimal_text_body_v0(tokens: &[TokenV0]) -> Option
     let mut footnotes = Vec::<Vec<u8>>::new();
     let mut href_urls = Vec::<Vec<u8>>::new();
     let mut bibitems = Vec::<BibItemMetaV0>::new();
+    let mut bibliography_render_requested = false;
+    let mut saw_thebibliography_env = false;
     let mut toc_entries = Vec::<TocEntryMetaV0>::new();
     let mut labels_by_key = BTreeMap::<Vec<u8>, LabelEntryMetaV0>::new();
     let mut ref_occurrences = Vec::<RefOccurrenceMetaV0>::new();
@@ -2196,7 +2586,8 @@ pub(crate) fn extract_typeset_minimal_text_body_v0(tokens: &[TokenV0]) -> Option
                     });
                 } else if env_name.as_slice() == THEBIBLIOGRAPHY_ENV_V0 {
                     pending_label_target = None;
-                    index = consume_thebibliography_environment_v0(tokens, index, &mut body, &mut bibitems)?;
+                    saw_thebibliography_env = true;
+                    index = consume_thebibliography_environment_v0(tokens, index, &mut bibitems)?;
                 } else {
                     pending_label_target = None;
                     index = consume_body_environment_v0(tokens, index, &mut body)?;
@@ -2253,10 +2644,31 @@ pub(crate) fn extract_typeset_minimal_text_body_v0(tokens: &[TokenV0]) -> Option
                 index = consume_cite_command_v0(tokens, index, &mut body)?;
             }
             Some(TokenV0::ControlSeq(name))
-                if name.as_slice() == BIBLIOGRAPHY_CONTROL_V0
-                    || name.as_slice() == BIBLIOGRAPHYSTYLE_CONTROL_V0 =>
+                if name.as_slice() == ADDBIBRESOURCE_CONTROL_V0
+                    || name.as_slice() == BIBLIOGRAPHY_CONTROL_V0 =>
             {
-                return None;
+                saw_body_content_after_maketitle = true;
+                maybe_emit_pending_noindent_prefix_v0(&mut body, &mut pending_noindent_after_heading);
+                pending_label_target = None;
+                if name.as_slice() == BIBLIOGRAPHY_CONTROL_V0 {
+                    bibliography_render_requested = true;
+                }
+                let (_, next) = parse_bibliography_resource_command_v0(tokens, index)?;
+                index = next;
+            }
+            Some(TokenV0::ControlSeq(name)) if name.as_slice() == PRINTBIBLIOGRAPHY_CONTROL_V0 => {
+                saw_body_content_after_maketitle = true;
+                maybe_emit_pending_noindent_prefix_v0(&mut body, &mut pending_noindent_after_heading);
+                pending_label_target = None;
+                bibliography_render_requested = true;
+                index += 1;
+            }
+            Some(TokenV0::ControlSeq(name))
+                if name.as_slice() == BIBLIOGRAPHYSTYLE_CONTROL_V0 =>
+            {
+                saw_body_content_after_maketitle = true;
+                pending_label_target = None;
+                index = consume_bibliographystyle_command_v0(tokens, index)?;
             }
             Some(TokenV0::ControlSeq(name)) if is_heading_control_v0(name.as_slice()) => {
                 saw_body_content_after_maketitle = true;
@@ -2321,11 +2733,50 @@ pub(crate) fn extract_typeset_minimal_text_body_v0(tokens: &[TokenV0]) -> Option
     )?;
     let (href_links, ref_anchor_links) =
         assign_link_metadata_v1(&body, &href_urls, &ref_link_anchor_ids)?;
-    let bibitems_by_key = bibitems
-        .iter()
-        .map(|item| (item.key.clone(), item.ordinal))
-        .collect::<BTreeMap<Vec<u8>, u32>>();
-    body = resolve_cite_markers_v0(&body, &bibitems_by_key, &mut cite_occurrences)?;
+    if saw_thebibliography_env && bibliography_render_requested {
+        return None;
+    }
+    let mut bibliography_entries_by_key = BTreeMap::<Vec<u8>, BibItemMetaV0>::new();
+    for (key, text) in external_bib_entries {
+        if text.is_empty() {
+            return None;
+        }
+        let text_len = u32::try_from(text.len()).ok()?;
+        if bibliography_entries_by_key
+            .insert(
+                key.clone(),
+                BibItemMetaV0 {
+                    key: key.clone(),
+                    text: text.clone(),
+                    text_len,
+                },
+            )
+            .is_some()
+        {
+            return None;
+        }
+    }
+    for item in &bibitems {
+        if bibliography_entries_by_key.insert(item.key.clone(), item.clone()).is_some() {
+            return None;
+        }
+    }
+    let (resolved_body, resolved_bibliography_entries) = resolve_cite_markers_fixedpoint_v0(
+        &body,
+        &bibliography_entries_by_key,
+        &mut cite_occurrences,
+    )?;
+    body = resolved_body;
+
+    if !cite_occurrences.is_empty() && resolved_bibliography_entries.is_empty() {
+        return None;
+    }
+    if saw_thebibliography_env || bibliography_render_requested {
+        if resolved_bibliography_entries.is_empty() {
+            return None;
+        }
+        emit_bibliography_block_v0(&mut body, &resolved_bibliography_entries);
+    }
 
     if !footnotes.is_empty() {
         push_paragraph_break(&mut body);
@@ -2411,13 +2862,14 @@ pub(crate) fn extract_typeset_minimal_text_body_v0(tokens: &[TokenV0]) -> Option
             push_newline(&mut body);
         }
     }
-    if !bibitems.is_empty() {
+    if !resolved_bibliography_entries.is_empty() {
         push_paragraph_break(&mut body);
-        for item in &bibitems {
+        for (ordinal_index, item) in resolved_bibliography_entries.iter().enumerate() {
+            let ordinal = u32::try_from(ordinal_index.checked_add(1)?).ok()?;
             body.extend_from_slice(BIBITEM_LINE_PREFIX_MARKER_V0);
             body.extend_from_slice(&item.key);
             body.push(b' ');
-            body.extend_from_slice(item.ordinal.to_string().as_bytes());
+            body.extend_from_slice(ordinal.to_string().as_bytes());
             body.push(b' ');
             body.extend_from_slice(item.text_len.to_string().as_bytes());
             push_newline(&mut body);
