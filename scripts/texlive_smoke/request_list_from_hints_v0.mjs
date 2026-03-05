@@ -30,11 +30,22 @@ function normalizeTexmfNameV0(rawValue, hintType, caseId) {
   if (typeof rawValue !== 'string' || rawValue.trim() === '') {
     throw new Error(`resource hint ${hintType} in case ${caseId} must be non-empty`);
   }
-  const value = rawValue.trim();
-  if (!isSafeTokenV0(value)) {
+  const value = rawValue.trim().replace(/\\/g, '/');
+  const segments = value
+    .split('/')
+    .map((segment) => segment.trim())
+    .filter((segment) => segment.length > 0 && segment !== '.');
+  if (segments.length === 0) {
+    throw new Error(`resource hint ${hintType} in case ${caseId} has empty path token`);
+  }
+  if (segments.some((segment) => segment === '..' || segment.includes('..'))) {
     throw new Error(`resource hint ${hintType} in case ${caseId} has unsafe token '${value}'`);
   }
-  return value;
+  const normalized = segments.join('__');
+  if (!isSafeTokenV0(normalized)) {
+    throw new Error(`resource hint ${hintType} in case ${caseId} has unsafe normalized token '${normalized}'`);
+  }
+  return normalized;
 }
 
 function ensureDefaultExtensionV0(name, extension) {
