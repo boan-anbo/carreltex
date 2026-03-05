@@ -396,15 +396,19 @@ fn pdf_renderer_paragraph_indent_and_line_gap_invariants_v0() {
 #[test]
 fn pdf_renderer_section_heading_spacing_invariants_v0() {
     let demo_text =
-        b"Title\nAuthor\n2026-03-05\n\nIntro paragraph.\n\n{Section Heading}\n\nBody after heading.";
+        b"Title\nAuthor\n2026-03-05\n\nIntro paragraph.\n\n{Section Heading}\n\n~ Body after heading.";
     let xdv = write_dvi_v2_text_page_v0(demo_text).expect("writer should accept heading text");
     let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
 
-    let (_, intro_y) =
+    let (intro_x, intro_y) =
         tm_position_for_line_containing_text_v0(&pdf, "(Intro paragraph.)").expect("intro position");
     let (_, heading_y) = tm_position_for_line_containing_text_v0(&pdf, "(Section Heading)")
         .expect("heading position");
-    let (_, body_y) = tm_position_for_line_containing_text_v0(&pdf, "(Body after heading.)")
+    assert!(
+        !pdf.windows(b"(~ Body after heading.) Tj".len())
+            .any(|w| w == b"(~ Body after heading.) Tj")
+    );
+    let (body_x, body_y) = tm_position_for_line_containing_text_v0(&pdf, "(Body after heading.)")
         .expect("body position");
 
     assert!(
@@ -414,6 +418,11 @@ fn pdf_renderer_section_heading_spacing_invariants_v0() {
     assert!(
         (heading_y - body_y - 28.0).abs() <= 0.02,
         "heading->body y-gap mismatch: heading_y={heading_y}, body_y={body_y}"
+    );
+    assert!((intro_x - 72.0).abs() <= 0.02, "intro x mismatch: {intro_x}");
+    assert!(
+        (body_x - 72.0).abs() <= 0.02,
+        "first paragraph after heading should not indent: {body_x}"
     );
 }
 
