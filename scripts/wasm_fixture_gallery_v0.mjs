@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { createCtx } from './wasm_smoke_js/ctx.mjs';
 import { createMemHelpers } from './wasm_smoke_js/mem.mjs';
 import { createAssertHelpers } from './wasm_smoke_js/assert.mjs';
+import { createOfflineOnDemandResolverV0 } from './wasm_smoke_js/ondemand_resolver_v0.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -125,12 +126,13 @@ function entrypointSetOkV0(ctx, mem, entrypoint) {
   );
 }
 
-function buildConfigHashV0(cases, sourceDateEpoch) {
+function buildConfigHashV0(cases, sourceDateEpoch, resolverId) {
   const config = {
     runner: 'wasm_fixture_gallery_v0',
     source_date_epoch: sourceDateEpoch,
     tz: 'UTC',
     max_log_bytes: DEFAULT_MAX_LOG_BYTES_V0,
+    resolver_id: resolverId,
     cases: cases.map((item) => ({
       id: item.id,
       mode: item.mode,
@@ -140,7 +142,17 @@ function buildConfigHashV0(cases, sourceDateEpoch) {
   return sha256HexV0(Buffer.from(JSON.stringify(config)));
 }
 
-async function runCaseV0(ctx, mem, helpers, outDir, caseSpec, sourceDateEpoch, engineRev, configHash) {
+async function runCaseV0(
+  ctx,
+  mem,
+  helpers,
+  outDir,
+  caseSpec,
+  sourceDateEpoch,
+  engineRev,
+  configHash,
+  resolver,
+) {
   const caseOutDir = path.join(outDir, caseSpec.id);
   await mkdir(caseOutDir, { recursive: true });
 
@@ -240,6 +252,26 @@ async function runCaseV0(ctx, mem, helpers, outDir, caseSpec, sourceDateEpoch, e
     errorMessage = errorMessage || 'expected non-empty main.pdf for OK case';
   }
 
+  const resolvedResources = [];
+  const resolution = await resolver.resolve({
+    kind: 'texmf',
+    format: 'tex',
+    name: caseSpec.id,
+    variant: caseSpec.mode,
+    resolver_id: resolver.resolverId,
+  });
+  if (resolution.tag === 'Found') {
+    resolvedResources.push({
+      kind: 'texmf',
+      format: 'tex',
+      name: caseSpec.id,
+      variant: caseSpec.mode,
+      stable_id: resolution.stable_id,
+      sha256: resolution.sha256,
+      cache_hit: resolution.cache_hit,
+    });
+  }
+
   const summary = {
     case_id: caseSpec.id,
     mode: caseSpec.mode,
@@ -260,7 +292,8 @@ async function runCaseV0(ctx, mem, helpers, outDir, caseSpec, sourceDateEpoch, e
       main_xdv: sha256HexV0(xdvBytes),
       main_pdf: sha256HexV0(pdfBytes),
     },
-    resolved_resources: [],
+    resolver_id: resolver.resolverId,
+    resolved_resources: resolvedResources,
   };
   if (errorMessage) {
     summary.error = errorMessage;
@@ -291,7 +324,11 @@ async function run() {
     encoding: 'utf8',
   }).trim();
   const cases = await loadFixtureCasesV0();
-  const configHash = buildConfigHashV0(cases, sourceDateEpoch);
+  const resolver = await createOfflineOnDemandResolverV0({
+    rootDir,
+    storeDir: path.join(rootDir, 'target', 'texlive_store_v0'),
+  });
+  const configHash = buildConfigHashV0(cases, sourceDateEpoch, resolver.resolverId);
 
   await rm(outDir, { recursive: true, force: true });
   await mkdir(outDir, { recursive: true });
@@ -302,13 +339,24 @@ async function run() {
   const summaries = [];
   for (const caseSpec of cases) {
     summaries.push(
-      await runCaseV0(ctx, mem, helpers, outDir, caseSpec, sourceDateEpoch, engineRev, configHash),
+      await runCaseV0(
+        ctx,
+        mem,
+        helpers,
+        outDir,
+        caseSpec,
+        sourceDateEpoch,
+        engineRev,
+        configHash,
+        resolver,
+      ),
     );
   }
 
   const report = {
     engine_rev: engineRev,
     source_date_epoch: sourceDateEpoch,
+    resolver_id: resolver.resolverId,
     config_hash: configHash,
     case_count: summaries.length,
     statuses: summaries.map((summary) => ({
