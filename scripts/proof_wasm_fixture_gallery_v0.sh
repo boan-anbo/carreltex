@@ -43,11 +43,13 @@ node "$ROOT_DIR/scripts/wasm_fixture_gallery_v0.mjs" "$OUT_DIR"
 node - "$OUT_DIR" "$BASELINE_ROOT" <<'NODE'
 const fs = require('node:fs');
 const path = require('node:path');
+const crypto = require('node:crypto');
 
 const outDir = process.argv[2];
 const baselineRoot = process.argv[3];
 
 const firstRunShaPath = (name) => path.join(baselineRoot, `${name}_first.sha256`);
+const sha256 = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex');
 const assertEntrySourceSpans = (caseId, artifactName, entries) => {
   const sourceLen = fs.readFileSync(path.join(outDir, caseId, 'main.tex')).length;
   entries.forEach((entry, entryIndex) => {
@@ -248,6 +250,38 @@ if (report?.typed_artifacts_version !== 1) {
   console.error('FAIL: expected report.typed_artifacts_version=1 after first run');
   process.exit(1);
 }
+const resourceHints = report?.resource_hints_v0;
+if (!resourceHints || typeof resourceHints !== 'object') {
+  console.error('FAIL: expected report.resource_hints_v0 after first run');
+  process.exit(1);
+}
+if (resourceHints.version !== 1) {
+  console.error('FAIL: expected report.resource_hints_v0.version=1 after first run');
+  process.exit(1);
+}
+if (!Array.isArray(resourceHints.entries)) {
+  console.error('FAIL: expected report.resource_hints_v0.entries array after first run');
+  process.exit(1);
+}
+if (resourceHints.entries.length <= 0) {
+  console.error('FAIL: expected non-empty report.resource_hints_v0.entries after first run');
+  process.exit(1);
+}
+for (const [index, entry] of resourceHints.entries.entries()) {
+  if (typeof entry?.case_id !== 'string' || entry.case_id.length === 0) {
+    console.error(`FAIL: resource_hints_v0.entries[${index}] invalid case_id`);
+    process.exit(1);
+  }
+  if (typeof entry?.hint_type !== 'string' || entry.hint_type.length === 0) {
+    console.error(`FAIL: resource_hints_v0.entries[${index}] invalid hint_type`);
+    process.exit(1);
+  }
+  if (typeof entry?.value !== 'string' || entry.value.length === 0) {
+    console.error(`FAIL: resource_hints_v0.entries[${index}] invalid value`);
+    process.exit(1);
+  }
+}
+fs.writeFileSync(firstRunShaPath('resource_hints_v0'), `${sha256(Buffer.from(JSON.stringify(resourceHints)))}\n`);
 const typedArtifactShaMap = report?.typed_artifact_sha256;
 if (!typedArtifactShaMap || typeof typedArtifactShaMap !== 'object') {
   console.error('FAIL: expected report.typed_artifact_sha256 map after first run');
@@ -404,13 +438,34 @@ fi
 node - "$OUT_DIR" <<'NODE'
 const fs = require('node:fs');
 const path = require('node:path');
+const crypto = require('node:crypto');
 
 const outDir = process.argv[2];
 const report = JSON.parse(fs.readFileSync(path.join(outDir, 'report.json'), 'utf8'));
 const statuses = Array.isArray(report.statuses) ? report.statuses : [];
 const resolvedCount = Number(report.resolved_resources_count ?? 0);
+const sha256 = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex');
 if (report?.typed_artifacts_version !== 1) {
   console.error('FAIL: expected report.typed_artifacts_version=1 after rerun');
+  process.exit(1);
+}
+const resourceHints = report?.resource_hints_v0;
+if (!resourceHints || typeof resourceHints !== 'object') {
+  console.error('FAIL: expected report.resource_hints_v0 after rerun');
+  process.exit(1);
+}
+if (resourceHints.version !== 1) {
+  console.error('FAIL: expected report.resource_hints_v0.version=1 after rerun');
+  process.exit(1);
+}
+if (!Array.isArray(resourceHints.entries)) {
+  console.error('FAIL: expected report.resource_hints_v0.entries array after rerun');
+  process.exit(1);
+}
+const resourceHintsShaFirst = fs.readFileSync(path.join(`${outDir}_baseline`, 'resource_hints_v0_first.sha256'), 'utf8').trim();
+const resourceHintsShaSecond = sha256(Buffer.from(JSON.stringify(resourceHints)));
+if (resourceHintsShaSecond !== resourceHintsShaFirst) {
+  console.error('FAIL: report.resource_hints_v0 must be stable across reruns');
   process.exit(1);
 }
 const requiredTypedKeys = ['toc', 'labels', 'bib', 'hyperref', 'pkgopt', 'graphics'];
@@ -433,6 +488,13 @@ if (okStatuses.length <= 0) {
 for (const status of okStatuses) {
   if (status.baseline_match !== 'MATCH') {
     console.error(`FAIL: expected baseline_match=MATCH for OK case ${status.case_id}`);
+    process.exit(1);
+  }
+}
+const okCaseIds = new Set(okStatuses.map((entry) => entry.case_id));
+for (const entry of resourceHints.entries) {
+  if (okCaseIds.has(entry.case_id)) {
+    console.error(`FAIL: expected no resource_hints_v0 entries for OK case ${entry.case_id}`);
     process.exit(1);
   }
 }
@@ -654,6 +716,8 @@ console.log(`PASS: resolved_resources_count ${resolvedCount}`);
 console.log(`PASS: baseline_match MATCH for all OK cases (${okStatuses.length})`);
 console.log(`PASS: typed_artifacts keys ${requiredTypedKeys.join(',')}`);
 console.log('PASS: typed_artifacts_version gate 1');
+console.log(`PASS: resource_hints_v0 sha stable ${resourceHintsShaSecond}`);
+console.log('PASS: resource_hints_v0 empty for OK cases');
 console.log(`PASS: labels_v0 sha stable ${labelsShaSecond}`);
 console.log(`PASS: toc_v0 sha stable ${tocShaSecond}`);
 console.log(`PASS: bib_v0 sha stable ${bibShaSecond}`);
