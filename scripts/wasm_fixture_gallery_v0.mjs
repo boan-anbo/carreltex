@@ -222,6 +222,11 @@ async function loadFixtureCasesV0() {
       fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_include_probe_v0.tex',
     },
     {
+      id: 'typeset_demo_includeonly_probe_v0',
+      mode: 'typeset',
+      fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_includeonly_probe_v0.tex',
+    },
+    {
       id: 'typeset_demo_package_require_probe_v0',
       mode: 'typeset',
       fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_package_require_probe_v0.tex',
@@ -765,6 +770,17 @@ function extractResourceHintEntriesFromSourceV0(sourceBytes) {
         continue;
       }
       addHintValues(command === 'input' ? 'tex_input' : 'tex_include', splitCommaValuesV0(group.value), index, group.next, 'tex');
+      index = group.next;
+      continue;
+    }
+
+    if (command === 'includeonly') {
+      const group = readBracedGroupV0(sourceBytes, commandIndex);
+      if (!group.ok || group.value.length === 0) {
+        index = commandIndex;
+        continue;
+      }
+      addHintValues('tex_includeonly', splitCommaValuesV0(group.value), index, group.next, 'tex');
       index = group.next;
       continue;
     }
@@ -1344,7 +1360,7 @@ async function collectResolverRequestsFromResourceHintsV0(caseSpec, caseOutDir, 
       addTexmfRequest(ensureDefaultExtensionV0(value, 'bib'), 'bib', hintType);
       continue;
     }
-    if (hintType === 'tex_input' || hintType === 'tex_include') {
+    if (hintType === 'tex_input' || hintType === 'tex_include' || hintType === 'tex_includeonly') {
       addTexmfRequest(ensureDefaultExtensionV0(value, 'tex'), 'tex', hintType);
       continue;
     }
