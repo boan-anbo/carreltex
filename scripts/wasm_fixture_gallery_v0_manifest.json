@@ -158,6 +158,18 @@
       "purpose": "Probes usepackage option normalization with stable dedupe/ordering across repeated declarations."
     },
     {
+      "id": "typeset_demo_usepackage_multipackage_probe_v0",
+      "tags": ["typeset", "packages", "pkgopt", "usepackage", "requirepackage", "multi-package", "path", "probe", "ni"],
+      "expected_status": "NI",
+      "purpose": "Probes multi-package usepackage/RequirePackage hints and per-package pkgopt extraction with path normalization."
+    },
+    {
+      "id": "typeset_demo_usepackage_multipackage_invalid_probe_v0",
+      "tags": ["typeset", "packages", "invalid", "usepackage", "multi-package", "unsafe-path", "probe"],
+      "expected_status": "INVALID",
+      "purpose": "Probes fail-closed package hint extraction when a multi-package declaration contains an unsafe path token."
+    },
+    {
       "id": "typeset_demo_usepackage_emptyopts_invalid_probe_v0",
       "tags": ["typeset", "packages", "invalid", "usepackage", "options", "empty-entry", "probe"],
       "expected_status": "INVALID",
