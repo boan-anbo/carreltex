@@ -1,4 +1,5 @@
 use crate::tex::tokenize_v0::TokenV0;
+use std::collections::BTreeMap;
 
 const NEWLINE_MARKER_V0: u8 = 0x0a;
 const PAGE_BREAK_MARKER_V0: u8 = 0x0c;
@@ -26,13 +27,19 @@ const CAPTION_CONTROL_V0: &[u8] = b"caption";
 const INCLUDEGRAPHICS_CONTROL_V0: &[u8] = b"includegraphics";
 const FOOTNOTE_CONTROL_V0: &[u8] = b"footnote";
 const HREF_CONTROL_V0: &[u8] = b"href";
+const LABEL_CONTROL_V0: &[u8] = b"label";
+const REF_CONTROL_V0: &[u8] = b"ref";
 const FOOTNOTE_LINE_PREFIX_MARKER_V0: &[u8] = b"!f ";
 const HREF_URL_LINE_PREFIX_MARKER_V0: &[u8] = b"!u ";
+const LABEL_LINE_PREFIX_MARKER_V0: &[u8] = b"!l ";
+const REF_LINE_PREFIX_MARKER_V0: &[u8] = b"!r ";
 const TABLE_ROW_PREFIX_MARKER_V0: &[u8] = b"!t ";
 const FIGURE_BOX_PREFIX_MARKER_V0: &[u8] = b"!gbox";
 const FIGURE_CAPTION_PREFIX_MARKER_V0: &[u8] = b"!gcap ";
 const TOC_PLACEHOLDER_MARKER_V0: &[u8] = b"!toc";
 const TOC_ENTRY_LINE_PREFIX_MARKER_V0: &[u8] = b"!toc ";
+const REF_MARKER_PREFIX_V0: &[u8] = b"@@REF:";
+const REF_MARKER_SUFFIX_V0: &[u8] = b"@@";
 const LINK_START_MARKER_V0: u8 = b'<';
 const LINK_END_MARKER_V0: u8 = b'>';
 const NOINDENT_PREFIX_MARKER_V0: &[u8] = b"~ ";
@@ -53,6 +60,35 @@ struct TocEntryMetaV0 {
     level: u8,
     anchor_id: u32,
     title: Vec<u8>,
+}
+
+#[derive(Clone, Copy)]
+enum LabelKindV0 {
+    Heading,
+    Figure,
+}
+
+#[derive(Clone)]
+struct LabelEntryMetaV0 {
+    anchor_id: u32,
+    kind: LabelKindV0,
+    level: Option<u8>,
+    title: Option<Vec<u8>>,
+}
+
+#[derive(Clone)]
+struct PendingLabelTargetV0 {
+    anchor_id: u32,
+    kind: LabelKindV0,
+    level: Option<u8>,
+    title: Option<Vec<u8>>,
+}
+
+#[derive(Clone)]
+struct RefOccurrenceMetaV0 {
+    key: Vec<u8>,
+    line_index: u32,
+    resolved_anchor_id: Option<u32>,
 }
 
 #[derive(Default)]
@@ -670,8 +706,8 @@ fn consume_heading_command_v0(
     tokens: &[TokenV0],
     index: usize,
     out: &mut Vec<u8>,
-    toc_entries: Option<(&mut Vec<TocEntryMetaV0>, &mut u32)>,
-) -> Option<usize> {
+    allow_deeper_levels: bool,
+) -> Option<(usize, Option<(u8, Vec<u8>)>)> {
     let TokenV0::ControlSeq(name) = tokens.get(index)? else {
         return None;
     };
@@ -693,17 +729,13 @@ fn consume_heading_command_v0(
     out.push(BOLD_END_MARKER_V0);
     push_paragraph_break(out);
 
-    if let Some((entries, next_anchor_id)) = toc_entries {
-        let level = heading_toc_level_for_control_v0(name.as_slice())?;
-        let anchor_id = *next_anchor_id;
-        *next_anchor_id = next_anchor_id.checked_add(1)?;
-        entries.push(TocEntryMetaV0 {
-            level,
-            anchor_id,
-            title: heading,
-        });
+    let heading_level = heading_toc_level_for_control_v0(name.as_slice());
+    if !allow_deeper_levels && heading_level.is_none() {
+        return None;
     }
-    Some(next)
+
+    let label_candidate = heading_level.map(|level| (level, heading));
+    Some((next, label_candidate))
 }
 
 fn is_hard_line_break_control_v0(name: &[u8]) -> bool {
@@ -1292,6 +1324,124 @@ fn is_safe_href_url_byte_v0(byte: u8) -> bool {
         )
 }
 
+fn is_safe_label_key_byte_v0(byte: u8) -> bool {
+    byte.is_ascii_alphanumeric() || matches!(byte, b':' | b'-' | b'_' | b'.' | b'/')
+}
+
+fn parse_label_or_ref_key_group_v0(tokens: &[TokenV0], index: usize) -> Option<(Vec<u8>, usize)> {
+    let (group_start, group_end, next) = consume_group_bounds(tokens, index + 1)?;
+    let mut key = Vec::<u8>::new();
+    for token in &tokens[group_start..group_end] {
+        match token {
+            TokenV0::Char(byte) if is_safe_label_key_byte_v0(*byte) => key.push(*byte),
+            TokenV0::Space => return None,
+            _ => return None,
+        }
+    }
+    if key.is_empty() {
+        return None;
+    }
+    if key.starts_with(b"/") || key.windows(2).any(|window| window == b"..") {
+        return None;
+    }
+    Some((key, next))
+}
+
+fn resolve_ref_markers_v0(
+    body: &[u8],
+    labels_by_key: &BTreeMap<Vec<u8>, LabelEntryMetaV0>,
+    ref_occurrences: &mut Vec<RefOccurrenceMetaV0>,
+) -> Option<Vec<u8>> {
+    let mut out = Vec::<u8>::with_capacity(body.len());
+    let mut index = 0usize;
+    let mut line_index = 1u32;
+
+    while index < body.len() {
+        if body[index..].starts_with(REF_MARKER_PREFIX_V0) {
+            let key_start = index + REF_MARKER_PREFIX_V0.len();
+            let mut key_end = key_start;
+            while key_end < body.len() {
+                if body[key_end..].starts_with(REF_MARKER_SUFFIX_V0) {
+                    break;
+                }
+                if !is_safe_label_key_byte_v0(body[key_end]) {
+                    return None;
+                }
+                key_end += 1;
+            }
+            if key_end == key_start || key_end >= body.len() {
+                return None;
+            }
+            let key = body[key_start..key_end].to_vec();
+            let resolved_anchor_id = labels_by_key.get(&key).map(|entry| entry.anchor_id);
+            ref_occurrences.push(RefOccurrenceMetaV0 {
+                key,
+                line_index,
+                resolved_anchor_id,
+            });
+
+            if let Some(anchor_id) = resolved_anchor_id {
+                out.extend_from_slice(anchor_id.to_string().as_bytes());
+            } else {
+                out.extend_from_slice(b"??");
+            }
+            index = key_end + REF_MARKER_SUFFIX_V0.len();
+            continue;
+        }
+
+        let byte = body[index];
+        out.push(byte);
+        if byte == NEWLINE_MARKER_V0 {
+            line_index = line_index.checked_add(1)?;
+        }
+        index += 1;
+    }
+    Some(out)
+}
+
+fn consume_label_command_v0(
+    tokens: &[TokenV0],
+    index: usize,
+    labels_by_key: &mut BTreeMap<Vec<u8>, LabelEntryMetaV0>,
+    pending_label_target: &mut Option<PendingLabelTargetV0>,
+) -> Option<usize> {
+    if !matches!(
+        tokens.get(index),
+        Some(TokenV0::ControlSeq(name)) if name.as_slice() == LABEL_CONTROL_V0
+    ) {
+        return None;
+    }
+    let target = pending_label_target.take()?;
+    let (key, next) = parse_label_or_ref_key_group_v0(tokens, index)?;
+    if labels_by_key.contains_key(&key) {
+        return None;
+    }
+    labels_by_key.insert(
+        key,
+        LabelEntryMetaV0 {
+            anchor_id: target.anchor_id,
+            kind: target.kind,
+            level: target.level,
+            title: target.title,
+        },
+    );
+    Some(next)
+}
+
+fn consume_ref_command_v0(tokens: &[TokenV0], index: usize, out: &mut Vec<u8>) -> Option<usize> {
+    if !matches!(
+        tokens.get(index),
+        Some(TokenV0::ControlSeq(name)) if name.as_slice() == REF_CONTROL_V0
+    ) {
+        return None;
+    }
+    let (key, next) = parse_label_or_ref_key_group_v0(tokens, index)?;
+    out.extend_from_slice(REF_MARKER_PREFIX_V0);
+    out.extend_from_slice(&key);
+    out.extend_from_slice(REF_MARKER_SUFFIX_V0);
+    Some(next)
+}
+
 fn consume_footnote_command_v0(
     tokens: &[TokenV0],
     index: usize,
@@ -1420,11 +1570,14 @@ pub(crate) fn extract_typeset_minimal_text_body_v0(tokens: &[TokenV0]) -> Option
     let mut footnotes = Vec::<Vec<u8>>::new();
     let mut href_urls = Vec::<Vec<u8>>::new();
     let mut toc_entries = Vec::<TocEntryMetaV0>::new();
-    let mut next_toc_anchor_id = 1u32;
+    let mut labels_by_key = BTreeMap::<Vec<u8>, LabelEntryMetaV0>::new();
+    let mut ref_occurrences = Vec::<RefOccurrenceMetaV0>::new();
+    let mut next_anchor_id = 1u32;
     let mut saw_maketitle = false;
     let mut saw_body_content_after_maketitle = false;
     let mut toc_requested = false;
     let mut pending_noindent_after_heading = false;
+    let mut pending_label_target = None::<PendingLabelTargetV0>;
     loop {
         match tokens.get(index) {
             Some(TokenV0::Space) => {
@@ -1435,6 +1588,7 @@ pub(crate) fn extract_typeset_minimal_text_body_v0(tokens: &[TokenV0]) -> Option
                 emit_maketitle_block_v0(&mut body, &meta);
                 saw_maketitle = true;
                 pending_noindent_after_heading = false;
+                pending_label_target = None;
                 index += 1;
             }
             Some(TokenV0::ControlSeq(name)) if name.as_slice() == TABLEOFCONTENTS_CONTROL_V0 => {
@@ -1446,6 +1600,7 @@ pub(crate) fn extract_typeset_minimal_text_body_v0(tokens: &[TokenV0]) -> Option
                 push_newline(&mut body);
                 push_paragraph_break(&mut body);
                 toc_requested = true;
+                pending_label_target = None;
                 index += 1;
             }
             Some(TokenV0::ControlSeq(name)) if name.as_slice() == END_CONTROL_V0 => {
@@ -1455,49 +1610,96 @@ pub(crate) fn extract_typeset_minimal_text_body_v0(tokens: &[TokenV0]) -> Option
             Some(TokenV0::ControlSeq(name)) if name.as_slice() == BEGIN_CONTROL_V0 => {
                 saw_body_content_after_maketitle = true;
                 pending_noindent_after_heading = false;
-                index = consume_body_environment_v0(tokens, index, &mut body)?;
+                let (env_name, _) = consume_env_name_command_v0(tokens, index, BEGIN_CONTROL_V0)?;
+                if env_name.as_slice() == FIGURE_ENV_V0 {
+                    index = consume_figure_environment_v0(tokens, index, &mut body)?;
+                    let anchor_id = next_anchor_id;
+                    next_anchor_id = next_anchor_id.checked_add(1)?;
+                    pending_label_target = Some(PendingLabelTargetV0 {
+                        anchor_id,
+                        kind: LabelKindV0::Figure,
+                        level: None,
+                        title: None,
+                    });
+                } else {
+                    pending_label_target = None;
+                    index = consume_body_environment_v0(tokens, index, &mut body)?;
+                }
             }
             Some(TokenV0::ControlSeq(name)) if name.as_slice() == CARRELPAR_MARKER_CONTROL_V0 => {
                 push_paragraph_break(&mut body);
+                pending_label_target = None;
                 index += 1;
             }
             Some(TokenV0::ControlSeq(name)) if name.as_slice() == CENTERLINE_CONTROL_V0 => {
                 saw_body_content_after_maketitle = true;
                 pending_noindent_after_heading = false;
+                pending_label_target = None;
                 index = consume_centerline_command_v0(tokens, index, &mut body)?;
             }
             Some(TokenV0::ControlSeq(name)) if name.as_slice() == RIGHTLINE_CONTROL_V0 => {
                 saw_body_content_after_maketitle = true;
                 pending_noindent_after_heading = false;
+                pending_label_target = None;
                 index = consume_rightline_command_v0(tokens, index, &mut body)?;
             }
             Some(TokenV0::ControlSeq(name)) if name.as_slice() == FOOTNOTE_CONTROL_V0 => {
                 saw_body_content_after_maketitle = true;
                 maybe_emit_pending_noindent_prefix_v0(&mut body, &mut pending_noindent_after_heading);
+                pending_label_target = None;
                 index = consume_footnote_command_v0(tokens, index, &mut body, &mut footnotes)?;
             }
             Some(TokenV0::ControlSeq(name)) if name.as_slice() == HREF_CONTROL_V0 => {
                 saw_body_content_after_maketitle = true;
                 maybe_emit_pending_noindent_prefix_v0(&mut body, &mut pending_noindent_after_heading);
+                pending_label_target = None;
                 index = consume_href_command_v0(tokens, index, &mut body, &mut href_urls)?;
+            }
+            Some(TokenV0::ControlSeq(name)) if name.as_slice() == LABEL_CONTROL_V0 => {
+                saw_body_content_after_maketitle = true;
+                index = consume_label_command_v0(
+                    tokens,
+                    index,
+                    &mut labels_by_key,
+                    &mut pending_label_target,
+                )?;
+            }
+            Some(TokenV0::ControlSeq(name)) if name.as_slice() == REF_CONTROL_V0 => {
+                saw_body_content_after_maketitle = true;
+                maybe_emit_pending_noindent_prefix_v0(&mut body, &mut pending_noindent_after_heading);
+                pending_label_target = None;
+                index = consume_ref_command_v0(tokens, index, &mut body)?;
             }
             Some(TokenV0::ControlSeq(name)) if is_heading_control_v0(name.as_slice()) => {
                 saw_body_content_after_maketitle = true;
-                index = if toc_requested {
-                    consume_heading_command_v0(
-                        tokens,
-                        index,
-                        &mut body,
-                        Some((&mut toc_entries, &mut next_toc_anchor_id)),
-                    )?
+                let (next, heading_meta) =
+                    consume_heading_command_v0(tokens, index, &mut body, !toc_requested)?;
+                index = next;
+                if let Some((level, title)) = heading_meta {
+                    let anchor_id = next_anchor_id;
+                    next_anchor_id = next_anchor_id.checked_add(1)?;
+                    if toc_requested {
+                        toc_entries.push(TocEntryMetaV0 {
+                            level,
+                            anchor_id,
+                            title: title.clone(),
+                        });
+                    }
+                    pending_label_target = Some(PendingLabelTargetV0 {
+                        anchor_id,
+                        kind: LabelKindV0::Heading,
+                        level: Some(level),
+                        title: Some(title),
+                    });
                 } else {
-                    consume_heading_command_v0(tokens, index, &mut body, None)?
-                };
+                    pending_label_target = None;
+                }
                 pending_noindent_after_heading = true;
             }
             Some(_) => {
                 saw_body_content_after_maketitle = true;
                 maybe_emit_pending_noindent_prefix_v0(&mut body, &mut pending_noindent_after_heading);
+                pending_label_target = None;
                 index = consume_fragment_token_v0(tokens, index, &mut body, false, true)?;
             }
             None => return None,
@@ -1511,6 +1713,13 @@ pub(crate) fn extract_typeset_minimal_text_body_v0(tokens: &[TokenV0]) -> Option
         return None;
     }
 
+    body = normalize_punctuation_spacing_v0(&body);
+    body = normalize_tex_double_quotes_v0(&body);
+    body = normalize_tex_dashes_v0(&body);
+    body = normalize_tex_ellipsis_v0(&body);
+    body = normalize_bracket_spacing_v0(&body);
+    body = resolve_ref_markers_v0(&body, &labels_by_key, &mut ref_occurrences)?;
+
     if !footnotes.is_empty() {
         push_paragraph_break(&mut body);
         for (note_index, footnote) in footnotes.iter().enumerate() {
@@ -1522,11 +1731,6 @@ pub(crate) fn extract_typeset_minimal_text_body_v0(tokens: &[TokenV0]) -> Option
         }
     }
 
-    body = normalize_punctuation_spacing_v0(&body);
-    body = normalize_tex_double_quotes_v0(&body);
-    body = normalize_tex_dashes_v0(&body);
-    body = normalize_tex_ellipsis_v0(&body);
-    body = normalize_bracket_spacing_v0(&body);
     if !href_urls.is_empty() {
         push_paragraph_break(&mut body);
         for (href_index, href_url) in href_urls.iter().enumerate() {
@@ -1546,6 +1750,47 @@ pub(crate) fn extract_typeset_minimal_text_body_v0(tokens: &[TokenV0]) -> Option
             body.extend_from_slice(entry.anchor_id.to_string().as_bytes());
             body.push(b' ');
             body.extend_from_slice(&entry.title);
+            push_newline(&mut body);
+        }
+    }
+    if !labels_by_key.is_empty() {
+        push_paragraph_break(&mut body);
+        for (key, entry) in &labels_by_key {
+            body.extend_from_slice(LABEL_LINE_PREFIX_MARKER_V0);
+            body.extend_from_slice(key);
+            body.push(b' ');
+            body.extend_from_slice(entry.anchor_id.to_string().as_bytes());
+            body.push(b' ');
+            body.extend_from_slice(match entry.kind {
+                LabelKindV0::Heading => b"heading",
+                LabelKindV0::Figure => b"figure",
+            });
+            body.push(b' ');
+            body.extend_from_slice(entry.level.unwrap_or(0).to_string().as_bytes());
+            body.push(b' ');
+            if let Some(title) = &entry.title {
+                body.extend_from_slice(title);
+            } else {
+                body.push(b'-');
+            }
+            push_newline(&mut body);
+        }
+    }
+    if !ref_occurrences.is_empty() {
+        push_paragraph_break(&mut body);
+        for occurrence in &ref_occurrences {
+            body.extend_from_slice(REF_LINE_PREFIX_MARKER_V0);
+            body.extend_from_slice(&occurrence.key);
+            body.push(b' ');
+            body.extend_from_slice(occurrence.line_index.to_string().as_bytes());
+            body.push(b' ');
+            body.extend_from_slice(
+                occurrence
+                    .resolved_anchor_id
+                    .unwrap_or(0)
+                    .to_string()
+                    .as_bytes(),
+            );
             push_newline(&mut body);
         }
     }
