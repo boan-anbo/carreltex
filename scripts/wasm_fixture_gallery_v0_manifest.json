@@ -80,6 +80,12 @@
       "purpose": "Probes include resource-hint extraction and deterministic .tex request mapping."
     },
     {
+      "id": "typeset_demo_includeonly_probe_v0",
+      "tags": ["typeset", "includeonly", "probe", "ni"],
+      "expected_status": "NI",
+      "purpose": "Probes includeonly list extraction and deterministic .tex request mapping."
+    },
+    {
       "id": "typeset_demo_package_require_probe_v0",
       "tags": ["typeset", "packages", "requirepackage", "probe", "ni"],
       "expected_status": "NI",
