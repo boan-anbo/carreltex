@@ -51,8 +51,46 @@ printf 'fixture-bytes-for-chapters-intro\n' > "$FIXTURE_SOURCE_DIR/xetex/tex/cha
 printf 'fixture-bytes-for-chapters-appendix\n' > "$FIXTURE_SOURCE_DIR/xetex/tex/chapters__appendix.tex"
 printf 'fixture-bytes-for-sections-intro-nested\n' > "$FIXTURE_SOURCE_DIR/xetex/tex/sections/intro.tex"
 printf 'fixture-bytes-for-chapters-ch1-nested\n' > "$FIXTURE_SOURCE_DIR/xetex/tex/chapters/ch1.tex"
+cat > "$FIXTURE_SOURCE_DIR/xetex/tex/sections/one.tex" <<'EOF'
+\section{Included One}
+\label{sec:one}
+Included section body.
+EOF
+cat > "$FIXTURE_SOURCE_DIR/xetex/tex/sections/two.tex" <<'EOF'
+\section{Included Two}
+\label{sec:two}
+\begin{figure}
+\caption{Included figure}
+\end{figure}
+\label{fig:two}
+\[x+y\]
+\label{eq:two}
+EOF
+cat > "$FIXTURE_SOURCE_DIR/xetex/tex/sections/toc_headings.tex" <<'EOF'
+\section{Input Section}
+\subsection{Input Detail}
+EOF
 printf 'fixture-bytes-for-sections-intro-normalized\n' > "$FIXTURE_SOURCE_DIR/xetex/tex/sections__intro.tex"
 printf 'fixture-bytes-for-chapters-ch1-normalized\n' > "$FIXTURE_SOURCE_DIR/xetex/tex/chapters__ch1.tex"
+cat > "$FIXTURE_SOURCE_DIR/xetex/tex/sections__one.tex" <<'EOF'
+\section{Included One}
+\label{sec:one}
+Included section body.
+EOF
+cat > "$FIXTURE_SOURCE_DIR/xetex/tex/sections__two.tex" <<'EOF'
+\section{Included Two}
+\label{sec:two}
+\begin{figure}
+\caption{Included figure}
+\end{figure}
+\label{fig:two}
+\[x+y\]
+\label{eq:two}
+EOF
+cat > "$FIXTURE_SOURCE_DIR/xetex/tex/sections__toc_headings.tex" <<'EOF'
+\section{Input Section}
+\subsection{Input Detail}
+EOF
 printf 'fixture-bytes-for-ondemand-extra-section-nested\n' > "$FIXTURE_SOURCE_DIR/xetex/tex/ondemand/extra_section.tex"
 printf 'fixture-bytes-for-ondemand-chapter-one-nested\n' > "$FIXTURE_SOURCE_DIR/xetex/tex/ondemand/chapter_one.tex"
 printf 'fixture-bytes-for-ondemand-extra-section-normalized\n' > "$FIXTURE_SOURCE_DIR/xetex/tex/ondemand__extra_section.tex"
