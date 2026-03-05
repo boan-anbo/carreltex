@@ -1500,6 +1500,7 @@ function extractPkgoptEntriesFromSourceV0(sourceBytes) {
 }
 
 function extractGraphicsEntriesFromSourceV0(sourceBytes) {
+  const allowedExtensions = new Set(['png', 'jpg', 'jpeg', 'pdf']);
   const entries = [];
   let index = 0;
   while (index < sourceBytes.length) {
@@ -1532,17 +1533,35 @@ function extractGraphicsEntriesFromSourceV0(sourceBytes) {
       index = commandIndex;
       continue;
     }
-    const pathBytes = Buffer.from(pathGroup.value, 'utf8');
+    const pathAsWritten = pathGroup.value.trim();
+    if (pathAsWritten.length === 0) {
+      index = pathGroup.next;
+      continue;
+    }
+    const normalizedToken = normalizePathHintTokenV0(pathAsWritten, 'graphics_path');
+    if (normalizedToken === null) {
+      index = pathGroup.next;
+      continue;
+    }
+    const resolverPath = ensureDefaultExtensionV0(normalizedToken, 'png');
+    const dotIndex = resolverPath.lastIndexOf('.');
+    const extension = dotIndex >= 0 ? resolverPath.slice(dotIndex + 1).toLowerCase() : '';
+    if (!allowedExtensions.has(extension)) {
+      throw new Error(`graphics_v1 unsupported extension '${extension}'`);
+    }
+
+    const pathBytes = Buffer.from(pathAsWritten, 'utf8');
     if (pathBytes.length > MAX_GRAPHICS_PATH_BYTES_V0) {
-      throw new Error(`graphics_v0 path exceeds cap ${MAX_GRAPHICS_PATH_BYTES_V0}`);
+      throw new Error(`graphics_v1 path exceeds cap ${MAX_GRAPHICS_PATH_BYTES_V0}`);
     }
     entries.push({
       command,
-      path: pathGroup.value,
-      source_span: buildSourceSpanV0(sourceBytes, index, pathGroup.next, 'graphics_v0'),
+      path: pathAsWritten,
+      resolver_path: resolverPath,
+      source_span: buildSourceSpanV0(sourceBytes, index, pathGroup.next, 'graphics_v1'),
     });
     if (entries.length > MAX_GRAPHICS_ENTRIES_V0) {
-      throw new Error(`graphics_v0 entries exceed cap ${MAX_GRAPHICS_ENTRIES_V0}`);
+      throw new Error(`graphics_v1 entries exceed cap ${MAX_GRAPHICS_ENTRIES_V0}`);
     }
     index = pathGroup.next;
   }
@@ -2577,11 +2596,11 @@ async function emitPkgoptTypedArtifactV0(caseOutDir, fixtureBytes) {
 async function emitGraphicsTypedArtifactV0(caseOutDir, fixtureBytes) {
   const payload = {
     version: TYPED_ARTIFACTS_VERSION_V0,
-    schema: 'graphics_v0',
+    schema: 'graphics_v1',
     entries: extractGraphicsEntriesFromSourceV0(fixtureBytes),
   };
   const bytes = Buffer.from(`${JSON.stringify(payload, null, 2)}\n`, 'utf8');
-  const relpath = 'graphics_v0.json';
+  const relpath = 'graphics_v1.json';
   const fullPath = path.join(caseOutDir, relpath);
   await writeFile(fullPath, bytes);
   return {

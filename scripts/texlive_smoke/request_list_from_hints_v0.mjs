@@ -154,7 +154,7 @@ export async function buildRequestListFromHintsV0(options = {}) {
     const variant = normalizeVariantFromCaseIdV0(caseId);
 
     if (hintType === 'graphics_path') {
-      const name = normalizeTexmfNameV0(value, hintType, caseId);
+      const name = ensureDefaultExtensionV0(normalizeTexmfNameV0(value, hintType, caseId), 'png');
       const request = {
         kind: 'texmf',
         format: inferTexmfFormatV0(name, 'graphic'),

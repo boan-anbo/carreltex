@@ -544,8 +544,38 @@ fn typeset_minimal_figure_stub_emits_placeholder_and_caption_markers() {
 }
 
 #[test]
-fn typeset_minimal_rejects_figure_with_includegraphics() {
+fn typeset_minimal_figure_stub_accepts_includegraphics_path_marker() {
     let main = b"\\documentclass{article}\\begin{document}\\begin{figure}\\includegraphics{demo.png}\\caption{Nope}\\end{figure}\\end{document}";
+    let body = extract_typeset_body(main);
+    let text = String::from_utf8(body).expect("body should be valid utf8");
+    assert!(
+        text.contains("!gbox\n!gimg 1 demo.png\n!gcap Nope"),
+        "body={text:?}"
+    );
+}
+
+#[test]
+fn typeset_minimal_figure_stub_accepts_includegraphics_without_extension_by_normalizing_png() {
+    let main = b"\\documentclass{article}\\begin{document}\\begin{figure}\\includegraphics{figs/demo}\\caption{No ext}\\end{figure}\\end{document}";
+    let body = extract_typeset_body(main);
+    let text = String::from_utf8(body).expect("body should be valid utf8");
+    assert!(
+        text.contains("!gimg 1 figs/demo.png"),
+        "body={text:?}"
+    );
+}
+
+#[test]
+fn typeset_minimal_rejects_figure_includegraphics_optional_args() {
+    let main = b"\\documentclass{article}\\begin{document}\\begin{figure}\\includegraphics[width=0.5\\textwidth]{demo.png}\\caption{Nope}\\end{figure}\\end{document}";
+    let result = compile_typeset(main);
+    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert!(result.main_xdv_bytes.is_empty());
+}
+
+#[test]
+fn typeset_minimal_rejects_figure_includegraphics_unsafe_path() {
+    let main = b"\\documentclass{article}\\begin{document}\\begin{figure}\\includegraphics{../demo.png}\\caption{Nope}\\end{figure}\\end{document}";
     let result = compile_typeset(main);
     assert_eq!(result.status, CompileStatus::NotImplemented);
     assert!(result.main_xdv_bytes.is_empty());

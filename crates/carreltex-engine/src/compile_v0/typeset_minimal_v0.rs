@@ -42,6 +42,7 @@ const BIBITEM_LINE_PREFIX_MARKER_V0: &[u8] = b"!b ";
 const CITE_LINE_PREFIX_MARKER_V0: &[u8] = b"!c ";
 const TABLE_ROW_PREFIX_MARKER_V0: &[u8] = b"!t ";
 const FIGURE_BOX_PREFIX_MARKER_V0: &[u8] = b"!gbox";
+const FIGURE_IMAGE_PREFIX_MARKER_V0: &[u8] = b"!gimg ";
 const FIGURE_CAPTION_PREFIX_MARKER_V0: &[u8] = b"!gcap ";
 const TOC_PLACEHOLDER_MARKER_V0: &[u8] = b"!toc";
 const TOC_ENTRY_LINE_PREFIX_MARKER_V0: &[u8] = b"!toc ";
@@ -951,6 +952,96 @@ fn parse_char_space_group_trimmed_v0(
     Some(out)
 }
 
+fn is_safe_graphics_path_byte_v0(byte: u8) -> bool {
+    byte.is_ascii_alphanumeric() || matches!(byte, b'/' | b'.' | b'_' | b'-')
+}
+
+fn has_allowed_graphics_extension_v0(path: &[u8]) -> bool {
+    let Some(last_segment) = path.rsplit(|byte| *byte == b'/').next() else {
+        return false;
+    };
+    let Some(dot_index) = last_segment.iter().rposition(|byte| *byte == b'.') else {
+        return false;
+    };
+    if dot_index == 0 || dot_index + 1 >= last_segment.len() {
+        return false;
+    }
+    let ext = last_segment[dot_index + 1..]
+        .iter()
+        .map(u8::to_ascii_lowercase)
+        .collect::<Vec<u8>>();
+    matches!(ext.as_slice(), b"png" | b"jpg" | b"jpeg" | b"pdf")
+}
+
+fn normalize_graphics_path_v0(raw_path: &[u8]) -> Option<Vec<u8>> {
+    if raw_path.is_empty() {
+        return None;
+    }
+    if raw_path.starts_with(b"/") || raw_path.starts_with(b"\\") {
+        return None;
+    }
+    if raw_path.contains(&b'\\') || raw_path.contains(&b':') {
+        return None;
+    }
+    if !raw_path.iter().copied().all(is_safe_graphics_path_byte_v0) {
+        return None;
+    }
+
+    let mut normalized_segments = Vec::<Vec<u8>>::new();
+    for segment in raw_path.split(|byte| *byte == b'/') {
+        if segment.is_empty() || segment == b"." || segment == b".." {
+            return None;
+        }
+        normalized_segments.push(segment.to_vec());
+    }
+    if normalized_segments.is_empty() {
+        return None;
+    }
+
+    let mut normalized = Vec::<u8>::new();
+    for (segment_index, segment) in normalized_segments.iter().enumerate() {
+        if segment_index > 0 {
+            normalized.push(b'/');
+        }
+        normalized.extend_from_slice(segment);
+    }
+    if !has_allowed_graphics_extension_v0(&normalized) {
+        let has_explicit_extension = normalized
+            .rsplit(|byte| *byte == b'/')
+            .next()
+            .map(|last: &[u8]| last.contains(&b'.'))
+            .unwrap_or(false);
+        if has_explicit_extension {
+            return None;
+        }
+        normalized.extend_from_slice(b".png");
+    }
+    Some(normalized)
+}
+
+fn consume_includegraphics_path_v0(tokens: &[TokenV0], index: usize) -> Option<(Vec<u8>, usize)> {
+    if !matches!(
+        tokens.get(index),
+        Some(TokenV0::ControlSeq(name)) if name.as_slice() == INCLUDEGRAPHICS_CONTROL_V0
+    ) {
+        return None;
+    }
+    let group_index = skip_spaces(tokens, index + 1);
+    if matches!(tokens.get(group_index), Some(TokenV0::Char(b'['))) {
+        return None;
+    }
+    let (group_start, group_end, next) = consume_group_bounds(tokens, group_index)?;
+    let mut raw_path = Vec::<u8>::new();
+    for token in &tokens[group_start..group_end] {
+        match token {
+            TokenV0::Char(byte) if is_safe_graphics_path_byte_v0(*byte) => raw_path.push(*byte),
+            _ => return None,
+        }
+    }
+    let normalized = normalize_graphics_path_v0(&raw_path)?;
+    Some((normalized, next))
+}
+
 fn consume_tabular_environment_v0(tokens: &[TokenV0], index: usize, out: &mut Vec<u8>) -> Option<usize> {
     let (env_name, mut cursor) = consume_env_name_command_v0(tokens, index, BEGIN_CONTROL_V0)?;
     if env_name.as_slice() != TABULAR_ENV_V0 {
@@ -1030,13 +1121,19 @@ fn consume_tabular_environment_v0(tokens: &[TokenV0], index: usize, out: &mut Ve
     }
 }
 
-fn consume_figure_environment_v0(tokens: &[TokenV0], index: usize, out: &mut Vec<u8>) -> Option<usize> {
+fn consume_figure_environment_v0(
+    tokens: &[TokenV0],
+    index: usize,
+    out: &mut Vec<u8>,
+    figure_anchor_id: u32,
+) -> Option<usize> {
     let (env_name, mut cursor) = consume_env_name_command_v0(tokens, index, BEGIN_CONTROL_V0)?;
     if env_name.as_slice() != FIGURE_ENV_V0 {
         return None;
     }
 
     let mut caption: Option<Vec<u8>> = None;
+    let mut image_path: Option<Vec<u8>> = None;
     loop {
         cursor = skip_spaces(tokens, cursor);
         match tokens.get(cursor) {
@@ -1053,6 +1150,13 @@ fn consume_figure_environment_v0(tokens: &[TokenV0], index: usize, out: &mut Vec
                 push_paragraph_break(out);
                 out.extend_from_slice(FIGURE_BOX_PREFIX_MARKER_V0);
                 push_newline(out);
+                if let Some(path) = &image_path {
+                    out.extend_from_slice(FIGURE_IMAGE_PREFIX_MARKER_V0);
+                    out.extend_from_slice(figure_anchor_id.to_string().as_bytes());
+                    out.push(b' ');
+                    out.extend_from_slice(path);
+                    push_newline(out);
+                }
                 out.extend_from_slice(FIGURE_CAPTION_PREFIX_MARKER_V0);
                 out.extend_from_slice(&figure_caption);
                 push_newline(out);
@@ -1077,7 +1181,12 @@ fn consume_figure_environment_v0(tokens: &[TokenV0], index: usize, out: &mut Vec
                 cursor = next;
             }
             Some(TokenV0::ControlSeq(name)) if name.as_slice() == INCLUDEGRAPHICS_CONTROL_V0 => {
-                return None;
+                if image_path.is_some() {
+                    return None;
+                }
+                let (path, next) = consume_includegraphics_path_v0(tokens, cursor)?;
+                image_path = Some(path);
+                cursor = next;
             }
             Some(TokenV0::ControlSeq(name))
                 if name.as_slice() == b"protect" || name.as_slice() == b"relax" =>
@@ -1429,9 +1538,6 @@ fn consume_body_environment_v0(tokens: &[TokenV0], index: usize, out: &mut Vec<u
     }
     if env_name.as_slice() == TABULAR_ENV_V0 {
         return consume_tabular_environment_v0(tokens, index, out);
-    }
-    if env_name.as_slice() == FIGURE_ENV_V0 {
-        return consume_figure_environment_v0(tokens, index, out);
     }
     None
 }
@@ -1962,9 +2068,9 @@ pub(crate) fn extract_typeset_minimal_text_body_v0(tokens: &[TokenV0]) -> Option
                 pending_noindent_after_heading = false;
                 let (env_name, _) = consume_env_name_command_v0(tokens, index, BEGIN_CONTROL_V0)?;
                 if env_name.as_slice() == FIGURE_ENV_V0 {
-                    index = consume_figure_environment_v0(tokens, index, &mut body)?;
                     let anchor_id = next_anchor_id;
                     next_anchor_id = next_anchor_id.checked_add(1)?;
+                    index = consume_figure_environment_v0(tokens, index, &mut body, anchor_id)?;
                     pending_label_target = Some(PendingLabelTargetV0 {
                         anchor_id,
                         kind: LabelKindV0::Figure,

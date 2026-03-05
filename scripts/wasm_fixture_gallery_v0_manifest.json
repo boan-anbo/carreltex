@@ -81,9 +81,9 @@
     },
     {
       "id": "typeset_demo_graphics_probe_v0",
-      "tags": ["typeset", "graphics", "probe", "ni"],
-      "expected_status": "NI",
-      "purpose": "Probes graphics include seam planned for future typed artifacts."
+      "tags": ["typeset", "graphics", "probe", "ok"],
+      "expected_status": "OK",
+      "purpose": "Exercises includegraphics stub v1 in figure mode so graphics dependencies become auditable resource edges."
     },
     {
       "id": "typeset_demo_graphicspath_probe_v0",
