@@ -212,6 +212,16 @@ async function loadFixtureCasesV0() {
       fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_input_include_probe_v0.tex',
     },
     {
+      id: 'typeset_demo_input_probe_v0',
+      mode: 'typeset',
+      fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_input_probe_v0.tex',
+    },
+    {
+      id: 'typeset_demo_include_probe_v0',
+      mode: 'typeset',
+      fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_include_probe_v0.tex',
+    },
+    {
       id: 'typeset_demo_package_require_probe_v0',
       mode: 'typeset',
       fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_package_require_probe_v0.tex',
@@ -488,6 +498,12 @@ function normalizePathHintTokenV0(rawValue, hintType) {
   if (trimmed.length === 0) {
     return null;
   }
+  if (trimmed.startsWith('/') || trimmed.startsWith('\\')) {
+    throw new Error(`resource_hints_v0 ${hintType} rejects absolute path '${trimmed}'`);
+  }
+  if (/^[A-Za-z]:([\\/]|$)/.test(trimmed)) {
+    throw new Error(`resource_hints_v0 ${hintType} rejects drive path '${trimmed}'`);
+  }
   const normalizedSeparators = trimmed.replace(/\\/g, '/');
   const segments = normalizedSeparators
     .split('/')
@@ -498,6 +514,9 @@ function normalizePathHintTokenV0(rawValue, hintType) {
   }
   if (segments.some((segment) => segment === '..' || segment.includes('..'))) {
     throw new Error(`resource_hints_v0 ${hintType} has unsafe path token '${trimmed}'`);
+  }
+  if (segments.some((segment) => !/^[A-Za-z0-9._-]+$/.test(segment))) {
+    throw new Error(`resource_hints_v0 ${hintType} has unsupported path segment '${trimmed}'`);
   }
   const normalized = segments.join('__');
   if (!isSafeResolverTokenV0(normalized)) {
@@ -697,6 +716,19 @@ function extractResourceHintEntriesFromSourceV0(sourceBytes) {
 
   const addHintValues = (hintType, values, startByte, endByte, defaultExtension = null) => {
     for (const rawValue of values) {
+      if (hintType === 'hyperref_url') {
+        const normalizedUrl = typeof rawValue === 'string' ? rawValue.trim() : '';
+        if (normalizedUrl.length === 0) {
+          continue;
+        }
+        const dedupeKey = `${hintType}\u0000${normalizedUrl}`;
+        if (seen.has(dedupeKey)) {
+          continue;
+        }
+        seen.add(dedupeKey);
+        addResourceHintEntryV0(entries, sourceBytes, hintType, normalizedUrl, startByte, endByte);
+        continue;
+      }
       const normalizedPath = normalizePathHintTokenV0(rawValue, hintType);
       if (!normalizedPath) {
         continue;
