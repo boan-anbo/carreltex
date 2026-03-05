@@ -311,12 +311,12 @@ fn typeset_minimal_labels_and_refs_emit_metadata_and_resolve_inline_values() {
     let body = extract_typeset_body(main);
     let text = String::from_utf8(body).expect("body should be valid utf8");
     assert!(text.contains("See 1 and ??."), "body={text:?}");
-    assert!(text.contains("Figure 2."), "body={text:?}");
+    assert!(text.contains("Figure 1."), "body={text:?}");
     assert!(
         text.contains("!l sec:intro 1 heading 1 Intro"),
         "body={text:?}"
     );
-    assert!(text.contains("!l fig:cap 2 figure 0 -"), "body={text:?}");
+    assert!(text.contains("!l fig:cap 2 figure 1 -"), "body={text:?}");
     assert!(text.contains("!r sec:intro "), "body={text:?}");
     assert!(text.contains("!r sec:missing "), "body={text:?}");
     assert!(text.contains("!r fig:cap "), "body={text:?}");
@@ -335,6 +335,16 @@ fn typeset_minimal_crossref_pass_v1_wraps_resolved_refs_as_links_when_hyperref_i
     assert!(text.contains("!r sec:missing 3 0"), "body={text:?}");
     assert!(text.contains("!ra 1 1"), "body={text:?}");
     assert!(text.contains("!u 2 https://example.com"), "body={text:?}");
+}
+
+#[test]
+fn typeset_minimal_figure_refs_use_figure_ordinals_and_anchor_links() {
+    let main = b"\\documentclass{article}\\begin{document}\\section{Intro}\\begin{figure}\\caption{First fig}\\end{figure}\\label{fig:first}Reference \\ref{fig:first}.\\href{https://example.com}{link}\\end{document}";
+    let body = extract_typeset_body(main);
+    let text = String::from_utf8(body).expect("body should be valid utf8");
+    assert!(text.contains("Reference <1>."), "body={text:?}");
+    assert!(text.contains("!l fig:first 2 figure 1 -"), "body={text:?}");
+    assert!(text.contains("!ra 1 2"), "body={text:?}");
 }
 
 #[test]
@@ -645,7 +655,7 @@ fn typeset_minimal_figure_stub_emits_placeholder_and_caption_markers() {
     let body = extract_typeset_body(main);
     let text = String::from_utf8(body).expect("body should be valid utf8");
     assert!(
-        text.contains("Before.\n\n!gbox\n!gcap Demo figure caption with [emphasis].\n\nAfter."),
+        text.contains("Before.\n\n!gbox\n!gcap Figure 1: Demo figure caption with [emphasis].\n\nAfter."),
         "body={text:?}"
     );
 }
@@ -656,7 +666,7 @@ fn typeset_minimal_figure_stub_accepts_includegraphics_path_marker() {
     let body = extract_typeset_body(main);
     let text = String::from_utf8(body).expect("body should be valid utf8");
     assert!(
-        text.contains("!gbox\n!gimg 1 demo.png\n!gcap Nope"),
+        text.contains("!gbox\n!gimg 1 demo.png\n!gcap Figure 1: Nope"),
         "body={text:?}"
     );
 }
@@ -667,6 +677,18 @@ fn typeset_minimal_figure_stub_accepts_includegraphics_without_extension_by_norm
     let body = extract_typeset_body(main);
     let text = String::from_utf8(body).expect("body should be valid utf8");
     assert!(text.contains("!gimg 1 figs/demo.png"), "body={text:?}");
+}
+
+#[test]
+fn typeset_minimal_figure_ordinals_stay_stable_with_interleaved_headings() {
+    let main = b"\\documentclass{article}\\begin{document}\\section{One}\\begin{figure}\\caption{First}\\end{figure}\\label{fig:first}\\subsection{Two}\\begin{figure}\\caption{Second}\\end{figure}\\label{fig:second}Refs: \\ref{fig:first}, \\ref{fig:second}.\\end{document}";
+    let body = extract_typeset_body(main);
+    let text = String::from_utf8(body).expect("body should be valid utf8");
+    assert!(text.contains("!gcap Figure 1: First"), "body={text:?}");
+    assert!(text.contains("!gcap Figure 2: Second"), "body={text:?}");
+    assert!(text.contains("!l fig:first 2 figure 1 -"), "body={text:?}");
+    assert!(text.contains("!l fig:second 4 figure 2 -"), "body={text:?}");
+    assert!(text.contains("Refs: 1, 2."), "body={text:?}");
 }
 
 #[test]

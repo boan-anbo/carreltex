@@ -90,6 +90,7 @@ struct LabelEntryMetaV0 {
     anchor_id: u32,
     kind: LabelKindV0,
     level: Option<u8>,
+    figure_ordinal: Option<u32>,
     title: Option<Vec<u8>>,
 }
 
@@ -98,6 +99,7 @@ struct PendingLabelTargetV0 {
     anchor_id: u32,
     kind: LabelKindV0,
     level: Option<u8>,
+    figure_ordinal: Option<u32>,
     title: Option<Vec<u8>>,
 }
 
@@ -1183,6 +1185,7 @@ fn consume_figure_environment_v0(
     index: usize,
     out: &mut Vec<u8>,
     figure_anchor_id: u32,
+    figure_ordinal: u32,
 ) -> Option<usize> {
     let (env_name, mut cursor) = consume_env_name_command_v0(tokens, index, BEGIN_CONTROL_V0)?;
     if env_name.as_slice() != FIGURE_ENV_V0 {
@@ -1215,6 +1218,9 @@ fn consume_figure_environment_v0(
                     push_newline(out);
                 }
                 out.extend_from_slice(FIGURE_CAPTION_PREFIX_MARKER_V0);
+                out.extend_from_slice(b"Figure ");
+                out.extend_from_slice(figure_ordinal.to_string().as_bytes());
+                out.extend_from_slice(b": ");
                 out.extend_from_slice(&figure_caption);
                 push_newline(out);
                 push_paragraph_break(out);
@@ -2141,27 +2147,35 @@ fn apply_crossref_pass_v1(
                 return None;
             }
             let key = body[key_start..key_end].to_vec();
-            let resolved_anchor_id = artifacts
-                .labels_by_key
-                .get(&key)
-                .map(|entry| entry.anchor_id);
-            if let Some(anchor_id) = resolved_anchor_id {
-                if let Some(label) = artifacts.labels_by_key.get(&key) {
-                    if matches!(label.kind, LabelKindV0::Heading)
-                        && !artifacts.heading_anchor_ids.contains_key(&anchor_id)
-                    {
-                        return None;
-                    }
-                }
+            let resolved_label = artifacts.labels_by_key.get(&key);
+            let resolved_anchor_id = resolved_label.map(|entry| entry.anchor_id);
+            let resolved_value = resolved_label.and_then(|entry| match entry.kind {
+                LabelKindV0::Heading => Some(entry.anchor_id),
+                LabelKindV0::Figure => entry.figure_ordinal,
+            });
+            if resolved_anchor_id.is_some() != resolved_value.is_some() {
+                return None;
             }
             if let Some(anchor_id) = resolved_anchor_id {
+                let label = resolved_label?;
+                if matches!(label.kind, LabelKindV0::Heading)
+                    && !artifacts.heading_anchor_ids.contains_key(&anchor_id)
+                {
+                    return None;
+                }
+                if matches!(label.kind, LabelKindV0::Figure) && label.figure_ordinal.is_none() {
+                    return None;
+                }
+            }
+            if let Some(value) = resolved_value {
                 if artifacts.hyperref_enabled {
                     out.push(LINK_START_MARKER_V0);
-                    out.extend_from_slice(anchor_id.to_string().as_bytes());
+                    out.extend_from_slice(value.to_string().as_bytes());
                     out.push(LINK_END_MARKER_V0);
+                    let anchor_id = resolved_anchor_id?;
                     ref_link_anchor_ids.push(anchor_id);
                 } else {
-                    out.extend_from_slice(anchor_id.to_string().as_bytes());
+                    out.extend_from_slice(value.to_string().as_bytes());
                 }
             } else {
                 out.extend_from_slice(b"??");
@@ -2321,6 +2335,9 @@ fn consume_label_command_v0(
         return None;
     }
     let target = pending_label_target.take()?;
+    if matches!(target.kind, LabelKindV0::Figure) && target.figure_ordinal.is_none() {
+        return None;
+    }
     let (key, next) = parse_label_or_ref_key_group_v0(tokens, index)?;
     if labels_by_key.contains_key(&key) {
         return None;
@@ -2331,6 +2348,7 @@ fn consume_label_command_v0(
             anchor_id: target.anchor_id,
             kind: target.kind,
             level: target.level,
+            figure_ordinal: target.figure_ordinal,
             title: target.title,
         },
     );
@@ -2621,6 +2639,7 @@ pub(crate) fn extract_typeset_minimal_text_body_with_external_bib_v0(
     let mut ref_link_anchor_ids = Vec::<u32>::new();
     let mut cite_occurrences = Vec::<CiteOccurrenceMetaV0>::new();
     let mut next_anchor_id = 1u32;
+    let mut next_figure_ordinal = 1u32;
     let mut saw_maketitle = false;
     let mut saw_body_content_after_maketitle = false;
     let mut toc_requested = false;
@@ -2662,11 +2681,20 @@ pub(crate) fn extract_typeset_minimal_text_body_with_external_bib_v0(
                 if env_name.as_slice() == FIGURE_ENV_V0 {
                     let anchor_id = next_anchor_id;
                     next_anchor_id = next_anchor_id.checked_add(1)?;
-                    index = consume_figure_environment_v0(tokens, index, &mut body, anchor_id)?;
+                    let figure_ordinal = next_figure_ordinal;
+                    next_figure_ordinal = next_figure_ordinal.checked_add(1)?;
+                    index = consume_figure_environment_v0(
+                        tokens,
+                        index,
+                        &mut body,
+                        anchor_id,
+                        figure_ordinal,
+                    )?;
                     pending_label_target = Some(PendingLabelTargetV0 {
                         anchor_id,
                         kind: LabelKindV0::Figure,
                         level: None,
+                        figure_ordinal: Some(figure_ordinal),
                         title: None,
                     });
                 } else if env_name.as_slice() == THEBIBLIOGRAPHY_ENV_V0 {
@@ -2790,6 +2818,7 @@ pub(crate) fn extract_typeset_minimal_text_body_with_external_bib_v0(
                         anchor_id,
                         kind: LabelKindV0::Heading,
                         level: Some(level),
+                        figure_ordinal: None,
                         title: Some(title),
                     });
                 } else {
@@ -2934,7 +2963,11 @@ pub(crate) fn extract_typeset_minimal_text_body_with_external_bib_v0(
                 LabelKindV0::Figure => b"figure",
             });
             body.push(b' ');
-            body.extend_from_slice(entry.level.unwrap_or(0).to_string().as_bytes());
+            let level_or_figure = match entry.kind {
+                LabelKindV0::Heading => u32::from(entry.level.unwrap_or(0)),
+                LabelKindV0::Figure => entry.figure_ordinal.unwrap_or(0),
+            };
+            body.extend_from_slice(level_or_figure.to_string().as_bytes());
             body.push(b' ');
             if let Some(title) = &entry.title {
                 body.extend_from_slice(title);

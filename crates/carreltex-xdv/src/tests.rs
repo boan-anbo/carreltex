@@ -2313,6 +2313,33 @@ fn pdf_renderer_emits_internal_ref_and_external_href_annotations_v0() {
 }
 
 #[test]
+fn pdf_renderer_emits_figref_annotation_targeting_figure_anchor_v0() {
+    let xdv = write_dvi_v2_text_page_v0(
+        b"Prelude.\n\n@S {Intro}\n\n!gbox\n!gcap Figure 1: Demo caption.\n\nSee <1>.\n\n!l fig:demo 2 figure 1 -\n!r fig:demo 9 2\n!ra 1 2",
+    )
+    .expect("writer should accept figure and cross-ref marker lines");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+    let pdf_text = String::from_utf8_lossy(&pdf);
+    assert!(
+        pdf_text.contains("(See ) Tj") && pdf_text.contains("(1) Tj"),
+        "figref text should render resolved figure ordinal without placeholder: {pdf_text}"
+    );
+    let page_one = parse_pdf_object_body_v0(&pdf, 3).expect("page object");
+    let annots = parse_pdf_ref_ids_v0(&page_one, "/Annots");
+    assert_eq!(annots.len(), 1, "expected one internal figure ref annotation");
+    let annotation = parse_pdf_object_body_v0(&pdf, annots[0]).expect("annotation");
+    assert!(
+        annotation.contains("/Dest ["),
+        "figure ref annotation should use internal destination: {annotation}"
+    );
+    assert_eq!(
+        parse_pdf_annotation_dest_page_id_v0(&annotation),
+        Some(3),
+        "figure ref destination should target page containing figure anchor"
+    );
+}
+
+#[test]
 fn pdf_renderer_rejects_ref_annotation_target_with_missing_anchor_v0() {
     let xdv = write_dvi_v2_text_page_v0(b"See <1> only.\n\n!r sec:intro 1 1\n!ra 1 1")
         .expect("writer should accept marker lines");
@@ -2668,7 +2695,7 @@ fn pdf_renderer_rejects_table_width_overflow_v0() {
 #[test]
 fn pdf_renderer_figure_block_spacing_invariants_v0() {
     let xdv = write_dvi_v2_text_page_v0(
-        b"Before paragraph.\n\n!gbox\n!gimg 7 figures/demo.png\n!gcap Figure caption text.\n\nAfter paragraph.",
+        b"Before paragraph.\n\n!gbox\n!gimg 7 figures/demo.png\n!gcap Figure 1: Figure caption text.\n\nAfter paragraph.",
     )
     .expect("writer should accept figure marker lines");
     let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
@@ -2682,7 +2709,7 @@ fn pdf_renderer_figure_block_spacing_invariants_v0() {
         "graphics placeholder text should render with normalized path label: {pdf_text}"
     );
     assert!(
-        pdf_text.contains("(Figure caption text.) Tj"),
+        pdf_text.contains("(Figure 1: Figure caption text.) Tj"),
         "caption text should render: {pdf_text}"
     );
 
@@ -2695,7 +2722,8 @@ fn pdf_renderer_figure_block_spacing_invariants_v0() {
         tm_position_for_line_containing_text_v0(&pdf, "([ Figure placeholder: figures/demo.png ])")
             .expect("placeholder");
     let (caption_x, caption_y) =
-        tm_position_for_line_containing_text_v0(&pdf, "(Figure caption text.)").expect("caption");
+        tm_position_for_line_containing_text_v0(&pdf, "(Figure 1: Figure caption text.)")
+            .expect("caption");
     let (after_x, after_y) =
         tm_position_for_line_containing_text_v0(&pdf, "(After paragraph.)").expect("after");
 
