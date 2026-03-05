@@ -262,6 +262,33 @@ fn max_tm_gap_pt_for_line_containing_v0(pdf: &[u8], needle: &str) -> Option<f32>
     None
 }
 
+fn tm_count_for_line_containing_v0(pdf: &[u8], needle: &str) -> usize {
+    let text = String::from_utf8_lossy(pdf);
+    for line in text.lines() {
+        if !line.contains(needle) {
+            continue;
+        }
+        let fields = line.split_whitespace().collect::<Vec<_>>();
+        let mut count = 0usize;
+        let mut index = 0usize;
+        while index + 6 < fields.len() {
+            if fields[index] == "1"
+                && fields[index + 1] == "0"
+                && fields[index + 2] == "0"
+                && fields[index + 3] == "1"
+                && fields[index + 6] == "Tm"
+            {
+                count += 1;
+                index += 7;
+                continue;
+            }
+            index += 1;
+        }
+        return count;
+    }
+    0
+}
+
 fn tm_x_for_line_containing_text_v0(pdf: &[u8], needle: &str) -> Option<f32> {
     let text = String::from_utf8_lossy(pdf);
     for line in text.lines() {
@@ -382,6 +409,35 @@ fn pdf_renderer_caps_segment_tm_gap_for_styled_line_v0() {
     assert!(
         max_tm_gap <= 24.0,
         "styled line tm gap should be capped, got {max_tm_gap}"
+    );
+}
+
+#[test]
+fn pdf_renderer_inline_wrapper_spacing_invariants_v0() {
+    let xdv =
+        write_dvi_v2_text_page_v0(b"word[mid]word word [lead] trail,{bold}!")
+            .expect("writer should accept styled text");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+    let line_text = String::from_utf8_lossy(&pdf);
+    assert!(
+        line_text.contains("(word) Tj /F2 12 Tf (mid) Tj /F1 12 Tf (word word ) Tj /F2 12 Tf (lead) Tj"),
+        "styled boundary sequence missing: {line_text}"
+    );
+    assert!(
+        line_text.contains("/F1 12 Tf ( trail,) Tj /F3 12 Tf (bold) Tj /F1 12 Tf (!) Tj"),
+        "styled punctuation sequence missing: {line_text}"
+    );
+    assert!(
+        !line_text.contains("(word ) Tj /F2 12 Tf (mid)"),
+        "unexpected extra space before inline emph boundary: {line_text}"
+    );
+    let tm_count = tm_count_for_line_containing_v0(&pdf, "(word)");
+    assert_eq!(tm_count, 1, "styled line should use a single Tm: {line_text}");
+    let max_tm_gap = max_tm_gap_pt_for_line_containing_v0(&pdf, "(word)")
+        .expect("styled line should parse");
+    assert!(
+        max_tm_gap <= 0.02,
+        "styled inline boundary should not create matrix gaps: {max_tm_gap}"
     );
 }
 
@@ -607,6 +663,39 @@ fn pdf_renderer_applies_quote_indent_and_hides_prefix_v0() {
     assert!(xs.len() >= 2, "expected at least two rendered lines, got {xs:?}");
     assert!(xs[0] > 72.0, "quote line should be indented: {xs:?}");
     assert!((xs[0] - xs[1]).abs() <= 0.02, "quote continuation should keep indent: {xs:?}");
+}
+
+#[test]
+fn pdf_renderer_quote_indent_and_paragraph_break_invariants_v0() {
+    let xdv = write_dvi_v2_text_page_v0(
+        b"\n> quote first line\n> quote continuation\n\n> second paragraph line\n> second continuation",
+    )
+    .expect("writer should accept quote text");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+    let text = String::from_utf8_lossy(&pdf);
+    assert!(
+        !text.contains("(> quote first line) Tj"),
+        "quote prefix should be hidden"
+    );
+    let (x1, y1) =
+        tm_position_for_line_containing_text_v0(&pdf, "(quote first line)").expect("line 1");
+    let (x2, y2) =
+        tm_position_for_line_containing_text_v0(&pdf, "(quote continuation)").expect("line 2");
+    let (x3, y3) =
+        tm_position_for_line_containing_text_v0(&pdf, "(second paragraph line)").expect("line 3");
+    let (x4, y4) =
+        tm_position_for_line_containing_text_v0(&pdf, "(second continuation)").expect("line 4");
+
+    let epsilon_pt = 0.02f32;
+    assert!((x1 - x2).abs() <= epsilon_pt, "quote line x drift: {x1} vs {x2}");
+    assert!((x1 - x3).abs() <= epsilon_pt, "quote paragraph x drift: {x1} vs {x3}");
+    assert!((x1 - x4).abs() <= epsilon_pt, "quote line x drift: {x1} vs {x4}");
+    assert!((y1 - y2 - 14.0).abs() <= epsilon_pt, "quote line gap mismatch");
+    assert!(
+        (y2 - y3 - 28.0).abs() <= epsilon_pt,
+        "quote paragraph gap mismatch"
+    );
+    assert!((y3 - y4 - 14.0).abs() <= epsilon_pt, "quote line gap mismatch");
 }
 
 #[test]
