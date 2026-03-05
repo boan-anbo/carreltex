@@ -419,8 +419,8 @@ async function run() {
   if (!streamOneBody || !streamTwoBody) {
     throw new Error('missing content stream object bodies');
   }
-  const footnoteOneY = parseTmYForNeedleV0(streamOneBody, '(1');
-  const footnoteTwoY = parseTmYForNeedleV0(streamTwoBody, '(2');
+  const footnoteOneY = parseTmYForNeedleV0(streamOneBody, '(1 First demo footnote text');
+  const footnoteTwoY = parseTmYForNeedleV0(streamTwoBody, '(2 Second demo footnote text');
   if (footnoteOneY == null || footnoteTwoY == null) {
     throw new Error('expected footnote lines on both page 1 and page 2');
   }
