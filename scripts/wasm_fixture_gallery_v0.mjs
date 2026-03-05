@@ -39,6 +39,20 @@ const MAX_GRAPHICS_PATH_BYTES_V0 = 256;
 const MAX_RESOURCE_HINT_ENTRIES_V0 = 512;
 const MAX_RESOURCE_HINT_VALUE_BYTES_V0 = 256;
 const RESOURCE_HINTS_V0_VERSION = 1;
+const DELTA_POLICY_V1_SCHEMA = 'wasm_fixture_gallery_delta_policy_v1';
+const DELTA_POLICY_V1_VERSION = 1;
+const BASELINE_CMP_CLASS_MATCH_V1 = 'MATCH';
+const BASELINE_CMP_CLASS_DIFF_OK_V1 = 'DIFF_OK';
+const BASELINE_CMP_CLASS_DIFF_SUSPECT_V1 = 'DIFF_SUSPECT';
+const BASELINE_CMP_CLASS_MISSING_V1 = 'MISSING_BASELINE';
+const BASELINE_CMP_CLASS_SKIP_V1 = 'SKIP';
+const BASELINE_CMP_CLASS_ALLOWLIST_V1 = new Set([
+  BASELINE_CMP_CLASS_MATCH_V1,
+  BASELINE_CMP_CLASS_DIFF_OK_V1,
+  BASELINE_CMP_CLASS_DIFF_SUSPECT_V1,
+  BASELINE_CMP_CLASS_MISSING_V1,
+  BASELINE_CMP_CLASS_SKIP_V1,
+]);
 const RESOURCE_HINT_TYPE_ALLOWLIST_V0 = new Set([
   'tex_input',
   'tex_include',
@@ -128,6 +142,356 @@ function parseBoolEnvV0(value) {
   }
   const normalized = `${value}`.trim().toLowerCase();
   return normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on';
+}
+
+function countRegexMatchesV1(text, regex) {
+  let count = 0;
+  let match;
+  while ((match = regex.exec(text)) !== null) {
+    count += 1;
+  }
+  return count;
+}
+
+function decodePdfStringBytesV1(encoded) {
+  const out = [];
+  for (let index = 0; index < encoded.length; index += 1) {
+    const byte = encoded.charCodeAt(index) & 0xff;
+    if (byte !== 0x5c) {
+      out.push(byte);
+      continue;
+    }
+    if (index + 1 >= encoded.length) {
+      out.push(0x5c);
+      continue;
+    }
+    const next = encoded.charCodeAt(index + 1) & 0xff;
+    index += 1;
+    if (next === 0x5c || next === 0x28 || next === 0x29) {
+      out.push(next);
+      continue;
+    }
+    if (next === 0x6e) {
+      out.push(0x0a);
+      continue;
+    }
+    if (next === 0x72) {
+      out.push(0x0d);
+      continue;
+    }
+    if (next === 0x74) {
+      out.push(0x09);
+      continue;
+    }
+    if (next === 0x62) {
+      out.push(0x08);
+      continue;
+    }
+    if (next === 0x66) {
+      out.push(0x0c);
+      continue;
+    }
+    if (next >= 0x30 && next <= 0x37) {
+      let oct = String.fromCharCode(next);
+      for (let i = 0; i < 2 && index + 1 < encoded.length; i += 1) {
+        const octNext = encoded.charCodeAt(index + 1) & 0xff;
+        if (octNext < 0x30 || octNext > 0x37) {
+          break;
+        }
+        index += 1;
+        oct += String.fromCharCode(octNext);
+      }
+      out.push(Number.parseInt(oct, 8) & 0xff);
+      continue;
+    }
+    out.push(next);
+  }
+  return Uint8Array.from(out);
+}
+
+function extractPdfTextRunsV1(pdfText) {
+  const runs = [];
+  const regex = /\(((?:\\.|[^\\()])*)\)\s*Tj/g;
+  let match;
+  while ((match = regex.exec(pdfText)) !== null) {
+    const encoded = match[1];
+    const bytes = decodePdfStringBytesV1(encoded);
+    runs.push({
+      encoded,
+      bytes,
+      text: Buffer.from(bytes).toString('utf8'),
+    });
+  }
+  return runs;
+}
+
+function computePdfMetricsV1(pdfBytes) {
+  const pdfText = Buffer.from(pdfBytes).toString('latin1');
+  const tmRegex = /(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s+Tm/g;
+  const textRunRegex = /\(((?:\\.|[^\\()])*)\)\s*Tj/g;
+  const lineGlyphCounts = [];
+  const lineYValues = [];
+  let totalGlyphs = 0;
+  let footnoteMarkerCount = 0;
+  let currentLineGlyphs = null;
+  let tmMatch;
+  let textRunMatch;
+  tmRegex.lastIndex = 0;
+  textRunRegex.lastIndex = 0;
+  while (true) {
+    const tmIndex = tmRegex.lastIndex;
+    const tjIndex = textRunRegex.lastIndex;
+    tmMatch = tmRegex.exec(pdfText);
+    textRunMatch = textRunRegex.exec(pdfText);
+    if (!tmMatch && !textRunMatch) {
+      break;
+    }
+    const tmPos = tmMatch ? tmMatch.index : Number.POSITIVE_INFINITY;
+    const tjPos = textRunMatch ? textRunMatch.index : Number.POSITIVE_INFINITY;
+    if (tmPos <= tjPos) {
+      if (currentLineGlyphs !== null) {
+        lineGlyphCounts.push(currentLineGlyphs);
+      }
+      const y = Number.parseFloat(tmMatch[2]);
+      if (Number.isFinite(y)) {
+        lineYValues.push(y);
+      }
+      currentLineGlyphs = 0;
+      textRunRegex.lastIndex = tjIndex;
+      continue;
+    }
+    const runBytes = decodePdfStringBytesV1(textRunMatch[1]);
+    const runText = Buffer.from(runBytes).toString('utf8');
+    totalGlyphs += runBytes.length;
+    if (currentLineGlyphs !== null) {
+      currentLineGlyphs += runBytes.length;
+    }
+    const markerMatches = runText.match(/\^[0-9]+/g);
+    if (markerMatches) {
+      footnoteMarkerCount += markerMatches.length;
+    }
+    tmRegex.lastIndex = tmIndex;
+  }
+  if (currentLineGlyphs !== null) {
+    lineGlyphCounts.push(currentLineGlyphs);
+  }
+  const linkRectRegex = /\/Rect\s*\[\s*(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s*\]/g;
+  let minLinkRectWidthPt = null;
+  let maxLinkRectWidthPt = null;
+  let minLinkRectHeightPt = null;
+  let maxLinkRectHeightPt = null;
+  let linkRectCount = 0;
+  let linkRectMatch;
+  while ((linkRectMatch = linkRectRegex.exec(pdfText)) !== null) {
+    const x0 = Number.parseFloat(linkRectMatch[1]);
+    const y0 = Number.parseFloat(linkRectMatch[2]);
+    const x1 = Number.parseFloat(linkRectMatch[3]);
+    const y1 = Number.parseFloat(linkRectMatch[4]);
+    if (![x0, y0, x1, y1].every((value) => Number.isFinite(value))) {
+      continue;
+    }
+    const width = Math.abs(x1 - x0);
+    const height = Math.abs(y1 - y0);
+    minLinkRectWidthPt = minLinkRectWidthPt === null ? width : Math.min(minLinkRectWidthPt, width);
+    maxLinkRectWidthPt = maxLinkRectWidthPt === null ? width : Math.max(maxLinkRectWidthPt, width);
+    minLinkRectHeightPt = minLinkRectHeightPt === null ? height : Math.min(minLinkRectHeightPt, height);
+    maxLinkRectHeightPt = maxLinkRectHeightPt === null ? height : Math.max(maxLinkRectHeightPt, height);
+    linkRectCount += 1;
+  }
+  const textRuns = extractPdfTextRunsV1(pdfText);
+  const pageCount = countRegexMatchesV1(pdfText, /\/Type\s*\/Page\b/g);
+  const annotsCount = countRegexMatchesV1(pdfText, /\/Subtype\s*\/Link\b/g);
+  const uriCount = countRegexMatchesV1(pdfText, /\/URI\s*\(/g);
+  const linesCount = lineGlyphCounts.length;
+  const maxLineGlyphs = lineGlyphCounts.length > 0 ? Math.max(...lineGlyphCounts) : 0;
+  const minYPt = lineYValues.length > 0 ? Math.min(...lineYValues) : 0;
+  const maxYPt = lineYValues.length > 0 ? Math.max(...lineYValues) : 0;
+  return {
+    page_count: pageCount,
+    total_lines: linesCount,
+    total_glyphs: totalGlyphs,
+    max_line_glyphs: maxLineGlyphs,
+    min_y_pt: minYPt,
+    max_y_pt: maxYPt,
+    annots_count: annotsCount,
+    uri_count: uriCount,
+    footnote_marker_count: footnoteMarkerCount,
+    pdf_text_run_count: textRuns.length,
+    min_link_rect_width_pt: minLinkRectWidthPt ?? 0,
+    max_link_rect_width_pt: maxLinkRectWidthPt ?? 0,
+    min_link_rect_height_pt: minLinkRectHeightPt ?? 0,
+    max_link_rect_height_pt: maxLinkRectHeightPt ?? 0,
+    link_rect_count: linkRectCount,
+  };
+}
+
+function computeXdvMetricsV1(xdvBytes) {
+  const xdvText = Buffer.from(xdvBytes).toString('latin1');
+  const newlineCount = countRegexMatchesV1(xdvText, /\n/g);
+  const formFeedCount = countRegexMatchesV1(xdvText, /\f/g);
+  return {
+    byte_length: xdvBytes.length,
+    newline_count: newlineCount,
+    formfeed_count: formFeedCount,
+  };
+}
+
+function buildBaselineMetricsV1(xdvBytes, pdfBytes, logBytes, summary) {
+  const xdvMetrics = computeXdvMetricsV1(xdvBytes);
+  const pdfMetrics = computePdfMetricsV1(pdfBytes);
+  return {
+    schema: 'baseline_metrics_v1',
+    xdv_sha256: summary.artifact_sha256.main_xdv,
+    pdf_sha256: summary.artifact_sha256.main_pdf,
+    xdv_bytes: xdvBytes.length,
+    pdf_bytes: pdfBytes.length,
+    log_bytes: logBytes.length,
+    resolved_resources_count: Number(summary.resolved_resources_count ?? 0),
+    missing_resources_count: Number(summary.missing_resources_count ?? 0),
+    ...xdvMetrics,
+    ...pdfMetrics,
+  };
+}
+
+function normalizeThresholdV1(value, key) {
+  if (!Number.isFinite(value) || value < 0) {
+    throw new Error(`delta policy threshold '${key}' must be a non-negative number`);
+  }
+  return Number(value);
+}
+
+async function loadDeltaPolicyV1(policyPathRaw) {
+  const policyPath = path.resolve(policyPathRaw);
+  const bytes = await readFile(policyPath);
+  let parsed;
+  try {
+    parsed = JSON.parse(bytes.toString('utf8'));
+  } catch {
+    throw new Error(`invalid delta policy json: ${policyPath}`);
+  }
+  if (parsed?.schema !== DELTA_POLICY_V1_SCHEMA) {
+    throw new Error(`delta policy schema must be ${DELTA_POLICY_V1_SCHEMA}`);
+  }
+  if (parsed?.version !== DELTA_POLICY_V1_VERSION) {
+    throw new Error(`delta policy version must be ${DELTA_POLICY_V1_VERSION}`);
+  }
+  const okCasesRequireMatch = parsed?.ok_cases_require_match !== false;
+  const allowlistRaw = parsed?.ok_case_allowlist;
+  const okCaseAllowlist = {};
+  if (allowlistRaw && typeof allowlistRaw === 'object' && !Array.isArray(allowlistRaw)) {
+    for (const [caseId, entry] of Object.entries(allowlistRaw)) {
+      if (typeof caseId !== 'string' || caseId.trim() === '') {
+        throw new Error('delta policy allowlist has invalid case id');
+      }
+      const reason = typeof entry?.reason === 'string' ? entry.reason.trim() : '';
+      const expires = typeof entry?.expires === 'string' ? entry.expires.trim() : '';
+      if (!reason) {
+        throw new Error(`delta policy allowlist entry for ${caseId} missing reason`);
+      }
+      okCaseAllowlist[caseId] = {
+        reason,
+        expires,
+      };
+    }
+  }
+  const nonOkMismatchClass = `${parsed?.non_ok_mismatch_class ?? BASELINE_CMP_CLASS_DIFF_OK_V1}`;
+  if (!BASELINE_CMP_CLASS_ALLOWLIST_V1.has(nonOkMismatchClass)) {
+    throw new Error(`delta policy has unsupported non_ok_mismatch_class: ${nonOkMismatchClass}`);
+  }
+  const okAllowlistedMismatchClass = `${parsed?.ok_allowlisted_mismatch_class ?? BASELINE_CMP_CLASS_DIFF_OK_V1}`;
+  if (!BASELINE_CMP_CLASS_ALLOWLIST_V1.has(okAllowlistedMismatchClass)) {
+    throw new Error(`delta policy has unsupported ok_allowlisted_mismatch_class: ${okAllowlistedMismatchClass}`);
+  }
+  const missingBaselineClass = `${parsed?.missing_baseline_class ?? BASELINE_CMP_CLASS_MISSING_V1}`;
+  if (!BASELINE_CMP_CLASS_ALLOWLIST_V1.has(missingBaselineClass)) {
+    throw new Error(`delta policy has unsupported missing_baseline_class: ${missingBaselineClass}`);
+  }
+  const skipClass = `${parsed?.skip_class ?? BASELINE_CMP_CLASS_SKIP_V1}`;
+  if (!BASELINE_CMP_CLASS_ALLOWLIST_V1.has(skipClass)) {
+    throw new Error(`delta policy has unsupported skip_class: ${skipClass}`);
+  }
+  const thresholdsRaw = parsed?.metrics_thresholds ?? {};
+  if (typeof thresholdsRaw !== 'object' || thresholdsRaw === null || Array.isArray(thresholdsRaw)) {
+    throw new Error('delta policy metrics_thresholds must be an object');
+  }
+  const metricsThresholds = {
+    max_page_count_delta: normalizeThresholdV1(thresholdsRaw.max_page_count_delta ?? 0, 'max_page_count_delta'),
+    max_total_lines_delta: normalizeThresholdV1(thresholdsRaw.max_total_lines_delta ?? 0, 'max_total_lines_delta'),
+    max_total_glyphs_delta: normalizeThresholdV1(thresholdsRaw.max_total_glyphs_delta ?? 0, 'max_total_glyphs_delta'),
+    max_annots_delta: normalizeThresholdV1(thresholdsRaw.max_annots_delta ?? 0, 'max_annots_delta'),
+    max_footnote_marker_delta: normalizeThresholdV1(
+      thresholdsRaw.max_footnote_marker_delta ?? 0,
+      'max_footnote_marker_delta',
+    ),
+  };
+  return {
+    path: policyPath,
+    sha256: sha256HexV0(bytes),
+    ok_cases_require_match: okCasesRequireMatch,
+    ok_case_allowlist: okCaseAllowlist,
+    non_ok_mismatch_class: nonOkMismatchClass,
+    ok_allowlisted_mismatch_class: okAllowlistedMismatchClass,
+    missing_baseline_class: missingBaselineClass,
+    skip_class: skipClass,
+    metrics_thresholds: metricsThresholds,
+  };
+}
+
+function classifyBaselineCmpV1(caseSpec, summary, deltaPolicy, baselineDir) {
+  const reasons = [];
+  const metrics = summary.baseline_metrics_v1 ?? {};
+  if (!baselineDir) {
+    reasons.push('baseline_dir_unset');
+    return {
+      class: deltaPolicy.skip_class,
+      reasons,
+      metrics,
+    };
+  }
+  if (summary.baseline_match === 'MISSING') {
+    reasons.push('baseline_missing');
+    return {
+      class: deltaPolicy.missing_baseline_class,
+      reasons,
+      metrics,
+    };
+  }
+  if (summary.baseline_match === 'MATCH') {
+    reasons.push('artifact_sha_match');
+    return {
+      class: BASELINE_CMP_CLASS_MATCH_V1,
+      reasons,
+      metrics,
+    };
+  }
+  const allowlisted = deltaPolicy.ok_case_allowlist[caseSpec.id];
+  if (summary.status === STATUS_OK_V0) {
+    if (allowlisted) {
+      reasons.push(`ok_case_allowlisted:${allowlisted.reason}`);
+      if (allowlisted.expires) {
+        reasons.push(`allowlist_expires:${allowlisted.expires}`);
+      }
+      return {
+        class: deltaPolicy.ok_allowlisted_mismatch_class,
+        reasons,
+        metrics,
+      };
+    }
+    reasons.push('ok_case_baseline_mismatch');
+    reasons.push('requires_match');
+    return {
+      class: BASELINE_CMP_CLASS_DIFF_SUSPECT_V1,
+      reasons,
+      metrics,
+    };
+  }
+  reasons.push(`non_ok_status:${summary.status}`);
+  reasons.push('fail_closed_non_ok');
+  return {
+    class: deltaPolicy.non_ok_mismatch_class,
+    reasons,
+    metrics,
+  };
 }
 
 async function loadGalleryManifestV0() {
@@ -448,13 +812,14 @@ function entrypointSetOkV0(ctx, mem, entrypoint) {
   );
 }
 
-function buildConfigHashV0(cases, sourceDateEpoch, resolverId) {
+function buildConfigHashV0(cases, sourceDateEpoch, resolverId, deltaPolicySha256) {
   const config = {
     runner: 'wasm_fixture_gallery_v0',
     source_date_epoch: sourceDateEpoch,
     tz: 'UTC',
     max_log_bytes: DEFAULT_MAX_LOG_BYTES_V0,
     resolver_id: resolverId,
+    delta_policy_sha256: deltaPolicySha256,
     cases: cases.map((item) => ({
       id: item.id,
       mode: item.mode,
@@ -2097,6 +2462,7 @@ async function runCaseV0(
   configHash,
   resolver,
   baselineDir,
+  deltaPolicy,
 ) {
   const caseOutDir = path.join(outDir, caseSpec.id);
   await mkdir(caseOutDir, { recursive: true });
@@ -2269,7 +2635,9 @@ async function runCaseV0(
   summary.resolved_resources_count = resolverOutcomes.resolvedResources.length;
   summary.missing_resources_count = resolverOutcomes.missingResources.length;
   summary.expected_vs_actual = expectedVsActualV0(caseSpec.expected_status, summary.status);
+  summary.baseline_metrics_v1 = buildBaselineMetricsV1(xdvBytes, pdfBytes, logBytes, summary);
   summary.baseline_match = await computeBaselineMatchV0(caseSpec.id, summary.artifact_sha256, baselineDir);
+  summary.baseline_cmp_v1 = classifyBaselineCmpV1(caseSpec, summary, deltaPolicy, baselineDir);
   if (errorMessage) {
     summary.error = errorMessage;
   }
@@ -2288,6 +2656,10 @@ async function run() {
   const baselineDir = process.env.TEXLIVE_BASELINE_DIR
     ? path.resolve(process.env.TEXLIVE_BASELINE_DIR)
     : '';
+  const deltaPolicyPath = path.resolve(
+    process.env.WASM_GALLERY_DELTA_POLICY_V1
+      ?? path.join(rootDir, 'scripts', 'wasm_fixture_gallery_delta_policy_v1.json'),
+  );
   const onDemandEnabled = parseBoolEnvV0(
     process.env.WASM_GALLERY_ENABLE_ONDEMAND_V1 ?? process.env.WASM_GALLERY_ONDEMAND_ENABLE_V1,
   );
@@ -2321,7 +2693,8 @@ async function run() {
     rootDir,
     storeDir,
   });
-  const configHash = buildConfigHashV0(cases, sourceDateEpoch, resolver.resolverId);
+  const deltaPolicy = await loadDeltaPolicyV1(deltaPolicyPath);
+  const configHash = buildConfigHashV0(cases, sourceDateEpoch, resolver.resolverId, deltaPolicy.sha256);
   const buildCaseResolver = () =>
     createOnDemandResolverV0({
       backend: resolverBackend,
@@ -2349,6 +2722,7 @@ async function run() {
       configHash,
       await buildCaseResolver(),
       baselineDir,
+      deltaPolicy,
     );
     let finalSummary = initialSummary;
     const missingBefore = Number(initialSummary.missing_resources_count ?? 0);
@@ -2397,6 +2771,7 @@ async function run() {
           configHash,
           await buildCaseResolver(),
           baselineDir,
+          deltaPolicy,
         );
         const improved = rerunSummary.resolved_resources_count > finalSummary.resolved_resources_count
           || rerunSummary.missing_resources_count < finalSummary.missing_resources_count;
@@ -2439,6 +2814,17 @@ async function run() {
     resolver_id: resolver.resolverId,
     store_dir: storeDir,
     baseline_dir: baselineDir || null,
+    delta_policy_v1: {
+      path: deltaPolicy.path,
+      sha256: deltaPolicy.sha256,
+      ok_cases_require_match: deltaPolicy.ok_cases_require_match,
+      ok_allowlist_case_count: Object.keys(deltaPolicy.ok_case_allowlist).length,
+      non_ok_mismatch_class: deltaPolicy.non_ok_mismatch_class,
+      ok_allowlisted_mismatch_class: deltaPolicy.ok_allowlisted_mismatch_class,
+      missing_baseline_class: deltaPolicy.missing_baseline_class,
+      skip_class: deltaPolicy.skip_class,
+      metrics_thresholds: deltaPolicy.metrics_thresholds,
+    },
     manifest_path: manifestPath,
     config_hash: configHash,
     ondemand_v1: {
@@ -2501,6 +2887,7 @@ async function run() {
       config_hash: summary.config_hash,
       input_sha256: summary.input_sha256,
       baseline_match: summary.baseline_match,
+      baseline_cmp_v1: summary.baseline_cmp_v1,
       resolved_resources_count: summary.resolved_resources_count,
       missing_before: Number(summary.missing_before ?? summary.missing_resources_count ?? 0),
       missing_after: Number(summary.missing_after ?? summary.missing_resources_count ?? 0),
@@ -2517,6 +2904,23 @@ async function run() {
       throw new Error(
         `typed_artifacts_version mismatch for case ${summary.case_id}: expected ${TYPED_ARTIFACTS_VERSION_V0}, got ${summary.typed_artifacts_version}`,
       );
+    }
+    const cmpClass = summary?.baseline_cmp_v1?.class;
+    if (!BASELINE_CMP_CLASS_ALLOWLIST_V1.has(cmpClass)) {
+      throw new Error(`baseline_cmp_v1 class invalid for case ${summary.case_id}`);
+    }
+    const cmpReasons = summary?.baseline_cmp_v1?.reasons;
+    if (!Array.isArray(cmpReasons) || cmpReasons.length === 0) {
+      throw new Error(`baseline_cmp_v1 reasons missing for case ${summary.case_id}`);
+    }
+    if (
+      deltaPolicy.ok_cases_require_match
+      && baselineDir
+      && summary.status === STATUS_OK_V0
+      && cmpClass !== BASELINE_CMP_CLASS_MATCH_V1
+      && !deltaPolicy.ok_case_allowlist[summary.case_id]
+    ) {
+      throw new Error(`OK case baseline_cmp_v1 must be MATCH for ${summary.case_id}`);
     }
   }
   await writeFile(path.join(outDir, 'report.json'), `${JSON.stringify(report, null, 2)}\n`);

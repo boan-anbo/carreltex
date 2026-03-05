@@ -1,0 +1,17 @@
+{
+  "schema": "wasm_fixture_gallery_delta_policy_v1",
+  "version": 1,
+  "ok_cases_require_match": true,
+  "non_ok_mismatch_class": "DIFF_OK",
+  "ok_allowlisted_mismatch_class": "DIFF_OK",
+  "missing_baseline_class": "MISSING_BASELINE",
+  "skip_class": "SKIP",
+  "metrics_thresholds": {
+    "max_page_count_delta": 0,
+    "max_total_lines_delta": 0,
+    "max_total_glyphs_delta": 0,
+    "max_annots_delta": 0,
+    "max_footnote_marker_delta": 0
+  },
+  "ok_case_allowlist": {}
+}
