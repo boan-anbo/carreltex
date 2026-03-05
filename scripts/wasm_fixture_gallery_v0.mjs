@@ -21,6 +21,7 @@ const STATUS_INVALID_V0 = 'INVALID';
 const STATUS_FAIL_V0 = 'FAIL';
 const EXPECTED_STATUS_VALUES_V0 = new Set([STATUS_OK_V0, STATUS_NI_V0, STATUS_INVALID_V0, STATUS_FAIL_V0]);
 const TYPED_ARTIFACT_KEYS_V0 = ['toc', 'labels', 'bib', 'hyperref', 'pkgopt', 'graphics'];
+const TYPED_ARTIFACTS_VERSION_V0 = 1;
 const MAX_TOC_ENTRIES_V0 = 256;
 const MAX_TOC_TITLE_BYTES_V0 = 256;
 const MAX_LABEL_ENTRIES_V0 = 256;
@@ -276,7 +277,7 @@ function buildTypedArtifactsPlaceholderV0() {
 
 async function emitPlaceholderTypedArtifactV0(caseOutDir, artifactName, schemaName) {
   const payload = {
-    version: 1,
+    version: TYPED_ARTIFACTS_VERSION_V0,
     schema: schemaName,
     entries: [],
   };
@@ -762,7 +763,7 @@ function extractLabelEntriesFromSourceV0(sourceBytes) {
 
 async function emitLabelsTypedArtifactV0(caseOutDir, fixtureBytes) {
   const payload = {
-    version: 1,
+    version: TYPED_ARTIFACTS_VERSION_V0,
     schema: 'labels_v0',
     entries: extractLabelEntriesFromSourceV0(fixtureBytes),
   };
@@ -780,7 +781,7 @@ async function emitLabelsTypedArtifactV0(caseOutDir, fixtureBytes) {
 
 async function emitTocTypedArtifactV0(caseOutDir, fixtureBytes) {
   const payload = {
-    version: 1,
+    version: TYPED_ARTIFACTS_VERSION_V0,
     schema: 'toc_v0',
     entries: extractTocEntriesFromSourceV0(fixtureBytes),
   };
@@ -798,7 +799,7 @@ async function emitTocTypedArtifactV0(caseOutDir, fixtureBytes) {
 
 async function emitHyperrefTypedArtifactV0(caseOutDir, fixtureBytes) {
   const payload = {
-    version: 1,
+    version: TYPED_ARTIFACTS_VERSION_V0,
     schema: 'hyperref_v0',
     entries: extractHyperrefLinksFromSourceV0(fixtureBytes),
   };
@@ -816,7 +817,7 @@ async function emitHyperrefTypedArtifactV0(caseOutDir, fixtureBytes) {
 
 async function emitBibTypedArtifactV0(caseOutDir, fixtureBytes) {
   const payload = {
-    version: 1,
+    version: TYPED_ARTIFACTS_VERSION_V0,
     schema: 'bib_v0',
     entries: extractBibEntriesFromSourceV0(fixtureBytes),
   };
@@ -834,7 +835,7 @@ async function emitBibTypedArtifactV0(caseOutDir, fixtureBytes) {
 
 async function emitPkgoptTypedArtifactV0(caseOutDir, fixtureBytes) {
   const payload = {
-    version: 1,
+    version: TYPED_ARTIFACTS_VERSION_V0,
     schema: 'pkgopt_v0',
     entries: extractPkgoptEntriesFromSourceV0(fixtureBytes),
   };
@@ -852,7 +853,7 @@ async function emitPkgoptTypedArtifactV0(caseOutDir, fixtureBytes) {
 
 async function emitGraphicsTypedArtifactV0(caseOutDir, fixtureBytes) {
   const payload = {
-    version: 1,
+    version: TYPED_ARTIFACTS_VERSION_V0,
     schema: 'graphics_v0',
     entries: extractGraphicsEntriesFromSourceV0(fixtureBytes),
   };
@@ -1071,6 +1072,7 @@ async function runCaseV0(
     },
     resolver_id: resolver.resolverId,
     resolved_resources: resolvedResources,
+    typed_artifacts_version: TYPED_ARTIFACTS_VERSION_V0,
     typed_artifacts: buildTypedArtifactsPlaceholderV0(),
   };
   await emitTypedArtifactsV0(caseSpec, caseOutDir, summary.typed_artifacts, fixtureBytes);
@@ -1148,6 +1150,7 @@ async function run() {
     baseline_dir: baselineDir || null,
     manifest_path: manifestPath,
     config_hash: configHash,
+    typed_artifacts_version: TYPED_ARTIFACTS_VERSION_V0,
     case_count: summaries.length,
     resolved_resources_count: summaries.reduce(
       (sum, summary) => sum + (Array.isArray(summary.resolved_resources) ? summary.resolved_resources.length : 0),
@@ -1184,6 +1187,7 @@ async function run() {
       }),
     ),
     statuses: summaries.map((summary) => ({
+      typed_artifacts_version: summary.typed_artifacts_version,
       case_id: summary.case_id,
       tags: summary.tags,
       expected_status: summary.expected_status,
@@ -1196,6 +1200,13 @@ async function run() {
       artifact_sha256: summary.artifact_sha256,
     })),
   };
+  for (const summary of summaries) {
+    if (summary.typed_artifacts_version !== TYPED_ARTIFACTS_VERSION_V0) {
+      throw new Error(
+        `typed_artifacts_version mismatch for case ${summary.case_id}: expected ${TYPED_ARTIFACTS_VERSION_V0}, got ${summary.typed_artifacts_version}`,
+      );
+    }
+  }
   await writeFile(path.join(outDir, 'report.json'), `${JSON.stringify(report, null, 2)}\n`);
 
   if (summaries.some((summary) => summary.status === STATUS_FAIL_V0)) {
