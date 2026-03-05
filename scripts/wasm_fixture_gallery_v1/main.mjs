@@ -23,7 +23,7 @@ const STATUS_FAIL_V0 = 'FAIL';
 const STATUS_MISMATCH_V0 = 'MISMATCH';
 const EXPECTED_STATUS_VALUES_V0 = new Set([STATUS_OK_V0, STATUS_NI_V0, STATUS_INVALID_V0, STATUS_FAIL_V0]);
 const DEFAULT_ONDEMAND_FIXEDPOINT_MAX_ITERS_V1 = 3;
-const TYPED_ARTIFACT_KEYS_V0 = ['toc', 'labels', 'refs', 'bib', 'cite', 'bibitems', 'cites', 'hyperref', 'pkgopt', 'graphics', 'math', 'table'];
+const TYPED_ARTIFACT_KEYS_V0 = ['toc', 'labels', 'refs', 'bib', 'cite', 'bibitems', 'cites', 'hyperref', 'pkgopt', 'graphics', 'input', 'math', 'table'];
 const TYPED_ARTIFACTS_VERSION_V0 = 1;
 const MAX_TOC_ENTRIES_V0 = 256;
 const MAX_TOC_TITLE_BYTES_V0 = 256;
@@ -38,6 +38,8 @@ const MAX_PKGOPT_VALUE_BYTES_V0 = 256;
 const MAX_PKGOPT_OPTIONS_PER_ENTRY_V0 = 64;
 const MAX_GRAPHICS_ENTRIES_V0 = 256;
 const MAX_GRAPHICS_PATH_BYTES_V0 = 256;
+const MAX_INPUT_ENTRIES_V1 = 512;
+const MAX_INPUT_INCLUDE_DEPTH_V1 = 32;
 const MAX_MATH_ENTRIES_V0 = 256;
 const MAX_MATH_PAYLOAD_BYTES_V0 = 1024;
 const MAX_TABLE_ENTRIES_V0 = 64;
@@ -665,6 +667,16 @@ async function loadFixtureCasesV0() {
       id: 'typeset_demo_include_probe_v0',
       mode: 'typeset',
       fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_include_probe_v0.tex',
+    },
+    {
+      id: 'typeset_demo_input_cycle_probe_v0',
+      mode: 'typeset',
+      fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_input_cycle_probe_v0.tex',
+    },
+    {
+      id: 'typeset_demo_input_missing_probe_v0',
+      mode: 'typeset',
+      fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_input_missing_probe_v0.tex',
     },
     {
       id: 'typeset_demo_ondemand_input_probe_v0',
@@ -1711,6 +1723,224 @@ function extractGraphicsEntriesFromSourceV0(sourceBytes) {
     index = pathGroup.next;
   }
   return entries;
+}
+
+function normalizeInputIncludeMountPathV1(rawValue) {
+  if (typeof rawValue !== 'string') {
+    return null;
+  }
+  const trimmed = rawValue.trim();
+  if (trimmed.length === 0) {
+    return null;
+  }
+  if (trimmed.startsWith('/') || trimmed.startsWith('\\')) {
+    return null;
+  }
+  if (trimmed.includes('\\')) {
+    return null;
+  }
+  if (/^[A-Za-z]:([\\/]|$)/.test(trimmed)) {
+    return null;
+  }
+  const normalizedSeparators = trimmed.replace(/\\/g, '/');
+  const segments = normalizedSeparators
+    .split('/')
+    .map((segment) => segment.trim())
+    .filter((segment) => segment.length > 0 && segment !== '.');
+  if (segments.length === 0) {
+    return null;
+  }
+  if (segments.some((segment) => segment === '..' || segment.includes('..'))) {
+    return null;
+  }
+  if (segments.some((segment) => !/^[A-Za-z0-9._-]+$/.test(segment))) {
+    return null;
+  }
+  const normalizedPath = segments.join('/');
+  const lastSegment = segments[segments.length - 1];
+  if (lastSegment.includes('.')) {
+    return normalizedPath;
+  }
+  return `${normalizedPath}.tex`;
+}
+
+function resolverNameFromMountPathV1(mountPath) {
+  if (typeof mountPath !== 'string' || mountPath.length === 0) {
+    return null;
+  }
+  const name = mountPath.replace(/\//g, '__');
+  if (!isSafeResolverTokenV0(name)) {
+    return null;
+  }
+  return name;
+}
+
+function extractInputIncludeDirectivesFromSourceV1(sourceBytes, sourcePath) {
+  const entries = [];
+  let index = 0;
+  while (index < sourceBytes.length) {
+    if (sourceBytes[index] !== 0x5c) {
+      index += 1;
+      continue;
+    }
+    let commandIndex = index + 1;
+    while (commandIndex < sourceBytes.length && isAsciiLetterByteV0(sourceBytes[commandIndex])) {
+      commandIndex += 1;
+    }
+    if (commandIndex === index + 1) {
+      index += 1;
+      continue;
+    }
+    const command = Buffer.from(sourceBytes.slice(index + 1, commandIndex)).toString('ascii');
+    if (command !== 'input' && command !== 'include') {
+      index = commandIndex;
+      continue;
+    }
+    const group = readBracedGroupV0(sourceBytes, commandIndex);
+    if (!group.ok || group.value.length === 0) {
+      index = commandIndex;
+      continue;
+    }
+    const values = splitCommaValuesV0(group.value);
+    for (const rawValue of values) {
+      const mountPath = normalizeInputIncludeMountPathV1(rawValue);
+      if (!mountPath) {
+        continue;
+      }
+      const resolverName = resolverNameFromMountPathV1(mountPath);
+      if (!resolverName) {
+        continue;
+      }
+      entries.push({
+        command,
+        hint_type: command === 'input' ? 'tex_input' : 'tex_include',
+        source_path: sourcePath,
+        value: mountPath,
+        resolver_name: resolverName,
+        source_span: buildSourceSpanV0(sourceBytes, index, group.next, 'input_v1'),
+      });
+    }
+    index = group.next;
+  }
+  return entries;
+}
+
+async function collectInputIncludeGraphV1(sourceBytes, resolver, caseSpec) {
+  const queue = [{
+    source_path: 'main.tex',
+    source_bytes: toUint8ArrayV0(sourceBytes),
+    depth: 0,
+  }];
+  const parsedPaths = new Set(['main.tex']);
+  const resolvedByMountPath = new Map();
+  const resolverRequestsByKey = new Map();
+  const graphEntries = [];
+
+  while (queue.length > 0) {
+    const current = queue.shift();
+    const directives = extractInputIncludeDirectivesFromSourceV1(current.source_bytes, current.source_path);
+    for (const directive of directives) {
+      if (graphEntries.length >= MAX_INPUT_ENTRIES_V1) {
+        throw new Error(`input_v1 entries exceed cap ${MAX_INPUT_ENTRIES_V1}`);
+      }
+      const request = {
+        kind: 'texmf',
+        format: 'tex',
+        name: directive.resolver_name,
+        variant: caseSpec.mode,
+        hint_type: directive.hint_type,
+      };
+      resolverRequestsByKey.set(resolverRequestKeyV0(request), request);
+
+      let resolution = resolvedByMountPath.get(directive.value);
+      if (!resolution) {
+        resolution = await resolver.resolve({
+          kind: request.kind,
+          format: request.format,
+          name: request.name,
+          variant: request.variant,
+          resolver_id: resolver.resolverId,
+        });
+        resolvedByMountPath.set(directive.value, resolution);
+      }
+
+      const resolved = resolution.tag === 'Found';
+      if (current.source_path === 'main.tex') {
+        graphEntries.push({
+          command: directive.command,
+          source_path: directive.source_path,
+          value: directive.value,
+          resolver_name: directive.resolver_name,
+          source_span: directive.source_span,
+        });
+      }
+
+      if (!resolved || parsedPaths.has(directive.value)) {
+        continue;
+      }
+      if (current.depth + 1 > MAX_INPUT_INCLUDE_DEPTH_V1) {
+        throw new Error(`input_v1 include depth exceeds cap ${MAX_INPUT_INCLUDE_DEPTH_V1}`);
+      }
+      parsedPaths.add(directive.value);
+      queue.push({
+        source_path: directive.value,
+        source_bytes: toUint8ArrayV0(resolution.bytes),
+        depth: current.depth + 1,
+      });
+    }
+  }
+
+  graphEntries.sort((left, right) => {
+    const sourceCmp = left.source_path.localeCompare(right.source_path);
+    if (sourceCmp !== 0) {
+      return sourceCmp;
+    }
+    const startCmp = left.source_span.start_byte - right.source_span.start_byte;
+    if (startCmp !== 0) {
+      return startCmp;
+    }
+    const endCmp = left.source_span.end_byte - right.source_span.end_byte;
+    if (endCmp !== 0) {
+      return endCmp;
+    }
+    const commandCmp = left.command.localeCompare(right.command);
+    if (commandCmp !== 0) {
+      return commandCmp;
+    }
+    return left.value.localeCompare(right.value);
+  });
+
+  const mountedFiles = [...resolvedByMountPath.entries()]
+    .filter(([, resolution]) => resolution.tag === 'Found')
+    .sort(([leftPath], [rightPath]) => leftPath.localeCompare(rightPath))
+    .map(([mountPath, resolution]) => [mountPath, toUint8ArrayV0(resolution.bytes)]);
+
+  const resolverRequests = [...resolverRequestsByKey.values()]
+    .sort((left, right) => resolverRequestKeyV0(left).localeCompare(resolverRequestKeyV0(right)));
+
+  return {
+    entries: graphEntries,
+    mounted_files: mountedFiles,
+    resolver_requests: resolverRequests,
+  };
+}
+
+async function emitInputTypedArtifactV1(caseOutDir, inputEntries) {
+  const payload = {
+    version: TYPED_ARTIFACTS_VERSION_V0,
+    schema: 'input_v1',
+    entries: inputEntries,
+  };
+  const bytes = Buffer.from(`${JSON.stringify(payload, null, 2)}\n`, 'utf8');
+  const relpath = 'input_v1.json';
+  const fullPath = path.join(caseOutDir, relpath);
+  await writeFile(fullPath, bytes);
+  return {
+    present: true,
+    items: payload.entries.length,
+    artifact_relpath: relpath,
+    artifact_sha256: sha256HexV0(bytes),
+  };
 }
 
 function addResourceHintEntryV0(entries, sourceBytes, caseId, hintType, value, startByte, endByte) {
@@ -2904,7 +3134,13 @@ async function emitEmptyResourceHintsArtifactV0(caseOutDir) {
   };
 }
 
-async function emitTypedArtifactsV0(caseSpec, caseOutDir, typedArtifacts, fixtureBytes) {
+async function emitTypedArtifactsV0(
+  caseSpec,
+  caseOutDir,
+  typedArtifacts,
+  fixtureBytes,
+  inputEntries = [],
+) {
   if (caseSpec.id === 'typeset_demo_toc_probe_v0') {
     typedArtifacts.toc = await emitTocTypedArtifactV0(caseOutDir, fixtureBytes);
   }
@@ -2940,6 +3176,9 @@ async function emitTypedArtifactsV0(caseSpec, caseOutDir, typedArtifacts, fixtur
   }
   if (caseSpec.id === 'typeset_demo_graphics_probe_v0') {
     typedArtifacts.graphics = await emitGraphicsTypedArtifactV0(caseOutDir, fixtureBytes);
+  }
+  if (caseSpec.mode === 'typeset' && Array.isArray(inputEntries) && inputEntries.length > 0) {
+    typedArtifacts.input = await emitInputTypedArtifactV1(caseOutDir, inputEntries);
   }
 }
 
@@ -3176,6 +3415,19 @@ async function collectResolverRequestsFromTypedArtifactsV0(caseSpec, caseOutDir,
     }
   }
 
+  const inputRelpath = typedArtifacts?.input?.artifact_relpath;
+  if (typedArtifacts?.input?.present === true && typeof inputRelpath === 'string' && inputRelpath.length > 0) {
+    const inputPayload = JSON.parse((await readFile(path.join(caseOutDir, inputRelpath))).toString('utf8'));
+    const inputEntries = Array.isArray(inputPayload?.entries) ? inputPayload.entries : [];
+    for (const entry of inputEntries) {
+      if (typeof entry?.value !== 'string' || entry.value.length === 0) {
+        continue;
+      }
+      const hintType = entry?.command === 'include' ? 'tex_include' : 'tex_input';
+      addTexmfRequest(entry.value, 'tex', hintType);
+    }
+  }
+
   return [...requestsByKey.values()].sort((left, right) => resolverRequestKeyV0(left).localeCompare(resolverRequestKeyV0(right)));
 }
 
@@ -3327,6 +3579,11 @@ async function runCaseV0(
   let report = { status: 'INVALID_INPUT' };
   let caseStatus = STATUS_FAIL_V0;
   let errorMessage = '';
+  let inputInclusionGraph = {
+    entries: [],
+    mounted_files: [],
+    resolver_requests: [],
+  };
 
   try {
     if (ctx.mountReset() !== 0) {
@@ -3334,6 +3591,18 @@ async function runCaseV0(
     }
     if (helpers.addMountedFile('main.tex', fixtureBytes, `${caseSpec.id}_main`) !== 0) {
       throw new Error('mount_add_file(main.tex) failed');
+    }
+    if (caseSpec.mode === 'typeset') {
+      inputInclusionGraph = await collectInputIncludeGraphV1(fixtureBytes, resolver, caseSpec);
+      for (const [mountPath, mountBytes] of inputInclusionGraph.mounted_files) {
+        if (mountPath === 'main.tex') {
+          continue;
+        }
+        const mountLabel = `${caseSpec.id}_${mountPath.replaceAll('/', '__')}`;
+        if (helpers.addMountedFile(mountPath, mountBytes, mountLabel) !== 0) {
+          throw new Error(`mount_add_file(${mountPath}) failed`);
+        }
+      }
     }
     if (ctx.mountFinalize() !== 0) {
       throw new Error('mount_finalize failed');
@@ -3423,6 +3692,9 @@ async function runCaseV0(
     hint_type: 'entrypoint',
   };
   resolverRequestsByKey.set(resolverRequestKeyV0(rootResolverRequest), rootResolverRequest);
+  for (const request of inputInclusionGraph.resolver_requests) {
+    resolverRequestsByKey.set(resolverRequestKeyV0(request), request);
+  }
 
   const summary = {
     case_id: caseSpec.id,
@@ -3468,7 +3740,13 @@ async function runCaseV0(
     errorMessage = errorMessage ? `${errorMessage}; ${message}` : message;
     summary.status = caseStatus;
   }
-  await emitTypedArtifactsV0(caseSpec, caseOutDir, summary.typed_artifacts, fixtureBytes);
+  await emitTypedArtifactsV0(
+    caseSpec,
+    caseOutDir,
+    summary.typed_artifacts,
+    fixtureBytes,
+    inputInclusionGraph.entries,
+  );
   const typedArtifactRequests = await collectResolverRequestsFromResourceHintsV0(
     caseSpec,
     caseOutDir,
