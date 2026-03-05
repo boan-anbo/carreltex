@@ -102,6 +102,178 @@ fn typeset_minimal_headings_emit_bold_with_paragraph_breaks() {
 }
 
 #[test]
+fn typeset_minimal_toc_after_maketitle_emits_placeholder_and_entries() {
+    let main = b"\\documentclass{article}\\title{T}\\author{A}\\date{D}\\begin{document}\\maketitle\\tableofcontents\\section{Intro}\\subsection{Detail}\\end{document}";
+    let body = extract_typeset_body(main);
+    let text = String::from_utf8(body).expect("body should be valid utf8");
+    assert!(text.contains("\n\n!toc\n\n@S {Intro}\n\n@s {Detail}"), "body={text:?}");
+    assert!(text.contains("!toc 1 1 Intro"), "body={text:?}");
+    assert!(text.contains("!toc 2 2 Detail"), "body={text:?}");
+}
+
+#[test]
+fn typeset_minimal_rejects_toc_before_maketitle() {
+    let main = b"\\documentclass{article}\\begin{document}\\tableofcontents\\maketitle\\section{Intro}\\end{document}";
+    let result = compile_typeset(main);
+    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert!(result.main_xdv_bytes.is_empty());
+}
+
+#[test]
+fn typeset_minimal_rejects_toc_after_body_content() {
+    let main = b"\\documentclass{article}\\title{T}\\author{A}\\date{D}\\begin{document}\\maketitle Before.\\tableofcontents\\section{Intro}\\end{document}";
+    let result = compile_typeset(main);
+    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert!(result.main_xdv_bytes.is_empty());
+}
+
+#[test]
+fn typeset_minimal_rejects_toc_with_unsupported_heading_depth() {
+    let main = b"\\documentclass{article}\\title{T}\\author{A}\\date{D}\\begin{document}\\maketitle\\tableofcontents\\subsubsection{Too deep}\\end{document}";
+    let result = compile_typeset(main);
+    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert!(result.main_xdv_bytes.is_empty());
+}
+
+#[test]
+fn typeset_minimal_toc_entries_follow_heading_order_with_stable_anchors() {
+    let main = b"\\documentclass{article}\\title{T}\\author{A}\\date{D}\\begin{document}\\maketitle\\tableofcontents\\section{One}\\subsection{Two}\\section{Three}\\end{document}";
+    let body = extract_typeset_body(main);
+    let text = String::from_utf8(body).expect("body should be valid utf8");
+    let first = text.find("!toc 1 1 One").expect("first toc entry");
+    let second = text.find("!toc 2 2 Two").expect("second toc entry");
+    let third = text.find("!toc 1 3 Three").expect("third toc entry");
+    assert!(first < second && second < third, "body={text:?}");
+}
+
+#[test]
+fn typeset_minimal_rejects_duplicate_tableofcontents_commands() {
+    let main = b"\\documentclass{article}\\title{T}\\author{A}\\date{D}\\begin{document}\\maketitle\\tableofcontents\\tableofcontents\\section{Intro}\\end{document}";
+    let result = compile_typeset(main);
+    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert!(result.main_xdv_bytes.is_empty());
+}
+
+#[test]
+fn typeset_minimal_rejects_tableofcontents_inside_center_environment() {
+    let main = b"\\documentclass{article}\\title{T}\\author{A}\\date{D}\\begin{document}\\maketitle\\begin{center}\\tableofcontents\\end{center}\\section{Intro}\\end{document}";
+    let result = compile_typeset(main);
+    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert!(result.main_xdv_bytes.is_empty());
+}
+
+#[test]
+fn typeset_minimal_accepts_deeper_heading_without_toc() {
+    let main = b"\\documentclass{article}\\begin{document}\\subsubsection{Deep heading}Body.\\end{document}";
+    let result = compile_typeset(main);
+    assert_eq!(result.status, CompileStatus::Ok);
+    assert!(!result.main_xdv_bytes.is_empty());
+}
+
+#[test]
+fn typeset_minimal_toc_without_headings_emits_placeholder_only() {
+    let main = b"\\documentclass{article}\\title{T}\\author{A}\\date{D}\\begin{document}\\maketitle\\tableofcontents\\end{document}";
+    let body = extract_typeset_body(main);
+    let text = String::from_utf8(body).expect("body should be valid utf8");
+    assert!(text.contains("\n\n!toc"), "body={text:?}");
+    assert!(!text.contains("!toc 1 "), "body={text:?}");
+}
+
+#[test]
+fn typeset_minimal_toc_allows_spacing_between_maketitle_and_command() {
+    let main = b"\\documentclass{article}\n\\title{T}\\author{A}\\date{D}\n\\begin{document}\n\\maketitle\n\n   % spacer\n   \\tableofcontents\n\\section{Intro}\n\\end{document}\n";
+    let body = extract_typeset_body(main);
+    let text = String::from_utf8(body).expect("body should be valid utf8");
+    assert!(text.contains("!toc"), "body={text:?}");
+    assert!(text.contains("!toc 1 1 Intro"), "body={text:?}");
+}
+
+#[test]
+fn typeset_minimal_rejects_toc_without_maketitle_even_with_meta() {
+    let main = b"\\documentclass{article}\\title{T}\\author{A}\\date{D}\\begin{document}\\tableofcontents\\section{Intro}\\end{document}";
+    let result = compile_typeset(main);
+    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert!(result.main_xdv_bytes.is_empty());
+}
+
+#[test]
+fn typeset_minimal_toc_metadata_coexists_with_footnotes_and_links() {
+    let main = b"\\documentclass{article}\\title{T}\\author{A}\\date{D}\\begin{document}\\maketitle\\tableofcontents\\section{Intro}Body\\footnote{Note one} and \\href{https://example.com}{Link}.\\end{document}";
+    let body = extract_typeset_body(main);
+    let text = String::from_utf8(body).expect("body should be valid utf8");
+    assert!(text.contains("!toc 1 1 Intro"), "body={text:?}");
+    assert!(text.contains("!f 1 Note one"), "body={text:?}");
+    assert!(text.contains("!u 1 https://example.com"), "body={text:?}");
+    let toc_pos = text.find("!toc 1 1 Intro").expect("toc marker");
+    let footnote_pos = text.find("!f 1 Note one").expect("footnote marker");
+    let href_pos = text.find("!u 1 https://example.com").expect("href marker");
+    assert!(footnote_pos < href_pos && href_pos < toc_pos, "body={text:?}");
+}
+
+#[test]
+fn typeset_minimal_toc_anchor_ids_ignore_non_heading_commands() {
+    let main = b"\\documentclass{article}\\title{T}\\author{A}\\date{D}\\begin{document}\\maketitle\\tableofcontents\\section{Alpha}Body with \\footnote{N}.\\subsection{Beta}\\end{document}";
+    let body = extract_typeset_body(main);
+    let text = String::from_utf8(body).expect("body should be valid utf8");
+    assert!(text.contains("!toc 1 1 Alpha"), "body={text:?}");
+    assert!(text.contains("!toc 2 2 Beta"), "body={text:?}");
+    assert!(!text.contains("!toc 1 2"), "body={text:?}");
+}
+
+#[test]
+fn typeset_minimal_rejects_tableofcontents_inside_list_environment() {
+    let main = b"\\documentclass{article}\\title{T}\\author{A}\\date{D}\\begin{document}\\maketitle\\begin{itemize}\\item Intro\\tableofcontents\\end{itemize}\\section{After}\\end{document}";
+    let result = compile_typeset(main);
+    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert!(result.main_xdv_bytes.is_empty());
+}
+
+#[test]
+fn typeset_minimal_rejects_unsupported_heading_depth_when_toc_is_active() {
+    let main = b"\\documentclass{article}\\title{T}\\author{A}\\date{D}\\begin{document}\\maketitle\\tableofcontents\\section{Top}\\paragraph{Too deep}\\end{document}";
+    let result = compile_typeset(main);
+    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert!(result.main_xdv_bytes.is_empty());
+}
+
+#[test]
+fn typeset_minimal_toc_placeholder_precedes_rendered_headings() {
+    let main = b"\\documentclass{article}\\title{T}\\author{A}\\date{D}\\begin{document}\\maketitle\\tableofcontents\\section{First}\\subsection{Second}\\end{document}";
+    let body = extract_typeset_body(main);
+    let text = String::from_utf8(body).expect("body should be valid utf8");
+    let toc_placeholder = text.find("!toc").expect("toc placeholder should exist");
+    let first_heading = text.find("@S {First}").expect("section heading should exist");
+    let second_heading = text.find("@s {Second}").expect("subsection heading should exist");
+    assert!(
+        toc_placeholder < first_heading && first_heading < second_heading,
+        "toc placeholder and headings should preserve deterministic order: body={text:?}"
+    );
+}
+
+#[test]
+fn typeset_minimal_toc_preserves_duplicate_heading_titles_with_unique_anchors() {
+    let main = b"\\documentclass{article}\\title{T}\\author{A}\\date{D}\\begin{document}\\maketitle\\tableofcontents\\section{Repeat}\\subsection{Repeat}\\section{Repeat}\\end{document}";
+    let body = extract_typeset_body(main);
+    let text = String::from_utf8(body).expect("body should be valid utf8");
+    assert!(text.contains("!toc 1 1 Repeat"), "body={text:?}");
+    assert!(text.contains("!toc 2 2 Repeat"), "body={text:?}");
+    assert!(text.contains("!toc 1 3 Repeat"), "body={text:?}");
+}
+
+#[test]
+fn typeset_minimal_toc_anchor_ids_follow_document_order_even_when_levels_change() {
+    let main = b"\\documentclass{article}\\title{T}\\author{A}\\date{D}\\begin{document}\\maketitle\\tableofcontents\\subsection{Early sub}\\section{Later section}\\subsection{Last sub}\\end{document}";
+    let body = extract_typeset_body(main);
+    let text = String::from_utf8(body).expect("body should be valid utf8");
+    let first = text.find("!toc 2 1 Early sub").expect("first toc entry");
+    let second = text
+        .find("!toc 1 2 Later section")
+        .expect("second toc entry");
+    let third = text.find("!toc 2 3 Last sub").expect("third toc entry");
+    assert!(first < second && second < third, "body={text:?}");
+}
+
+#[test]
 fn typeset_minimal_heading_at_start_has_no_leading_blank_lines() {
     let main =
         b"\\documentclass{article}\\begin{document}\\paragraph{Lead in}Body text.\\end{document}";

@@ -3,6 +3,8 @@ use std::collections::BTreeMap;
 
 const PDF_VERSION: &[u8] = b"%PDF-1.4\n";
 const PDF_EOF: &[u8] = b"%%EOF\n";
+const NEWLINE_MARKER_V0: u8 = 0x0a;
+const PAGE_BREAK_MARKER_V0: u8 = 0x0c;
 
 const PAGE_WIDTH_PT_V0: f32 = 612.0;
 const PAGE_HEIGHT_PT_V0: f32 = 792.0;
@@ -30,10 +32,15 @@ const FOOTNOTE_MARKER_RISE_PT_V0: f32 = 4.0;
 const TABLE_ROW_PREFIX_MARKER_V0: &[u8] = b"!t ";
 const FIGURE_BOX_PREFIX_MARKER_V0: &[u8] = b"!gbox";
 const FIGURE_CAPTION_PREFIX_MARKER_V0: &[u8] = b"!gcap ";
+const TOC_PLACEHOLDER_MARKER_V0: &[u8] = b"!toc";
+const TOC_ENTRY_LINE_PREFIX_MARKER_V0: &[u8] = b"!toc ";
 const TABLE_COLUMN_COUNT_V0: usize = 3;
 const TABLE_CELL_PADDING_PT_V0: f32 = 6.0;
 const FIGURE_PLACEHOLDER_LINE_V0: &[u8] = b"[ Figure placeholder ]";
 const FIGURE_CAPTION_FONT_SIZE_PT_V0: f32 = 11.0;
+const TOC_TITLE_TEXT_V0: &[u8] = b"Contents";
+const TOC_TITLE_FONT_SIZE_PT_V0: f32 = 14.0;
+const TOC_ENTRY_INDENT_STEP_PT_V0: f32 = 18.0;
 const SECTION_HEADING_PREFIX_MARKER_V0: &[u8] = b"@S ";
 const SUBSECTION_HEADING_PREFIX_MARKER_V0: &[u8] = b"@s ";
 const ITALIC_START_MARKER_V0: u8 = b'[';
@@ -146,6 +153,13 @@ struct PdfLinkAnnotationV0 {
 struct PageRenderV0 {
     stream: Vec<u8>,
     annotations: Vec<PdfLinkAnnotationV0>,
+}
+
+#[derive(Clone)]
+struct TocEntryMetadataV0 {
+    level: u8,
+    anchor_id: u32,
+    title_glyphs: Vec<GlyphPlanV0>,
 }
 
 fn parse_styled_segments_v0(glyphs: &[GlyphPlanV0]) -> Option<Vec<PdfStyledSegmentV0>> {
@@ -448,6 +462,22 @@ fn has_figure_caption_prefix_v0(glyphs: &[GlyphPlanV0]) -> bool {
             .eq(FIGURE_CAPTION_PREFIX_MARKER_V0.iter().copied())
 }
 
+fn has_toc_placeholder_line_v0(glyphs: &[GlyphPlanV0]) -> bool {
+    glyphs.len() == TOC_PLACEHOLDER_MARKER_V0.len()
+        && glyphs
+            .iter()
+            .map(|glyph| glyph.byte)
+            .eq(TOC_PLACEHOLDER_MARKER_V0.iter().copied())
+}
+
+fn has_toc_entry_line_prefix_v0(glyphs: &[GlyphPlanV0]) -> bool {
+    glyphs.len() >= TOC_ENTRY_LINE_PREFIX_MARKER_V0.len()
+        && glyphs[..TOC_ENTRY_LINE_PREFIX_MARKER_V0.len()]
+            .iter()
+            .map(|glyph| glyph.byte)
+            .eq(TOC_ENTRY_LINE_PREFIX_MARKER_V0.iter().copied())
+}
+
 fn trim_space_glyph_edges_v0(glyphs: &[GlyphPlanV0]) -> Vec<GlyphPlanV0> {
     let mut start = 0usize;
     let mut end = glyphs.len();
@@ -635,6 +665,59 @@ fn emit_figure_block_v0(
         FIGURE_CAPTION_FONT_SIZE_PT_V0,
     );
     out.extend_from_slice(b"\n");
+    *y -= LEADING_PT_V0;
+    Some(())
+}
+
+fn emit_toc_block_v0(
+    out: &mut Vec<u8>,
+    toc_entries: &[TocEntryMetadataV0],
+    y: &mut f32,
+    min_body_y_pt: f32,
+) -> Option<()> {
+    if *y < min_body_y_pt {
+        return None;
+    }
+
+    let title_glyphs: Vec<GlyphPlanV0> = TOC_TITLE_TEXT_V0
+        .iter()
+        .copied()
+        .map(|byte| GlyphPlanV0 {
+            byte,
+            advance_sp: 65_536,
+        })
+        .collect();
+    let title_segments = vec![PdfStyledSegmentV0 {
+        style: PdfTextStyleV0::Bold,
+        advance_pt: title_glyphs
+            .iter()
+            .map(|glyph| (glyph.advance_sp as f32) / 65_536.0)
+            .sum(),
+        glyphs: title_glyphs,
+        is_link: false,
+    }];
+    emit_styled_segments_v0(out, &title_segments, MARGIN_PT_V0, *y, TOC_TITLE_FONT_SIZE_PT_V0);
+    out.extend_from_slice(b"\n");
+    *y -= LEADING_PT_V0;
+
+    for entry in toc_entries {
+        if *y < min_body_y_pt {
+            return None;
+        }
+        let base_segments = parse_styled_segments_v0(&entry.title_glyphs)?;
+        let render_segments = split_superscript_segments_v0(&base_segments);
+        if render_segments
+            .iter()
+            .any(|segment| segment.superscript || segment.is_link)
+        {
+            return None;
+        }
+        let indent_steps = f32::from(entry.level.saturating_sub(1));
+        let x_pt = MARGIN_PT_V0 + (indent_steps * TOC_ENTRY_INDENT_STEP_PT_V0);
+        emit_render_segments_with_superscript_v0(out, &render_segments, x_pt, *y, FONT_SIZE_PT_V0);
+        out.extend_from_slice(b"\n");
+        *y -= LEADING_PT_V0;
+    }
     *y -= LEADING_PT_V0;
     Some(())
 }
@@ -848,6 +931,62 @@ fn parse_href_url_line_v0(glyphs: &[GlyphPlanV0]) -> Option<(u32, Vec<u8>)> {
     Some((marker_id, uri))
 }
 
+fn parse_toc_entry_line_v0(glyphs: &[GlyphPlanV0]) -> Option<TocEntryMetadataV0> {
+    if !has_toc_entry_line_prefix_v0(glyphs) {
+        return None;
+    }
+    let mut cursor = TOC_ENTRY_LINE_PREFIX_MARKER_V0.len();
+
+    let mut level = 0u8;
+    let mut saw_level_digit = false;
+    while cursor < glyphs.len() && glyphs[cursor].byte.is_ascii_digit() {
+        level = level
+            .checked_mul(10)?
+            .checked_add(glyphs[cursor].byte.checked_sub(b'0')?)?;
+        saw_level_digit = true;
+        cursor += 1;
+    }
+    if !saw_level_digit || !(1..=2).contains(&level) {
+        return None;
+    }
+    if cursor >= glyphs.len() || glyphs[cursor].byte != b' ' {
+        return None;
+    }
+    cursor += 1;
+
+    let mut anchor_id = 0u32;
+    let mut saw_anchor_digit = false;
+    while cursor < glyphs.len() && glyphs[cursor].byte.is_ascii_digit() {
+        anchor_id = anchor_id
+            .checked_mul(10)?
+            .checked_add(u32::from(glyphs[cursor].byte - b'0'))?;
+        saw_anchor_digit = true;
+        cursor += 1;
+    }
+    if !saw_anchor_digit || anchor_id == 0 {
+        return None;
+    }
+    if cursor >= glyphs.len() || glyphs[cursor].byte != b' ' {
+        return None;
+    }
+    cursor += 1;
+    if cursor >= glyphs.len() {
+        return None;
+    }
+    let title = glyphs[cursor..].to_vec();
+    if title
+        .iter()
+        .any(|glyph| glyph.byte == NEWLINE_MARKER_V0 || glyph.byte == PAGE_BREAK_MARKER_V0)
+    {
+        return None;
+    }
+    Some(TocEntryMetadataV0 {
+        level,
+        anchor_id,
+        title_glyphs: title,
+    })
+}
+
 fn collect_link_annotations_for_line_v0(
     segments: &[PdfRenderSegmentV0],
     line_x_pt: f32,
@@ -963,7 +1102,10 @@ fn split_body_and_metadata_lines_v0(pages: &[PagePlanV0]) -> (Vec<Vec<LinePlanV0
     let mut in_metadata = false;
     for (page_index, page) in pages.iter().enumerate() {
         for line in &page.lines {
-            if has_footnote_line_prefix_v0(&line.glyphs) || has_href_url_line_prefix_v0(&line.glyphs) {
+            if has_footnote_line_prefix_v0(&line.glyphs)
+                || has_href_url_line_prefix_v0(&line.glyphs)
+                || has_toc_entry_line_prefix_v0(&line.glyphs)
+            {
                 in_metadata = true;
             }
             if in_metadata {
@@ -985,9 +1127,14 @@ fn split_body_and_metadata_lines_v0(pages: &[PagePlanV0]) -> (Vec<Vec<LinePlanV0
 
 fn parse_metadata_lines_v0(
     metadata_lines: &[LinePlanV0],
-) -> Option<(BTreeMap<u32, Vec<Vec<GlyphPlanV0>>>, BTreeMap<u32, Vec<u8>>)> {
+) -> Option<(
+    BTreeMap<u32, Vec<Vec<GlyphPlanV0>>>,
+    BTreeMap<u32, Vec<u8>>,
+    Vec<TocEntryMetadataV0>,
+)> {
     let mut footnote_defs_by_id = BTreeMap::<u32, Vec<Vec<GlyphPlanV0>>>::new();
     let mut href_url_by_id = BTreeMap::<u32, Vec<u8>>::new();
+    let mut toc_entries = Vec::<TocEntryMetadataV0>::new();
     let mut current_footnote_id = None::<u32>;
     for line in metadata_lines {
         if let Some((footnote_id, footnote_line)) = parse_footnote_definition_line_v0(&line.glyphs) {
@@ -1005,6 +1152,17 @@ fn parse_metadata_lines_v0(
             current_footnote_id = None;
             continue;
         }
+        if let Some(toc_entry) = parse_toc_entry_line_v0(&line.glyphs) {
+            if toc_entries
+                .iter()
+                .any(|entry| entry.anchor_id == toc_entry.anchor_id)
+            {
+                return None;
+            }
+            toc_entries.push(toc_entry);
+            current_footnote_id = None;
+            continue;
+        }
         if line.glyphs.is_empty() {
             if let Some(footnote_id) = current_footnote_id {
                 footnote_defs_by_id.get_mut(&footnote_id)?.push(Vec::new());
@@ -1014,13 +1172,15 @@ fn parse_metadata_lines_v0(
         let footnote_id = current_footnote_id?;
         footnote_defs_by_id.get_mut(&footnote_id)?.push(line.glyphs.clone());
     }
-    Some((footnote_defs_by_id, href_url_by_id))
+    toc_entries.sort_by_key(|entry| entry.anchor_id);
+    Some((footnote_defs_by_id, href_url_by_id, toc_entries))
 }
 
 fn build_page_content_stream_v0(
     lines: &[LinePlanV0],
     footnote_defs_by_id: &BTreeMap<u32, Vec<Vec<GlyphPlanV0>>>,
     href_url_by_id: &BTreeMap<u32, Vec<u8>>,
+    toc_entries: &[TocEntryMetadataV0],
     next_link_id: &mut u32,
     allow_title_block: bool,
 ) -> Option<PageRenderV0> {
@@ -1093,6 +1253,18 @@ fn build_page_content_stream_v0(
             continue;
         }
         if line_index >= title_block_len && has_figure_caption_prefix_v0(&line.glyphs) {
+            return None;
+        }
+        if line_index >= title_block_len && has_toc_placeholder_line_v0(&line.glyphs) {
+            emit_toc_block_v0(&mut out, toc_entries, &mut y, min_body_y_pt)?;
+            previous_rendered_line_was_empty = false;
+            skip_indent_after_title_block = false;
+            active_hang_indent_pt = 0.0;
+            active_quote_indent_pt = 0.0;
+            line_index += 1;
+            continue;
+        }
+        if line_index >= title_block_len && has_toc_entry_line_prefix_v0(&line.glyphs) {
             return None;
         }
         let quote_prefix_advance_pt = if line_index >= title_block_len {
@@ -1328,7 +1500,7 @@ fn build_page_content_stream_v0(
 
 fn build_pdf_for_pages_v0(pages: &[PagePlanV0]) -> Vec<u8> {
     let (body_pages, metadata_lines) = split_body_and_metadata_lines_v0(pages);
-    let Some((footnote_defs_by_id, href_url_by_id)) = parse_metadata_lines_v0(&metadata_lines) else {
+    let Some((footnote_defs_by_id, href_url_by_id, toc_entries)) = parse_metadata_lines_v0(&metadata_lines) else {
         return Vec::new();
     };
 
@@ -1339,6 +1511,7 @@ fn build_pdf_for_pages_v0(pages: &[PagePlanV0]) -> Vec<u8> {
             body_lines,
             &footnote_defs_by_id,
             &href_url_by_id,
+            &toc_entries,
             &mut next_link_id,
             page_index == 0,
         ) else { return Vec::new(); };

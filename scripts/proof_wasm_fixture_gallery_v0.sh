@@ -600,9 +600,9 @@ if (tocSummary?.typed_artifacts?.toc?.present !== true) {
   console.error('FAIL: expected toc typed artifact present after first run');
   process.exit(1);
 }
-const tocPath = path.join(outDir, 'typeset_demo_toc_probe_v0', 'toc_v0.json');
+const tocPath = path.join(outDir, 'typeset_demo_toc_probe_v0', 'toc_v1.json');
 if (!fs.existsSync(tocPath)) {
-  console.error('FAIL: expected toc_v0.json artifact after first run');
+  console.error('FAIL: expected toc_v1.json artifact after first run');
   process.exit(1);
 }
 const tocShaFirst = tocSummary.typed_artifacts.toc.artifact_sha256;
@@ -612,15 +612,33 @@ if (typeof tocShaFirst !== 'string' || !/^[0-9a-f]{64}$/.test(tocShaFirst)) {
 }
 const tocArtifactFirst = JSON.parse(fs.readFileSync(tocPath, 'utf8'));
 if (!Array.isArray(tocArtifactFirst?.entries)) {
-  console.error('FAIL: expected toc_v0.entries array in first-run artifact');
+  console.error('FAIL: expected toc_v1.entries array in first-run artifact');
+  process.exit(1);
+}
+if (tocArtifactFirst?.schema !== 'toc_v1') {
+  console.error('FAIL: expected toc_v1 schema in first-run artifact');
   process.exit(1);
 }
 if (tocArtifactFirst.entries.length <= 0) {
-  console.error('FAIL: expected non-empty toc_v0.entries for toc probe');
+  console.error('FAIL: expected non-empty toc_v1.entries for toc probe');
   process.exit(1);
 }
-assertEntrySourceSpans('typeset_demo_toc_probe_v0', 'toc_v0', tocArtifactFirst.entries);
-fs.writeFileSync(firstRunShaPath('toc_v0'), `${tocShaFirst}\n`);
+for (const [index, entry] of tocArtifactFirst.entries.entries()) {
+  if (!Number.isInteger(entry?.level) || entry.level < 1 || entry.level > 2) {
+    console.error(`FAIL: toc_v1.entries[${index}] must have level in [1,2]`);
+    process.exit(1);
+  }
+  if (typeof entry?.anchor_id !== 'string' || !/^h[1-9]\d*$/.test(entry.anchor_id)) {
+    console.error(`FAIL: toc_v1.entries[${index}] must have anchor_id like hN`);
+    process.exit(1);
+  }
+  if (entry?.page !== null) {
+    console.error(`FAIL: toc_v1.entries[${index}].page must be null in v1`);
+    process.exit(1);
+  }
+}
+assertEntrySourceSpans('typeset_demo_toc_probe_v0', 'toc_v1', tocArtifactFirst.entries);
+fs.writeFileSync(firstRunShaPath('toc_v1'), `${tocShaFirst}\n`);
 
 const bibSummary = JSON.parse(
   fs.readFileSync(path.join(outDir, 'typeset_demo_bib_probe_v0', 'summary.json'), 'utf8'),
@@ -1279,7 +1297,7 @@ if (resourceHintsShaSecond !== resourceHintsShaFirst) {
 }
 const requiredTypedKeys = ['toc', 'labels', 'bib', 'hyperref', 'pkgopt', 'graphics'];
 const labelsShaFirst = fs.readFileSync(path.join(`${outDir}_baseline`, 'labels_v0_first.sha256'), 'utf8').trim();
-const tocShaFirst = fs.readFileSync(path.join(`${outDir}_baseline`, 'toc_v0_first.sha256'), 'utf8').trim();
+const tocShaFirst = fs.readFileSync(path.join(`${outDir}_baseline`, 'toc_v1_first.sha256'), 'utf8').trim();
 const bibShaFirst = fs.readFileSync(path.join(`${outDir}_baseline`, 'bib_v0_first.sha256'), 'utf8').trim();
 const hyperrefShaFirst = fs.readFileSync(path.join(`${outDir}_baseline`, 'hyperref_v0_first.sha256'), 'utf8').trim();
 const pkgoptShaFirst = fs.readFileSync(path.join(`${outDir}_baseline`, 'pkgopt_v0_first.sha256'), 'utf8').trim();
@@ -1494,15 +1512,33 @@ if (!tocArtifact || tocArtifact.present !== true) {
 }
 const tocShaSecond = tocArtifact.artifact_sha256;
 if (tocShaSecond !== tocShaFirst) {
-  console.error('FAIL: toc_v0 artifact sha256 must be stable across reruns');
+  console.error('FAIL: toc_v1 artifact sha256 must be stable across reruns');
   process.exit(1);
 }
 const tocArtifactSecond = JSON.parse(
-  fs.readFileSync(path.join(outDir, 'typeset_demo_toc_probe_v0', 'toc_v0.json'), 'utf8'),
+  fs.readFileSync(path.join(outDir, 'typeset_demo_toc_probe_v0', 'toc_v1.json'), 'utf8'),
 );
 if (!Array.isArray(tocArtifactSecond?.entries) || tocArtifactSecond.entries.length <= 0) {
-  console.error('FAIL: expected non-empty toc_v0.entries after rerun');
+  console.error('FAIL: expected non-empty toc_v1.entries after rerun');
   process.exit(1);
+}
+if (tocArtifactSecond?.schema !== 'toc_v1') {
+  console.error('FAIL: expected toc_v1 schema after rerun');
+  process.exit(1);
+}
+for (const [index, entry] of tocArtifactSecond.entries.entries()) {
+  if (!Number.isInteger(entry?.level) || entry.level < 1 || entry.level > 2) {
+    console.error(`FAIL: rerun toc_v1.entries[${index}] must have level in [1,2]`);
+    process.exit(1);
+  }
+  if (typeof entry?.anchor_id !== 'string' || !/^h[1-9]\d*$/.test(entry.anchor_id)) {
+    console.error(`FAIL: rerun toc_v1.entries[${index}] must have anchor_id like hN`);
+    process.exit(1);
+  }
+  if (entry?.page !== null) {
+    console.error(`FAIL: rerun toc_v1.entries[${index}].page must be null in v1`);
+    process.exit(1);
+  }
 }
 
 const bibSummary = JSON.parse(
@@ -1646,7 +1682,7 @@ console.log('PASS: typed_artifacts_version gate 1');
 console.log(`PASS: resource_hints_v0 sha stable ${resourceHintsShaSecond}`);
 console.log('PASS: resource_hints_v0 excludes ok_demo_v0');
 console.log(`PASS: labels_v0 sha stable ${labelsShaSecond}`);
-console.log(`PASS: toc_v0 sha stable ${tocShaSecond}`);
+console.log(`PASS: toc_v1 sha stable ${tocShaSecond}`);
 console.log(`PASS: bib_v0 sha stable ${bibShaSecond}`);
 console.log(`PASS: hyperref_v0 sha stable ${hyperrefShaSecond}`);
 console.log(`PASS: pkgopt_v0 sha stable ${pkgoptShaSecond}`);
