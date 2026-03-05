@@ -284,15 +284,13 @@ fn build_page_content_stream_v0(lines: &[LinePlanV0]) -> Option<Vec<u8>> {
             } else {
                 MARGIN_PT_V0
             };
-            let mut segment_x = line_x;
+            out.extend_from_slice(b"1 0 0 1 ");
+            out.extend_from_slice(format!("{:.2} {:.2} Tm ", line_x, y).as_bytes());
             for segment in segments {
                 if segment.bytes.is_empty() {
-                    segment_x += segment.advance_pt;
                     continue;
                 }
                 let escaped = escape_pdf_string_bytes(&segment.bytes);
-                out.extend_from_slice(b"1 0 0 1 ");
-                out.extend_from_slice(format!("{:.2} {:.2} Tm ", segment_x, y).as_bytes());
                 out.extend_from_slice(b"/");
                 out.extend_from_slice(style_font_alias_v0(segment.style));
                 out.extend_from_slice(b" ");
@@ -300,7 +298,6 @@ fn build_page_content_stream_v0(lines: &[LinePlanV0]) -> Option<Vec<u8>> {
                 out.extend_from_slice(b" Tf (");
                 out.extend_from_slice(&escaped);
                 out.extend_from_slice(b") Tj ");
-                segment_x += segment.advance_pt;
             }
             out.extend_from_slice(b"\n");
             if !in_title_block && skip_indent_after_title_block {
