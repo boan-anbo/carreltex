@@ -83,6 +83,25 @@ if (typeof labelsShaFirst !== 'string' || !/^[0-9a-f]{64}$/.test(labelsShaFirst)
   process.exit(1);
 }
 fs.writeFileSync(path.join(baselineDir, 'labels_v0_first.sha256'), `${labelsShaFirst}\n`);
+
+const tocSummary = JSON.parse(
+  fs.readFileSync(path.join(outDir, 'typeset_demo_toc_probe_v0', 'summary.json'), 'utf8'),
+);
+if (tocSummary?.typed_artifacts?.toc?.present !== true) {
+  console.error('FAIL: expected toc typed artifact present after first run');
+  process.exit(1);
+}
+const tocPath = path.join(outDir, 'typeset_demo_toc_probe_v0', 'toc_v0.json');
+if (!fs.existsSync(tocPath)) {
+  console.error('FAIL: expected toc_v0.json artifact after first run');
+  process.exit(1);
+}
+const tocShaFirst = tocSummary.typed_artifacts.toc.artifact_sha256;
+if (typeof tocShaFirst !== 'string' || !/^[0-9a-f]{64}$/.test(tocShaFirst)) {
+  console.error('FAIL: expected toc artifact sha256 in first summary');
+  process.exit(1);
+}
+fs.writeFileSync(path.join(baselineDir, 'toc_v0_first.sha256'), `${tocShaFirst}\n`);
 NODE
 
 TEXLIVE_RESOLVER_BACKEND_V0=offline_store_v0 \
@@ -105,6 +124,7 @@ const statuses = Array.isArray(report.statuses) ? report.statuses : [];
 const resolvedCount = Number(report.resolved_resources_count ?? 0);
 const requiredTypedKeys = ['toc', 'labels', 'bib', 'hyperref'];
 const labelsShaFirst = fs.readFileSync(path.join(`${outDir}_baseline`, 'labels_v0_first.sha256'), 'utf8').trim();
+const tocShaFirst = fs.readFileSync(path.join(`${outDir}_baseline`, 'toc_v0_first.sha256'), 'utf8').trim();
 
 if (resolvedCount <= 0) {
   console.error('FAIL: expected at least one resolved resource in fixture gallery summaries');
@@ -167,10 +187,25 @@ if (labelsShaSecond !== labelsShaFirst) {
   process.exit(1);
 }
 
+const tocSummary = JSON.parse(
+  fs.readFileSync(path.join(outDir, 'typeset_demo_toc_probe_v0', 'summary.json'), 'utf8'),
+);
+const tocArtifact = tocSummary?.typed_artifacts?.toc;
+if (!tocArtifact || tocArtifact.present !== true) {
+  console.error('FAIL: expected toc typed artifact present after second run');
+  process.exit(1);
+}
+const tocShaSecond = tocArtifact.artifact_sha256;
+if (tocShaSecond !== tocShaFirst) {
+  console.error('FAIL: toc_v0 artifact sha256 must be stable across reruns');
+  process.exit(1);
+}
+
 console.log(`PASS: resolved_resources_count ${resolvedCount}`);
 console.log(`PASS: baseline_match MATCH=${baselineMatches} MISSING=${baselineMissing}`);
 console.log(`PASS: typed_artifacts keys ${requiredTypedKeys.join(',')}`);
 console.log(`PASS: labels_v0 sha stable ${labelsShaSecond}`);
+console.log(`PASS: toc_v0 sha stable ${tocShaSecond}`);
 NODE
 
 echo "PASS: wasm fixture gallery artifacts $OUT_DIR"
