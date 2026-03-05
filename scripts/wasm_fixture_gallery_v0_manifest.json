@@ -32,6 +32,24 @@
       "purpose": "Probes hyperref/url seam planned for future typed artifacts."
     },
     {
+      "id": "typeset_demo_hyperref_links_probe_v0",
+      "tags": ["typeset", "hyperref", "links", "probe", "ni"],
+      "expected_status": "NI",
+      "purpose": "Probes hyperref link/url seams so resource_hints request mapping can resolve endpoint/store resources."
+    },
+    {
+      "id": "typeset_demo_cjk_probe_v0",
+      "tags": ["typeset", "cjk", "font", "probe", "ni"],
+      "expected_status": "NI",
+      "purpose": "Probes CJK package/font seam for on-demand package request generation."
+    },
+    {
+      "id": "typeset_demo_math_probe_v0",
+      "tags": ["typeset", "math", "amsmath", "probe", "ni"],
+      "expected_status": "NI",
+      "purpose": "Probes amsmath package seam for on-demand package request generation."
+    },
+    {
       "id": "typeset_demo_bib_probe_v0",
       "tags": ["typeset", "bib", "cite", "probe", "ni"],
       "expected_status": "NI",
