@@ -49,6 +49,8 @@ const REF_MARKER_PREFIX_V0: &[u8] = b"@@REF:";
 const REF_MARKER_SUFFIX_V0: &[u8] = b"@@";
 const CITE_MARKER_PREFIX_V0: &[u8] = b"@@CITE:";
 const CITE_MARKER_SUFFIX_V0: &[u8] = b"@@";
+const INLINE_MATH_PLACEHOLDER_V0: &[u8] = b"MATH";
+const DISPLAY_MATH_PLACEHOLDER_V0: &[u8] = b"MATH DISPLAY";
 const LINK_START_MARKER_V0: u8 = b'<';
 const LINK_END_MARKER_V0: u8 = b'>';
 const NOINDENT_PREFIX_MARKER_V0: &[u8] = b"~ ";
@@ -436,6 +438,93 @@ fn is_supported_literal_char_v0(byte: u8) -> bool {
     )
 }
 
+fn is_safe_math_payload_char_v0(byte: u8) -> bool {
+    (0x20..=0x7e).contains(&byte)
+        && !matches!(
+            byte,
+            b'$'
+                | b'\\'
+                | ITALIC_START_MARKER_V0
+                | ITALIC_END_MARKER_V0
+                | BOLD_START_MARKER_V0
+                | BOLD_END_MARKER_V0
+                | LINK_START_MARKER_V0
+                | LINK_END_MARKER_V0
+        )
+}
+
+fn consume_inline_math_command_v0(tokens: &[TokenV0], index: usize, out: &mut Vec<u8>) -> Option<usize> {
+    if !matches!(tokens.get(index), Some(TokenV0::Char(b'$'))) {
+        return None;
+    }
+    let mut cursor = index + 1;
+    let mut payload = Vec::<u8>::new();
+    loop {
+        match tokens.get(cursor) {
+            Some(TokenV0::Char(b'$')) => {
+                trim_trailing_spaces(&mut payload);
+                if payload.is_empty() {
+                    return None;
+                }
+                out.extend_from_slice(INLINE_MATH_PLACEHOLDER_V0);
+                return Some(cursor + 1);
+            }
+            Some(TokenV0::Char(byte)) if *byte == NEWLINE_MARKER_V0 => {
+                push_space(&mut payload);
+                cursor += 1;
+            }
+            Some(TokenV0::Char(byte)) if is_safe_math_payload_char_v0(*byte) => {
+                payload.push(*byte);
+                cursor += 1;
+            }
+            Some(TokenV0::Space) => {
+                push_space(&mut payload);
+                cursor += 1;
+            }
+            _ => return None,
+        }
+    }
+}
+
+fn consume_display_math_command_v0(tokens: &[TokenV0], index: usize, out: &mut Vec<u8>) -> Option<usize> {
+    if !matches!(
+        tokens.get(index),
+        Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"["
+    ) {
+        return None;
+    }
+    let mut cursor = index + 1;
+    let mut payload = Vec::<u8>::new();
+    loop {
+        match tokens.get(cursor) {
+            Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"]" => {
+                trim_trailing_spaces(&mut payload);
+                if payload.is_empty() {
+                    return None;
+                }
+                push_paragraph_break(out);
+                out.extend_from_slice(b"^ ");
+                out.extend_from_slice(DISPLAY_MATH_PLACEHOLDER_V0);
+                push_paragraph_break(out);
+                return Some(cursor + 1);
+            }
+            Some(TokenV0::Char(byte)) if *byte == NEWLINE_MARKER_V0 => {
+                push_space(&mut payload);
+                cursor += 1;
+            }
+            Some(TokenV0::Char(byte)) if is_safe_math_payload_char_v0(*byte) => {
+                payload.push(*byte);
+                cursor += 1;
+            }
+            Some(TokenV0::Space) => {
+                push_space(&mut payload);
+                cursor += 1;
+            }
+            _ => return None,
+        }
+    }
+}
+
 fn is_spacing_or_newline_v0(byte: u8) -> bool {
     matches!(byte, b' ' | NEWLINE_MARKER_V0)
 }
@@ -616,6 +705,9 @@ fn consume_fragment_token_v0(
     allow_hard_break: bool,
 ) -> Option<usize> {
     match tokens.get(index)? {
+        TokenV0::Char(byte) if allow_hard_break && *byte == b'$' => {
+            consume_inline_math_command_v0(tokens, index, out)
+        }
         TokenV0::Char(byte) if allow_hard_break && *byte == PAGE_BREAK_MARKER_V0 => {
             push_page_break(out);
             Some(index + 1)
@@ -655,6 +747,9 @@ fn consume_fragment_token_v0(
         {
             push_page_break(out);
             Some(index + 1)
+        }
+        TokenV0::ControlSeq(name) if allow_hard_break && name.as_slice() == b"[" => {
+            consume_display_math_command_v0(tokens, index, out)
         }
         TokenV0::ControlSeq(name) if name.as_slice() == b"protect" || name.as_slice() == b"relax" => {
             Some(index + 1)
