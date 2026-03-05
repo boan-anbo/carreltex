@@ -259,6 +259,61 @@ fn typeset_minimal_rightline_rejects_multiline_content() {
 }
 
 #[test]
+fn typeset_minimal_footnotes_and_href_emit_expected_markers() {
+    let main = b"\\documentclass{article}\\begin{document}Body text\\footnote{First note}. Visit \\href{https://example.com}{example link}.\\end{document}";
+    let body = extract_typeset_body(main);
+    let text = String::from_utf8(body).expect("body should be valid utf8");
+    assert!(
+        text.contains("Body text^1. Visit {example link}."),
+        "body={text:?}"
+    );
+    assert!(text.contains("!f 1 First note"), "body={text:?}");
+}
+
+#[test]
+fn typeset_minimal_rejects_nested_footnote_content() {
+    let main = b"\\documentclass{article}\\begin{document}A\\footnote{outer \\footnote{inner}}\\end{document}";
+    let result = compile_typeset(main);
+    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert!(result.main_xdv_bytes.is_empty());
+}
+
+#[test]
+fn typeset_minimal_rejects_href_with_unsupported_url_tokens() {
+    let main = b"\\documentclass{article}\\begin{document}\\href{\\bad}{text}\\end{document}";
+    let result = compile_typeset(main);
+    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert!(result.main_xdv_bytes.is_empty());
+}
+
+#[test]
+fn typeset_minimal_rejects_malformed_href_missing_text_group() {
+    let main = b"\\documentclass{article}\\begin{document}\\href{https://example.com}\\end{document}";
+    let result = compile_typeset(main);
+    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert!(result.main_xdv_bytes.is_empty());
+}
+
+#[test]
+fn typeset_minimal_keeps_multiple_footnotes_in_order() {
+    let main = b"\\documentclass{article}\\begin{document}A\\footnote{First note} B\\footnote{Second note}.\\end{document}";
+    let body = extract_typeset_body(main);
+    let text = String::from_utf8(body).expect("body should be valid utf8");
+    assert!(
+        text.contains("A^1 B^2."),
+        "inline markers should be emitted in-order: body={text:?}"
+    );
+    assert!(
+        text.contains("!f 1 First note"),
+        "first footnote line missing: body={text:?}"
+    );
+    assert!(
+        text.contains("!f 2 Second note"),
+        "second footnote line missing: body={text:?}"
+    );
+}
+
+#[test]
 fn typeset_minimal_long_paragraph_wraps_to_multiple_lines() {
     let main = b"\\documentclass{article}\\begin{document}This is a long paragraph that should wrap deterministically to multiple physical lines in the minimal typeset pipeline when width-based layout is enabled and the content exceeds the configured line width for the page body area.\\end{document}";
     let result = compile_typeset(main);

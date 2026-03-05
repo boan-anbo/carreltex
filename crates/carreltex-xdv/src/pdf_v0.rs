@@ -15,6 +15,10 @@ const LIST_BODY_INDENT_PT_V0: f32 = INDENT_PT_V0;
 const ENUM_NUMBER_COLUMN_RIGHT_PT_V0: f32 = MARGIN_PT_V0 + (FONT_SIZE_PT_V0 * 1.5);
 const LEADING_PT_V0: f32 = 14.0;
 const TITLE_EXTRA_GAP_PT_V0: f32 = LEADING_PT_V0;
+const FOOTNOTE_FONT_SIZE_PT_V0: f32 = 10.0;
+const FOOTNOTE_LEADING_PT_V0: f32 = 12.0;
+const FOOTNOTE_BLOCK_GAP_PT_V0: f32 = 12.0;
+const FOOTNOTE_LINE_PREFIX_MARKER_V0: &[u8] = b"!f ";
 const NOINDENT_PREFIX_MARKER_V0: u8 = b'~';
 const SECTION_HEADING_PREFIX_MARKER_V0: &[u8] = b"@S ";
 const SUBSECTION_HEADING_PREFIX_MARKER_V0: &[u8] = b"@s ";
@@ -251,6 +255,14 @@ fn has_noindent_prefix_v0(glyphs: &[GlyphPlanV0]) -> bool {
     glyphs.len() >= 2 && glyphs[0].byte == NOINDENT_PREFIX_MARKER_V0 && glyphs[1].byte == b' '
 }
 
+fn has_footnote_line_prefix_v0(glyphs: &[GlyphPlanV0]) -> bool {
+    glyphs.len() >= FOOTNOTE_LINE_PREFIX_MARKER_V0.len()
+        && glyphs[..FOOTNOTE_LINE_PREFIX_MARKER_V0.len()]
+            .iter()
+            .map(|glyph| glyph.byte)
+            .eq(FOOTNOTE_LINE_PREFIX_MARKER_V0.iter().copied())
+}
+
 fn heading_prefix_len_v0(kind: HeadingKindV0) -> usize {
     match kind {
         HeadingKindV0::Section => SECTION_HEADING_PREFIX_MARKER_V0.len(),
@@ -333,14 +345,33 @@ fn build_page_content_stream_v0(lines: &[LinePlanV0]) -> Option<Vec<u8>> {
     out.extend_from_slice(b"BT\n");
     out.extend_from_slice(b"0 g\n");
 
-    let title_block_len = detect_title_block_len_v0(lines);
+    let footnote_block_start = lines
+        .iter()
+        .position(|line| has_footnote_line_prefix_v0(&line.glyphs))
+        .unwrap_or(lines.len());
+    let body_lines = &lines[..footnote_block_start];
+    let footnote_lines = &lines[footnote_block_start..];
+    let footnote_reserved_height_pt = if footnote_lines.is_empty() {
+        0.0
+    } else {
+        FOOTNOTE_BLOCK_GAP_PT_V0 + (footnote_lines.len() as f32 * FOOTNOTE_LEADING_PT_V0)
+    };
+    if footnote_reserved_height_pt >= (PAGE_HEIGHT_PT_V0 - (2.0 * MARGIN_PT_V0)) {
+        return None;
+    }
+    let min_body_y_pt = MARGIN_PT_V0 + footnote_reserved_height_pt;
+
+    let title_block_len = detect_title_block_len_v0(body_lines);
     let mut y = PAGE_HEIGHT_PT_V0 - MARGIN_PT_V0 - TITLE_FONT_SIZE_PT_V0;
     let mut previous_rendered_line_was_empty = false;
     let mut skip_indent_after_title_block = title_block_len > 0;
     let mut active_hang_indent_pt = 0.0f32;
     let mut active_quote_indent_pt = 0.0f32;
-    for (line_index, line) in lines.iter().enumerate() {
+    for (line_index, line) in body_lines.iter().enumerate() {
         if y < MARGIN_PT_V0 {
+            break;
+        }
+        if y < min_body_y_pt {
             break;
         }
         let quote_prefix_advance_pt = if line_index >= title_block_len {
@@ -414,7 +445,7 @@ fn build_page_content_stream_v0(lines: &[LinePlanV0]) -> Option<Vec<u8>> {
         } else {
             FONT_SIZE_PT_V0
         };
-        let next_raw_line_is_empty = lines
+        let next_raw_line_is_empty = body_lines
             .get(line_index + 1)
             .map(|next_line| next_line.glyphs.is_empty())
             .unwrap_or(false);
@@ -491,6 +522,33 @@ fn build_page_content_stream_v0(lines: &[LinePlanV0]) -> Option<Vec<u8>> {
         y -= LEADING_PT_V0;
         if title_block_len > 0 && line_index + 1 == title_block_len {
             y -= TITLE_EXTRA_GAP_PT_V0;
+        }
+    }
+
+    if !footnote_lines.is_empty() {
+        let mut footnote_y =
+            MARGIN_PT_V0 + footnote_reserved_height_pt - FOOTNOTE_LEADING_PT_V0;
+        for line in footnote_lines {
+            if footnote_y < MARGIN_PT_V0 {
+                return None;
+            }
+            let render_glyphs = if has_footnote_line_prefix_v0(&line.glyphs) {
+                &line.glyphs[FOOTNOTE_LINE_PREFIX_MARKER_V0.len()..]
+            } else {
+                &line.glyphs[..]
+            };
+            let segments = parse_styled_segments_v0(render_glyphs)?;
+            if !segments.is_empty() {
+                emit_styled_segments_v0(
+                    &mut out,
+                    &segments,
+                    MARGIN_PT_V0,
+                    footnote_y,
+                    FOOTNOTE_FONT_SIZE_PT_V0,
+                );
+                out.extend_from_slice(b"\n");
+            }
+            footnote_y -= FOOTNOTE_LEADING_PT_V0;
         }
     }
 

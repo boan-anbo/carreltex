@@ -1671,6 +1671,96 @@ fn pdf_renderer_indents_body_paragraph_start_after_blank_line_v0() {
 }
 
 #[test]
+fn pdf_renderer_footnote_block_renders_at_page_bottom_with_small_font_v0() {
+    let xdv = write_dvi_v2_text_page_v0(b"Body marker^1 line.\n\n!f 1 Footnote text with [emph].")
+        .expect("writer should accept footnote marker lines");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+    let pdf_text = String::from_utf8_lossy(&pdf);
+    assert!(
+        pdf_text.contains("10 Tf"),
+        "footnote block should use smaller font size: {pdf_text}"
+    );
+    assert!(
+        !pdf_text.contains("!f 1"),
+        "internal footnote prefix should be hidden in pdf output: {pdf_text}"
+    );
+
+    let body_pos = tm_position_for_line_containing_text_v0(&pdf, "(Body marker^1 line.)")
+        .expect("body line position");
+    let footnote_pos =
+        tm_position_for_line_containing_text_v0(&pdf, "(1 Footnote text with ")
+            .expect("footnote line position");
+    assert!(
+        footnote_pos.1 < body_pos.1,
+        "footnote should render below body line: body_y={} footnote_y={}",
+        body_pos.1,
+        footnote_pos.1
+    );
+    assert!(
+        (72.0..=140.0).contains(&footnote_pos.1),
+        "footnote block should stay near page bottom margin: y={}",
+        footnote_pos.1
+    );
+}
+
+#[test]
+fn pdf_renderer_link_style_segments_are_emitted_v0() {
+    let xdv = write_dvi_v2_text_page_v0(b"Visit {Example link} now.")
+        .expect("writer should accept link style markers");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+    let pdf_text = String::from_utf8_lossy(&pdf);
+    assert!(
+        pdf_text.contains("/F3 12 Tf (Example link) Tj"),
+        "link segment should render in styled font: {pdf_text}"
+    );
+    assert!(
+        pdf_text.contains("/F1 12 Tf (Visit ) Tj"),
+        "leading regular segment should remain: {pdf_text}"
+    );
+    assert!(
+        pdf_text.contains("/F1 12 Tf ( now.) Tj"),
+        "trailing regular segment should remain: {pdf_text}"
+    );
+}
+
+#[test]
+fn pdf_renderer_rejects_footnote_block_overflow_v0() {
+    let mut text = Vec::<u8>::new();
+    text.extend_from_slice(b"Body line with marker^1.\n\n");
+    for index in 0..80u8 {
+        text.extend_from_slice(b"!f ");
+        text.extend_from_slice((index + 1).to_string().as_bytes());
+        text.extend_from_slice(b" Footnote overflow line.\n");
+    }
+    let xdv = write_dvi_v2_text_page_v0(&text).expect("writer should accept overflow case");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv);
+    assert!(
+        pdf.is_none(),
+        "renderer should fail-closed when footnote block exceeds reserved height"
+    );
+}
+
+#[test]
+fn pdf_renderer_link_style_near_punctuation_stays_single_matrix_v0() {
+    let xdv = write_dvi_v2_text_page_v0(b"See,{Example}. Tail")
+        .expect("writer should accept styled punctuation link line");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+    let pdf_text = String::from_utf8_lossy(&pdf);
+    assert!(
+        pdf_text.contains("/F1 12 Tf (See,) Tj /F3 12 Tf (Example) Tj /F1 12 Tf (. Tail) Tj"),
+        "styled punctuation link sequence missing: {pdf_text}"
+    );
+    let tm_count = tm_count_for_line_containing_v0(&pdf, "(See,)");
+    assert_eq!(tm_count, 1, "expected single Tm for link punctuation line");
+    let max_tm_gap = max_tm_gap_pt_for_line_containing_v0(&pdf, "(See,)")
+        .expect("link punctuation line should parse");
+    assert!(
+        max_tm_gap <= 0.02,
+        "link punctuation line should not create matrix gaps: {max_tm_gap}"
+    );
+}
+
+#[test]
 fn validator_rejects_wrong_movement_amount() {
     let mut bytes = write_dvi_v2_text_page_v0(b"ABCD").expect("writer should accept ABCD");
     let right_index = bytes

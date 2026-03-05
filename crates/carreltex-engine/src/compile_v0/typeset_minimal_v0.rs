@@ -19,6 +19,9 @@ const CENTER_ENV_V0: &[u8] = b"center";
 const CENTERLINE_CONTROL_V0: &[u8] = b"centerline";
 const FLUSHRIGHT_ENV_V0: &[u8] = b"flushright";
 const RIGHTLINE_CONTROL_V0: &[u8] = b"rightline";
+const FOOTNOTE_CONTROL_V0: &[u8] = b"footnote";
+const HREF_CONTROL_V0: &[u8] = b"href";
+const FOOTNOTE_LINE_PREFIX_MARKER_V0: &[u8] = b"!f ";
 const NOINDENT_PREFIX_MARKER_V0: &[u8] = b"~ ";
 const SECTION_HEADING_PREFIX_MARKER_V0: &[u8] = b"@S ";
 const SUBSECTION_HEADING_PREFIX_MARKER_V0: &[u8] = b"@s ";
@@ -1009,6 +1012,110 @@ fn consume_meta_declaration_v0(
     Some((next, value))
 }
 
+fn maybe_emit_pending_noindent_prefix_v0(out: &mut Vec<u8>, pending_noindent: &mut bool) {
+    if !*pending_noindent {
+        return;
+    }
+    if out.is_empty()
+        || matches!(
+            out.last().copied(),
+            Some(NEWLINE_MARKER_V0 | PAGE_BREAK_MARKER_V0)
+        )
+    {
+        out.extend_from_slice(NOINDENT_PREFIX_MARKER_V0);
+        *pending_noindent = false;
+    }
+}
+
+fn is_safe_href_url_byte_v0(byte: u8) -> bool {
+    byte.is_ascii_alphanumeric()
+        || matches!(
+            byte,
+            b':'
+                | b'/'
+                | b'?'
+                | b'#'
+                | b'['
+                | b']'
+                | b'@'
+                | b'!'
+                | b'$'
+                | b'&'
+                | b'\''
+                | b'('
+                | b')'
+                | b'*'
+                | b'+'
+                | b','
+                | b';'
+                | b'='
+                | b'%'
+                | b'.'
+                | b'_'
+                | b'-'
+                | b'~'
+        )
+}
+
+fn consume_footnote_command_v0(
+    tokens: &[TokenV0],
+    index: usize,
+    out: &mut Vec<u8>,
+    footnotes: &mut Vec<Vec<u8>>,
+) -> Option<usize> {
+    if !matches!(
+        tokens.get(index),
+        Some(TokenV0::ControlSeq(name)) if name.as_slice() == FOOTNOTE_CONTROL_V0
+    ) {
+        return None;
+    }
+    let (group_start, group_end, next) = consume_group_bounds(tokens, index + 1)?;
+    let mut footnote = Vec::<u8>::new();
+    consume_fragment_range_v0(tokens, group_start, group_end, &mut footnote, false, false)?;
+    trim_trailing_spaces(&mut footnote);
+    if footnote.is_empty() {
+        return None;
+    }
+    footnotes.push(footnote);
+    out.push(b'^');
+    out.extend_from_slice(footnotes.len().to_string().as_bytes());
+    Some(next)
+}
+
+fn consume_href_command_v0(tokens: &[TokenV0], index: usize, out: &mut Vec<u8>) -> Option<usize> {
+    if !matches!(
+        tokens.get(index),
+        Some(TokenV0::ControlSeq(name)) if name.as_slice() == HREF_CONTROL_V0
+    ) {
+        return None;
+    }
+
+    let (url_start, url_end, cursor_after_url) = consume_group_bounds(tokens, index + 1)?;
+    let mut href_url = Vec::<u8>::new();
+    for token in &tokens[url_start..url_end] {
+        match token {
+            TokenV0::Char(byte) if is_safe_href_url_byte_v0(*byte) => href_url.push(*byte),
+            _ => return None,
+        }
+    }
+    if href_url.is_empty() {
+        return None;
+    }
+
+    let (text_start, text_end, next) = consume_group_bounds(tokens, cursor_after_url)?;
+    let mut href_text = Vec::<u8>::new();
+    consume_fragment_range_v0(tokens, text_start, text_end, &mut href_text, false, false)?;
+    trim_trailing_spaces(&mut href_text);
+    if href_text.is_empty() {
+        return None;
+    }
+
+    out.push(BOLD_START_MARKER_V0);
+    out.extend_from_slice(&href_text);
+    out.push(BOLD_END_MARKER_V0);
+    Some(next)
+}
+
 fn emit_maketitle_block_v0(out: &mut Vec<u8>, meta: &TitleMetaV0) {
     let mut emitted = false;
     if let Some(title) = &meta.title {
@@ -1067,6 +1174,7 @@ pub(crate) fn extract_typeset_minimal_text_body_v0(tokens: &[TokenV0]) -> Option
     }
 
     let mut body = Vec::<u8>::new();
+    let mut footnotes = Vec::<Vec<u8>>::new();
     let mut pending_noindent_after_heading = false;
     loop {
         match tokens.get(index) {
@@ -1099,21 +1207,20 @@ pub(crate) fn extract_typeset_minimal_text_body_v0(tokens: &[TokenV0]) -> Option
                 pending_noindent_after_heading = false;
                 index = consume_rightline_command_v0(tokens, index, &mut body)?;
             }
+            Some(TokenV0::ControlSeq(name)) if name.as_slice() == FOOTNOTE_CONTROL_V0 => {
+                maybe_emit_pending_noindent_prefix_v0(&mut body, &mut pending_noindent_after_heading);
+                index = consume_footnote_command_v0(tokens, index, &mut body, &mut footnotes)?;
+            }
+            Some(TokenV0::ControlSeq(name)) if name.as_slice() == HREF_CONTROL_V0 => {
+                maybe_emit_pending_noindent_prefix_v0(&mut body, &mut pending_noindent_after_heading);
+                index = consume_href_command_v0(tokens, index, &mut body)?;
+            }
             Some(TokenV0::ControlSeq(name)) if is_heading_control_v0(name.as_slice()) => {
                 index = consume_heading_command_v0(tokens, index, &mut body)?;
                 pending_noindent_after_heading = true;
             }
             Some(_) => {
-                if pending_noindent_after_heading
-                    && (body.is_empty()
-                        || matches!(
-                            body.last().copied(),
-                            Some(NEWLINE_MARKER_V0 | PAGE_BREAK_MARKER_V0)
-                        ))
-                {
-                    body.extend_from_slice(NOINDENT_PREFIX_MARKER_V0);
-                    pending_noindent_after_heading = false;
-                }
+                maybe_emit_pending_noindent_prefix_v0(&mut body, &mut pending_noindent_after_heading);
                 index = consume_fragment_token_v0(tokens, index, &mut body, false, true)?;
             }
             None => return None,
@@ -1125,6 +1232,17 @@ pub(crate) fn extract_typeset_minimal_text_body_v0(tokens: &[TokenV0]) -> Option
         .any(|token| !matches!(token, TokenV0::Space))
     {
         return None;
+    }
+
+    if !footnotes.is_empty() {
+        push_paragraph_break(&mut body);
+        for (note_index, footnote) in footnotes.iter().enumerate() {
+            body.extend_from_slice(FOOTNOTE_LINE_PREFIX_MARKER_V0);
+            body.extend_from_slice((note_index + 1).to_string().as_bytes());
+            body.push(b' ');
+            body.extend_from_slice(footnote);
+            push_newline(&mut body);
+        }
     }
 
     body = normalize_punctuation_spacing_v0(&body);
