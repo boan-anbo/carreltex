@@ -63,7 +63,7 @@ if (resourceHintsShaSecond !== resourceHintsShaFirst) {
   console.error('FAIL: report.resource_hints_v0 must be stable across reruns');
   process.exit(1);
 }
-const requiredTypedKeys = ['toc', 'labels', 'refs', 'bib', 'hyperref', 'pkgopt', 'graphics', 'math'];
+const requiredTypedKeys = ['toc', 'labels', 'refs', 'bib', 'hyperref', 'pkgopt', 'graphics', 'math', 'table'];
 const labelsShaFirst = fs.readFileSync(path.join(`${outDir}_baseline`, 'labels_v1_first.sha256'), 'utf8').trim();
 const refsShaFirst = fs.readFileSync(path.join(`${outDir}_baseline`, 'refs_v1_first.sha256'), 'utf8').trim();
 const tocShaFirst = fs.readFileSync(path.join(`${outDir}_baseline`, 'toc_v1_first.sha256'), 'utf8').trim();
@@ -72,6 +72,7 @@ const hyperrefShaFirst = fs.readFileSync(path.join(`${outDir}_baseline`, 'hyperr
 const pkgoptShaFirst = fs.readFileSync(path.join(`${outDir}_baseline`, 'pkgopt_v0_first.sha256'), 'utf8').trim();
 const graphicsShaFirst = fs.readFileSync(path.join(`${outDir}_baseline`, 'graphics_v1_first.sha256'), 'utf8').trim();
 const mathShaFirst = fs.readFileSync(path.join(`${outDir}_baseline`, 'math_v1_first.sha256'), 'utf8').trim();
+const tableShaFirst = fs.readFileSync(path.join(`${outDir}_baseline`, 'table_v1_first.sha256'), 'utf8').trim();
 
 if (resolvedCount <= 0) {
   console.error('FAIL: expected at least one resolved resource in fixture gallery summaries');
@@ -433,6 +434,24 @@ if (!Array.isArray(mathArtifactSecond?.entries) || mathArtifactSecond.entries.le
   process.exit(1);
 }
 
+const tableArtifact = mathSummary?.typed_artifacts?.table;
+if (!tableArtifact || tableArtifact.present !== true) {
+  console.error('FAIL: expected table typed artifact present after second run');
+  process.exit(1);
+}
+const tableShaSecond = tableArtifact.artifact_sha256;
+if (tableShaSecond !== tableShaFirst) {
+  console.error('FAIL: table_v1 artifact sha256 must be stable across reruns');
+  process.exit(1);
+}
+const tableArtifactSecond = JSON.parse(
+  fs.readFileSync(path.join(outDir, 'typeset_demo_minimal_v0', 'table_v1.json'), 'utf8'),
+);
+if (!Array.isArray(tableArtifactSecond?.entries) || tableArtifactSecond.entries.length <= 0) {
+  console.error('FAIL: expected non-empty table_v1.entries after rerun');
+  process.exit(1);
+}
+
 const reportCaseSha = report.case_artifact_sha256;
 if (!reportCaseSha || typeof reportCaseSha !== 'object') {
   console.error('FAIL: report missing top-level case_artifact_sha256');
@@ -497,5 +516,6 @@ console.log(`PASS: hyperref_v0 sha stable ${hyperrefShaSecond}`);
 console.log(`PASS: pkgopt_v0 sha stable ${pkgoptShaSecond}`);
 console.log(`PASS: graphics_v1 sha stable ${graphicsShaSecond}`);
 console.log(`PASS: math_v1 sha stable ${mathShaSecond}`);
+console.log(`PASS: table_v1 sha stable ${tableShaSecond}`);
 console.log('PASS: report typed_artifact_sha256 map present and stable');
 console.log('PASS: report top-level case_artifact_sha256 present');
