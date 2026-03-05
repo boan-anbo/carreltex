@@ -262,6 +262,11 @@ async function loadFixtureCasesV0() {
       fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_documentclass_opts_probe_v0.tex',
     },
     {
+      id: 'typeset_demo_documentclass_opts_multi_probe_v0',
+      mode: 'typeset',
+      fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_documentclass_opts_multi_probe_v0.tex',
+    },
+    {
       id: 'typeset_demo_passoptionstoclass_probe_v0',
       mode: 'typeset',
       fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_passoptionstoclass_probe_v0.tex',
@@ -270,6 +275,11 @@ async function loadFixtureCasesV0() {
       id: 'typeset_demo_documentclass_invalid_probe_v0',
       mode: 'typeset',
       fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_documentclass_invalid_probe_v0.tex',
+    },
+    {
+      id: 'typeset_demo_documentclass_emptyopts_invalid_probe_v0',
+      mode: 'typeset',
+      fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_documentclass_emptyopts_invalid_probe_v0.tex',
     },
     {
       id: 'typeset_demo_package_require_invalid_probe_v0',
@@ -547,6 +557,18 @@ function dedupeValuesPreserveOrderV0(values) {
   return deduped;
 }
 
+function splitCommaOptionsStrictV0(rawValue, context) {
+  const values = [];
+  for (const chunk of rawValue.split(',')) {
+    const trimmed = chunk.trim();
+    if (trimmed.length === 0) {
+      throw new Error(`${context} has empty option entry`);
+    }
+    values.push(trimmed);
+  }
+  return dedupeValuesPreserveOrderV0(values);
+}
+
 function ensureDefaultExtensionV0(value, extension) {
   if (value.includes('.')) {
     return value;
@@ -738,7 +760,11 @@ function extractPkgoptEntriesFromSourceV0(sourceBytes) {
         index = commandIndex;
         continue;
       }
-      options = dedupeValuesPreserveOrderV0(splitCommaValuesV0(optionGroup.value));
+      if (command === 'PassOptionsToClass') {
+        options = splitCommaOptionsStrictV0(optionGroup.value, 'pkgopt_v0 PassOptionsToClass');
+      } else {
+        options = dedupeValuesPreserveOrderV0(splitCommaValuesV0(optionGroup.value));
+      }
       packages = dedupeValuesPreserveOrderV0(splitCommaValuesV0(packageGroup.value));
       endOffset = packageGroup.next;
     } else if (command === 'documentclass') {
@@ -752,7 +778,7 @@ function extractPkgoptEntriesFromSourceV0(sourceBytes) {
         index = commandIndex;
         continue;
       }
-      options = optGroup.ok ? dedupeValuesPreserveOrderV0(splitCommaValuesV0(optGroup.value)) : [];
+      options = optGroup.ok ? splitCommaOptionsStrictV0(optGroup.value, 'pkgopt_v0 documentclass options') : [];
       if (options.length === 0) {
         index = classGroup.next;
         continue;
@@ -970,6 +996,7 @@ function extractResourceHintEntriesFromSourceV0(sourceBytes) {
       const optGroup = readBracketGroupV0(sourceBytes, commandIndex);
       let next = commandIndex;
       if (optGroup.ok) {
+        splitCommaOptionsStrictV0(optGroup.value, 'resource_hints_v0 documentclass options');
         next = optGroup.next;
       }
       const classGroup = readBracedGroupV0(sourceBytes, next);
@@ -1015,6 +1042,7 @@ function extractResourceHintEntriesFromSourceV0(sourceBytes) {
         index = commandIndex;
         continue;
       }
+      splitCommaOptionsStrictV0(optionGroup.value, 'resource_hints_v0 PassOptionsToClass');
       const classGroup = readBracedGroupV0(sourceBytes, optionGroup.next);
       if (!classGroup.ok || classGroup.value.length === 0) {
         index = commandIndex;
@@ -1493,6 +1521,7 @@ async function emitTypedArtifactsV0(caseSpec, caseOutDir, typedArtifacts, fixtur
     || caseSpec.id === 'typeset_demo_pkgopt_require_pass_probe_v0'
     || caseSpec.id === 'typeset_demo_class_options_probe_v0'
     || caseSpec.id === 'typeset_demo_documentclass_opts_probe_v0'
+    || caseSpec.id === 'typeset_demo_documentclass_opts_multi_probe_v0'
     || caseSpec.id === 'typeset_demo_passoptionstoclass_probe_v0'
   ) {
     typedArtifacts.pkgopt = await emitPkgoptTypedArtifactV0(caseOutDir, fixtureBytes);
