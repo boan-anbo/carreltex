@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { createCtx } from './wasm_smoke_js/ctx.mjs';
 import { createMemHelpers } from './wasm_smoke_js/mem.mjs';
 import { createAssertHelpers } from './wasm_smoke_js/assert.mjs';
-import { createOfflineOnDemandResolverV0 } from './wasm_smoke_js/ondemand_resolver_v0.mjs';
+import { createOnDemandResolverV0 } from './wasm_smoke_js/ondemand_resolver_v0.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -324,7 +324,9 @@ async function run() {
     encoding: 'utf8',
   }).trim();
   const cases = await loadFixtureCasesV0();
-  const resolver = await createOfflineOnDemandResolverV0({
+  const resolver = await createOnDemandResolverV0({
+    backend: process.env.TEXLIVE_RESOLVER_BACKEND_V0,
+    endpoint: process.env.TEXLIVE_ENDPOINT,
     rootDir,
     storeDir: path.join(rootDir, 'target', 'texlive_store_v0'),
   });

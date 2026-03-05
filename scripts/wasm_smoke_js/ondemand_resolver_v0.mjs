@@ -7,6 +7,12 @@ const DEFAULT_INDEX_V0 = {
   entries: [],
 };
 
+const RESOLVER_BACKEND_OFFLINE_V0 = 'offline_store_v0';
+const RESOLVER_BACKEND_ENDPOINT_V0 = 'endpoint_v0';
+const DEFAULT_BACKEND_V0 = RESOLVER_BACKEND_OFFLINE_V0;
+const DEFAULT_TIMEOUT_MS_V0 = 3000;
+const MAX_ENDPOINT_BYTES_V0 = 4 * 1024 * 1024;
+
 function sha256HexV0(bytes) {
   return createHash('sha256').update(bytes).digest('hex');
 }
@@ -33,12 +39,40 @@ function makeRequestKeyV0(kind, format, name, variant) {
   return `${kind}\u001f${format}\u001f${name}\u001f${variant}`;
 }
 
-export async function createOfflineOnDemandResolverV0(options = {}) {
-  const rootDir = path.resolve(options.rootDir ?? process.cwd());
-  const storeDir = path.resolve(options.storeDir ?? path.join(rootDir, 'target', 'texlive_store_v0'));
-  const indexPath = path.join(storeDir, 'index.json');
-  const blobsDir = path.join(storeDir, 'blobs');
+function makeNotFoundV0(cacheHit) {
+  return { tag: 'NotFound', cache_hit: cacheHit };
+}
 
+function buildFoundResultV0(bytes, sha256, stableId, cacheHit) {
+  return {
+    tag: 'Found',
+    bytes,
+    sha256,
+    stable_id: stableId,
+    cache_hit: cacheHit,
+  };
+}
+
+function normalizeEndpointV0(endpoint) {
+  if (typeof endpoint !== 'string') {
+    return '';
+  }
+  const trimmed = endpoint.trim();
+  if (trimmed === '') {
+    return '';
+  }
+  return trimmed.replace(/\/+$/, '');
+}
+
+function stableIdFromHeadersV0(headers, fallbackSha) {
+  const headerStableId = headers.get('fileid') ?? headers.get('fontid');
+  if (headerStableId && isSafeTokenV0(headerStableId)) {
+    return headerStableId;
+  }
+  return `sha256:${fallbackSha}`;
+}
+
+async function readIndexEntriesV0(indexPath, blobsDir) {
   await mkdir(blobsDir, { recursive: true });
 
   let indexBytes;
@@ -89,6 +123,19 @@ export async function createOfflineOnDemandResolverV0(options = {}) {
     });
   }
 
+  return {
+    indexBytes,
+    entries,
+  };
+}
+
+export async function createOfflineOnDemandResolverV0(options = {}) {
+  const rootDir = path.resolve(options.rootDir ?? process.cwd());
+  const storeDir = path.resolve(options.storeDir ?? path.join(rootDir, 'target', 'texlive_store_v0'));
+  const indexPath = path.join(storeDir, 'index.json');
+  const blobsDir = path.join(storeDir, 'blobs');
+
+  const { indexBytes, entries } = await readIndexEntriesV0(indexPath, blobsDir);
   const indexSha256 = sha256HexV0(indexBytes);
   const resolverId = `offline-store-v0:${indexSha256}`;
   const cache = new Map();
@@ -101,22 +148,19 @@ export async function createOfflineOnDemandResolverV0(options = {}) {
     const requestResolverId = request?.resolver_id;
 
     if (!isSafeTokenV0(kind) || !isSafeTokenV0(format) || !isSafeTokenV0(name) || variant === null) {
-      return { tag: 'NotFound' };
+      return makeNotFoundV0(false);
     }
     if (requestResolverId !== resolverId) {
-      return { tag: 'NotFound' };
+      return makeNotFoundV0(false);
     }
 
     const key = makeRequestKeyV0(kind, format, name, variant);
     const cached = cache.get(key);
     if (cached) {
-      return {
-        tag: 'Found',
-        bytes: cached.bytes,
-        sha256: cached.sha256,
-        stable_id: cached.stable_id,
-        cache_hit: true,
-      };
+      if (cached.tag === 'Found') {
+        return buildFoundResultV0(cached.bytes, cached.sha256, cached.stable_id, true);
+      }
+      return makeNotFoundV0(true);
     }
 
     const found = entries.find(
@@ -127,36 +171,34 @@ export async function createOfflineOnDemandResolverV0(options = {}) {
         && entry.variant === variant,
     );
     if (!found) {
-      return { tag: 'NotFound' };
+      cache.set(key, { tag: 'NotFound' });
+      return makeNotFoundV0(false);
     }
 
     const blobPath = path.join(blobsDir, found.sha256);
     const bytes = await readFile(blobPath).catch(() => null);
     if (!bytes) {
-      return { tag: 'NotFound' };
+      cache.set(key, { tag: 'NotFound' });
+      return makeNotFoundV0(false);
     }
     const actualSha = sha256HexV0(bytes);
     if (actualSha !== found.sha256) {
-      return { tag: 'NotFound' };
+      cache.set(key, { tag: 'NotFound' });
+      return makeNotFoundV0(false);
     }
 
-    const result = {
+    const cachedFound = {
+      tag: 'Found',
       bytes: new Uint8Array(bytes),
       sha256: actualSha,
       stable_id: found.stable_id,
     };
-    cache.set(key, result);
-
-    return {
-      tag: 'Found',
-      bytes: result.bytes,
-      sha256: result.sha256,
-      stable_id: result.stable_id,
-      cache_hit: false,
-    };
+    cache.set(key, cachedFound);
+    return buildFoundResultV0(cachedFound.bytes, cachedFound.sha256, cachedFound.stable_id, false);
   }
 
   return {
+    backend: RESOLVER_BACKEND_OFFLINE_V0,
     resolverId,
     indexSha256,
     storeDir,
@@ -164,3 +206,114 @@ export async function createOfflineOnDemandResolverV0(options = {}) {
     resolve,
   };
 }
+
+export async function createEndpointOnDemandResolverV0(options = {}) {
+  const endpoint = normalizeEndpointV0(options.endpoint ?? process.env.TEXLIVE_ENDPOINT ?? '');
+  const fetchImpl = options.fetchImpl ?? globalThis.fetch;
+  const timeoutMs = Number.isInteger(options.timeoutMs) && options.timeoutMs > 0
+    ? options.timeoutMs
+    : DEFAULT_TIMEOUT_MS_V0;
+  const endpointConfigHash = sha256HexV0(
+    Buffer.from(JSON.stringify({ backend: RESOLVER_BACKEND_ENDPOINT_V0, endpoint })),
+  );
+  const resolverId = `endpoint-v0:${endpointConfigHash}`;
+  const cache = new Map();
+
+  async function resolve(request) {
+    const kind = request?.kind;
+    const format = request?.format;
+    const name = request?.name;
+    const variant = normalizeVariantV0(request?.variant);
+    const requestResolverId = request?.resolver_id;
+
+    if (!isSafeTokenV0(kind) || !isSafeTokenV0(format) || !isSafeTokenV0(name) || variant === null) {
+      return makeNotFoundV0(false);
+    }
+    if (requestResolverId !== resolverId) {
+      return makeNotFoundV0(false);
+    }
+    if (!endpoint || typeof fetchImpl !== 'function') {
+      return makeNotFoundV0(false);
+    }
+
+    const key = makeRequestKeyV0(kind, format, name, variant);
+    const cached = cache.get(key);
+    if (cached) {
+      if (cached.tag === 'Found') {
+        return buildFoundResultV0(cached.bytes, cached.sha256, cached.stable_id, true);
+      }
+      return makeNotFoundV0(true);
+    }
+
+    let relPath;
+    if (kind === 'fontconfig') {
+      if (!isSafeTokenV0(variant)) {
+        cache.set(key, { tag: 'NotFound' });
+        return makeNotFoundV0(false);
+      }
+      relPath = `fontconfig/${variant}/${name}`;
+    } else {
+      relPath = `xetex/${format}/${name}`;
+    }
+    const url = `${endpoint}/${relPath}`;
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    let response;
+    try {
+      response = await fetchImpl(url, { method: 'GET', signal: controller.signal });
+    } catch {
+      cache.set(key, { tag: 'NotFound' });
+      return makeNotFoundV0(false);
+    } finally {
+      clearTimeout(timeoutId);
+    }
+
+    if (response.status === 404) {
+      cache.set(key, { tag: 'NotFound' });
+      return makeNotFoundV0(false);
+    }
+    if (response.status !== 200) {
+      cache.set(key, { tag: 'NotFound' });
+      return makeNotFoundV0(false);
+    }
+
+    const arrayBuffer = await response.arrayBuffer().catch(() => null);
+    if (!arrayBuffer) {
+      cache.set(key, { tag: 'NotFound' });
+      return makeNotFoundV0(false);
+    }
+    const bytes = new Uint8Array(arrayBuffer);
+    if (bytes.length === 0 || bytes.length > MAX_ENDPOINT_BYTES_V0) {
+      cache.set(key, { tag: 'NotFound' });
+      return makeNotFoundV0(false);
+    }
+
+    const sha256 = sha256HexV0(bytes);
+    const stableId = stableIdFromHeadersV0(response.headers, sha256);
+    const cachedFound = {
+      tag: 'Found',
+      bytes,
+      sha256,
+      stable_id: stableId,
+    };
+    cache.set(key, cachedFound);
+    return buildFoundResultV0(cachedFound.bytes, cachedFound.sha256, cachedFound.stable_id, false);
+  }
+
+  return {
+    backend: RESOLVER_BACKEND_ENDPOINT_V0,
+    resolverId,
+    endpoint,
+    resolve,
+  };
+}
+
+export async function createOnDemandResolverV0(options = {}) {
+  const backend = options.backend ?? process.env.TEXLIVE_RESOLVER_BACKEND_V0 ?? DEFAULT_BACKEND_V0;
+  if (backend === RESOLVER_BACKEND_ENDPOINT_V0) {
+    return createEndpointOnDemandResolverV0(options);
+  }
+  return createOfflineOnDemandResolverV0(options);
+}
+
