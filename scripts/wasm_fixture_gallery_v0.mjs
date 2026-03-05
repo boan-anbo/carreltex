@@ -766,7 +766,7 @@ async function emitHyperrefTypedArtifactV0(caseOutDir, fixtureBytes) {
   const payload = {
     version: 1,
     schema: 'hyperref_v0',
-    links: extractHyperrefLinksFromSourceV0(fixtureBytes),
+    entries: extractHyperrefLinksFromSourceV0(fixtureBytes),
   };
   const bytes = Buffer.from(`${JSON.stringify(payload, null, 2)}\n`, 'utf8');
   const relpath = 'hyperref_v0.json';
@@ -774,7 +774,7 @@ async function emitHyperrefTypedArtifactV0(caseOutDir, fixtureBytes) {
   await writeFile(fullPath, bytes);
   return {
     present: true,
-    items: payload.links.length,
+    items: payload.entries.length,
     artifact_relpath: relpath,
     artifact_sha256: sha256HexV0(bytes),
   };
@@ -1133,6 +1133,21 @@ async function run() {
           ),
         },
       ]),
+    ),
+    typed_artifact_sha256: Object.fromEntries(
+      TYPED_ARTIFACT_KEYS_V0.map((key) => {
+        const digestPayload = {
+          version: 1,
+          schema: `${key}_sha_rollup_v0`,
+          entries: summaries
+            .map((summary) => ({
+              case_id: summary.case_id,
+              artifact_sha256: summary.typed_artifacts?.[key]?.artifact_sha256 ?? null,
+            }))
+            .sort((left, right) => left.case_id.localeCompare(right.case_id)),
+        };
+        return [key, sha256HexV0(Buffer.from(JSON.stringify(digestPayload), 'utf8'))];
+      }),
     ),
     statuses: summaries.map((summary) => ({
       case_id: summary.case_id,
