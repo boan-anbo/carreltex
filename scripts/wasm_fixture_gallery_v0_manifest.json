@@ -152,6 +152,18 @@
       "purpose": "Probes fail-closed class option parsing on empty comma-separated option entries."
     },
     {
+      "id": "typeset_demo_usepackage_opts_multi_probe_v0",
+      "tags": ["typeset", "packages", "pkgopt", "usepackage", "options", "whitespace", "dedupe", "probe", "ni"],
+      "expected_status": "NI",
+      "purpose": "Probes usepackage option normalization with stable dedupe/ordering across repeated declarations."
+    },
+    {
+      "id": "typeset_demo_usepackage_emptyopts_invalid_probe_v0",
+      "tags": ["typeset", "packages", "invalid", "usepackage", "options", "empty-entry", "probe"],
+      "expected_status": "INVALID",
+      "purpose": "Probes fail-closed usepackage option parsing on empty comma-separated option entries."
+    },
+    {
       "id": "typeset_demo_package_require_invalid_probe_v0",
       "tags": ["typeset", "packages", "requirepackage", "unsafe-path", "probe", "invalid"],
       "expected_status": "INVALID",
