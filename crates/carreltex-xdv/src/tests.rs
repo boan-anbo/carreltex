@@ -138,6 +138,46 @@ fn planner_propagates_wi_dot_glyph_advances_and_line_width() {
 }
 
 #[test]
+fn planner_space_and_punctuation_advances_are_stable_v0() {
+    let plan = plan_layout_width_v0(b"A ,.!? B", 65_536, 786_432, 10_000_000, 200)
+        .expect("layout plan");
+    assert_eq!(plan.pages.len(), 1);
+    assert_eq!(plan.pages[0].lines.len(), 1);
+    let line = &plan.pages[0].lines[0];
+    let glyph_bytes: Vec<u8> = line.glyphs.iter().map(|glyph| glyph.byte).collect();
+    let glyph_advances: Vec<i32> = line.glyphs.iter().map(|glyph| glyph.advance_sp).collect();
+    assert_eq!(glyph_bytes, b"A ,.!? B");
+    assert_eq!(
+        glyph_advances,
+        vec![65_536, 32_768, 32_768, 32_768, 32_768, 32_768, 32_768, 65_536]
+    );
+    let recomputed = recompute_line_width_sp_v0(line).expect("line width should recompute");
+    let summed = glyph_advances
+        .iter()
+        .copied()
+        .fold(0u32, |acc, value| acc + value as u32);
+    assert_eq!(recomputed, summed);
+    assert_eq!(line.width_sp, summed);
+}
+
+#[test]
+fn planner_variable_width_ratio_categories_are_stable_v0() {
+    let plan = plan_layout_width_v0(b"Wm i|.M", 65_536, 786_432, 10_000_000, 200)
+        .expect("layout plan");
+    assert_eq!(plan.pages.len(), 1);
+    assert_eq!(plan.pages[0].lines.len(), 1);
+    let line = &plan.pages[0].lines[0];
+    let glyph_bytes: Vec<u8> = line.glyphs.iter().map(|glyph| glyph.byte).collect();
+    let glyph_advances: Vec<i32> = line.glyphs.iter().map(|glyph| glyph.advance_sp).collect();
+    assert_eq!(glyph_bytes, b"Wm i|.M");
+    assert_eq!(
+        glyph_advances,
+        vec![98_304, 98_304, 32_768, 32_768, 32_768, 32_768, 98_304]
+    );
+    assert_eq!(recompute_line_width_sp_v0(line), Some(line.width_sp));
+}
+
+#[test]
 fn planner_width_wraps_long_line_at_spaces() {
     let plan =
         plan_layout_width_v0(b"aaaa bbbb cccc", 65_536, 786_432, 327_680, 200).expect("layout plan");
@@ -399,6 +439,18 @@ fn width_sp_for_prefixed_rendered_line_v0(line: &LinePlanV0, prefix: [u8; 2]) ->
     Some(width_sp)
 }
 
+fn layout_line_width_for_exact_bytes_v0(layout: &super::LayoutPlanV0, target: &[u8]) -> Option<u32> {
+    for page in &layout.pages {
+        for line in &page.lines {
+            let bytes: Vec<u8> = line.glyphs.iter().map(|glyph| glyph.byte).collect();
+            if bytes == target {
+                return Some(line.width_sp);
+            }
+        }
+    }
+    None
+}
+
 #[test]
 fn pdf_renderer_caps_segment_tm_gap_for_styled_line_v0() {
     let xdv = write_dvi_v2_text_page_v0(b"Styled [emphasis] and {bold} run.")
@@ -442,6 +494,141 @@ fn pdf_renderer_inline_wrapper_spacing_invariants_v0() {
 }
 
 #[test]
+fn pdf_renderer_punctuation_adjacent_wrapper_gap_invariants_v0() {
+    let xdv = write_dvi_v2_text_page_v0(
+        b"word[mid],word word,[mid]word word{mid}. (alpha[mid]beta) [lead], trail lead, [trail]",
+    )
+    .expect("writer should accept punctuation-adjacent styled text");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+    let line_text = String::from_utf8_lossy(&pdf);
+    assert!(
+        line_text.contains("(word) Tj /F2 12 Tf (mid) Tj /F1 12 Tf (,word word,) Tj /F2 12 Tf (mid) Tj"),
+        "first punctuation-adjacent styled sequence missing: {line_text}"
+    );
+    assert!(
+        line_text.contains("/F3 12 Tf (mid) Tj /F1 12 Tf (. \\(alpha) Tj /F2 12 Tf (mid) Tj"),
+        "second punctuation-adjacent styled sequence missing: {line_text}"
+    );
+    assert!(
+        line_text.contains("/F1 12 Tf (beta\\) ) Tj /F2 12 Tf (lead) Tj /F1 12 Tf (, trail lead,) Tj"),
+        "wrapper-near-punctuation trail sequence missing: {line_text}"
+    );
+    assert!(
+        line_text.contains("/F2 12 Tf (trail) Tj"),
+        "trailing styled segment missing: {line_text}"
+    );
+    assert!(
+        !line_text.contains("word ) Tj /F2 12 Tf (mid)"),
+        "unexpected extra space before wrapper boundary: {line_text}"
+    );
+    assert!(
+        !line_text.contains(") Tj /F1 12 Tf ( ,"),
+        "unexpected space inserted before punctuation at boundary: {line_text}"
+    );
+    let tm_count = tm_count_for_line_containing_v0(&pdf, "(word)");
+    assert_eq!(
+        tm_count, 1,
+        "punctuation-adjacent styled line should use single Tm: {line_text}"
+    );
+    let max_tm_gap = max_tm_gap_pt_for_line_containing_v0(&pdf, "(word)")
+        .expect("punctuation-adjacent styled line should parse");
+    assert!(
+        max_tm_gap <= 0.02,
+        "punctuation-adjacent styled line should not create matrix gaps: {max_tm_gap}"
+    );
+}
+
+#[test]
+fn pdf_renderer_wrapper_punctuation_patterns_are_stable_v0() {
+    let cases: [(&[u8], &str, &str); 6] = [
+        (
+            b"alpha[beta],gamma",
+            "(alpha) Tj /F2 12 Tf (beta) Tj /F1 12 Tf (,gamma) Tj",
+            "(alpha ) Tj /F2 12 Tf (beta)",
+        ),
+        (
+            b"alpha,[beta]gamma",
+            "(alpha,) Tj /F2 12 Tf (beta) Tj /F1 12 Tf (gamma) Tj",
+            "(alpha, ) Tj /F2 12 Tf (beta)",
+        ),
+        (
+            b"(alpha[beta]gamma)",
+            "(\\(alpha) Tj /F2 12 Tf (beta) Tj /F1 12 Tf (gamma\\)) Tj",
+            "(\\(alpha ) Tj /F2 12 Tf (beta)",
+        ),
+        (
+            b"alpha{beta}. gamma",
+            "(alpha) Tj /F3 12 Tf (beta) Tj /F1 12 Tf (. gamma) Tj",
+            "(alpha ) Tj /F3 12 Tf (beta)",
+        ),
+        (
+            b"{lead}, trail",
+            "/F3 12 Tf (lead) Tj /F1 12 Tf (, trail) Tj",
+            "/F3 12 Tf (lead) Tj /F1 12 Tf ( , trail) Tj",
+        ),
+        (
+            b"lead, [trail]",
+            "(lead, ) Tj /F2 12 Tf (trail) Tj",
+            "(lead,) Tj /F2 12 Tf (trail) Tj",
+        ),
+    ];
+
+    for (input, expected_fragment, forbidden_fragment) in cases {
+        let xdv = write_dvi_v2_text_page_v0(input).expect("writer should accept punctuation case");
+        let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+        let line_text = String::from_utf8_lossy(&pdf);
+        assert!(
+            line_text.contains(expected_fragment),
+            "expected punctuation fragment missing for input {:?}: {line_text}",
+            String::from_utf8_lossy(input),
+        );
+        assert!(
+            !line_text.contains(forbidden_fragment),
+            "forbidden punctuation fragment present for input {:?}: {line_text}",
+            String::from_utf8_lossy(input),
+        );
+        let tm_count = tm_count_for_line_containing_v0(&pdf, "(");
+        assert_eq!(
+            tm_count, 1,
+            "punctuation wrapper case should remain single-line Tm for input {:?}: {line_text}",
+            String::from_utf8_lossy(input),
+        );
+        let max_tm_gap = max_tm_gap_pt_for_line_containing_v0(&pdf, "(")
+            .expect("punctuation wrapper line should parse");
+        assert!(
+            max_tm_gap <= 0.02,
+            "punctuation wrapper case should not add matrix gaps for input {:?}: {max_tm_gap}",
+            String::from_utf8_lossy(input),
+        );
+    }
+}
+
+#[test]
+fn pdf_renderer_wrapper_punctuation_segment_positions_progress_monotonically_v0() {
+    let xdv = write_dvi_v2_text_page_v0(b"A[mid],B C,[mid]D E{mid}. F")
+        .expect("writer should accept wrapper punctuation sequence");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+
+    let line_text = String::from_utf8_lossy(&pdf);
+    assert!(
+        line_text.contains("(A) Tj /F2 12 Tf (mid) Tj /F1 12 Tf (,B C,) Tj /F2 12 Tf (mid) Tj"),
+        "expected first styled punctuation sequence missing: {line_text}"
+    );
+    assert!(
+        line_text.contains("/F1 12 Tf (D E) Tj /F3 12 Tf (mid) Tj /F1 12 Tf (. F) Tj"),
+        "expected trailing styled punctuation sequence missing: {line_text}"
+    );
+    let tm_count = tm_count_for_line_containing_v0(&pdf, "(A)");
+    assert_eq!(tm_count, 1, "expected single matrix for test line: {line_text}");
+    let max_tm_gap = max_tm_gap_pt_for_line_containing_v0(&pdf, "(A)")
+        .expect("wrapper punctuation line should parse");
+    assert!(
+        max_tm_gap <= 0.02,
+        "wrapper punctuation matrix gaps should remain zero: {max_tm_gap}"
+    );
+}
+
+#[test]
 fn pdf_renderer_centers_title_block_lines_within_epsilon_v0() {
     let demo_text = b"Centering Accuracy Title\nAlice Bob\n2026-03-05\n\nBody line.";
     let xdv = write_dvi_v2_text_page_v0(demo_text).expect("writer should accept demo text");
@@ -474,6 +661,81 @@ fn pdf_renderer_centers_title_block_lines_within_epsilon_v0() {
     assert!(
         (date_x - expected_date_x).abs() <= epsilon_pt,
         "date x mismatch: actual={date_x}, expected={expected_date_x}"
+    );
+}
+
+#[test]
+fn pdf_renderer_centers_section_headings_within_epsilon_v0() {
+    let demo_text = b"Title\nAuthor\n2026-03-05\n\nPrelude paragraph.\n\n{Centered Section Heading}\n\n~ Body after centered heading.";
+    let xdv = write_dvi_v2_text_page_v0(demo_text).expect("writer should accept centered heading text");
+    let layout = parse_dvi_v2_text_page_to_layout_v0(&xdv, 786_432).expect("layout parse");
+    assert_eq!(layout.pages.len(), 1);
+    let heading_line = layout.pages[0]
+        .lines
+        .iter()
+        .find(|line| {
+            line.glyphs
+                .iter()
+                .map(|glyph| glyph.byte)
+                .collect::<Vec<_>>()
+                == b"{Centered Section Heading}"
+        })
+        .expect("heading line in layout");
+    let expected_heading_x = expected_center_x_pt_v0(heading_line.width_sp);
+
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+    let heading_x = tm_x_for_line_containing_text_v0(&pdf, "(Centered Section Heading)")
+        .expect("centered heading position");
+    assert!(
+        (heading_x - expected_heading_x).abs() <= 0.02,
+        "centered heading x mismatch: actual={heading_x}, expected={expected_heading_x}"
+    );
+    assert!(
+        (heading_x - 72.0).abs() > 0.5,
+        "heading should not be left-margin aligned: {heading_x}"
+    );
+}
+
+#[test]
+fn pdf_renderer_title_and_heading_centering_per_line_width_v0() {
+    let demo_text = b"Centered Title Line\nAlice Bob\n2026-03-05\n\nPrelude paragraph.\n\n{Heading Alpha}\n\n~ Body alpha paragraph.\n\n{Heading Beta}\n\n~ Body beta paragraph.";
+    let xdv = write_dvi_v2_text_page_v0(demo_text).expect("writer should accept title+heading demo");
+    let layout = parse_dvi_v2_text_page_to_layout_v0(&xdv, 786_432).expect("layout parse");
+    let title_width = layout_line_width_for_exact_bytes_v0(&layout, b"Centered Title Line")
+        .expect("title line width");
+    let heading_alpha_width = layout_line_width_for_exact_bytes_v0(&layout, b"{Heading Alpha}")
+        .expect("heading alpha width");
+    let heading_beta_width = layout_line_width_for_exact_bytes_v0(&layout, b"{Heading Beta}")
+        .expect("heading beta width");
+
+    let expected_title_x = expected_center_x_pt_v0(title_width);
+    let expected_heading_alpha_x = expected_center_x_pt_v0(heading_alpha_width);
+    let expected_heading_beta_x = expected_center_x_pt_v0(heading_beta_width);
+
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+    let title_x = tm_x_for_line_containing_text_v0(&pdf, "(Centered Title Line)")
+        .expect("title x");
+    let heading_alpha_x = tm_x_for_line_containing_text_v0(&pdf, "(Heading Alpha)")
+        .expect("heading alpha x");
+    let heading_beta_x = tm_x_for_line_containing_text_v0(&pdf, "(Heading Beta)")
+        .expect("heading beta x");
+
+    let epsilon_pt = 0.02f32;
+    assert!(
+        (title_x - expected_title_x).abs() <= epsilon_pt,
+        "title centering mismatch: actual={title_x}, expected={expected_title_x}"
+    );
+    assert!(
+        (heading_alpha_x - expected_heading_alpha_x).abs() <= epsilon_pt,
+        "heading alpha centering mismatch: actual={heading_alpha_x}, expected={expected_heading_alpha_x}"
+    );
+    assert!(
+        (heading_beta_x - expected_heading_beta_x).abs() <= epsilon_pt,
+        "heading beta centering mismatch: actual={heading_beta_x}, expected={expected_heading_beta_x}"
+    );
+    assert!(
+        (heading_alpha_x - 72.0).abs() > 0.5 && (heading_beta_x - 72.0).abs() > 0.5,
+        "heading lines should not be left-margin aligned: alpha={heading_alpha_x}, beta={heading_beta_x}"
     );
 }
 
