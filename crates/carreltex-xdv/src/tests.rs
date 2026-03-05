@@ -478,6 +478,28 @@ fn tm_position_for_segment_substring_v0(pdf: &[u8], needle: &str) -> Option<(f32
     None
 }
 
+fn parse_first_link_rect_v0(pdf: &[u8]) -> Option<[f32; 4]> {
+    let text = String::from_utf8_lossy(pdf);
+    for line in text.lines() {
+        if !line.contains("/Subtype /Link") || !line.contains("/Rect [") {
+            continue;
+        }
+        let rect_start = line.find("/Rect [")?;
+        let rect_body_start = rect_start + "/Rect [".len();
+        let rect_body_end = line[rect_body_start..].find(']')?;
+        let rect_text = &line[rect_body_start..rect_body_start + rect_body_end];
+        let values: Vec<f32> = rect_text
+            .split_whitespace()
+            .filter_map(|value| value.parse::<f32>().ok())
+            .collect();
+        if values.len() != 4 {
+            return None;
+        }
+        return Some([values[0], values[1], values[2], values[3]]);
+    }
+    None
+}
+
 fn expected_center_x_pt_v0(width_sp: u32) -> f32 {
     let width_pt = (width_sp as f32) / 65_536.0;
     ((612.0 - width_pt) * 0.5).clamp(72.0, 612.0 - 72.0)
@@ -1685,8 +1707,8 @@ fn pdf_renderer_footnote_block_renders_at_page_bottom_with_small_font_v0() {
         "internal footnote prefix should be hidden in pdf output: {pdf_text}"
     );
 
-    let body_pos = tm_position_for_line_containing_text_v0(&pdf, "(Body marker^1 line.)")
-        .expect("body line position");
+    let body_pos = tm_position_for_segment_substring_v0(&pdf, "(Body")
+        .expect("body segment position");
     let footnote_pos =
         tm_position_for_line_containing_text_v0(&pdf, "(1 Footnote text with ")
             .expect("footnote line position");
@@ -1757,6 +1779,44 @@ fn pdf_renderer_link_style_near_punctuation_stays_single_matrix_v0() {
     assert!(
         max_tm_gap <= 0.02,
         "link punctuation line should not create matrix gaps: {max_tm_gap}"
+    );
+}
+
+#[test]
+fn pdf_renderer_emits_link_annotation_with_in_bounds_rect_v0() {
+    let xdv =
+        write_dvi_v2_text_page_v0(b"Visit <{Example link}> now.\n\n!u 1 https://example.com")
+            .expect("writer should accept href marker lines");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+    let pdf_text = String::from_utf8_lossy(&pdf);
+    assert!(
+        pdf_text.contains("/Subtype /Link"),
+        "link annotation subtype missing: {pdf_text}"
+    );
+    assert!(
+        pdf_text.contains("/URI (https://example.com)"),
+        "link annotation URI missing: {pdf_text}"
+    );
+    let rect = parse_first_link_rect_v0(&pdf).expect("link rect should parse");
+    assert!(rect[2] > rect[0], "rect width must be positive: {rect:?}");
+    assert!(rect[3] > rect[1], "rect height must be positive: {rect:?}");
+    assert!((0.0..=612.0).contains(&rect[0]) && (0.0..=612.0).contains(&rect[2]));
+    assert!((0.0..=792.0).contains(&rect[1]) && (0.0..=792.0).contains(&rect[3]));
+}
+
+#[test]
+fn pdf_renderer_footnote_marker_uses_smaller_raised_typography_v0() {
+    let xdv = write_dvi_v2_text_page_v0(b"Body marker^1 line.\n\n!f 1 Footnote text.")
+        .expect("writer should accept footnote marker lines");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+    let pdf_text = String::from_utf8_lossy(&pdf);
+    assert!(
+        pdf_text.contains("/F1 8 Tf (^1) Tj"),
+        "footnote marker should render in smaller font: {pdf_text}"
+    );
+    assert!(
+        pdf_text.contains("4 Ts /F1 8 Tf (^1) Tj"),
+        "footnote marker should use positive text rise for superscript effect: {pdf_text}"
     );
 }
 
