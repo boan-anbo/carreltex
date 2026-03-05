@@ -1154,7 +1154,7 @@ fn parse_label_line_v0(glyphs: &[GlyphPlanV0]) -> Option<()> {
     let key = parts.next()?.trim();
     let anchor_id = parts.next()?.trim().parse::<u32>().ok()?;
     let kind = parts.next()?.trim();
-    let level = parts.next()?.trim().parse::<u8>().ok()?;
+    let level = parts.next()?.trim().parse::<u32>().ok()?;
     let title = parts.next()?.trim();
     if key.is_empty() || anchor_id == 0 {
         return None;
@@ -1165,7 +1165,7 @@ fn parse_label_line_v0(glyphs: &[GlyphPlanV0]) -> Option<()> {
     if kind == "heading" && !(1..=2).contains(&level) {
         return None;
     }
-    if kind == "figure" && level != 0 {
+    if kind == "figure" && level == 0 {
         return None;
     }
     if title.is_empty() {

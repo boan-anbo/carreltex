@@ -83,11 +83,20 @@ Beta & 9.00 & Check\\
 \end{tabular}
 
 \subsection{Figure}
-The figure block below is a deterministic placeholder stub with caption spacing invariants.
+The first figure block below is a deterministic placeholder stub with caption spacing invariants.
 
 \begin{figure}
 \caption{Deterministic placeholder figure caption for layout validation.}
 \end{figure}
+This paragraph follows the first figure before introducing a second figure in a later section.
+
+\subsection{Figure References}
+Interleaved text between figure blocks keeps figure numbering deterministic across section boundaries.
+
+\begin{figure}
+\caption{Second deterministic figure caption to validate figure ordinal and figref resolution.}
+\end{figure}
+This paragraph follows the second figure after interleaved section text.
 
 \subsection{Centering}
 \begin{center}
