@@ -51,6 +51,12 @@ const TABLE_BORDER_TOP_OFFSET_PT_V0: f32 = 4.0;
 const TABLE_BORDER_BOTTOM_OFFSET_PT_V0: f32 = 4.0;
 const FIGURE_PLACEHOLDER_LINE_V0: &[u8] = b"[ Figure placeholder ]";
 const FIGURE_CAPTION_FONT_SIZE_PT_V0: f32 = 11.0;
+const DEFAULT_FIGURE_PLACEHOLDER_WIDTH_PT_V0: f32 = 180.0;
+const DEFAULT_FIGURE_PLACEHOLDER_HEIGHT_PT_V0: f32 = 120.0;
+const MAX_FIGURE_PLACEHOLDER_WIDTH_PT_V0: f32 = PAGE_WIDTH_PT_V0 - (2.0 * MARGIN_PT_V0);
+const MAX_FIGURE_PLACEHOLDER_HEIGHT_PT_V0: f32 = 288.0;
+const FIGURE_PLACEHOLDER_LABEL_INSET_PT_V0: f32 = 8.0;
+const FIGURE_PLACEHOLDER_TO_CAPTION_GAP_PT_V0: f32 = 8.0;
 const TOC_TITLE_TEXT_V0: &[u8] = b"Contents";
 const TOC_TITLE_FONT_SIZE_PT_V0: f32 = 14.0;
 const TOC_ENTRY_INDENT_STEP_PT_V0: f32 = 18.0;
@@ -615,7 +621,14 @@ fn is_safe_figure_image_path_byte_v0(byte: u8) -> bool {
     byte.is_ascii_alphanumeric() || matches!(byte, b'/' | b'.' | b'_' | b'-')
 }
 
-fn parse_figure_image_line_v0(glyphs: &[GlyphPlanV0]) -> Option<(u32, Vec<u8>)> {
+#[derive(Clone)]
+struct FigureImageMetadataV0 {
+    image_path: Vec<u8>,
+    width_pt: f32,
+    height_pt: f32,
+}
+
+fn parse_figure_image_line_v0(glyphs: &[GlyphPlanV0]) -> Option<FigureImageMetadataV0> {
     if !has_figure_image_prefix_v0(glyphs) {
         return None;
     }
@@ -639,8 +652,64 @@ fn parse_figure_image_line_v0(glyphs: &[GlyphPlanV0]) -> Option<(u32, Vec<u8>)> 
     if cursor >= glyphs.len() {
         return None;
     }
+
+    let mut path_end = glyphs.len();
+    let mut width_pt = DEFAULT_FIGURE_PLACEHOLDER_WIDTH_PT_V0;
+    let mut height_pt = DEFAULT_FIGURE_PLACEHOLDER_HEIGHT_PT_V0;
+    let mut parsed_size_suffix = false;
+    for split in cursor..glyphs.len() {
+        if glyphs[split].byte != b' ' {
+            continue;
+        }
+        if split + 1 >= glyphs.len() || !glyphs[split + 1].byte.is_ascii_digit() {
+            continue;
+        }
+        let mut second_sep = split + 1;
+        while second_sep < glyphs.len() && glyphs[second_sep].byte.is_ascii_digit() {
+            second_sep += 1;
+        }
+        if second_sep >= glyphs.len() || glyphs[second_sep].byte != b' ' {
+            continue;
+        }
+        let mut height_start = second_sep + 1;
+        if height_start >= glyphs.len() || !glyphs[height_start].byte.is_ascii_digit() {
+            continue;
+        }
+        while height_start < glyphs.len() && glyphs[height_start].byte.is_ascii_digit() {
+            height_start += 1;
+        }
+        if height_start != glyphs.len() {
+            continue;
+        }
+        let width_raw = glyphs[split + 1..second_sep]
+            .iter()
+            .map(|glyph| glyph.byte)
+            .collect::<Vec<u8>>();
+        let height_raw = glyphs[second_sep + 1..height_start]
+            .iter()
+            .map(|glyph| glyph.byte)
+            .collect::<Vec<u8>>();
+        let width_mpt = std::str::from_utf8(&width_raw).ok()?.parse::<u32>().ok()?;
+        let height_mpt = std::str::from_utf8(&height_raw).ok()?.parse::<u32>().ok()?;
+        if width_mpt == 0 || height_mpt == 0 {
+            return None;
+        }
+        width_pt = (width_mpt as f32) / 1000.0;
+        height_pt = (height_mpt as f32) / 1000.0;
+        if width_pt <= 0.0
+            || height_pt <= 0.0
+            || width_pt > MAX_FIGURE_PLACEHOLDER_WIDTH_PT_V0
+            || height_pt > MAX_FIGURE_PLACEHOLDER_HEIGHT_PT_V0
+        {
+            return None;
+        }
+        path_end = split;
+        parsed_size_suffix = true;
+        break;
+    }
+
     let mut image_path = Vec::<u8>::new();
-    for glyph in &glyphs[cursor..] {
+    for glyph in &glyphs[cursor..path_end] {
         if !is_safe_figure_image_path_byte_v0(glyph.byte) {
             return None;
         }
@@ -649,7 +718,14 @@ fn parse_figure_image_line_v0(glyphs: &[GlyphPlanV0]) -> Option<(u32, Vec<u8>)> 
     if image_path.is_empty() {
         return None;
     }
-    Some((anchor_id, image_path))
+    if !parsed_size_suffix && path_end != glyphs.len() {
+        return None;
+    }
+    Some(FigureImageMetadataV0 {
+        image_path,
+        width_pt,
+        height_pt,
+    })
 }
 
 fn placeholder_segments_v0(image_path: Option<&[u8]>) -> Vec<PdfStyledSegmentV0> {
@@ -813,7 +889,7 @@ fn emit_table_block_v0(
 
 fn emit_figure_block_v0(
     out: &mut Vec<u8>,
-    image_path: Option<&[u8]>,
+    image_metadata: Option<&FigureImageMetadataV0>,
     caption_glyphs: &[GlyphPlanV0],
     y: &mut f32,
     min_body_y_pt: f32,
@@ -822,22 +898,57 @@ fn emit_figure_block_v0(
         return None;
     }
 
-    let placeholder_segments = placeholder_segments_v0(image_path);
+    let placeholder_segments = placeholder_segments_v0(image_metadata.map(|meta| meta.image_path.as_slice()));
     let placeholder_render_segments = split_superscript_segments_v0(&placeholder_segments);
-    let placeholder_width_pt = placeholder_render_segments
+    let placeholder_text_width_pt = placeholder_render_segments
         .iter()
         .map(|segment| segment.advance_pt)
         .sum::<f32>();
+    let placeholder_box_width_pt = image_metadata
+        .map(|meta| meta.width_pt)
+        .unwrap_or(DEFAULT_FIGURE_PLACEHOLDER_WIDTH_PT_V0);
+    let placeholder_box_height_pt = image_metadata
+        .map(|meta| meta.height_pt)
+        .unwrap_or(DEFAULT_FIGURE_PLACEHOLDER_HEIGHT_PT_V0);
+    let placeholder_width_pt = placeholder_box_width_pt.max(
+        placeholder_text_width_pt + (FIGURE_PLACEHOLDER_LABEL_INSET_PT_V0 * 2.0),
+    );
+    if placeholder_width_pt > MAX_FIGURE_PLACEHOLDER_WIDTH_PT_V0 {
+        return None;
+    }
+    let required_placeholder_bottom_y = *y - placeholder_box_height_pt;
+    if required_placeholder_bottom_y < min_body_y_pt {
+        return None;
+    }
     let placeholder_x_pt = centered_line_x_v0(placeholder_width_pt);
+    let max_placeholder_right = PAGE_WIDTH_PT_V0 - MARGIN_PT_V0;
+    if placeholder_x_pt + placeholder_width_pt > max_placeholder_right + 0.01 {
+        return None;
+    }
     emit_render_segments_with_superscript_v0(
         out,
         &placeholder_render_segments,
-        placeholder_x_pt,
-        *y,
+        placeholder_x_pt + FIGURE_PLACEHOLDER_LABEL_INSET_PT_V0,
+        *y - FIGURE_PLACEHOLDER_LABEL_INSET_PT_V0,
         FONT_SIZE_PT_V0,
     );
     out.extend_from_slice(b"\n");
-    *y -= LEADING_PT_V0;
+    out.extend_from_slice(b"ET\n");
+    out.extend_from_slice(b"0 G\n");
+    out.extend_from_slice(format!("{TABLE_BORDER_LINE_WIDTH_PT_V0} w\n").as_bytes());
+    out.extend_from_slice(
+        format!(
+            "{:.2} {:.2} {:.2} {:.2} re S\n",
+            placeholder_x_pt,
+            required_placeholder_bottom_y,
+            placeholder_width_pt,
+            placeholder_box_height_pt,
+        )
+        .as_bytes(),
+    );
+    out.extend_from_slice(b"BT\n");
+    out.extend_from_slice(b"0 g\n");
+    *y = required_placeholder_bottom_y - FIGURE_PLACEHOLDER_TO_CAPTION_GAP_PT_V0;
 
     if *y < min_body_y_pt {
         return None;
@@ -1878,11 +1989,11 @@ fn build_page_content_stream_v0(
                 return None;
             }
             let mut cursor = line_index + 1;
-            let mut image_path: Option<Vec<u8>> = None;
+            let mut image_metadata: Option<FigureImageMetadataV0> = None;
             if let Some(image_line) = lines.get(cursor) {
                 if has_figure_image_prefix_v0(&image_line.glyphs) {
-                    let (_, parsed_path) = parse_figure_image_line_v0(&image_line.glyphs)?;
-                    image_path = Some(parsed_path);
+                    let parsed_image = parse_figure_image_line_v0(&image_line.glyphs)?;
+                    image_metadata = Some(parsed_image);
                     cursor += 1;
                 }
             }
@@ -1890,7 +2001,7 @@ fn build_page_content_stream_v0(
             let caption_glyphs = parse_figure_caption_line_v0(&caption_line.glyphs)?;
             emit_figure_block_v0(
                 &mut out,
-                image_path.as_deref(),
+                image_metadata.as_ref(),
                 &caption_glyphs,
                 &mut y,
                 min_body_y_pt,

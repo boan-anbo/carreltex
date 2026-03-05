@@ -50,6 +50,11 @@ const TABLE_ROW_PREFIX_MARKER_V0: &[u8] = b"!t ";
 const FIGURE_BOX_PREFIX_MARKER_V0: &[u8] = b"!gbox";
 const FIGURE_IMAGE_PREFIX_MARKER_V0: &[u8] = b"!gimg ";
 const FIGURE_CAPTION_PREFIX_MARKER_V0: &[u8] = b"!gcap ";
+const DEFAULT_FIGURE_PLACEHOLDER_WIDTH_MPT_V0: u32 = 180_000;
+const DEFAULT_FIGURE_PLACEHOLDER_HEIGHT_MPT_V0: u32 = 120_000;
+const MAX_FIGURE_PLACEHOLDER_WIDTH_MPT_V0: u32 = 468_000;
+const MAX_FIGURE_PLACEHOLDER_HEIGHT_MPT_V0: u32 = 288_000;
+const INCLUDEGRAPHICS_ALLOWED_WIDTH_UNITS_V0: [&[u8]; 4] = [b"pt", b"mm", b"cm", b"in"];
 const TOC_PLACEHOLDER_MARKER_V0: &[u8] = b"!toc";
 const TOC_ENTRY_LINE_PREFIX_MARKER_V0: &[u8] = b"!toc ";
 const REF_MARKER_PREFIX_V0: &[u8] = b"@@REF:";
@@ -150,6 +155,18 @@ struct CiteOccurrenceMetaV0 {
     key: Vec<u8>,
     line_index: u32,
     resolved_ordinal: Option<u32>,
+}
+
+#[derive(Clone, Copy)]
+struct FigureSizingMptV0 {
+    width_mpt: u32,
+    height_mpt: u32,
+}
+
+#[derive(Clone)]
+struct IncludeGraphicsCommandV0 {
+    path: Vec<u8>,
+    sizing: FigureSizingMptV0,
 }
 
 #[derive(Default)]
@@ -1036,6 +1053,214 @@ fn has_allowed_graphics_extension_v0(path: &[u8]) -> bool {
     matches!(ext.as_slice(), b"png" | b"jpg" | b"jpeg" | b"pdf")
 }
 
+fn parse_decimal_milli_v0(value: &[u8]) -> Option<u32> {
+    if value.is_empty() {
+        return None;
+    }
+    if value.iter().any(|byte| matches!(byte, b'+' | b'-' | b'e' | b'E')) {
+        return None;
+    }
+    let mut dot_index = None::<usize>;
+    for (index, byte) in value.iter().enumerate() {
+        if *byte == b'.' {
+            if dot_index.is_some() {
+                return None;
+            }
+            dot_index = Some(index);
+            continue;
+        }
+        if !byte.is_ascii_digit() {
+            return None;
+        }
+    }
+    let (int_part, frac_part) = if let Some(index) = dot_index {
+        (&value[..index], &value[index + 1..])
+    } else {
+        (value, &b""[..])
+    };
+    if int_part.is_empty() || frac_part.len() > 3 {
+        return None;
+    }
+    let int_value = std::str::from_utf8(int_part).ok()?.parse::<u64>().ok()?;
+    let mut frac_value = 0u64;
+    if !frac_part.is_empty() {
+        frac_value = std::str::from_utf8(frac_part).ok()?.parse::<u64>().ok()?;
+        for _ in 0..(3 - frac_part.len()) {
+            frac_value = frac_value.checked_mul(10)?;
+        }
+    }
+    let milli = int_value.checked_mul(1000)?.checked_add(frac_value)?;
+    if milli == 0 || milli > u32::MAX as u64 {
+        return None;
+    }
+    Some(milli as u32)
+}
+
+fn convert_dimension_to_milli_pt_v0(value_milli: u32, unit: &[u8]) -> Option<u32> {
+    let value = u64::from(value_milli);
+    let converted = if unit == b"pt" {
+        value
+    } else if unit == b"in" {
+        value.checked_mul(72)?
+    } else if unit == b"cm" {
+        value.checked_mul(3600)?.checked_div(127)?
+    } else if unit == b"mm" {
+        value.checked_mul(360)?.checked_div(127)?
+    } else {
+        return None;
+    };
+    if converted == 0 || converted > u32::MAX as u64 {
+        return None;
+    }
+    Some(converted as u32)
+}
+
+fn parse_dimension_milli_pt_v0(value: &[u8]) -> Option<u32> {
+    let trimmed = trim_horizontal_space_bytes_v0(value);
+    if trimmed.is_empty() {
+        return None;
+    }
+    let mut suffix_start = trimmed.len();
+    while suffix_start > 0 && trimmed[suffix_start - 1].is_ascii_alphabetic() {
+        suffix_start -= 1;
+    }
+    let unit = if suffix_start == trimmed.len() {
+        b"pt".as_slice()
+    } else {
+        &trimmed[suffix_start..]
+    };
+    if !INCLUDEGRAPHICS_ALLOWED_WIDTH_UNITS_V0
+        .iter()
+        .any(|allowed| *allowed == unit)
+    {
+        return None;
+    }
+    let number_part = trim_horizontal_space_bytes_v0(&trimmed[..suffix_start]);
+    let value_milli = parse_decimal_milli_v0(number_part)?;
+    convert_dimension_to_milli_pt_v0(value_milli, unit)
+}
+
+fn scale_dimension_milli_pt_v0(base_milli: u32, scale_milli: u32) -> Option<u32> {
+    let scaled = u64::from(base_milli)
+        .checked_mul(u64::from(scale_milli))?
+        .checked_div(1000)?;
+    if scaled == 0 || scaled > u32::MAX as u64 {
+        return None;
+    }
+    Some(scaled as u32)
+}
+
+fn scale_by_ratio_milli_pt_v0(value: u32, numerator: u32, denominator: u32) -> Option<u32> {
+    let scaled = u64::from(value)
+        .checked_mul(u64::from(numerator))?
+        .checked_div(u64::from(denominator))?;
+    if scaled == 0 || scaled > u32::MAX as u64 {
+        return None;
+    }
+    Some(scaled as u32)
+}
+
+fn apply_figure_sizing_caps_v0(sizing: FigureSizingMptV0) -> FigureSizingMptV0 {
+    FigureSizingMptV0 {
+        width_mpt: sizing
+            .width_mpt
+            .min(MAX_FIGURE_PLACEHOLDER_WIDTH_MPT_V0)
+            .max(1),
+        height_mpt: sizing
+            .height_mpt
+            .min(MAX_FIGURE_PLACEHOLDER_HEIGHT_MPT_V0)
+            .max(1),
+    }
+}
+
+fn parse_includegraphics_options_v0(raw: &[u8]) -> Option<FigureSizingMptV0> {
+    let mut width_mpt = None::<u32>;
+    let mut height_mpt = None::<u32>;
+    let mut scale_milli = None::<u32>;
+    let mut saw_entry = false;
+    for chunk in raw.split(|byte| *byte == b',') {
+        let trimmed = trim_horizontal_space_bytes_v0(chunk);
+        if trimmed.is_empty() {
+            return None;
+        }
+        saw_entry = true;
+        let equals_index = trimmed.iter().position(|byte| *byte == b'=')?;
+        if equals_index == 0 || equals_index + 1 >= trimmed.len() {
+            return None;
+        }
+        let key = trim_horizontal_space_bytes_v0(&trimmed[..equals_index])
+            .iter()
+            .map(u8::to_ascii_lowercase)
+            .collect::<Vec<u8>>();
+        let value = trim_horizontal_space_bytes_v0(&trimmed[equals_index + 1..]);
+        if value.is_empty() {
+            return None;
+        }
+        match key.as_slice() {
+            b"width" => {
+                if width_mpt.is_some() {
+                    return None;
+                }
+                width_mpt = Some(parse_dimension_milli_pt_v0(value)?);
+            }
+            b"height" => {
+                if height_mpt.is_some() {
+                    return None;
+                }
+                height_mpt = Some(parse_dimension_milli_pt_v0(value)?);
+            }
+            b"scale" => {
+                if scale_milli.is_some() {
+                    return None;
+                }
+                scale_milli = Some(parse_decimal_milli_v0(value)?);
+            }
+            _ => return None,
+        }
+    }
+    if !saw_entry {
+        return None;
+    }
+    if scale_milli.is_some() && (width_mpt.is_some() || height_mpt.is_some()) {
+        return None;
+    }
+    let default_sizing = FigureSizingMptV0 {
+        width_mpt: DEFAULT_FIGURE_PLACEHOLDER_WIDTH_MPT_V0,
+        height_mpt: DEFAULT_FIGURE_PLACEHOLDER_HEIGHT_MPT_V0,
+    };
+    let resolved = if let Some(scale) = scale_milli {
+        FigureSizingMptV0 {
+            width_mpt: scale_dimension_milli_pt_v0(default_sizing.width_mpt, scale)?,
+            height_mpt: scale_dimension_milli_pt_v0(default_sizing.height_mpt, scale)?,
+        }
+    } else {
+        match (width_mpt, height_mpt) {
+            (Some(width), Some(height)) => FigureSizingMptV0 {
+                width_mpt: width,
+                height_mpt: height,
+            },
+            (Some(width), None) => FigureSizingMptV0 {
+                width_mpt: width,
+                height_mpt: scale_by_ratio_milli_pt_v0(
+                    width,
+                    DEFAULT_FIGURE_PLACEHOLDER_HEIGHT_MPT_V0,
+                    DEFAULT_FIGURE_PLACEHOLDER_WIDTH_MPT_V0,
+                )?,
+            },
+            (None, Some(height)) => FigureSizingMptV0 {
+                width_mpt: scale_by_ratio_milli_pt_v0(
+                    height,
+                    DEFAULT_FIGURE_PLACEHOLDER_WIDTH_MPT_V0,
+                    DEFAULT_FIGURE_PLACEHOLDER_HEIGHT_MPT_V0,
+                )?,
+                height_mpt: height,
+            },
+            (None, None) => return None,
+        }
+    };
+    Some(apply_figure_sizing_caps_v0(resolved))
+}
+
 fn normalize_graphics_path_v0(raw_path: &[u8]) -> Option<Vec<u8>> {
     if raw_path.is_empty() {
         return None;
@@ -1082,16 +1307,49 @@ fn normalize_graphics_path_v0(raw_path: &[u8]) -> Option<Vec<u8>> {
     Some(normalized)
 }
 
-fn consume_includegraphics_path_v0(tokens: &[TokenV0], index: usize) -> Option<(Vec<u8>, usize)> {
+fn consume_includegraphics_command_v0(
+    tokens: &[TokenV0],
+    index: usize,
+) -> Option<(IncludeGraphicsCommandV0, usize)> {
     if !matches!(
         tokens.get(index),
         Some(TokenV0::ControlSeq(name)) if name.as_slice() == INCLUDEGRAPHICS_CONTROL_V0
     ) {
         return None;
     }
-    let group_index = skip_spaces(tokens, index + 1);
+    let mut group_index = skip_spaces(tokens, index + 1);
+    let mut sizing = FigureSizingMptV0 {
+        width_mpt: DEFAULT_FIGURE_PLACEHOLDER_WIDTH_MPT_V0,
+        height_mpt: DEFAULT_FIGURE_PLACEHOLDER_HEIGHT_MPT_V0,
+    };
     if matches!(tokens.get(group_index), Some(TokenV0::Char(b'['))) {
-        return None;
+        let mut cursor = group_index + 1;
+        let mut option_bytes = Vec::<u8>::new();
+        let mut saw_non_space = false;
+        while let Some(token) = tokens.get(cursor) {
+            match token {
+                TokenV0::Char(b']') => {
+                    if !saw_non_space {
+                        return None;
+                    }
+                    sizing = parse_includegraphics_options_v0(&option_bytes)?;
+                    group_index = cursor + 1;
+                    break;
+                }
+                TokenV0::Char(byte) => {
+                    option_bytes.push(*byte);
+                    if !is_horizontal_space_v0(*byte) {
+                        saw_non_space = true;
+                    }
+                }
+                TokenV0::Space => option_bytes.push(b' '),
+                _ => return None,
+            }
+            cursor += 1;
+        }
+        if !matches!(tokens.get(cursor), Some(TokenV0::Char(b']'))) {
+            return None;
+        }
     }
     let (group_start, group_end, next) = consume_group_bounds(tokens, group_index)?;
     let mut raw_path = Vec::<u8>::new();
@@ -1102,7 +1360,13 @@ fn consume_includegraphics_path_v0(tokens: &[TokenV0], index: usize) -> Option<(
         }
     }
     let normalized = normalize_graphics_path_v0(&raw_path)?;
-    Some((normalized, next))
+    Some((
+        IncludeGraphicsCommandV0 {
+            path: normalized,
+            sizing,
+        },
+        next,
+    ))
 }
 
 fn consume_tabular_environment_v0(
@@ -1203,7 +1467,7 @@ fn consume_figure_environment_v0(
     }
 
     let mut caption: Option<Vec<u8>> = None;
-    let mut image_path: Option<Vec<u8>> = None;
+    let mut image: Option<IncludeGraphicsCommandV0> = None;
     loop {
         cursor = skip_spaces(tokens, cursor);
         match tokens.get(cursor) {
@@ -1220,11 +1484,15 @@ fn consume_figure_environment_v0(
                 push_paragraph_break(out);
                 out.extend_from_slice(FIGURE_BOX_PREFIX_MARKER_V0);
                 push_newline(out);
-                if let Some(path) = &image_path {
+                if let Some(image_meta) = &image {
                     out.extend_from_slice(FIGURE_IMAGE_PREFIX_MARKER_V0);
                     out.extend_from_slice(figure_anchor_id.to_string().as_bytes());
                     out.push(b' ');
-                    out.extend_from_slice(path);
+                    out.extend_from_slice(&image_meta.path);
+                    out.push(b' ');
+                    out.extend_from_slice(image_meta.sizing.width_mpt.to_string().as_bytes());
+                    out.push(b' ');
+                    out.extend_from_slice(image_meta.sizing.height_mpt.to_string().as_bytes());
                     push_newline(out);
                 }
                 out.extend_from_slice(FIGURE_CAPTION_PREFIX_MARKER_V0);
@@ -1261,11 +1529,11 @@ fn consume_figure_environment_v0(
                 cursor = next;
             }
             Some(TokenV0::ControlSeq(name)) if name.as_slice() == INCLUDEGRAPHICS_CONTROL_V0 => {
-                if image_path.is_some() {
+                if image.is_some() {
                     return None;
                 }
-                let (path, next) = consume_includegraphics_path_v0(tokens, cursor)?;
-                image_path = Some(path);
+                let (parsed_image, next) = consume_includegraphics_command_v0(tokens, cursor)?;
+                image = Some(parsed_image);
                 cursor = next;
             }
             Some(TokenV0::ControlSeq(name))

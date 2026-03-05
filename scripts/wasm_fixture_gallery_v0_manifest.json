@@ -86,6 +86,18 @@
       "purpose": "Exercises includegraphics stub v1 in figure mode so graphics dependencies become auditable resource edges."
     },
     {
+      "id": "typeset_demo_graphics_width_probe_v0",
+      "tags": ["typeset", "graphics", "includegraphics", "width", "probe", "ok"],
+      "expected_status": "OK",
+      "purpose": "Exercises safe includegraphics width option parsing and deterministic placeholder sizing."
+    },
+    {
+      "id": "typeset_demo_graphics_scale_probe_v0",
+      "tags": ["typeset", "graphics", "includegraphics", "scale", "probe", "ok"],
+      "expected_status": "OK",
+      "purpose": "Exercises safe includegraphics scale option parsing and deterministic placeholder sizing."
+    },
+    {
       "id": "typeset_demo_graphicspath_probe_v0",
       "tags": ["typeset", "graphics", "graphicspath", "probe", "ni"],
       "expected_status": "NI",
