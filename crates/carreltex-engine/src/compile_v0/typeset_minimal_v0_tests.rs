@@ -805,7 +805,7 @@ fn typeset_minimal_figure_stub_accepts_includegraphics_path_marker() {
     let body = extract_typeset_body(main);
     let text = String::from_utf8(body).expect("body should be valid utf8");
     assert!(
-        text.contains("!gbox\n!gimg 1 demo.png\n!gcap Figure 1: Nope"),
+        text.contains("!gbox\n!gimg 1 demo.png 180000 120000\n!gcap Figure 1: Nope"),
         "body={text:?}"
     );
 }
@@ -815,7 +815,10 @@ fn typeset_minimal_figure_stub_accepts_includegraphics_without_extension_by_norm
     let main = b"\\documentclass{article}\\begin{document}\\begin{figure}\\includegraphics{figs/demo}\\caption{No ext}\\end{figure}\\end{document}";
     let body = extract_typeset_body(main);
     let text = String::from_utf8(body).expect("body should be valid utf8");
-    assert!(text.contains("!gimg 1 figs/demo.png"), "body={text:?}");
+    assert!(
+        text.contains("!gimg 1 figs/demo.png 180000 120000"),
+        "body={text:?}"
+    );
 }
 
 #[test]
@@ -842,8 +845,62 @@ fn typeset_minimal_figure_refs_with_hyperref_emit_anchor_links_in_order() {
 }
 
 #[test]
-fn typeset_minimal_rejects_figure_includegraphics_optional_args() {
-    let main = b"\\documentclass{article}\\begin{document}\\begin{figure}\\includegraphics[width=0.5\\textwidth]{demo.png}\\caption{Nope}\\end{figure}\\end{document}";
+fn typeset_minimal_figure_stub_accepts_includegraphics_width_option() {
+    let main = b"\\documentclass{article}\\begin{document}\\begin{figure}\\includegraphics[width=144pt]{demo.png}\\caption{Sized}\\end{figure}\\end{document}";
+    let body = extract_typeset_body(main);
+    let text = String::from_utf8(body).expect("body should be valid utf8");
+    assert!(
+        text.contains("!gimg 1 demo.png 144000 96000"),
+        "body={text:?}"
+    );
+}
+
+#[test]
+fn typeset_minimal_figure_stub_accepts_includegraphics_scale_option() {
+    let main = b"\\documentclass{article}\\begin{document}\\begin{figure}\\includegraphics[scale=1.5]{demo.png}\\caption{Scaled}\\end{figure}\\end{document}";
+    let body = extract_typeset_body(main);
+    let text = String::from_utf8(body).expect("body should be valid utf8");
+    assert!(
+        text.contains("!gimg 1 demo.png 270000 180000"),
+        "body={text:?}"
+    );
+}
+
+#[test]
+fn typeset_minimal_rejects_figure_includegraphics_unknown_option_key() {
+    let main = b"\\documentclass{article}\\begin{document}\\begin{figure}\\includegraphics[keepaspectratio=true]{demo.png}\\caption{Nope}\\end{figure}\\end{document}";
+    let result = compile_typeset(main);
+    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert!(result.main_xdv_bytes.is_empty());
+}
+
+#[test]
+fn typeset_minimal_rejects_figure_includegraphics_duplicate_option_key() {
+    let main = b"\\documentclass{article}\\begin{document}\\begin{figure}\\includegraphics[width=120pt,width=80pt]{demo.png}\\caption{Nope}\\end{figure}\\end{document}";
+    let result = compile_typeset(main);
+    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert!(result.main_xdv_bytes.is_empty());
+}
+
+#[test]
+fn typeset_minimal_rejects_figure_includegraphics_scientific_option_value() {
+    let main = b"\\documentclass{article}\\begin{document}\\begin{figure}\\includegraphics[scale=1e2]{demo.png}\\caption{Nope}\\end{figure}\\end{document}";
+    let result = compile_typeset(main);
+    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert!(result.main_xdv_bytes.is_empty());
+}
+
+#[test]
+fn typeset_minimal_rejects_figure_includegraphics_macro_payload_option_value() {
+    let main = b"\\documentclass{article}\\begin{document}\\begin{figure}\\includegraphics[width=\\textwidth]{demo.png}\\caption{Nope}\\end{figure}\\end{document}";
+    let result = compile_typeset(main);
+    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert!(result.main_xdv_bytes.is_empty());
+}
+
+#[test]
+fn typeset_minimal_rejects_figure_includegraphics_non_positive_option_value() {
+    let main = b"\\documentclass{article}\\begin{document}\\begin{figure}\\includegraphics[height=0pt]{demo.png}\\caption{Nope}\\end{figure}\\end{document}";
     let result = compile_typeset(main);
     assert_eq!(result.status, CompileStatus::NotImplemented);
     assert!(result.main_xdv_bytes.is_empty());

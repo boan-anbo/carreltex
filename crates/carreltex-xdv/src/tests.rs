@@ -2886,6 +2886,39 @@ fn pdf_renderer_figure_block_spacing_invariants_v0() {
 }
 
 #[test]
+fn pdf_renderer_figure_metadata_width_affects_placeholder_alignment_v2() {
+    let xdv = write_dvi_v2_text_page_v0(
+        b"!gbox\n!gimg 1 figures/narrow.png 120000 80000\n!gcap Figure 1: Narrow caption.\n\n!gbox\n!gimg 2 figures/wide.png 360000 240000\n!gcap Figure 2: Wide caption.",
+    )
+    .expect("writer should accept figure marker lines");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+
+    let (narrow_x, _) =
+        tm_position_for_line_containing_text_v0(&pdf, "([ Figure placeholder: figures/narrow.png ])")
+            .expect("narrow placeholder position");
+    let (wide_x, _) =
+        tm_position_for_line_containing_text_v0(&pdf, "([ Figure placeholder: figures/wide.png ])")
+            .expect("wide placeholder position");
+    assert!(
+        wide_x + 1.0 < narrow_x,
+        "wider placeholder should start further left: narrow_x={narrow_x}, wide_x={wide_x}"
+    );
+}
+
+#[test]
+fn pdf_renderer_rejects_figure_image_metadata_width_overflow_v2() {
+    let xdv = write_dvi_v2_text_page_v0(
+        b"!gbox\n!gimg 1 figures/demo.png 500000 120000\n!gcap Figure 1: Caption.",
+    )
+    .expect("writer should accept figure marker lines");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv);
+    assert!(
+        pdf.is_none(),
+        "renderer should fail-closed for figure placeholder width overflow"
+    );
+}
+
+#[test]
 fn pdf_renderer_rejects_malformed_figure_image_metadata_line_v0() {
     let xdv = write_dvi_v2_text_page_v0(b"!gbox\n!gimg demo.png\n!gcap Caption")
         .expect("writer should accept figure marker lines");

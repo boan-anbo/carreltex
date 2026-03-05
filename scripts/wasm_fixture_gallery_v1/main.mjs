@@ -42,6 +42,10 @@ const MAX_PACKAGES_OPTIONS_PER_ENTRY_V1 = 64;
 const MAX_PACKAGES_OPTION_BYTES_V1 = 256;
 const MAX_GRAPHICS_ENTRIES_V0 = 256;
 const MAX_GRAPHICS_PATH_BYTES_V0 = 256;
+const DEFAULT_GRAPHICS_PLACEHOLDER_WIDTH_PT_V2 = 180.0;
+const DEFAULT_GRAPHICS_PLACEHOLDER_HEIGHT_PT_V2 = 120.0;
+const MAX_GRAPHICS_PLACEHOLDER_WIDTH_PT_V2 = 468.0;
+const MAX_GRAPHICS_PLACEHOLDER_HEIGHT_PT_V2 = 288.0;
 const MAX_INPUT_ENTRIES_V1 = 512;
 const MAX_INPUT_INCLUDE_DEPTH_V1 = 32;
 const MAX_MATH_ENTRIES_V0 = 256;
@@ -636,6 +640,16 @@ async function loadFixtureCasesV0() {
       id: 'typeset_demo_graphics_probe_v0',
       mode: 'typeset',
       fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_graphics_probe_v0.tex',
+    },
+    {
+      id: 'typeset_demo_graphics_width_probe_v0',
+      mode: 'typeset',
+      fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_graphics_width_probe_v0.tex',
+    },
+    {
+      id: 'typeset_demo_graphics_scale_probe_v0',
+      mode: 'typeset',
+      fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_graphics_scale_probe_v0.tex',
     },
     {
       id: 'typeset_demo_graphicspath_probe_v0',
@@ -1810,7 +1824,101 @@ function extractPackagesEntriesFromSourceV1(sourceBytes) {
   return entries;
 }
 
-function extractGraphicsEntriesFromSourceV0(sourceBytes) {
+function parsePositiveDecimalStrictV2(rawValue, context) {
+  const trimmed = `${rawValue}`.trim();
+  if (!/^[0-9]+(?:\.[0-9]+)?$/.test(trimmed)) {
+    throw new Error(`${context} has malformed decimal '${rawValue}'`);
+  }
+  const parsed = Number.parseFloat(trimmed);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    throw new Error(`${context} must be positive '${rawValue}'`);
+  }
+  return parsed;
+}
+
+function parseLengthPtStrictV2(rawValue, context) {
+  const trimmed = `${rawValue}`.trim();
+  const match = /^([0-9]+(?:\.[0-9]+)?)(pt|mm|cm|in)?$/i.exec(trimmed);
+  if (!match) {
+    throw new Error(`${context} has malformed length '${rawValue}'`);
+  }
+  const numeric = parsePositiveDecimalStrictV2(match[1], context);
+  const unit = (match[2] ?? 'pt').toLowerCase();
+  if (unit === 'pt') {
+    return numeric;
+  }
+  if (unit === 'in') {
+    return numeric * 72.0;
+  }
+  if (unit === 'cm') {
+    return (numeric * 72.0) / 2.54;
+  }
+  if (unit === 'mm') {
+    return (numeric * 72.0) / 25.4;
+  }
+  throw new Error(`${context} has unsupported unit '${unit}'`);
+}
+
+function clampGraphicsDimensionV2(valuePt, maxPt) {
+  return Math.max(1.0, Math.min(maxPt, valuePt));
+}
+
+function parseGraphicsSizingOptionsStrictV2(rawValue) {
+  const entries = rawValue.split(',');
+  const options = new Map();
+  for (const chunk of entries) {
+    const trimmed = chunk.trim();
+    if (trimmed.length === 0) {
+      throw new Error('graphics_v2 includegraphics options has empty entry');
+    }
+    const equalsIndex = trimmed.indexOf('=');
+    if (equalsIndex <= 0 || equalsIndex === trimmed.length - 1) {
+      throw new Error(`graphics_v2 includegraphics option '${trimmed}' is malformed`);
+    }
+    const key = trimmed.slice(0, equalsIndex).trim().toLowerCase();
+    const value = trimmed.slice(equalsIndex + 1).trim();
+    if (!['width', 'height', 'scale'].includes(key)) {
+      throw new Error(`graphics_v2 includegraphics option '${key}' is unsupported`);
+    }
+    if (options.has(key)) {
+      throw new Error(`graphics_v2 includegraphics option '${key}' is duplicated`);
+    }
+    options.set(key, value);
+  }
+  if (options.size === 0) {
+    throw new Error('graphics_v2 includegraphics options must be non-empty');
+  }
+  if (options.has('scale') && (options.has('width') || options.has('height'))) {
+    throw new Error('graphics_v2 includegraphics scale cannot be combined with width/height');
+  }
+
+  let widthPt = DEFAULT_GRAPHICS_PLACEHOLDER_WIDTH_PT_V2;
+  let heightPt = DEFAULT_GRAPHICS_PLACEHOLDER_HEIGHT_PT_V2;
+  let scale = null;
+  if (options.has('scale')) {
+    scale = parsePositiveDecimalStrictV2(options.get('scale'), 'graphics_v2 scale');
+    widthPt *= scale;
+    heightPt *= scale;
+  } else if (options.has('width') && options.has('height')) {
+    widthPt = parseLengthPtStrictV2(options.get('width'), 'graphics_v2 width');
+    heightPt = parseLengthPtStrictV2(options.get('height'), 'graphics_v2 height');
+  } else if (options.has('width')) {
+    widthPt = parseLengthPtStrictV2(options.get('width'), 'graphics_v2 width');
+    heightPt = widthPt * (DEFAULT_GRAPHICS_PLACEHOLDER_HEIGHT_PT_V2 / DEFAULT_GRAPHICS_PLACEHOLDER_WIDTH_PT_V2);
+  } else if (options.has('height')) {
+    heightPt = parseLengthPtStrictV2(options.get('height'), 'graphics_v2 height');
+    widthPt = heightPt * (DEFAULT_GRAPHICS_PLACEHOLDER_WIDTH_PT_V2 / DEFAULT_GRAPHICS_PLACEHOLDER_HEIGHT_PT_V2);
+  }
+  widthPt = clampGraphicsDimensionV2(widthPt, MAX_GRAPHICS_PLACEHOLDER_WIDTH_PT_V2);
+  heightPt = clampGraphicsDimensionV2(heightPt, MAX_GRAPHICS_PLACEHOLDER_HEIGHT_PT_V2);
+  return {
+    width_pt: Number(widthPt.toFixed(3)),
+    height_pt: Number(heightPt.toFixed(3)),
+    scale: scale === null ? null : Number(scale.toFixed(6)),
+  };
+}
+
+function extractGraphicsEntriesFromSourceV2(sourceBytes) {
   const allowedExtensions = new Set(['png', 'jpg', 'jpeg', 'pdf']);
   const entries = [];
   let index = 0;
@@ -1835,6 +1943,13 @@ function extractGraphicsEntriesFromSourceV0(sourceBytes) {
 
     let next = commandIndex;
     const optGroup = readBracketGroupV0(sourceBytes, next);
+    const sizingOpts = optGroup.ok
+      ? parseGraphicsSizingOptionsStrictV2(optGroup.value)
+      : {
+          width_pt: DEFAULT_GRAPHICS_PLACEHOLDER_WIDTH_PT_V2,
+          height_pt: DEFAULT_GRAPHICS_PLACEHOLDER_HEIGHT_PT_V2,
+          scale: null,
+        };
     if (optGroup.ok) {
       next = optGroup.next;
     }
@@ -1858,21 +1973,22 @@ function extractGraphicsEntriesFromSourceV0(sourceBytes) {
     const dotIndex = resolverPath.lastIndexOf('.');
     const extension = dotIndex >= 0 ? resolverPath.slice(dotIndex + 1).toLowerCase() : '';
     if (!allowedExtensions.has(extension)) {
-      throw new Error(`graphics_v1 unsupported extension '${extension}'`);
+      throw new Error(`graphics_v2 unsupported extension '${extension}'`);
     }
 
     const pathBytes = Buffer.from(pathAsWritten, 'utf8');
     if (pathBytes.length > MAX_GRAPHICS_PATH_BYTES_V0) {
-      throw new Error(`graphics_v1 path exceeds cap ${MAX_GRAPHICS_PATH_BYTES_V0}`);
+      throw new Error(`graphics_v2 path exceeds cap ${MAX_GRAPHICS_PATH_BYTES_V0}`);
     }
     entries.push({
       command,
       path: pathAsWritten,
       resolver_path: resolverPath,
-      source_span: buildSourceSpanV0(sourceBytes, index, pathGroup.next, 'graphics_v1'),
+      opts: sizingOpts,
+      source_span: buildSourceSpanV0(sourceBytes, index, pathGroup.next, 'graphics_v2'),
     });
     if (entries.length > MAX_GRAPHICS_ENTRIES_V0) {
-      throw new Error(`graphics_v1 entries exceed cap ${MAX_GRAPHICS_ENTRIES_V0}`);
+      throw new Error(`graphics_v2 entries exceed cap ${MAX_GRAPHICS_ENTRIES_V0}`);
     }
     index = pathGroup.next;
   }
@@ -3214,11 +3330,11 @@ async function emitPackagesTypedArtifactV1(caseOutDir, fixtureBytes) {
 async function emitGraphicsTypedArtifactV0(caseOutDir, fixtureBytes) {
   const payload = {
     version: TYPED_ARTIFACTS_VERSION_V0,
-    schema: 'graphics_v1',
-    entries: extractGraphicsEntriesFromSourceV0(fixtureBytes),
+    schema: 'graphics_v2',
+    entries: extractGraphicsEntriesFromSourceV2(fixtureBytes),
   };
   const bytes = Buffer.from(`${JSON.stringify(payload, null, 2)}\n`, 'utf8');
-  const relpath = 'graphics_v1.json';
+  const relpath = 'graphics_v2.json';
   const fullPath = path.join(caseOutDir, relpath);
   await writeFile(fullPath, bytes);
   return {
@@ -3349,7 +3465,11 @@ async function emitTypedArtifactsV0(
   if (PACKAGE_ARTIFACT_CASE_IDS_V1.has(caseSpec.id)) {
     typedArtifacts.packages = await emitPackagesTypedArtifactV1(caseOutDir, fixtureBytes);
   }
-  if (caseSpec.id === 'typeset_demo_graphics_probe_v0') {
+  if (
+    caseSpec.id === 'typeset_demo_graphics_probe_v0'
+    || caseSpec.id === 'typeset_demo_graphics_width_probe_v0'
+    || caseSpec.id === 'typeset_demo_graphics_scale_probe_v0'
+  ) {
     typedArtifacts.graphics = await emitGraphicsTypedArtifactV0(caseOutDir, fixtureBytes);
   }
   if (caseSpec.mode === 'typeset' && Array.isArray(inputEntries) && inputEntries.length > 0) {
@@ -3557,8 +3677,15 @@ async function collectResolverRequestsFromTypedArtifactsV0(caseSpec, caseOutDir,
     const graphicsPayload = JSON.parse((await readFile(path.join(caseOutDir, graphicsRelpath))).toString('utf8'));
     const graphicsEntries = Array.isArray(graphicsPayload?.entries) ? graphicsPayload.entries : [];
     for (const entry of graphicsEntries) {
-      if (typeof entry?.path === 'string' && entry.path.length > 0) {
-        addTexmfRequest(entry.path, 'graphic', 'graphics_path');
+      const resolverPath = typeof entry?.resolver_path === 'string' && entry.resolver_path.length > 0
+        ? entry.resolver_path
+        : null;
+      const fallbackPath = typeof entry?.path === 'string' && entry.path.length > 0
+        ? entry.path
+        : null;
+      const requestPath = resolverPath ?? fallbackPath;
+      if (requestPath) {
+        addTexmfRequest(requestPath, 'graphic', 'graphics_path');
       }
     }
   }

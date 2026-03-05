@@ -544,9 +544,9 @@ if (graphicsSummary?.typed_artifacts?.graphics?.present !== true) {
   console.error('FAIL: expected graphics typed artifact present after first run');
   process.exit(1);
 }
-const graphicsPath = path.join(outDir, 'typeset_demo_graphics_probe_v0', 'graphics_v1.json');
+const graphicsPath = path.join(outDir, 'typeset_demo_graphics_probe_v0', 'graphics_v2.json');
 if (!fs.existsSync(graphicsPath)) {
-  console.error('FAIL: expected graphics_v1.json artifact after first run');
+  console.error('FAIL: expected graphics_v2.json artifact after first run');
   process.exit(1);
 }
 const graphicsShaFirst = graphicsSummary.typed_artifacts.graphics.artifact_sha256;
@@ -556,15 +556,29 @@ if (typeof graphicsShaFirst !== 'string' || !/^[0-9a-f]{64}$/.test(graphicsShaFi
 }
 const graphicsArtifactFirst = JSON.parse(fs.readFileSync(graphicsPath, 'utf8'));
 if (!Array.isArray(graphicsArtifactFirst?.entries)) {
-  console.error('FAIL: expected graphics_v1.entries array in first-run artifact');
+  console.error('FAIL: expected graphics_v2.entries array in first-run artifact');
   process.exit(1);
 }
 if (graphicsArtifactFirst.entries.length <= 0) {
-  console.error('FAIL: expected non-empty graphics_v1.entries for graphics probe');
+  console.error('FAIL: expected non-empty graphics_v2.entries for graphics probe');
   process.exit(1);
 }
-assertEntrySourceSpans('typeset_demo_graphics_probe_v0', 'graphics_v1', graphicsArtifactFirst.entries);
-fs.writeFileSync(firstRunShaPath('graphics_v1'), `${graphicsShaFirst}\n`);
+for (const entry of graphicsArtifactFirst.entries) {
+  if (typeof entry?.resolver_path !== 'string' || entry.resolver_path.length === 0) {
+    console.error('FAIL: expected graphics_v2 entry resolver_path');
+    process.exit(1);
+  }
+  if (typeof entry?.opts !== 'object' || entry.opts === null) {
+    console.error('FAIL: expected graphics_v2 entry opts object');
+    process.exit(1);
+  }
+  if (!(entry.opts.width_pt > 0) || !(entry.opts.height_pt > 0)) {
+    console.error('FAIL: expected graphics_v2 entry positive width_pt/height_pt');
+    process.exit(1);
+  }
+}
+assertEntrySourceSpans('typeset_demo_graphics_probe_v0', 'graphics_v2', graphicsArtifactFirst.entries);
+fs.writeFileSync(firstRunShaPath('graphics_v2'), `${graphicsShaFirst}\n`);
 
 const mathSummary = JSON.parse(
   fs.readFileSync(path.join(outDir, 'typeset_demo_minimal_v0', 'summary.json'), 'utf8'),
