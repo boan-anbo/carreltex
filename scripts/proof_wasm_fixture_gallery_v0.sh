@@ -1224,8 +1224,34 @@ const resolvedCountFirst = Number(
   fs.readFileSync(path.join(`${outDir}_baseline`, 'resolved_resources_count_first.sha256'), 'utf8').trim(),
 );
 const sha256 = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex');
+const baselineCmpClasses = new Set(['MATCH', 'DIFF_OK', 'DIFF_SUSPECT', 'MISSING_BASELINE', 'SKIP']);
 if (report?.typed_artifacts_version !== 1) {
   console.error('FAIL: expected report.typed_artifacts_version=1 after rerun');
+  process.exit(1);
+}
+const deltaPolicy = report?.delta_policy_v1;
+if (!deltaPolicy || typeof deltaPolicy !== 'object') {
+  console.error('FAIL: expected report.delta_policy_v1 after rerun');
+  process.exit(1);
+}
+if (typeof deltaPolicy.path !== 'string' || deltaPolicy.path.length === 0) {
+  console.error('FAIL: expected report.delta_policy_v1.path');
+  process.exit(1);
+}
+if (typeof deltaPolicy.sha256 !== 'string' || !/^[0-9a-f]{64}$/.test(deltaPolicy.sha256)) {
+  console.error('FAIL: expected report.delta_policy_v1.sha256');
+  process.exit(1);
+}
+if (deltaPolicy.ok_cases_require_match !== true) {
+  console.error('FAIL: expected report.delta_policy_v1.ok_cases_require_match=true');
+  process.exit(1);
+}
+if (typeof deltaPolicy.ok_allowlist_case_count !== 'number' || deltaPolicy.ok_allowlist_case_count < 0) {
+  console.error('FAIL: expected report.delta_policy_v1.ok_allowlist_case_count');
+  process.exit(1);
+}
+if (typeof deltaPolicy.metrics_thresholds !== 'object' || !deltaPolicy.metrics_thresholds) {
+  console.error('FAIL: expected report.delta_policy_v1.metrics_thresholds');
   process.exit(1);
 }
 const resourceHints = report?.resource_hints_v0;
@@ -1313,6 +1339,10 @@ for (const status of okStatuses) {
     console.error(`FAIL: expected baseline_match=MATCH for OK case ${status.case_id}`);
     process.exit(1);
   }
+  if (status?.baseline_cmp_v1?.class !== 'MATCH') {
+    console.error(`FAIL: expected baseline_cmp_v1.class=MATCH for OK case ${status.case_id}`);
+    process.exit(1);
+  }
 }
 if (resourceHints.entries.some((entry) => entry.case_id === 'ok_demo_v0')) {
   console.error('FAIL: expected no resource_hints_v0 entries for ok_demo_v0');
@@ -1327,6 +1357,80 @@ for (const status of statuses) {
   const typedPresence = status.typed_artifacts_presence;
   if (!typedPresence || typeof typedPresence !== 'object') {
     console.error(`FAIL: case ${status.case_id} missing typed_artifacts_presence`);
+    process.exit(1);
+  }
+  const baselineCmp = status?.baseline_cmp_v1;
+  if (!baselineCmp || typeof baselineCmp !== 'object') {
+    console.error(`FAIL: case ${status.case_id} missing baseline_cmp_v1`);
+    process.exit(1);
+  }
+  if (!baselineCmpClasses.has(baselineCmp.class)) {
+    console.error(`FAIL: case ${status.case_id} baseline_cmp_v1.class invalid: ${baselineCmp.class}`);
+    process.exit(1);
+  }
+  if (!Array.isArray(baselineCmp.reasons) || baselineCmp.reasons.length === 0) {
+    console.error(`FAIL: case ${status.case_id} baseline_cmp_v1.reasons missing`);
+    process.exit(1);
+  }
+  const metrics = baselineCmp.metrics;
+  if (!metrics || typeof metrics !== 'object') {
+    console.error(`FAIL: case ${status.case_id} baseline_cmp_v1.metrics missing`);
+    process.exit(1);
+  }
+  const requiredMetricKeys = [
+    'page_count',
+    'total_lines',
+    'total_glyphs',
+    'max_line_glyphs',
+    'annots_count',
+    'footnote_marker_count',
+    'xdv_sha256',
+    'pdf_sha256',
+  ];
+  for (const key of requiredMetricKeys) {
+    if (!(key in metrics)) {
+      console.error(`FAIL: case ${status.case_id} baseline_cmp_v1.metrics missing ${key}`);
+      process.exit(1);
+    }
+  }
+  if (typeof metrics.page_count !== 'number' || metrics.page_count < 0) {
+    console.error(`FAIL: case ${status.case_id} invalid baseline_cmp_v1.metrics.page_count`);
+    process.exit(1);
+  }
+  if (typeof metrics.total_lines !== 'number' || metrics.total_lines < 0) {
+    console.error(`FAIL: case ${status.case_id} invalid baseline_cmp_v1.metrics.total_lines`);
+    process.exit(1);
+  }
+  if (typeof metrics.total_glyphs !== 'number' || metrics.total_glyphs < 0) {
+    console.error(`FAIL: case ${status.case_id} invalid baseline_cmp_v1.metrics.total_glyphs`);
+    process.exit(1);
+  }
+  if (typeof metrics.max_line_glyphs !== 'number' || metrics.max_line_glyphs < 0) {
+    console.error(`FAIL: case ${status.case_id} invalid baseline_cmp_v1.metrics.max_line_glyphs`);
+    process.exit(1);
+  }
+  if (typeof metrics.annots_count !== 'number' || metrics.annots_count < 0) {
+    console.error(`FAIL: case ${status.case_id} invalid baseline_cmp_v1.metrics.annots_count`);
+    process.exit(1);
+  }
+  if (typeof metrics.footnote_marker_count !== 'number' || metrics.footnote_marker_count < 0) {
+    console.error(`FAIL: case ${status.case_id} invalid baseline_cmp_v1.metrics.footnote_marker_count`);
+    process.exit(1);
+  }
+  if (typeof metrics.xdv_sha256 !== 'string' || !/^[0-9a-f]{64}$/.test(metrics.xdv_sha256)) {
+    console.error(`FAIL: case ${status.case_id} invalid baseline_cmp_v1.metrics.xdv_sha256`);
+    process.exit(1);
+  }
+  if (typeof metrics.pdf_sha256 !== 'string' || !/^[0-9a-f]{64}$/.test(metrics.pdf_sha256)) {
+    console.error(`FAIL: case ${status.case_id} invalid baseline_cmp_v1.metrics.pdf_sha256`);
+    process.exit(1);
+  }
+  if (status.baseline_match === 'MATCH' && baselineCmp.class !== 'MATCH') {
+    console.error(`FAIL: case ${status.case_id} baseline_cmp_v1.class must be MATCH when baseline_match=MATCH`);
+    process.exit(1);
+  }
+  if (status.baseline_match === 'MISSING' && baselineCmp.class !== 'MISSING_BASELINE') {
+    console.error(`FAIL: case ${status.case_id} baseline_cmp_v1.class must be MISSING_BASELINE when baseline_match=MISSING`);
     process.exit(1);
   }
   for (const key of requiredTypedKeys) {
@@ -1536,6 +1640,7 @@ console.log(`PASS: resolved_resources_count ${resolvedCount}`);
 console.log(`PASS: resolved_resources_count increased from ${resolvedCountFirst} to ${resolvedCount}`);
 console.log('PASS: resolved_resources_count meets floor >= 45');
 console.log(`PASS: baseline_match MATCH for all OK cases (${okStatuses.length})`);
+console.log('PASS: baseline_cmp_v1 policy+metrics gates pass');
 console.log(`PASS: typed_artifacts keys ${requiredTypedKeys.join(',')}`);
 console.log('PASS: typed_artifacts_version gate 1');
 console.log(`PASS: resource_hints_v0 sha stable ${resourceHintsShaSecond}`);
