@@ -8,6 +8,7 @@ import { createCtx } from './wasm_smoke_js/ctx.mjs';
 import { createMemHelpers } from './wasm_smoke_js/mem.mjs';
 import { createAssertHelpers } from './wasm_smoke_js/assert.mjs';
 import { createOnDemandResolverV0 } from './wasm_smoke_js/ondemand_resolver_v0.mjs';
+import { generateTexliveStoreV0 } from './texlive_store_gen_v0.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -19,7 +20,9 @@ const STATUS_OK_V0 = 'OK';
 const STATUS_NI_V0 = 'NI';
 const STATUS_INVALID_V0 = 'INVALID';
 const STATUS_FAIL_V0 = 'FAIL';
+const STATUS_MISMATCH_V0 = 'MISMATCH';
 const EXPECTED_STATUS_VALUES_V0 = new Set([STATUS_OK_V0, STATUS_NI_V0, STATUS_INVALID_V0, STATUS_FAIL_V0]);
+const DEFAULT_ONDEMAND_FIXEDPOINT_MAX_ITERS_V1 = 3;
 const TYPED_ARTIFACT_KEYS_V0 = ['toc', 'labels', 'bib', 'hyperref', 'pkgopt', 'graphics'];
 const TYPED_ARTIFACTS_VERSION_V0 = 1;
 const MAX_TOC_ENTRIES_V0 = 256;
@@ -119,6 +122,14 @@ function expectedVsActualV0(expectedStatus, actualStatus) {
   return expectedStatus === actualStatus ? 'MATCH' : 'MISMATCH';
 }
 
+function parseBoolEnvV0(value) {
+  if (value === undefined || value === null) {
+    return false;
+  }
+  const normalized = `${value}`.trim().toLowerCase();
+  return normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on';
+}
+
 async function loadGalleryManifestV0() {
   const manifestPath = path.join(rootDir, 'scripts', 'wasm_fixture_gallery_v0_manifest.json');
   const bytes = await readFile(manifestPath);
@@ -158,6 +169,7 @@ async function loadGalleryManifestV0() {
       tags,
       expected_status: expectedStatus,
       purpose: purpose.trim(),
+      ondemand_opt_in: raw?.ondemand_opt_in === true,
     });
   }
   return {
@@ -284,6 +296,16 @@ async function loadFixtureCasesV0() {
       fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_include_probe_v0.tex',
     },
     {
+      id: 'typeset_demo_ondemand_input_probe_v0',
+      mode: 'typeset',
+      fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_ondemand_input_probe_v0.tex',
+    },
+    {
+      id: 'typeset_demo_ondemand_include_probe_v0',
+      mode: 'typeset',
+      fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_ondemand_include_probe_v0.tex',
+    },
+    {
       id: 'typeset_demo_includeonly_probe_v0',
       mode: 'typeset',
       fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_includeonly_probe_v0.tex',
@@ -403,6 +425,7 @@ async function loadFixtureCasesV0() {
       tags: metadata.tags,
       expected_status: metadata.expected_status,
       purpose: metadata.purpose,
+      ondemand_opt_in: metadata.ondemand_opt_in,
     };
   });
 
@@ -438,6 +461,7 @@ function buildConfigHashV0(cases, sourceDateEpoch, resolverId) {
       fixture: item.fixtureRelPath,
       tags: item.tags,
       expected_status: item.expected_status,
+      ondemand_opt_in: item.ondemand_opt_in === true,
     })),
   };
   return sha256HexV0(Buffer.from(JSON.stringify(config)));
@@ -1964,6 +1988,104 @@ async function computeBaselineMatchV0(caseId, artifactSha256, baselineDir) {
   return 'MISMATCH';
 }
 
+function buildResolverOutcomeEntryV0(request, resolution) {
+  return {
+    kind: request.kind,
+    format: request.format,
+    name: request.name,
+    variant: request.variant,
+    hint_type: request.hint_type ?? null,
+    stable_id: resolution.stable_id,
+    sha256: resolution.sha256,
+    cache_hit: resolution.cache_hit,
+  };
+}
+
+function buildResolverMissingEntryV0(request, resolution) {
+  return {
+    kind: request.kind,
+    format: request.format,
+    name: request.name,
+    variant: request.variant,
+    hint_type: request.hint_type ?? null,
+    cache_hit: resolution.cache_hit,
+  };
+}
+
+async function resolveRequestsWithResolverV0(resolver, requests) {
+  const resolvedResources = [];
+  const missingResources = [];
+  for (const request of requests) {
+    const resolution = await resolver.resolve({
+      kind: request.kind,
+      format: request.format,
+      name: request.name,
+      variant: request.variant,
+      resolver_id: resolver.resolverId,
+    });
+    if (resolution.tag === 'Found') {
+      resolvedResources.push(buildResolverOutcomeEntryV0(request, resolution));
+      continue;
+    }
+    missingResources.push(buildResolverMissingEntryV0(request, resolution));
+  }
+  return {
+    resolvedResources,
+    missingResources,
+  };
+}
+
+function normalizeStoreRequestFromEntryV0(entry) {
+  const kind = typeof entry?.kind === 'string' ? entry.kind : '';
+  const format = typeof entry?.format === 'string' ? entry.format : '';
+  const name = typeof entry?.name === 'string' ? entry.name : '';
+  const variant = typeof entry?.variant === 'string' ? entry.variant : '';
+  const safeVariant = variant === '' || isSafeResolverTokenV0(variant);
+  if (!isSafeResolverTokenV0(kind) || !isSafeResolverTokenV0(format) || !isSafeResolverTokenV0(name) || !safeVariant) {
+    return null;
+  }
+  return { kind, format, name, variant };
+}
+
+async function loadStoreRequestsV0(storeDir) {
+  const indexPath = path.join(storeDir, 'index.json');
+  const indexBytes = await readFile(indexPath).catch(() => null);
+  if (!indexBytes) {
+    return [];
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(indexBytes.toString('utf8'));
+  } catch {
+    return [];
+  }
+  const entries = Array.isArray(parsed?.entries) ? parsed.entries : [];
+  const requestsByKey = new Map();
+  for (const entry of entries) {
+    const normalized = normalizeStoreRequestFromEntryV0(entry);
+    if (!normalized) {
+      continue;
+    }
+    requestsByKey.set(resolverRequestKeyV0(normalized), normalized);
+  }
+  return [...requestsByKey.values()].sort((left, right) => resolverRequestKeyV0(left).localeCompare(resolverRequestKeyV0(right)));
+}
+
+function mergeStoreRequestsV0(existingRequests, missingRequests) {
+  const requestsByKey = new Map();
+  for (const request of existingRequests) {
+    requestsByKey.set(resolverRequestKeyV0(request), request);
+  }
+  for (const request of missingRequests) {
+    const normalized = normalizeStoreRequestFromEntryV0(request);
+    if (!normalized) {
+      continue;
+    }
+    requestsByKey.set(resolverRequestKeyV0(normalized), normalized);
+  }
+  return [...requestsByKey.values()].sort((left, right) => resolverRequestKeyV0(left).localeCompare(resolverRequestKeyV0(right)));
+}
+
 async function runCaseV0(
   ctx,
   mem,
@@ -2075,25 +2197,15 @@ async function runCaseV0(
     errorMessage = errorMessage || 'expected non-empty main.pdf for OK case';
   }
 
-  const resolvedResources = [];
-  const resolution = await resolver.resolve({
+  const resolverRequestsByKey = new Map();
+  const rootResolverRequest = {
     kind: 'texmf',
     format: 'tex',
     name: caseSpec.id,
     variant: caseSpec.mode,
-    resolver_id: resolver.resolverId,
-  });
-  if (resolution.tag === 'Found') {
-    resolvedResources.push({
-      kind: 'texmf',
-      format: 'tex',
-      name: caseSpec.id,
-      variant: caseSpec.mode,
-      stable_id: resolution.stable_id,
-      sha256: resolution.sha256,
-      cache_hit: resolution.cache_hit,
-    });
-  }
+    hint_type: 'entrypoint',
+  };
+  resolverRequestsByKey.set(resolverRequestKeyV0(rootResolverRequest), rootResolverRequest);
 
   const summary = {
     case_id: caseSpec.id,
@@ -2119,8 +2231,14 @@ async function runCaseV0(
       main_xdv: sha256HexV0(xdvBytes),
       main_pdf: sha256HexV0(pdfBytes),
     },
+    input_sha256: {
+      main_tex: sha256HexV0(fixtureBytes),
+    },
     resolver_id: resolver.resolverId,
-    resolved_resources: resolvedResources,
+    resolved_resources: [],
+    missing_resources: [],
+    resolved_resources_count: 0,
+    missing_resources_count: 0,
     typed_artifacts_version: TYPED_ARTIFACTS_VERSION_V0,
     typed_artifacts: buildTypedArtifactsPlaceholderV0(),
   };
@@ -2140,26 +2258,17 @@ async function runCaseV0(
     summary.resource_hints_v0,
   );
   for (const request of typedArtifactRequests) {
-    const resolutionFromHint = await resolver.resolve({
-      kind: request.kind,
-      format: request.format,
-      name: request.name,
-      variant: request.variant,
-      resolver_id: resolver.resolverId,
-    });
-    if (resolutionFromHint.tag !== 'Found') {
-      continue;
-    }
-    resolvedResources.push({
-      kind: request.kind,
-      format: request.format,
-      name: request.name,
-      variant: request.variant,
-      stable_id: resolutionFromHint.stable_id,
-      sha256: resolutionFromHint.sha256,
-      cache_hit: resolutionFromHint.cache_hit,
-    });
+    resolverRequestsByKey.set(resolverRequestKeyV0(request), request);
   }
+  const resolverRequests = [...resolverRequestsByKey.values()].sort(
+    (left, right) => resolverRequestKeyV0(left).localeCompare(resolverRequestKeyV0(right)),
+  );
+  const resolverOutcomes = await resolveRequestsWithResolverV0(resolver, resolverRequests);
+  summary.resolved_resources = resolverOutcomes.resolvedResources;
+  summary.missing_resources = resolverOutcomes.missingResources;
+  summary.resolved_resources_count = resolverOutcomes.resolvedResources.length;
+  summary.missing_resources_count = resolverOutcomes.missingResources.length;
+  summary.expected_vs_actual = expectedVsActualV0(caseSpec.expected_status, summary.status);
   summary.baseline_match = await computeBaselineMatchV0(caseSpec.id, summary.artifact_sha256, baselineDir);
   if (errorMessage) {
     summary.error = errorMessage;
@@ -2179,6 +2288,17 @@ async function run() {
   const baselineDir = process.env.TEXLIVE_BASELINE_DIR
     ? path.resolve(process.env.TEXLIVE_BASELINE_DIR)
     : '';
+  const onDemandEnabled = parseBoolEnvV0(
+    process.env.WASM_GALLERY_ENABLE_ONDEMAND_V1 ?? process.env.WASM_GALLERY_ONDEMAND_ENABLE_V1,
+  );
+  const onDemandMaxItersRaw = process.env.WASM_GALLERY_ONDEMAND_MAX_ITERS_V1 ?? `${DEFAULT_ONDEMAND_FIXEDPOINT_MAX_ITERS_V1}`;
+  const onDemandMaxIters = Number.parseInt(onDemandMaxItersRaw, 10);
+  if (!Number.isInteger(onDemandMaxIters) || onDemandMaxIters <= 0 || onDemandMaxIters > 5) {
+    throw new Error(`WASM_GALLERY_ONDEMAND_MAX_ITERS_V1 must be an integer in [1,5], got: ${onDemandMaxItersRaw}`);
+  }
+  const onDemandEndpoint = typeof process.env.TEXLIVE_ENDPOINT === 'string'
+    ? process.env.TEXLIVE_ENDPOINT.trim()
+    : '';
   const sourceDateEpochRaw = process.env.SOURCE_DATE_EPOCH ?? `${DEFAULT_SOURCE_DATE_EPOCH_V0}`;
   const sourceDateEpoch = Number.parseInt(sourceDateEpochRaw, 10);
   if (!Number.isInteger(sourceDateEpoch) || sourceDateEpoch <= 0) {
@@ -2194,13 +2314,21 @@ async function run() {
     encoding: 'utf8',
   }).trim();
   const { cases, manifestPath } = await loadFixtureCasesV0();
+  const resolverBackend = process.env.TEXLIVE_RESOLVER_BACKEND_V0;
   const resolver = await createOnDemandResolverV0({
     backend: process.env.TEXLIVE_RESOLVER_BACKEND_V0,
-    endpoint: process.env.TEXLIVE_ENDPOINT,
+    endpoint: onDemandEndpoint,
     rootDir,
     storeDir,
   });
   const configHash = buildConfigHashV0(cases, sourceDateEpoch, resolver.resolverId);
+  const buildCaseResolver = () =>
+    createOnDemandResolverV0({
+      backend: resolverBackend,
+      endpoint: onDemandEndpoint,
+      rootDir,
+      storeDir,
+    });
 
   await rm(outDir, { recursive: true, force: true });
   await mkdir(outDir, { recursive: true });
@@ -2210,20 +2338,99 @@ async function run() {
   const helpers = createAssertHelpers(ctx, mem);
   const summaries = [];
   for (const caseSpec of cases) {
-    summaries.push(
-      await runCaseV0(
-        ctx,
-        mem,
-        helpers,
-        outDir,
-        caseSpec,
-        sourceDateEpoch,
-        engineRev,
-        configHash,
-        resolver,
-        baselineDir,
-      ),
+    const initialSummary = await runCaseV0(
+      ctx,
+      mem,
+      helpers,
+      outDir,
+      caseSpec,
+      sourceDateEpoch,
+      engineRev,
+      configHash,
+      await buildCaseResolver(),
+      baselineDir,
     );
+    let finalSummary = initialSummary;
+    const missingBefore = Number(initialSummary.missing_resources_count ?? 0);
+    const resolvedBefore = Number(initialSummary.resolved_resources_count ?? 0);
+    const onDemandTriggered = onDemandEnabled && caseSpec.ondemand_opt_in === true && missingBefore > 0;
+    const onDemandAttempted = onDemandTriggered && onDemandEndpoint.length > 0;
+    let onDemandIterations = 0;
+    let onDemandStoreFound = 0;
+    let onDemandStoreMissing = missingBefore;
+    if (onDemandAttempted) {
+      for (let iter = 1; iter <= onDemandMaxIters; iter += 1) {
+        const missingRequests = Array.isArray(finalSummary.missing_resources) ? finalSummary.missing_resources : [];
+        if (missingRequests.length === 0) {
+          break;
+        }
+        const existingStoreRequests = await loadStoreRequestsV0(storeDir);
+        const mergedRequests = mergeStoreRequestsV0(existingStoreRequests, missingRequests);
+        if (mergedRequests.length === 0) {
+          break;
+        }
+        const caseOutDir = path.join(outDir, caseSpec.id);
+        const requestListPath = path.join(caseOutDir, `ondemand_requests_iter_${iter}.json`);
+        await writeFile(
+          requestListPath,
+          `${JSON.stringify({ version: 1, requests: mergedRequests }, null, 2)}\n`,
+        );
+        const storeResult = await generateTexliveStoreV0({
+          rootDir,
+          requestListPath,
+          storeDir,
+          backend: 'endpoint_v0',
+          endpoint: onDemandEndpoint,
+          sourceDateEpoch,
+        });
+        onDemandIterations = iter;
+        onDemandStoreFound = Number(storeResult.foundCount ?? 0);
+        onDemandStoreMissing = Number(storeResult.missingCount ?? 0);
+        const rerunSummary = await runCaseV0(
+          ctx,
+          mem,
+          helpers,
+          outDir,
+          caseSpec,
+          sourceDateEpoch,
+          engineRev,
+          configHash,
+          await buildCaseResolver(),
+          baselineDir,
+        );
+        const improved = rerunSummary.resolved_resources_count > finalSummary.resolved_resources_count
+          || rerunSummary.missing_resources_count < finalSummary.missing_resources_count;
+        finalSummary = rerunSummary;
+        if (!improved || rerunSummary.missing_resources_count === 0) {
+          break;
+        }
+      }
+    }
+    finalSummary.missing_before = missingBefore;
+    finalSummary.missing_after = Number(finalSummary.missing_resources_count ?? 0);
+    finalSummary.resolved_resources_before = resolvedBefore;
+    finalSummary.resolved_resources_after = Number(finalSummary.resolved_resources_count ?? 0);
+    finalSummary.status_for_report = finalSummary.expected_vs_actual === 'MATCH'
+      ? finalSummary.status
+      : STATUS_MISMATCH_V0;
+    finalSummary.ondemand_v1 = {
+      enabled: onDemandEnabled,
+      case_opt_in: caseSpec.ondemand_opt_in === true,
+      triggered: onDemandTriggered,
+      attempted: onDemandAttempted,
+      endpoint_present: onDemandEndpoint.length > 0,
+      max_iters: onDemandMaxIters,
+      iterations: onDemandIterations,
+      store_found: onDemandStoreFound,
+      store_missing: onDemandStoreMissing,
+      missing_before: missingBefore,
+      missing_after: finalSummary.missing_after,
+      resolved_before: resolvedBefore,
+      resolved_after: finalSummary.resolved_resources_after,
+    };
+    const caseOutDir = path.join(outDir, caseSpec.id);
+    await writeFile(path.join(caseOutDir, 'summary.json'), `${JSON.stringify(finalSummary, null, 2)}\n`);
+    summaries.push(finalSummary);
   }
 
   const report = {
@@ -2234,8 +2441,21 @@ async function run() {
     baseline_dir: baselineDir || null,
     manifest_path: manifestPath,
     config_hash: configHash,
+    ondemand_v1: {
+      enabled: onDemandEnabled,
+      endpoint_present: onDemandEndpoint.length > 0,
+      max_iters: onDemandMaxIters,
+    },
     typed_artifacts_version: TYPED_ARTIFACTS_VERSION_V0,
     case_count: summaries.length,
+    missing_before_total: summaries.reduce(
+      (sum, summary) => sum + Number(summary.missing_before ?? summary.missing_resources_count ?? 0),
+      0,
+    ),
+    missing_after_total: summaries.reduce(
+      (sum, summary) => sum + Number(summary.missing_after ?? summary.missing_resources_count ?? 0),
+      0,
+    ),
     resolved_resources_count: summaries.reduce(
       (sum, summary) => sum + (Array.isArray(summary.resolved_resources) ? summary.resolved_resources.length : 0),
       0,
@@ -2246,6 +2466,7 @@ async function run() {
         {
           main_xdv: summary.artifact_sha256.main_xdv,
           main_pdf: summary.artifact_sha256.main_pdf,
+          main_tex: summary.input_sha256?.main_tex ?? null,
           typed_artifacts: Object.fromEntries(
             TYPED_ARTIFACT_KEYS_V0.map((key) => [
               key,
@@ -2277,11 +2498,17 @@ async function run() {
       tags: summary.tags,
       expected_status: summary.expected_status,
       expected_vs_actual: summary.expected_vs_actual,
+      config_hash: summary.config_hash,
+      input_sha256: summary.input_sha256,
       baseline_match: summary.baseline_match,
+      resolved_resources_count: summary.resolved_resources_count,
+      missing_before: Number(summary.missing_before ?? summary.missing_resources_count ?? 0),
+      missing_after: Number(summary.missing_after ?? summary.missing_resources_count ?? 0),
+      ondemand_v1: summary.ondemand_v1,
       typed_artifacts_presence: Object.fromEntries(
         TYPED_ARTIFACT_KEYS_V0.map((key) => [key, summary.typed_artifacts?.[key]?.present === true]),
       ),
-      status: summary.status,
+      status: summary.status_for_report ?? summary.status,
       artifact_sha256: summary.artifact_sha256,
     })),
   };
