@@ -23,7 +23,7 @@ const STATUS_FAIL_V0 = 'FAIL';
 const STATUS_MISMATCH_V0 = 'MISMATCH';
 const EXPECTED_STATUS_VALUES_V0 = new Set([STATUS_OK_V0, STATUS_NI_V0, STATUS_INVALID_V0, STATUS_FAIL_V0]);
 const DEFAULT_ONDEMAND_FIXEDPOINT_MAX_ITERS_V1 = 3;
-const TYPED_ARTIFACT_KEYS_V0 = ['toc', 'labels', 'refs', 'bib', 'bibitems', 'cites', 'hyperref', 'pkgopt', 'graphics', 'math', 'table'];
+const TYPED_ARTIFACT_KEYS_V0 = ['toc', 'labels', 'refs', 'bib', 'cite', 'bibitems', 'cites', 'hyperref', 'pkgopt', 'graphics', 'math', 'table'];
 const TYPED_ARTIFACTS_VERSION_V0 = 1;
 const MAX_TOC_ENTRIES_V0 = 256;
 const MAX_TOC_TITLE_BYTES_V0 = 256;
@@ -2151,6 +2151,8 @@ function extractBibitemsAndCitesFromSourceV1(sourceBytes) {
   const bibitems = [];
   const bibOrdinalByKey = new Map();
   const citesByKey = new Map();
+  const citeEntriesV1 = [];
+  const citeOrderByKey = new Map();
   const citeCommands = new Set(['cite']);
   let inBibliography = false;
   let index = 0;
@@ -2202,6 +2204,22 @@ function extractBibitemsAndCitesFromSourceV1(sourceBytes) {
     });
     if (entry.occurrences.length > MAX_REF_OCCURRENCES_PER_KEY_V0) {
       throw new Error(`cites_v1 occurrences exceed cap ${MAX_REF_OCCURRENCES_PER_KEY_V0} for key ${key}`);
+    }
+    let citeOrder = citeOrderByKey.get(key);
+    if (citeOrder === undefined) {
+      citeOrder = citeOrderByKey.size + 1;
+      citeOrderByKey.set(key, citeOrder);
+    }
+    citeEntriesV1.push({
+      key,
+      line_index: lineIndexForByteOffsetV1(sourceBytes, startByte),
+      cite_order: citeOrder,
+      resolved: false,
+      ordinal: null,
+      source_span: buildSourceSpanV0(sourceBytes, startByte, endByte, 'cite_v1'),
+    });
+    if (citeEntriesV1.length > MAX_BIB_ENTRIES_V0) {
+      throw new Error(`cite_v1 entries exceed cap ${MAX_BIB_ENTRIES_V0}`);
     }
   };
 
@@ -2328,9 +2346,44 @@ function extractBibitemsAndCitesFromSourceV1(sourceBytes) {
     throw new Error(`cites_v1 entries exceed cap ${MAX_BIB_ENTRIES_V0}`);
   }
 
+  const bibByKey = new Map(bibitems.map((entry) => [entry.key, entry]));
+  const seenBibKeys = new Set();
+  const bibEntriesV1 = [];
+  for (const citeEntry of citeEntriesV1) {
+    const key = citeEntry.key;
+    if (seenBibKeys.has(key)) {
+      continue;
+    }
+    seenBibKeys.add(key);
+    const bibitem = bibByKey.get(key);
+    if (!bibitem) {
+      throw new Error(`bib_v1 unresolved cite key '${key}'`);
+    }
+    const ordinal = bibEntriesV1.length + 1;
+    bibEntriesV1.push({
+      key,
+      ordinal,
+      text_sha256: bibitem.text_sha256,
+      source_span: bibitem.source_span,
+    });
+    if (bibEntriesV1.length > MAX_BIB_ENTRIES_V0) {
+      throw new Error(`bib_v1 entries exceed cap ${MAX_BIB_ENTRIES_V0}`);
+    }
+  }
+  const bibOrdinalByResolvedKey = new Map(bibEntriesV1.map((entry) => [entry.key, entry.ordinal]));
+  for (const citeEntry of citeEntriesV1) {
+    const ordinal = bibOrdinalByResolvedKey.get(citeEntry.key);
+    if (ordinal !== undefined) {
+      citeEntry.resolved = true;
+      citeEntry.ordinal = ordinal;
+    }
+  }
+
   return {
     bibitems,
     cites,
+    bibEntriesV1,
+    citeEntriesV1,
   };
 }
 
@@ -2664,14 +2717,32 @@ async function emitHyperrefTypedArtifactV0(caseOutDir, fixtureBytes) {
   };
 }
 
-async function emitBibTypedArtifactV0(caseOutDir, fixtureBytes) {
+async function emitBibTypedArtifactV1(caseOutDir, bibEntries) {
   const payload = {
     version: TYPED_ARTIFACTS_VERSION_V0,
-    schema: 'bib_v0',
-    entries: extractBibEntriesFromSourceV0(fixtureBytes),
+    schema: 'bib_v1',
+    entries: bibEntries,
   };
   const bytes = Buffer.from(`${JSON.stringify(payload, null, 2)}\n`, 'utf8');
-  const relpath = 'bib_v0.json';
+  const relpath = 'bib_v1.json';
+  const fullPath = path.join(caseOutDir, relpath);
+  await writeFile(fullPath, bytes);
+  return {
+    present: true,
+    items: payload.entries.length,
+    artifact_relpath: relpath,
+    artifact_sha256: sha256HexV0(bytes),
+  };
+}
+
+async function emitCiteTypedArtifactV1(caseOutDir, citeEntries) {
+  const payload = {
+    version: TYPED_ARTIFACTS_VERSION_V0,
+    schema: 'cite_v1',
+    entries: citeEntries,
+  };
+  const bytes = Buffer.from(`${JSON.stringify(payload, null, 2)}\n`, 'utf8');
+  const relpath = 'cite_v1.json';
   const fullPath = path.join(caseOutDir, relpath);
   await writeFile(fullPath, bytes);
   return {
@@ -2842,7 +2913,9 @@ async function emitTypedArtifactsV0(caseSpec, caseOutDir, typedArtifacts, fixtur
     typedArtifacts.refs = await emitRefsTypedArtifactV0(caseOutDir, fixtureBytes);
   }
   if (caseSpec.id === 'typeset_demo_bib_probe_v0') {
-    typedArtifacts.bib = await emitBibTypedArtifactV0(caseOutDir, fixtureBytes);
+    const extractedBib = extractBibitemsAndCitesFromSourceV1(fixtureBytes);
+    typedArtifacts.bib = await emitBibTypedArtifactV1(caseOutDir, extractedBib.bibEntriesV1);
+    typedArtifacts.cite = await emitCiteTypedArtifactV1(caseOutDir, extractedBib.citeEntriesV1);
   }
   if (caseSpec.id === 'typeset_demo_minimal_v0') {
     typedArtifacts.bibitems = await emitBibitemsTypedArtifactV0(caseOutDir, fixtureBytes);
