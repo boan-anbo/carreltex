@@ -770,3 +770,47 @@ fn typeset_minimal_pagebreak_alias_emits_forced_page_split() {
     assert_eq!(first_line, b"A");
     assert_eq!(second_line, b"B");
 }
+
+#[test]
+fn typeset_minimal_inline_math_emits_placeholder_text() {
+    let main = b"\\documentclass{article}\\begin{document}Before $x + y$ after.\\end{document}";
+    let body = extract_typeset_body(main);
+    let text = String::from_utf8(body).expect("body should be valid utf8");
+    assert!(text.contains("Before MATH after."), "body={text:?}");
+}
+
+#[test]
+fn typeset_minimal_display_math_emits_centered_placeholder_block() {
+    let main =
+        b"\\documentclass{article}\\begin{document}Before.\\[x+y\\]After.\\end{document}";
+    let body = extract_typeset_body(main);
+    let text = String::from_utf8(body).expect("body should be valid utf8");
+    assert!(
+        text.contains("Before.\n\n^ MATH DISPLAY\n\nAfter."),
+        "body={text:?}"
+    );
+}
+
+#[test]
+fn typeset_minimal_rejects_inline_math_with_control_sequence_payload() {
+    let main = b"\\documentclass{article}\\begin{document}$\\alpha$\\end{document}";
+    let result = compile_typeset(main);
+    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert!(result.main_xdv_bytes.is_empty());
+}
+
+#[test]
+fn typeset_minimal_rejects_unterminated_inline_math() {
+    let main = b"\\documentclass{article}\\begin{document}A $x+y\\end{document}";
+    let result = compile_typeset(main);
+    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert!(result.main_xdv_bytes.is_empty());
+}
+
+#[test]
+fn typeset_minimal_rejects_unterminated_display_math() {
+    let main = b"\\documentclass{article}\\begin{document}A \\[x+y\\end{document}";
+    let result = compile_typeset(main);
+    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert!(result.main_xdv_bytes.is_empty());
+}
