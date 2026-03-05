@@ -74,6 +74,18 @@
       "purpose": "Probes fail-closed graphicspath handling for unsafe ../ and absolute path entries."
     },
     {
+      "id": "typeset_demo_graphics_multipath_probe_v0",
+      "tags": ["typeset", "graphics", "includegraphics", "options", "graphicspath", "multi-path", "probe", "ni"],
+      "expected_status": "NI",
+      "purpose": "Probes includegraphics option parsing beyond width/height and emits per-prefix candidate graphics hints."
+    },
+    {
+      "id": "typeset_demo_graphics_opts_invalid_probe_v0",
+      "tags": ["typeset", "graphics", "includegraphics", "options", "invalid", "unsafe-path", "probe"],
+      "expected_status": "INVALID",
+      "purpose": "Probes fail-closed includegraphics option parsing by rejecting unsafe path/dir option values."
+    },
+    {
       "id": "typeset_demo_pkgopt_probe_v0",
       "tags": ["typeset", "package-options", "probe", "ni"],
       "expected_status": "NI",
