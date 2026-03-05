@@ -14,6 +14,24 @@
       "purpose": "Capability-heavy fixture expected to remain not-implemented in minimal lane."
     },
     {
+      "id": "typeset_demo_toc_probe_v0",
+      "tags": ["typeset", "toc", "probe", "ni"],
+      "expected_status": "NI",
+      "purpose": "Probes table-of-contents seam planned for future typed artifacts."
+    },
+    {
+      "id": "typeset_demo_labels_probe_v0",
+      "tags": ["typeset", "labels", "probe", "ni"],
+      "expected_status": "NI",
+      "purpose": "Probes label/ref seam planned for future typed artifacts."
+    },
+    {
+      "id": "typeset_demo_hyperref_probe_v0",
+      "tags": ["typeset", "hyperref", "probe", "ni"],
+      "expected_status": "NI",
+      "purpose": "Probes hyperref/url seam planned for future typed artifacts."
+    },
+    {
       "id": "ok_demo_capabilities_v0",
       "tags": ["ok", "capabilities", "surface"],
       "expected_status": "OK",

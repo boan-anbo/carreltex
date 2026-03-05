@@ -20,6 +20,7 @@ const STATUS_NI_V0 = 'NI';
 const STATUS_INVALID_V0 = 'INVALID';
 const STATUS_FAIL_V0 = 'FAIL';
 const EXPECTED_STATUS_VALUES_V0 = new Set([STATUS_OK_V0, STATUS_NI_V0, STATUS_INVALID_V0, STATUS_FAIL_V0]);
+const TYPED_ARTIFACT_KEYS_V0 = ['toc', 'labels', 'bib', 'hyperref'];
 
 function sha256HexV0(bytes) {
   return createHash('sha256').update(bytes).digest('hex');
@@ -151,6 +152,21 @@ async function loadFixtureCasesV0() {
       mode: 'typeset',
       fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_capabilities_v0.tex',
     },
+    {
+      id: 'typeset_demo_toc_probe_v0',
+      mode: 'typeset',
+      fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_toc_probe_v0.tex',
+    },
+    {
+      id: 'typeset_demo_labels_probe_v0',
+      mode: 'typeset',
+      fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_labels_probe_v0.tex',
+    },
+    {
+      id: 'typeset_demo_hyperref_probe_v0',
+      mode: 'typeset',
+      fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_hyperref_probe_v0.tex',
+    },
   ];
 
   const okFixtureDir = path.join(rootDir, 'scripts', 'wasm_smoke_js', 'fixtures');
@@ -219,6 +235,17 @@ function buildConfigHashV0(cases, sourceDateEpoch, resolverId) {
     })),
   };
   return sha256HexV0(Buffer.from(JSON.stringify(config)));
+}
+
+function buildTypedArtifactsPlaceholderV0() {
+  const typedArtifacts = {};
+  for (const key of TYPED_ARTIFACT_KEYS_V0) {
+    typedArtifacts[key] = {
+      present: false,
+      items: 0,
+    };
+  }
+  return typedArtifacts;
 }
 
 async function computeBaselineMatchV0(caseId, artifactSha256, baselineDir) {
@@ -403,6 +430,7 @@ async function runCaseV0(
     },
     resolver_id: resolver.resolverId,
     resolved_resources: resolvedResources,
+    typed_artifacts: buildTypedArtifactsPlaceholderV0(),
   };
   summary.baseline_match = await computeBaselineMatchV0(caseSpec.id, summary.artifact_sha256, baselineDir);
   if (errorMessage) {
@@ -489,6 +517,9 @@ async function run() {
       expected_status: summary.expected_status,
       expected_vs_actual: summary.expected_vs_actual,
       baseline_match: summary.baseline_match,
+      typed_artifacts_presence: Object.fromEntries(
+        TYPED_ARTIFACT_KEYS_V0.map((key) => [key, summary.typed_artifacts?.[key]?.present === true]),
+      ),
       status: summary.status,
       artifact_sha256: summary.artifact_sha256,
     })),
