@@ -2255,6 +2255,25 @@ fn pdf_renderer_display_math_placeholder_line_is_centered_v0() {
 }
 
 #[test]
+fn pdf_renderer_display_math_with_equation_metadata_renders_right_number_v1() {
+    let xdv = write_dvi_v2_text_page_v0(b"Before.\n\n^ MATH DISPLAY\n\nAfter.\n\n!eq 1 1")
+        .expect("writer should accept equation metadata line");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+    let (display_x, _) = tm_position_for_line_containing_text_v0(&pdf, "(MATH DISPLAY)")
+        .expect("display placeholder x coordinate");
+    let (number_x, _) = tm_position_for_segment_substring_v0(&pdf, "\\(1\\)")
+        .expect("equation number x coordinate");
+    assert!(
+        number_x > display_x,
+        "equation number should render to the right of placeholder: display_x={display_x}, number_x={number_x}"
+    );
+    assert!(
+        number_x > 450.0,
+        "equation number should be near right margin: number_x={number_x}"
+    );
+}
+
+#[test]
 fn pdf_renderer_emits_link_annotation_with_in_bounds_rect_v0() {
     let xdv = write_dvi_v2_text_page_v0(b"Visit <{Example link}> now.\n\n!u 1 https://example.com")
         .expect("writer should accept href marker lines");
@@ -2340,6 +2359,34 @@ fn pdf_renderer_emits_figref_annotation_targeting_figure_anchor_v0() {
 }
 
 #[test]
+fn pdf_renderer_emits_eqref_annotation_targeting_equation_anchor_v1() {
+    let xdv = write_dvi_v2_text_page_v0(
+        b"Prelude.\n\n^ MATH DISPLAY\n\nSee <1>.\n\n!eq 1 1\n!l eq:first 1 equation 1 -\n!r eq:first 5 1\n!ra 1 1",
+    )
+    .expect("writer should accept equation and cross-ref marker lines");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+    let pdf_text = String::from_utf8_lossy(&pdf);
+    assert!(
+        pdf_text.contains("(See ) Tj") && pdf_text.contains("(1) Tj"),
+        "eqref text should render resolved equation ordinal without placeholder: {pdf_text}"
+    );
+
+    let page_one = parse_pdf_object_body_v0(&pdf, 3).expect("page object");
+    let annots = parse_pdf_ref_ids_v0(&page_one, "/Annots");
+    assert_eq!(annots.len(), 1, "expected one internal equation ref annotation");
+    let annotation = parse_pdf_object_body_v0(&pdf, annots[0]).expect("annotation");
+    assert!(
+        annotation.contains("/Dest ["),
+        "equation ref annotation should use internal destination: {annotation}"
+    );
+    assert_eq!(
+        parse_pdf_annotation_dest_page_id_v0(&annotation),
+        Some(3),
+        "equation ref destination should target page containing equation anchor"
+    );
+}
+
+#[test]
 fn pdf_renderer_multi_figure_ref_annotations_follow_ordinal_order_v1() {
     let xdv = write_dvi_v2_text_page_v0(
         b"Prelude.\n\n@S {Intro}\n\n!gbox\n!gcap Figure 1: First caption.\n\n!gbox\n!gcap Figure 2: Second caption.\n\nSee <1> and <2>.\n\n!l fig:first 2 figure 1 -\n!l fig:second 3 figure 2 -\n!r fig:first 11 2\n!r fig:second 11 3\n!ra 1 2\n!ra 2 3",
@@ -2400,6 +2447,19 @@ fn pdf_renderer_rejects_figure_label_metadata_with_zero_ordinal_v1() {
     assert!(
         pdf.is_none(),
         "renderer should fail-closed when figure label metadata carries zero ordinal"
+    );
+}
+
+#[test]
+fn pdf_renderer_rejects_equation_label_metadata_with_zero_ordinal_v1() {
+    let xdv = write_dvi_v2_text_page_v0(
+        b"Prelude.\n\n^ MATH DISPLAY\n\n!eq 1 1\n!l eq:bad 1 equation 0 -",
+    )
+    .expect("writer should accept marker lines");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv);
+    assert!(
+        pdf.is_none(),
+        "renderer should fail-closed when equation label metadata carries zero ordinal"
     );
 }
 

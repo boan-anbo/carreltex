@@ -29,6 +29,7 @@ const HREF_URL_LINE_PREFIX_MARKER_V0: &[u8] = b"!u ";
 const LABEL_LINE_PREFIX_MARKER_V0: &[u8] = b"!l ";
 const REF_LINE_PREFIX_MARKER_V0: &[u8] = b"!r ";
 const REF_ANCHOR_LINK_LINE_PREFIX_MARKER_V0: &[u8] = b"!ra ";
+const EQUATION_LINE_PREFIX_MARKER_V0: &[u8] = b"!eq ";
 const BIBITEM_LINE_PREFIX_MARKER_V0: &[u8] = b"!b ";
 const CITE_LINE_PREFIX_MARKER_V0: &[u8] = b"!c ";
 const NOINDENT_PREFIX_MARKER_V0: u8 = b'~';
@@ -55,6 +56,7 @@ const TOC_TITLE_FONT_SIZE_PT_V0: f32 = 14.0;
 const TOC_ENTRY_INDENT_STEP_PT_V0: f32 = 18.0;
 const SECTION_HEADING_PREFIX_MARKER_V0: &[u8] = b"@S ";
 const SUBSECTION_HEADING_PREFIX_MARKER_V0: &[u8] = b"@s ";
+const DISPLAY_MATH_PLACEHOLDER_V0: &[u8] = b"MATH DISPLAY";
 const ITALIC_START_MARKER_V0: u8 = b'[';
 const ITALIC_END_MARKER_V0: u8 = b']';
 const BOLD_START_MARKER_V0: u8 = b'{';
@@ -178,6 +180,12 @@ struct TocEntryMetadataV0 {
     level: u8,
     anchor_id: u32,
     title_glyphs: Vec<GlyphPlanV0>,
+}
+
+#[derive(Clone, Copy)]
+struct EquationMetadataV0 {
+    anchor_id: u32,
+    ordinal: u32,
 }
 
 #[derive(Clone)]
@@ -428,6 +436,14 @@ fn detect_quote_prefix_advance_pt_v0(glyphs: &[GlyphPlanV0]) -> Option<f32> {
 
 fn has_center_prefix_v0(glyphs: &[GlyphPlanV0]) -> bool {
     glyphs.len() >= 2 && glyphs[0].byte == b'^' && glyphs[1].byte == b' '
+}
+
+fn is_display_math_placeholder_line_v0(glyphs: &[GlyphPlanV0]) -> bool {
+    has_center_prefix_v0(glyphs)
+        && glyphs[2..]
+            .iter()
+            .map(|glyph| glyph.byte)
+            .eq(DISPLAY_MATH_PLACEHOLDER_V0.iter().copied())
 }
 
 fn has_right_prefix_v0(glyphs: &[GlyphPlanV0]) -> bool {
@@ -1075,6 +1091,14 @@ fn has_ref_anchor_link_line_prefix_v0(glyphs: &[GlyphPlanV0]) -> bool {
             .eq(REF_ANCHOR_LINK_LINE_PREFIX_MARKER_V0.iter().copied())
 }
 
+fn has_equation_line_prefix_v0(glyphs: &[GlyphPlanV0]) -> bool {
+    glyphs.len() >= EQUATION_LINE_PREFIX_MARKER_V0.len()
+        && glyphs[..EQUATION_LINE_PREFIX_MARKER_V0.len()]
+            .iter()
+            .map(|glyph| glyph.byte)
+            .eq(EQUATION_LINE_PREFIX_MARKER_V0.iter().copied())
+}
+
 fn has_bibitem_line_prefix_v0(glyphs: &[GlyphPlanV0]) -> bool {
     glyphs.len() >= BIBITEM_LINE_PREFIX_MARKER_V0.len()
         && glyphs[..BIBITEM_LINE_PREFIX_MARKER_V0.len()]
@@ -1159,19 +1183,41 @@ fn parse_label_line_v0(glyphs: &[GlyphPlanV0]) -> Option<()> {
     if key.is_empty() || anchor_id == 0 {
         return None;
     }
-    if kind != "heading" && kind != "figure" {
+    if kind != "heading" && kind != "figure" && kind != "equation" {
         return None;
     }
     if kind == "heading" && !(1..=2).contains(&level) {
         return None;
     }
-    if kind == "figure" && level == 0 {
+    if (kind == "figure" || kind == "equation") && level == 0 {
         return None;
     }
     if title.is_empty() {
         return None;
     }
     Some(())
+}
+
+fn parse_equation_line_v0(glyphs: &[GlyphPlanV0]) -> Option<EquationMetadataV0> {
+    if glyphs.len() < EQUATION_LINE_PREFIX_MARKER_V0.len() {
+        return None;
+    }
+    let bytes: Vec<u8> = glyphs.iter().map(|glyph| glyph.byte).collect();
+    if !bytes.starts_with(EQUATION_LINE_PREFIX_MARKER_V0) {
+        return None;
+    }
+    let line = String::from_utf8(bytes).ok()?;
+    let mut parts = line.splitn(3, ' ');
+    let prefix = parts.next()?;
+    if prefix != "!eq" {
+        return None;
+    }
+    let anchor_id = parts.next()?.trim().parse::<u32>().ok()?;
+    let ordinal = parts.next()?.trim().parse::<u32>().ok()?;
+    if anchor_id == 0 || ordinal == 0 {
+        return None;
+    }
+    Some(EquationMetadataV0 { anchor_id, ordinal })
 }
 
 fn parse_ref_line_v0(glyphs: &[GlyphPlanV0]) -> Option<()> {
@@ -1516,6 +1562,7 @@ fn split_body_and_metadata_lines_v0(
                 || has_label_line_prefix_v0(&line.glyphs)
                 || has_ref_line_prefix_v0(&line.glyphs)
                 || has_ref_anchor_link_line_prefix_v0(&line.glyphs)
+                || has_equation_line_prefix_v0(&line.glyphs)
                 || has_bibitem_line_prefix_v0(&line.glyphs)
                 || has_cite_line_prefix_v0(&line.glyphs)
             {
@@ -1569,6 +1616,22 @@ fn collect_nominal_anchor_destinations_v0(
                 }
                 next_anchor_id = next_anchor_id.checked_add(1)?;
             } else if line_index >= title_block_len
+                && is_display_math_placeholder_line_v0(&line.glyphs)
+            {
+                if anchor_destinations
+                    .insert(
+                        next_anchor_id,
+                        AnchorDestinationV0 {
+                            page_index,
+                            y_pt: y,
+                        },
+                    )
+                    .is_some()
+                {
+                    return None;
+                }
+                next_anchor_id = next_anchor_id.checked_add(1)?;
+            } else if line_index >= title_block_len
                 && detect_heading_prefix_v0(&line.glyphs).is_some()
             {
                 if anchor_destinations
@@ -1600,10 +1663,12 @@ fn parse_metadata_lines_v0(
     BTreeMap<u32, Vec<Vec<GlyphPlanV0>>>,
     BTreeMap<u32, PdfLinkTargetV0>,
     Vec<TocEntryMetadataV0>,
+    BTreeMap<u32, u32>,
 )> {
     let mut footnote_defs_by_id = BTreeMap::<u32, Vec<Vec<GlyphPlanV0>>>::new();
     let mut link_targets_by_id = BTreeMap::<u32, PdfLinkTargetV0>::new();
     let mut toc_entries = Vec::<TocEntryMetadataV0>::new();
+    let mut equation_ordinals_by_anchor_id = BTreeMap::<u32, u32>::new();
     let mut current_footnote_id = None::<u32>;
     for line in metadata_lines {
         if let Some((footnote_id, footnote_line)) = parse_footnote_definition_line_v0(&line.glyphs)
@@ -1631,6 +1696,16 @@ fn parse_metadata_lines_v0(
                     ref_link.link_id,
                     PdfLinkTargetV0::Anchor(ref_link.anchor_id),
                 )
+                .is_some()
+            {
+                return None;
+            }
+            current_footnote_id = None;
+            continue;
+        }
+        if let Some(equation) = parse_equation_line_v0(&line.glyphs) {
+            if equation_ordinals_by_anchor_id
+                .insert(equation.anchor_id, equation.ordinal)
                 .is_some()
             {
                 return None;
@@ -1677,7 +1752,12 @@ fn parse_metadata_lines_v0(
             .push(line.glyphs.clone());
     }
     toc_entries.sort_by_key(|entry| entry.anchor_id);
-    Some((footnote_defs_by_id, link_targets_by_id, toc_entries))
+    Some((
+        footnote_defs_by_id,
+        link_targets_by_id,
+        toc_entries,
+        equation_ordinals_by_anchor_id,
+    ))
 }
 
 fn build_page_content_stream_v0(
@@ -1685,6 +1765,7 @@ fn build_page_content_stream_v0(
     footnote_defs_by_id: &BTreeMap<u32, Vec<Vec<GlyphPlanV0>>>,
     link_targets_by_id: &BTreeMap<u32, PdfLinkTargetV0>,
     toc_entries: &[TocEntryMetadataV0],
+    equation_ordinals_by_anchor_id: &BTreeMap<u32, u32>,
     next_link_id: &mut u32,
     page_index: usize,
     next_anchor_id: &mut u32,
@@ -1846,6 +1927,10 @@ fn build_page_content_stream_v0(
         } else {
             None
         };
+        let display_math_line = line_index >= title_block_len
+            && quote_prefix_advance_pt.is_none()
+            && center_prefixed
+            && is_display_math_placeholder_line_v0(&line.glyphs);
         let render_glyphs_base: &[GlyphPlanV0] = if quote_prefix_advance_pt.is_some() {
             &line.glyphs[2..]
         } else if center_prefixed {
@@ -1952,12 +2037,13 @@ fn build_page_content_stream_v0(
             } else {
                 MARGIN_PT_V0
             };
-            if heading_kind.is_some() {
-                let heading_anchor_id = *next_anchor_id;
+            let mut equation_ordinal = None::<u32>;
+            if heading_kind.is_some() || display_math_line {
+                let anchor_id = *next_anchor_id;
                 *next_anchor_id = next_anchor_id.checked_add(1)?;
                 if anchor_destinations
                     .insert(
-                        heading_anchor_id,
+                        anchor_id,
                         AnchorDestinationV0 {
                             page_index,
                             y_pt: y,
@@ -1966,6 +2052,9 @@ fn build_page_content_stream_v0(
                     .is_some()
                 {
                     return None;
+                }
+                if display_math_line {
+                    equation_ordinal = equation_ordinals_by_anchor_id.get(&anchor_id).copied();
                 }
             }
             if let Some(prefix) = list_prefix {
@@ -2012,6 +2101,26 @@ fn build_page_content_stream_v0(
                 );
             } else {
                 emit_styled_segments_v0(&mut out, &segments, line_x, y, font_size_pt);
+            }
+            if let Some(ordinal) = equation_ordinal {
+                let equation_number = format!("({ordinal})").into_bytes();
+                let equation_number_width_pt = (equation_number.len() as f32) * (FONT_SIZE_PT_V0 * 0.6);
+                let equation_number_x =
+                    (PAGE_WIDTH_PT_V0 - MARGIN_PT_V0 - equation_number_width_pt).max(MARGIN_PT_V0);
+                let equation_segments = [PdfRenderSegmentV0 {
+                    style: PdfTextStyleV0::Regular,
+                    bytes: equation_number,
+                    advance_pt: equation_number_width_pt,
+                    is_link: false,
+                    superscript: false,
+                }];
+                emit_render_segments_with_superscript_v0(
+                    &mut out,
+                    &equation_segments,
+                    equation_number_x,
+                    y,
+                    FONT_SIZE_PT_V0,
+                );
             }
             out.extend_from_slice(b"\n");
             if !in_title_block && skip_indent_after_title_block {
@@ -2081,7 +2190,7 @@ fn build_page_content_stream_v0(
 
 fn build_pdf_for_pages_v0(pages: &[PagePlanV0]) -> Vec<u8> {
     let (body_pages, metadata_lines) = split_body_and_metadata_lines_v0(pages);
-    let Some((footnote_defs_by_id, link_targets_by_id, toc_entries)) =
+    let Some((footnote_defs_by_id, link_targets_by_id, toc_entries, equation_ordinals_by_anchor_id)) =
         parse_metadata_lines_v0(&metadata_lines)
     else {
         return Vec::new();
@@ -2101,6 +2210,7 @@ fn build_pdf_for_pages_v0(pages: &[PagePlanV0]) -> Vec<u8> {
             &footnote_defs_by_id,
             &link_targets_by_id,
             &toc_entries,
+            &equation_ordinals_by_anchor_id,
             &mut next_link_id,
             page_index,
             &mut next_anchor_id,

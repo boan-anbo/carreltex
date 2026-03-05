@@ -32,6 +32,13 @@ This inline math placeholder stress keeps wrapping deterministic: alpha $x^2 + y
 \[
 x^2 + y^2 = z^2
 \]
+\label{eq:pythagoras}
+This first display equation is referenced later as \ref{eq:pythagoras} in deterministic cross-reference flow.
+\[
+a + b = c
+\]
+\label{eq:linear}
+This second display equation is referenced as \ref{eq:linear}, and both references should emit stable link annotations when hyperref-style markers are active.
 This second paragraph is intentionally plain text and separated by a blank line so paragraph flow,\linebreak
 first-line indentation, and width-sensitive wrapping are visible in the PDF preview with words like WWWW and iiiii.
 This paragraph adds a second marker\footnote{Second demo footnote text with \textbf{bold emphasis}.} and a second visible link style through \href{https://example.com/page2}{CarrelTeX demo link page two},right beside punctuation in regular body flow.

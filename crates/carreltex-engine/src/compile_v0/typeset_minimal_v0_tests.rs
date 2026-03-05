@@ -1013,6 +1013,29 @@ fn typeset_minimal_display_math_emits_centered_placeholder_block() {
 }
 
 #[test]
+fn typeset_minimal_display_math_emits_equation_metadata_and_ref_resolution_v1() {
+    let main = b"\\documentclass{article}\\begin{document}\\[x+y\\]\\label{eq:first}\\[a+b\\]\\label{eq:second}Refs: \\ref{eq:first}, \\ref{eq:second}.\\end{document}";
+    let body = extract_typeset_body(main);
+    let text = String::from_utf8(body).expect("body should be valid utf8");
+    assert!(text.contains("^ MATH DISPLAY"), "body={text:?}");
+    assert!(text.contains("Refs: 1, 2."), "body={text:?}");
+    assert!(text.contains("!eq 1 1"), "body={text:?}");
+    assert!(text.contains("!eq 2 2"), "body={text:?}");
+    assert!(text.contains("!l eq:first 1 equation 1 -"), "body={text:?}");
+    assert!(text.contains("!l eq:second 2 equation 2 -"), "body={text:?}");
+}
+
+#[test]
+fn typeset_minimal_equation_refs_with_hyperref_emit_anchor_links_v1() {
+    let main = b"\\documentclass{article}\\begin{document}\\[x+y\\]\\label{eq:first}Refs: \\ref{eq:first}.\\href{https://example.com}{link}\\end{document}";
+    let body = extract_typeset_body(main);
+    let text = String::from_utf8(body).expect("body should be valid utf8");
+    assert!(text.contains("Refs: <1>."), "body={text:?}");
+    assert!(text.contains("!ra 1 1"), "body={text:?}");
+    assert!(text.contains("!u 2 https://example.com"), "body={text:?}");
+}
+
+#[test]
 fn typeset_minimal_rejects_inline_math_with_control_sequence_payload() {
     let main = b"\\documentclass{article}\\begin{document}$\\alpha$\\end{document}";
     let result = compile_typeset(main);
