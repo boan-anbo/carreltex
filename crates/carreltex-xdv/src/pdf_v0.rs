@@ -1,4 +1,4 @@
-use crate::{parse_dvi_v2_text_page_to_layout_v0, DEFAULT_LINE_ADVANCE_SP_V0};
+use crate::{parse_dvi_v2_text_page_to_layout_v0, GlyphPlanV0, LinePlanV0, PagePlanV0, DEFAULT_LINE_ADVANCE_SP_V0};
 
 const PDF_VERSION: &[u8] = b"%PDF-1.4\n";
 const PDF_EOF: &[u8] = b"%%EOF\n";
@@ -88,12 +88,20 @@ fn write_pdf_stream_obj(out: &mut Vec<u8>, id: u32, stream: &[u8]) -> u32 {
     write_pdf_obj(out, id, &body)
 }
 
-fn parse_styled_segments_v0(line: &[u8]) -> Option<Vec<(PdfTextStyleV0, Vec<u8>)>> {
+#[derive(Clone)]
+struct PdfStyledSegmentV0 {
+    style: PdfTextStyleV0,
+    bytes: Vec<u8>,
+    advance_pt: f32,
+}
+
+fn parse_styled_segments_v0(glyphs: &[GlyphPlanV0]) -> Option<Vec<PdfStyledSegmentV0>> {
     let mut style_stack = Vec::<PdfTextStyleV0>::new();
     let mut current_style = PdfTextStyleV0::Regular;
-    let mut segments = Vec::<(PdfTextStyleV0, Vec<u8>)>::new();
+    let mut segments = Vec::<PdfStyledSegmentV0>::new();
 
-    for &byte in line {
+    for glyph in glyphs {
+        let byte = glyph.byte;
         match byte {
             ITALIC_START_MARKER_V0 => {
                 style_stack.push(current_style);
@@ -116,13 +124,19 @@ fn parse_styled_segments_v0(line: &[u8]) -> Option<Vec<(PdfTextStyleV0, Vec<u8>)
                 current_style = style_stack.pop()?;
             }
             _ => {
-                if let Some((style, bytes)) = segments.last_mut() {
-                    if *style == current_style {
-                        bytes.push(byte);
+                let advance_pt = (glyph.advance_sp as f32) / 65_536.0;
+                if let Some(segment) = segments.last_mut() {
+                    if segment.style == current_style {
+                        segment.bytes.push(byte);
+                        segment.advance_pt += advance_pt;
                         continue;
                     }
                 }
-                segments.push((current_style, vec![byte]));
+                segments.push(PdfStyledSegmentV0 {
+                    style: current_style,
+                    bytes: vec![byte],
+                    advance_pt,
+                });
             }
         }
     }
@@ -132,9 +146,9 @@ fn parse_styled_segments_v0(line: &[u8]) -> Option<Vec<(PdfTextStyleV0, Vec<u8>)
     Some(segments)
 }
 
-fn detect_title_block_len_v0(lines: &[Vec<u8>]) -> usize {
+fn detect_title_block_len_v0(lines: &[LinePlanV0]) -> usize {
     let mut index = 0usize;
-    while index < lines.len() && !lines[index].is_empty() {
+    while index < lines.len() && !lines[index].glyphs.is_empty() {
         index += 1;
     }
     if index > 0 && index < lines.len() {
@@ -144,13 +158,13 @@ fn detect_title_block_len_v0(lines: &[Vec<u8>]) -> usize {
     }
 }
 
-fn centered_line_x_v0(glyph_count: usize, font_size_pt: f32) -> f32 {
-    let width_pt = (glyph_count as f32) * font_size_pt * 0.6;
+fn centered_line_x_v0(line_width_pt: f32) -> f32 {
+    let width_pt = line_width_pt.max(0.0);
     let centered = (PAGE_WIDTH_PT_V0 - width_pt) * 0.5;
     centered.clamp(MARGIN_PT_V0, PAGE_WIDTH_PT_V0 - MARGIN_PT_V0)
 }
 
-fn build_page_content_stream_v0(lines: &[Vec<u8>]) -> Option<Vec<u8>> {
+fn build_page_content_stream_v0(lines: &[LinePlanV0]) -> Option<Vec<u8>> {
     let mut out = Vec::new();
     out.extend_from_slice(b"BT\n");
     out.extend_from_slice(b"0 g\n");
@@ -163,7 +177,7 @@ fn build_page_content_stream_v0(lines: &[Vec<u8>]) -> Option<Vec<u8>> {
         if y < MARGIN_PT_V0 {
             break;
         }
-        let segments = parse_styled_segments_v0(line)?;
+        let segments = parse_styled_segments_v0(&line.glyphs)?;
         let line_is_empty = segments.is_empty();
         let in_title_block = title_block_len > 0 && line_index < title_block_len;
         let font_size_pt = if in_title_block && line_index == 0 {
@@ -172,28 +186,31 @@ fn build_page_content_stream_v0(lines: &[Vec<u8>]) -> Option<Vec<u8>> {
             FONT_SIZE_PT_V0
         };
         if !line_is_empty {
-            let glyph_count: usize = segments.iter().map(|(_, bytes)| bytes.len()).sum();
+            let line_width_pt = (line.width_sp as f32) / 65_536.0;
             let line_x = if in_title_block {
-                centered_line_x_v0(glyph_count, font_size_pt)
+                centered_line_x_v0(line_width_pt)
             } else if previous_rendered_line_was_empty && !skip_indent_after_title_block {
                 MARGIN_PT_V0 + INDENT_PT_V0
             } else {
                 MARGIN_PT_V0
             };
-            out.extend_from_slice(b"1 0 0 1 ");
-            out.extend_from_slice(format!("{:.2} {:.2} Tm ", line_x, y).as_bytes());
-            for (style, bytes) in segments {
-                if bytes.is_empty() {
+            let mut segment_x = line_x;
+            for segment in segments {
+                if segment.bytes.is_empty() {
+                    segment_x += segment.advance_pt;
                     continue;
                 }
-                let escaped = escape_pdf_string_bytes(&bytes);
+                let escaped = escape_pdf_string_bytes(&segment.bytes);
+                out.extend_from_slice(b"1 0 0 1 ");
+                out.extend_from_slice(format!("{:.2} {:.2} Tm ", segment_x, y).as_bytes());
                 out.extend_from_slice(b"/");
-                out.extend_from_slice(style_font_alias_v0(style));
+                out.extend_from_slice(style_font_alias_v0(segment.style));
                 out.extend_from_slice(b" ");
                 out.extend_from_slice(format!("{font_size_pt}").as_bytes());
                 out.extend_from_slice(b" Tf (");
                 out.extend_from_slice(&escaped);
                 out.extend_from_slice(b") Tj ");
+                segment_x += segment.advance_pt;
             }
             out.extend_from_slice(b"\n");
             if !in_title_block && skip_indent_after_title_block {
@@ -211,7 +228,7 @@ fn build_page_content_stream_v0(lines: &[Vec<u8>]) -> Option<Vec<u8>> {
     Some(out)
 }
 
-fn build_pdf_for_pages_v0(pages: &[Vec<Vec<u8>>]) -> Vec<u8> {
+fn build_pdf_for_pages_v0(pages: &[PagePlanV0]) -> Vec<u8> {
     // Object numbering:
     // 1: Catalog
     // 2: Pages
@@ -273,7 +290,7 @@ fn build_pdf_for_pages_v0(pages: &[Vec<Vec<u8>>]) -> Vec<u8> {
     // Content stream objects
     for page_index in 0..page_count {
         let stream_id = first_stream_id + page_index;
-        let stream = match build_page_content_stream_v0(&pages[page_index as usize]) {
+        let stream = match build_page_content_stream_v0(&pages[page_index as usize].lines) {
             Some(bytes) => bytes,
             None => return Vec::new(),
         };
@@ -327,23 +344,10 @@ pub fn render_dvi_v2_text_page_to_pdf_v0(bytes: &[u8]) -> Option<Vec<u8>> {
     }
     let line_advance_sp = infer_line_advance_sp_v0(bytes);
     let layout = parse_dvi_v2_text_page_to_layout_v0(bytes, line_advance_sp)?;
-
-    let mut pages = Vec::<Vec<Vec<u8>>>::new();
-    for page in layout.pages {
-        let mut lines = Vec::<Vec<u8>>::new();
-        for line in page.lines {
-            let mut out = Vec::with_capacity(line.glyphs.len());
-            for glyph in line.glyphs {
-                out.push(glyph.byte);
-            }
-            lines.push(out);
-        }
-        pages.push(lines);
-    }
-    if pages.is_empty() {
+    if layout.pages.is_empty() {
         return None;
     }
-    let pdf = build_pdf_for_pages_v0(&pages);
+    let pdf = build_pdf_for_pages_v0(&layout.pages);
     if pdf.is_empty() {
         return None;
     }
