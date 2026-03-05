@@ -6,6 +6,9 @@ use super::trace_v0::InputTraceV0;
 
 pub(crate) const MAX_INPUT_DEPTH_V0: usize = 32;
 pub(crate) const MAX_INPUT_EXPANSIONS_V0: usize = 1024;
+const INPUT_CONTROL_V0: &[u8] = b"input";
+const INCLUDE_CONTROL_V0: &[u8] = b"include";
+const PAGEBREAK_CONTROL_V0: &[u8] = b"pagebreak";
 
 pub(crate) fn expand_inputs_v0(
     tokens: &[TokenV0],
@@ -25,13 +28,14 @@ pub(crate) fn expand_inputs_v0(
     Ok((expanded, trace))
 }
 
-fn parse_input_path_group_v0(
+fn parse_input_like_path_group_v0(
     tokens: &[TokenV0],
     input_index: usize,
+    command_name: &[u8],
 ) -> Result<(String, usize), InvalidInputReasonV0> {
     if !matches!(
         tokens.get(input_index),
-        Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"input"
+        Some(TokenV0::ControlSeq(name)) if name.as_slice() == command_name
     ) {
         return Err(InvalidInputReasonV0::InputValidationFailed);
     }
@@ -122,7 +126,9 @@ fn expand_inputs_inner_v0(
     let mut index = 0usize;
     while index < tokens.len() {
         match &tokens[index] {
-            TokenV0::ControlSeq(name) if name.as_slice() == b"input" => {
+            TokenV0::ControlSeq(name)
+                if name.as_slice() == INPUT_CONTROL_V0 || name.as_slice() == INCLUDE_CONTROL_V0 =>
+            {
                 *expansion_count = expansion_count
                     .checked_add(1)
                     .ok_or(InvalidInputReasonV0::InputExpansionsExceeded)?;
@@ -131,7 +137,9 @@ fn expand_inputs_inner_v0(
                 }
                 trace.expansions = *expansion_count as u64;
 
-                let (normalized_path, next_index) = parse_input_path_group_v0(tokens, index)?;
+                let is_include = name.as_slice() == INCLUDE_CONTROL_V0;
+                let (normalized_path, next_index) =
+                    parse_input_like_path_group_v0(tokens, index, name.as_slice())?;
                 if active_stack.iter().any(|path| path == &normalized_path) {
                     return Err(InvalidInputReasonV0::InputCycleFailed);
                 }
@@ -156,6 +164,12 @@ fn expand_inputs_inner_v0(
                 )?;
                 active_stack.pop();
 
+                if is_include {
+                    push_token_checked(
+                        &mut out,
+                        TokenV0::ControlSeq(PAGEBREAK_CONTROL_V0.to_vec()),
+                    )?;
+                }
                 extend_tokens_checked(&mut out, &expanded)?;
                 index = next_index;
             }

@@ -123,9 +123,9 @@
     },
     {
       "id": "typeset_demo_input_include_probe_v0",
-      "tags": ["typeset", "input", "include", "probe", "ni"],
-      "expected_status": "INVALID",
-      "purpose": "Probes input/include resource-hint seam for deterministic on-demand request generation."
+      "tags": ["typeset", "input", "include", "probe", "ok"],
+      "expected_status": "OK",
+      "purpose": "Exercises combined input/include inclusion with deterministic page-break semantics for include."
     },
     {
       "id": "typeset_demo_resource_hints_invalid_probe_v0",
@@ -135,15 +135,27 @@
     },
     {
       "id": "typeset_demo_input_probe_v0",
-      "tags": ["typeset", "input", "probe", "ni"],
-      "expected_status": "NI",
-      "purpose": "Probes input resource-hint extraction and deterministic .tex request mapping."
+      "tags": ["typeset", "input", "probe", "ok"],
+      "expected_status": "OK",
+      "purpose": "Exercises basic \\input inclusion using resolver-backed tex resources."
     },
     {
       "id": "typeset_demo_include_probe_v0",
-      "tags": ["typeset", "include", "probe", "ni"],
-      "expected_status": "NI",
-      "purpose": "Probes include resource-hint extraction and deterministic .tex request mapping."
+      "tags": ["typeset", "include", "probe", "ok"],
+      "expected_status": "OK",
+      "purpose": "Exercises basic \\include inclusion with deterministic page break before included content."
+    },
+    {
+      "id": "typeset_demo_input_cycle_probe_v0",
+      "tags": ["typeset", "input", "cycle", "negative", "probe", "invalid"],
+      "expected_status": "INVALID",
+      "purpose": "Proves fail-closed cycle detection for recursive input/include graphs."
+    },
+    {
+      "id": "typeset_demo_input_missing_probe_v0",
+      "tags": ["typeset", "input", "missing", "negative", "probe", "invalid"],
+      "expected_status": "INVALID",
+      "purpose": "Proves fail-closed missing-file behavior for input inclusion."
     },
     {
       "id": "typeset_demo_ondemand_input_probe_v0",

@@ -677,7 +677,7 @@ if (!typedArtifactShaMap || typeof typedArtifactShaMap !== 'object') {
   console.error('FAIL: expected report.typed_artifact_sha256 map after first run');
   process.exit(1);
 }
-const typedKeys = ['toc', 'labels', 'bib', 'cite', 'hyperref', 'pkgopt', 'graphics', 'math', 'table'];
+const typedKeys = ['toc', 'labels', 'bib', 'cite', 'hyperref', 'pkgopt', 'graphics', 'input', 'math', 'table'];
 for (const key of typedKeys) {
   const value = typedArtifactShaMap[key];
   if (typeof value !== 'string' || !/^[0-9a-f]{64}$/.test(value)) {
@@ -685,6 +685,31 @@ for (const key of typedKeys) {
     process.exit(1);
   }
 }
+
+const inputProbeSummary = JSON.parse(
+  fs.readFileSync(path.join(outDir, 'typeset_demo_input_probe_v0', 'summary.json'), 'utf8'),
+);
+if (inputProbeSummary?.typed_artifacts?.input?.present !== true) {
+  console.error('FAIL: expected input_v1 artifact present for typeset_demo_input_probe_v0');
+  process.exit(1);
+}
+if (!(inputProbeSummary?.typed_artifacts?.input?.items > 0)) {
+  console.error('FAIL: expected non-empty input_v1 entries for typeset_demo_input_probe_v0');
+  process.exit(1);
+}
+
+const includeProbeSummary = JSON.parse(
+  fs.readFileSync(path.join(outDir, 'typeset_demo_include_probe_v0', 'summary.json'), 'utf8'),
+);
+if (includeProbeSummary?.typed_artifacts?.input?.present !== true) {
+  console.error('FAIL: expected input_v1 artifact present for typeset_demo_include_probe_v0');
+  process.exit(1);
+}
+if (!(includeProbeSummary?.typed_artifacts?.input?.items > 0)) {
+  console.error('FAIL: expected non-empty input_v1 entries for typeset_demo_include_probe_v0');
+  process.exit(1);
+}
+
 fs.writeFileSync(
   path.join(baselineRoot, 'typed_artifact_sha256_first.json'),
   `${JSON.stringify(typedArtifactShaMap, null, 2)}\n`,

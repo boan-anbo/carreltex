@@ -340,6 +340,35 @@ fn input_invalid_syntax_is_invalid() {
         assert!(result.log_bytes.ends_with(b"input_validation_failed"));
     }
 }
+
+#[test]
+fn include_missing_file_is_invalid() {
+    let mut mount = Mount::default();
+    let main_with_missing_include =
+        b"\\documentclass{article}\n\\begin{document}\n\\include{missing.tex}\n\\end{document}\n";
+    assert!(mount.add_file(b"main.tex", main_with_missing_include).is_ok());
+
+    let result = compile_request_v0(&mut mount, &valid_request());
+    assert_eq!(result.status, CompileStatus::InvalidInput);
+    assert!(result.log_bytes.starts_with(b"INVALID_INPUT:"));
+    assert!(result.log_bytes.ends_with(b"input_validation_failed"));
+}
+
+#[test]
+fn include_invalid_syntax_is_invalid() {
+    let cases: [&[u8]; 3] = [
+        b"\\documentclass{article}\n\\begin{document}\n\\include missing.tex\n\\end{document}\n",
+        b"\\documentclass{article}\n\\begin{document}\n\\include{}\n\\end{document}\n",
+        b"\\documentclass{article}\n\\begin{document}\n\\include{a b.tex}\n\\end{document}\n",
+    ];
+    for main in cases {
+        let mut mount = Mount::default();
+        assert!(mount.add_file(b"main.tex", main).is_ok());
+        let result = compile_request_v0(&mut mount, &valid_request());
+        assert_eq!(result.status, CompileStatus::InvalidInput);
+        assert!(result.log_bytes.ends_with(b"input_validation_failed"));
+    }
+}
 #[test]
 fn input_cycle_is_invalid() {
     let mut mount = Mount::default();

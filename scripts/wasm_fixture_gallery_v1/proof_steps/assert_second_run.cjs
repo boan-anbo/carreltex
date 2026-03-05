@@ -63,7 +63,7 @@ if (resourceHintsShaSecond !== resourceHintsShaFirst) {
   console.error('FAIL: report.resource_hints_v0 must be stable across reruns');
   process.exit(1);
 }
-const requiredTypedKeys = ['toc', 'labels', 'refs', 'bib', 'cite', 'hyperref', 'pkgopt', 'graphics', 'math', 'table'];
+const requiredTypedKeys = ['toc', 'labels', 'refs', 'bib', 'cite', 'hyperref', 'pkgopt', 'graphics', 'input', 'math', 'table'];
 const labelsShaFirst = fs.readFileSync(path.join(`${outDir}_baseline`, 'labels_v1_first.sha256'), 'utf8').trim();
 const refsShaFirst = fs.readFileSync(path.join(`${outDir}_baseline`, 'refs_v1_first.sha256'), 'utf8').trim();
 const tocShaFirst = fs.readFileSync(path.join(`${outDir}_baseline`, 'toc_v1_first.sha256'), 'utf8').trim();
@@ -122,6 +122,16 @@ if (!graphicsOptionsInvalidStatus || graphicsOptionsInvalidStatus.status !== 'IN
 const resourceHintsInvalidStatus = statuses.find((entry) => entry.case_id === 'typeset_demo_resource_hints_invalid_probe_v0');
 if (!resourceHintsInvalidStatus || resourceHintsInvalidStatus.status !== 'INVALID') {
   console.error('FAIL: expected typeset_demo_resource_hints_invalid_probe_v0 status INVALID');
+  process.exit(1);
+}
+const inputCycleInvalidStatus = statuses.find((entry) => entry.case_id === 'typeset_demo_input_cycle_probe_v0');
+if (!inputCycleInvalidStatus || inputCycleInvalidStatus.status !== 'INVALID') {
+  console.error('FAIL: expected typeset_demo_input_cycle_probe_v0 status INVALID');
+  process.exit(1);
+}
+const inputMissingInvalidStatus = statuses.find((entry) => entry.case_id === 'typeset_demo_input_missing_probe_v0');
+if (!inputMissingInvalidStatus || inputMissingInvalidStatus.status !== 'INVALID') {
+  console.error('FAIL: expected typeset_demo_input_missing_probe_v0 status INVALID');
   process.exit(1);
 }
 for (const status of okStatuses) {

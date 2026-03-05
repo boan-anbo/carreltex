@@ -359,7 +359,13 @@ pub fn compile_main_typeset_minimal_v0(mount: &mut Mount) -> CompileResultV0 {
     }
     if expanded_tokens
         .iter()
-        .any(|token| matches!(token, TokenV0::ControlSeq(name) if name.as_slice() == b"input"))
+        .any(|token| {
+            matches!(
+                token,
+                TokenV0::ControlSeq(name)
+                    if name.as_slice() == b"input" || name.as_slice() == b"include"
+            )
+        })
     {
         return invalid_result_v0(
             request.max_log_bytes,
@@ -513,7 +519,13 @@ pub fn compile_request_v0(mount: &mut Mount, req: &CompileRequestV0) -> CompileR
     }
     if expanded_tokens
         .iter()
-        .any(|token| matches!(token, TokenV0::ControlSeq(name) if name.as_slice() == b"input"))
+        .any(|token| {
+            matches!(
+                token,
+                TokenV0::ControlSeq(name)
+                    if name.as_slice() == b"input" || name.as_slice() == b"include"
+            )
+        })
     {
         return invalid_result_v0(
             req.max_log_bytes,
