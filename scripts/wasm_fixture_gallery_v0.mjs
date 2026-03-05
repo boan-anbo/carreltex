@@ -247,6 +247,11 @@ async function loadFixtureCasesV0() {
       fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_package_require_probe_v0.tex',
     },
     {
+      id: 'typeset_demo_package_require_invalid_probe_v0',
+      mode: 'typeset',
+      fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_package_require_invalid_probe_v0.tex',
+    },
+    {
       id: 'typeset_demo_resource_hints_probe_v0',
       mode: 'typeset',
       fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_resource_hints_probe_v0.tex',
@@ -771,7 +776,14 @@ function extractResourceHintEntriesFromSourceV0(sourceBytes) {
   let graphicspathPrefixes = [];
   let index = 0;
 
-  const addHintValues = (hintType, values, startByte, endByte, defaultExtension = null) => {
+  const addHintValues = (
+    hintType,
+    values,
+    startByte,
+    endByte,
+    defaultExtension = null,
+    ignoreInvalidPathToken = false,
+  ) => {
     for (const rawValue of values) {
       if (hintType === 'hyperref_url') {
         const normalizedUrl = typeof rawValue === 'string' ? rawValue.trim() : '';
@@ -786,7 +798,15 @@ function extractResourceHintEntriesFromSourceV0(sourceBytes) {
         addResourceHintEntryV0(entries, sourceBytes, hintType, normalizedUrl, startByte, endByte);
         continue;
       }
-      const normalizedPath = normalizePathHintTokenV0(rawValue, hintType);
+      let normalizedPath;
+      try {
+        normalizedPath = normalizePathHintTokenV0(rawValue, hintType);
+      } catch (error) {
+        if (ignoreInvalidPathToken) {
+          continue;
+        }
+        throw error;
+      }
       if (!normalizedPath) {
         continue;
       }
@@ -848,7 +868,7 @@ function extractResourceHintEntriesFromSourceV0(sourceBytes) {
         index = commandIndex;
         continue;
       }
-      addHintValues('package_file', splitCommaValuesV0(packageGroup.value), index, packageGroup.next, 'sty');
+      addHintValues('package_file', splitCommaValuesV0(packageGroup.value), index, packageGroup.next, 'sty', true);
       index = packageGroup.next;
       continue;
     }
