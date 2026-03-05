@@ -29,6 +29,7 @@ mkdir -p \
   "$FIXTURE_SOURCE_DIR/xetex/tex" \
   "$FIXTURE_SOURCE_DIR/xetex/bib" \
   "$FIXTURE_SOURCE_DIR/xetex/png" \
+  "$FIXTURE_SOURCE_DIR/xetex/pdf" \
   "$FIXTURE_SOURCE_DIR/xetex/sty" \
   "$FIXTURE_SOURCE_DIR/xetex/cls" \
   "$FIXTURE_SOURCE_DIR/fontconfig/public" \
@@ -38,10 +39,15 @@ mkdir -p \
 printf 'fixture-bytes-for-typeset-minimal-v0\n' > "$FIXTURE_SOURCE_DIR/xetex/tex/typeset_demo_minimal_v0"
 printf 'fixture-bytes-for-chapter-intro\n' > "$FIXTURE_SOURCE_DIR/xetex/tex/chapter_intro.tex"
 printf 'fixture-bytes-for-chapter-appendix\n' > "$FIXTURE_SOURCE_DIR/xetex/tex/chapter_appendix.tex"
+printf 'fixture-bytes-for-chapters-intro\n' > "$FIXTURE_SOURCE_DIR/xetex/tex/chapters__intro.tex"
+printf 'fixture-bytes-for-chapters-appendix\n' > "$FIXTURE_SOURCE_DIR/xetex/tex/chapters__appendix.tex"
 printf 'fixture-bytes-for-demo-png\n' > "$FIXTURE_SOURCE_DIR/xetex/png/demo.png"
 printf 'fixture-bytes-for-probe-figure-png\n' > "$FIXTURE_SOURCE_DIR/xetex/png/probe-figure.png"
+printf 'fixture-bytes-for-figs-diagram-pdf\n' > "$FIXTURE_SOURCE_DIR/xetex/pdf/figs__diagram.pdf"
 printf 'fixture-bytes-for-refs-bib\n' > "$FIXTURE_SOURCE_DIR/xetex/bib/refs.bib"
 printf 'fixture-bytes-for-legacyrefs-bib\n' > "$FIXTURE_SOURCE_DIR/xetex/bib/legacyrefs.bib"
+printf 'fixture-bytes-for-bib-deep-refs-local-bib\n' > "$FIXTURE_SOURCE_DIR/xetex/bib/bib__deep__refs-local.bib"
+printf 'fixture-bytes-for-legacy-deeprefs-bib\n' > "$FIXTURE_SOURCE_DIR/xetex/bib/legacy__deeprefs.bib"
 printf 'fixture-bytes-for-xcolor-sty\n' > "$FIXTURE_SOURCE_DIR/xetex/sty/xcolor.sty"
 printf 'fixture-bytes-for-memoir-cls\n' > "$FIXTURE_SOURCE_DIR/xetex/cls/memoir.cls"
 printf 'fixture-bytes-for-found-sans\n' > "$FIXTURE_SOURCE_DIR/fontconfig/public/FoundSans"
@@ -152,6 +158,34 @@ const bibRequest = listA.requests.find(
 );
 if (!bibRequest) {
   console.error('FAIL: request list must include bib hint request for refs.bib');
+  process.exit(1);
+}
+const nestedInputRequest = listA.requests.find(
+  (request) => request.kind === 'texmf' && request.format === 'tex' && request.name === 'chapters__intro.tex' && request.variant === 'typeset',
+);
+if (!nestedInputRequest) {
+  console.error('FAIL: request list must include nested input hint request for chapters__intro.tex');
+  process.exit(1);
+}
+const nestedIncludeRequest = listA.requests.find(
+  (request) => request.kind === 'texmf' && request.format === 'tex' && request.name === 'chapters__appendix.tex' && request.variant === 'typeset',
+);
+if (!nestedIncludeRequest) {
+  console.error('FAIL: request list must include nested include hint request for chapters__appendix.tex');
+  process.exit(1);
+}
+const graphicsOptsRequest = listA.requests.find(
+  (request) => request.kind === 'texmf' && request.format === 'pdf' && request.name === 'figs__diagram.pdf' && request.variant === 'typeset',
+);
+if (!graphicsOptsRequest) {
+  console.error('FAIL: request list must include includegraphics ext/dir hint request for figs__diagram.pdf');
+  process.exit(1);
+}
+const nestedBibRequest = listA.requests.find(
+  (request) => request.kind === 'texmf' && request.format === 'bib' && request.name === 'bib__deep__refs-local.bib' && request.variant === 'typeset',
+);
+if (!nestedBibRequest) {
+  console.error('FAIL: request list must include nested addbibresource hint request for bib__deep__refs-local.bib');
   process.exit(1);
 }
 if (listA.requests.some((request) => request.name === 'demo-image.png')) {
@@ -535,9 +569,16 @@ const requiredEntries = [
   ['texmf', 'tex', 'typeset_demo_minimal_v0', 'typeset'],
   ['texmf', 'tex', 'chapter_intro.tex', 'typeset'],
   ['texmf', 'tex', 'chapter_appendix.tex', 'typeset'],
+  ['texmf', 'tex', 'chapters__intro.tex', 'typeset'],
+  ['texmf', 'tex', 'chapters__appendix.tex', 'typeset'],
   ['texmf', 'sty', 'xcolor.sty', 'typeset'],
   ['texmf', 'bib', 'refs.bib', 'typeset'],
+  ['texmf', 'bib', 'legacyrefs.bib', 'typeset'],
+  ['texmf', 'bib', 'bib__deep__refs-local.bib', 'typeset'],
+  ['texmf', 'bib', 'legacy__deeprefs.bib', 'typeset'],
   ['texmf', 'png', 'demo.png', 'typeset'],
+  ['texmf', 'png', 'probe-figure.png', 'typeset'],
+  ['texmf', 'pdf', 'figs__diagram.pdf', 'typeset'],
   ['fontconfig', 'name', 'FoundSans', 'public'],
 ];
 for (const [kind, format, name, variant] of requiredEntries) {

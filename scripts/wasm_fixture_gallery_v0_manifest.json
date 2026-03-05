@@ -68,6 +68,18 @@
       "purpose": "Probes includegraphics and bibliography resource-hint seams in one deterministic NI fixture."
     },
     {
+      "id": "typeset_demo_nested_path_probe_v0",
+      "tags": ["typeset", "input", "include", "nested-path", "probe", "invalid"],
+      "expected_status": "INVALID",
+      "purpose": "Probes nested path normalization for input/include and bibliography resource hints."
+    },
+    {
+      "id": "typeset_demo_graphics_opts_probe_v0",
+      "tags": ["typeset", "graphics", "options", "ext-dir", "probe", "ni"],
+      "expected_status": "NI",
+      "purpose": "Probes includegraphics ext/dir option hint normalization for deterministic resource requests."
+    },
+    {
       "id": "ok_demo_capabilities_v0",
       "tags": ["ok", "capabilities", "surface"],
       "expected_status": "OK",
