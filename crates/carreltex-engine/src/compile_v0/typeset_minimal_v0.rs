@@ -631,13 +631,44 @@ fn consume_heading_command_v0(tokens: &[TokenV0], index: usize, out: &mut Vec<u8
     Some(next)
 }
 
-fn consume_list_environment_v0(tokens: &[TokenV0], index: usize, out: &mut Vec<u8>) -> Option<usize> {
-    let (env_name, mut cursor) = consume_env_name_command_v0(tokens, index, BEGIN_CONTROL_V0)?;
-    let is_itemize = env_name.as_slice() == ITEMIZE_ENV_V0;
-    let is_enumerate = env_name.as_slice() == ENUMERATE_ENV_V0;
-    if !is_itemize && !is_enumerate {
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ListKindV0 {
+    Itemize,
+    Enumerate,
+}
+
+fn list_item_prefix_v0(kind: ListKindV0, depth: usize, enumerate_counter: usize) -> Vec<u8> {
+    let mut prefix = Vec::new();
+    for _ in 0..depth {
+        prefix.extend_from_slice(b"  ");
+    }
+    match kind {
+        ListKindV0::Itemize => prefix.extend_from_slice(b"- "),
+        ListKindV0::Enumerate => {
+            prefix.extend_from_slice(enumerate_counter.to_string().as_bytes());
+            prefix.extend_from_slice(b". ");
+        }
+    }
+    prefix
+}
+
+fn consume_list_environment_with_depth_v0(
+    tokens: &[TokenV0],
+    index: usize,
+    out: &mut Vec<u8>,
+    depth: usize,
+) -> Option<usize> {
+    if depth > 1 {
         return None;
     }
+    let (env_name, mut cursor) = consume_env_name_command_v0(tokens, index, BEGIN_CONTROL_V0)?;
+    let kind = if env_name.as_slice() == ITEMIZE_ENV_V0 {
+        ListKindV0::Itemize
+    } else if env_name.as_slice() == ENUMERATE_ENV_V0 {
+        ListKindV0::Enumerate
+    } else {
+        return None;
+    };
 
     push_paragraph_break(out);
     let mut enumerate_counter = 1usize;
@@ -647,22 +678,24 @@ fn consume_list_environment_v0(tokens: &[TokenV0], index: usize, out: &mut Vec<u
         match tokens.get(cursor)? {
             TokenV0::ControlSeq(name) if name.as_slice() == ITEM_CONTROL_V0 => {
                 push_newline(out);
-                if is_itemize {
-                    out.extend_from_slice(b"- ");
-                } else {
-                    out.extend_from_slice(enumerate_counter.to_string().as_bytes());
-                    out.extend_from_slice(b". ");
+                out.extend_from_slice(&list_item_prefix_v0(kind, depth, enumerate_counter));
+                if kind == ListKindV0::Enumerate {
                     enumerate_counter += 1;
                 }
                 cursor += 1;
 
                 loop {
                     match tokens.get(cursor) {
-                        Some(TokenV0::ControlSeq(name)) if name.as_slice() == ITEM_CONTROL_V0 => {
-                            break;
-                        }
+                        Some(TokenV0::ControlSeq(name)) if name.as_slice() == ITEM_CONTROL_V0 => break,
                         Some(TokenV0::ControlSeq(name)) if name.as_slice() == BEGIN_CONTROL_V0 => {
-                            return None;
+                            let (nested_env, _) =
+                                consume_env_name_command_v0(tokens, cursor, BEGIN_CONTROL_V0)?;
+                            if nested_env.as_slice() != ITEMIZE_ENV_V0
+                                && nested_env.as_slice() != ENUMERATE_ENV_V0
+                            {
+                                return None;
+                            }
+                            cursor = consume_list_environment_with_depth_v0(tokens, cursor, out, depth + 1)?;
                         }
                         Some(TokenV0::ControlSeq(name)) if name.as_slice() == END_CONTROL_V0 => {
                             let (end_env, next) =
@@ -693,6 +726,10 @@ fn consume_list_environment_v0(tokens: &[TokenV0], index: usize, out: &mut Vec<u
             _ => return None,
         }
     }
+}
+
+fn consume_list_environment_v0(tokens: &[TokenV0], index: usize, out: &mut Vec<u8>) -> Option<usize> {
+    consume_list_environment_with_depth_v0(tokens, index, out, 0)
 }
 
 fn prefix_quote_lines_v0(content: &[u8]) -> Vec<u8> {
