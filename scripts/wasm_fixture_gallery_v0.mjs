@@ -20,7 +20,7 @@ const STATUS_NI_V0 = 'NI';
 const STATUS_INVALID_V0 = 'INVALID';
 const STATUS_FAIL_V0 = 'FAIL';
 const EXPECTED_STATUS_VALUES_V0 = new Set([STATUS_OK_V0, STATUS_NI_V0, STATUS_INVALID_V0, STATUS_FAIL_V0]);
-const TYPED_ARTIFACT_KEYS_V0 = ['toc', 'labels', 'bib', 'hyperref', 'pkgopt'];
+const TYPED_ARTIFACT_KEYS_V0 = ['toc', 'labels', 'bib', 'hyperref', 'pkgopt', 'graphics'];
 const MAX_TOC_ENTRIES_V0 = 256;
 const MAX_TOC_TITLE_BYTES_V0 = 256;
 const MAX_LABEL_ENTRIES_V0 = 256;
@@ -30,6 +30,8 @@ const MAX_BIB_VALUE_BYTES_V0 = 256;
 const MAX_PKGOPT_ENTRIES_V0 = 256;
 const MAX_PKGOPT_VALUE_BYTES_V0 = 256;
 const MAX_PKGOPT_OPTIONS_PER_ENTRY_V0 = 64;
+const MAX_GRAPHICS_ENTRIES_V0 = 256;
+const MAX_GRAPHICS_PATH_BYTES_V0 = 256;
 
 function sha256HexV0(bytes) {
   return createHash('sha256').update(bytes).digest('hex');
@@ -509,6 +511,55 @@ function extractPkgoptEntriesFromSourceV0(sourceBytes) {
   return entries;
 }
 
+function extractGraphicsEntriesFromSourceV0(sourceBytes) {
+  const entries = [];
+  let index = 0;
+  while (index < sourceBytes.length) {
+    if (sourceBytes[index] !== 0x5c) {
+      index += 1;
+      continue;
+    }
+    let commandIndex = index + 1;
+    while (commandIndex < sourceBytes.length && isAsciiLetterByteV0(sourceBytes[commandIndex])) {
+      commandIndex += 1;
+    }
+    if (commandIndex === index + 1) {
+      index += 1;
+      continue;
+    }
+    const command = Buffer.from(sourceBytes.slice(index + 1, commandIndex)).toString('ascii');
+    if (command !== 'includegraphics') {
+      index = commandIndex;
+      continue;
+    }
+
+    let next = commandIndex;
+    const optGroup = readBracketGroupV0(sourceBytes, next);
+    if (optGroup.ok) {
+      next = optGroup.next;
+    }
+
+    const pathGroup = readBracedGroupV0(sourceBytes, next);
+    if (!pathGroup.ok || pathGroup.value.length === 0) {
+      index = commandIndex;
+      continue;
+    }
+    const pathBytes = Buffer.from(pathGroup.value, 'utf8');
+    if (pathBytes.length > MAX_GRAPHICS_PATH_BYTES_V0) {
+      throw new Error(`graphics_v0 path exceeds cap ${MAX_GRAPHICS_PATH_BYTES_V0}`);
+    }
+    entries.push({
+      command,
+      path: pathGroup.value,
+    });
+    if (entries.length > MAX_GRAPHICS_ENTRIES_V0) {
+      throw new Error(`graphics_v0 entries exceed cap ${MAX_GRAPHICS_ENTRIES_V0}`);
+    }
+    index = pathGroup.next;
+  }
+  return entries;
+}
+
 function extractBibEntriesFromSourceV0(sourceBytes) {
   const entries = [];
   const citeCommands = new Set([
@@ -765,6 +816,24 @@ async function emitPkgoptTypedArtifactV0(caseOutDir, fixtureBytes) {
   };
 }
 
+async function emitGraphicsTypedArtifactV0(caseOutDir, fixtureBytes) {
+  const payload = {
+    version: 1,
+    schema: 'graphics_v0',
+    entries: extractGraphicsEntriesFromSourceV0(fixtureBytes),
+  };
+  const bytes = Buffer.from(`${JSON.stringify(payload, null, 2)}\n`, 'utf8');
+  const relpath = 'graphics_v0.json';
+  const fullPath = path.join(caseOutDir, relpath);
+  await writeFile(fullPath, bytes);
+  return {
+    present: true,
+    items: payload.entries.length,
+    artifact_relpath: relpath,
+    artifact_sha256: sha256HexV0(bytes),
+  };
+}
+
 async function emitTypedArtifactsV0(caseSpec, caseOutDir, typedArtifacts, fixtureBytes) {
   if (caseSpec.id === 'typeset_demo_toc_probe_v0') {
     typedArtifacts.toc = await emitTocTypedArtifactV0(caseOutDir, fixtureBytes);
@@ -780,6 +849,9 @@ async function emitTypedArtifactsV0(caseSpec, caseOutDir, typedArtifacts, fixtur
   }
   if (caseSpec.id === 'typeset_demo_pkgopt_probe_v0') {
     typedArtifacts.pkgopt = await emitPkgoptTypedArtifactV0(caseOutDir, fixtureBytes);
+  }
+  if (caseSpec.id === 'typeset_demo_graphics_probe_v0') {
+    typedArtifacts.graphics = await emitGraphicsTypedArtifactV0(caseOutDir, fixtureBytes);
   }
 }
 

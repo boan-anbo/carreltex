@@ -188,6 +188,34 @@ if (pkgoptArtifactFirst.entries.length <= 0) {
   process.exit(1);
 }
 fs.writeFileSync(firstRunShaPath('pkgopt_v0'), `${pkgoptShaFirst}\n`);
+
+const graphicsSummary = JSON.parse(
+  fs.readFileSync(path.join(outDir, 'typeset_demo_graphics_probe_v0', 'summary.json'), 'utf8'),
+);
+if (graphicsSummary?.typed_artifacts?.graphics?.present !== true) {
+  console.error('FAIL: expected graphics typed artifact present after first run');
+  process.exit(1);
+}
+const graphicsPath = path.join(outDir, 'typeset_demo_graphics_probe_v0', 'graphics_v0.json');
+if (!fs.existsSync(graphicsPath)) {
+  console.error('FAIL: expected graphics_v0.json artifact after first run');
+  process.exit(1);
+}
+const graphicsShaFirst = graphicsSummary.typed_artifacts.graphics.artifact_sha256;
+if (typeof graphicsShaFirst !== 'string' || !/^[0-9a-f]{64}$/.test(graphicsShaFirst)) {
+  console.error('FAIL: expected graphics artifact sha256 in first summary');
+  process.exit(1);
+}
+const graphicsArtifactFirst = JSON.parse(fs.readFileSync(graphicsPath, 'utf8'));
+if (!Array.isArray(graphicsArtifactFirst?.entries)) {
+  console.error('FAIL: expected graphics_v0.entries array in first-run artifact');
+  process.exit(1);
+}
+if (graphicsArtifactFirst.entries.length <= 0) {
+  console.error('FAIL: expected non-empty graphics_v0.entries for graphics probe');
+  process.exit(1);
+}
+fs.writeFileSync(firstRunShaPath('graphics_v0'), `${graphicsShaFirst}\n`);
 NODE
 
 node "$ROOT_DIR/scripts/texlive_smoke/baselines_v0/generate_v0.mjs" "$OUT_DIR" "$BASELINE_DIR_A"
@@ -299,12 +327,13 @@ const outDir = process.argv[2];
 const report = JSON.parse(fs.readFileSync(path.join(outDir, 'report.json'), 'utf8'));
 const statuses = Array.isArray(report.statuses) ? report.statuses : [];
 const resolvedCount = Number(report.resolved_resources_count ?? 0);
-const requiredTypedKeys = ['toc', 'labels', 'bib', 'hyperref', 'pkgopt'];
+const requiredTypedKeys = ['toc', 'labels', 'bib', 'hyperref', 'pkgopt', 'graphics'];
 const labelsShaFirst = fs.readFileSync(path.join(`${outDir}_baseline`, 'labels_v0_first.sha256'), 'utf8').trim();
 const tocShaFirst = fs.readFileSync(path.join(`${outDir}_baseline`, 'toc_v0_first.sha256'), 'utf8').trim();
 const bibShaFirst = fs.readFileSync(path.join(`${outDir}_baseline`, 'bib_v0_first.sha256'), 'utf8').trim();
 const hyperrefShaFirst = fs.readFileSync(path.join(`${outDir}_baseline`, 'hyperref_v0_first.sha256'), 'utf8').trim();
 const pkgoptShaFirst = fs.readFileSync(path.join(`${outDir}_baseline`, 'pkgopt_v0_first.sha256'), 'utf8').trim();
+const graphicsShaFirst = fs.readFileSync(path.join(`${outDir}_baseline`, 'graphics_v0_first.sha256'), 'utf8').trim();
 
 if (resolvedCount <= 0) {
   console.error('FAIL: expected at least one resolved resource in fixture gallery summaries');
@@ -459,6 +488,27 @@ if (!Array.isArray(pkgoptArtifactSecond?.entries) || pkgoptArtifactSecond.entrie
   process.exit(1);
 }
 
+const graphicsSummary = JSON.parse(
+  fs.readFileSync(path.join(outDir, 'typeset_demo_graphics_probe_v0', 'summary.json'), 'utf8'),
+);
+const graphicsArtifact = graphicsSummary?.typed_artifacts?.graphics;
+if (!graphicsArtifact || graphicsArtifact.present !== true) {
+  console.error('FAIL: expected graphics typed artifact present after second run');
+  process.exit(1);
+}
+const graphicsShaSecond = graphicsArtifact.artifact_sha256;
+if (graphicsShaSecond !== graphicsShaFirst) {
+  console.error('FAIL: graphics_v0 artifact sha256 must be stable across reruns');
+  process.exit(1);
+}
+const graphicsArtifactSecond = JSON.parse(
+  fs.readFileSync(path.join(outDir, 'typeset_demo_graphics_probe_v0', 'graphics_v0.json'), 'utf8'),
+);
+if (!Array.isArray(graphicsArtifactSecond?.entries) || graphicsArtifactSecond.entries.length <= 0) {
+  console.error('FAIL: expected non-empty graphics_v0.entries after rerun');
+  process.exit(1);
+}
+
 const reportCaseSha = report.case_artifact_sha256;
 if (!reportCaseSha || typeof reportCaseSha !== 'object') {
   console.error('FAIL: report missing top-level case_artifact_sha256');
@@ -495,6 +545,7 @@ console.log(`PASS: toc_v0 sha stable ${tocShaSecond}`);
 console.log(`PASS: bib_v0 sha stable ${bibShaSecond}`);
 console.log(`PASS: hyperref_v0 sha stable ${hyperrefShaSecond}`);
 console.log(`PASS: pkgopt_v0 sha stable ${pkgoptShaSecond}`);
+console.log(`PASS: graphics_v0 sha stable ${graphicsShaSecond}`);
 console.log('PASS: report top-level case_artifact_sha256 present');
 NODE
 
