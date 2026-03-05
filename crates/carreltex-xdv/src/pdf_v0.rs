@@ -743,21 +743,17 @@ fn emit_styled_segments_v0(
     if segments.is_empty() {
         return;
     }
-    out.extend_from_slice(b"1 0 0 1 ");
-    out.extend_from_slice(format!("{:.2} {:.2} Tm ", x_pt, y_pt).as_bytes());
+    let mut render_segments = Vec::<PdfRenderSegmentV0>::with_capacity(segments.len());
     for segment in segments {
-        if segment.glyphs.is_empty() {
-            continue;
-        }
-        let escaped = escape_pdf_string_bytes(&bytes_from_glyphs_v0(&segment.glyphs));
-        out.extend_from_slice(b"/");
-        out.extend_from_slice(style_font_alias_v0(segment.style));
-        out.extend_from_slice(b" ");
-        out.extend_from_slice(format!("{font_size_pt}").as_bytes());
-        out.extend_from_slice(b" Tf (");
-        out.extend_from_slice(&escaped);
-        out.extend_from_slice(b") Tj ");
+        render_segments.push(PdfRenderSegmentV0 {
+            style: segment.style,
+            bytes: bytes_from_glyphs_v0(&segment.glyphs),
+            advance_pt: segment.advance_pt,
+            is_link: segment.is_link,
+            superscript: false,
+        });
     }
+    emit_render_segments_with_superscript_v0(out, &render_segments, x_pt, y_pt, font_size_pt);
 }
 
 fn emit_render_segments_with_superscript_v0(
@@ -770,12 +766,14 @@ fn emit_render_segments_with_superscript_v0(
     if segments.is_empty() {
         return;
     }
-    out.extend_from_slice(b"1 0 0 1 ");
-    out.extend_from_slice(format!("{:.2} {:.2} Tm ", x_pt, y_pt).as_bytes());
+    let mut cursor_x = x_pt;
     for segment in segments {
         if segment.bytes.is_empty() {
+            cursor_x += segment.advance_pt;
             continue;
         }
+        out.extend_from_slice(b"1 0 0 1 ");
+        out.extend_from_slice(format!("{:.2} {:.2} Tm ", cursor_x, y_pt).as_bytes());
         let escaped = escape_pdf_string_bytes(&segment.bytes);
         let segment_font_size_pt = if segment.superscript {
             FOOTNOTE_MARKER_FONT_SIZE_PT_V0
@@ -795,6 +793,7 @@ fn emit_render_segments_with_superscript_v0(
         out.extend_from_slice(b" Tf (");
         out.extend_from_slice(&escaped);
         out.extend_from_slice(b") Tj ");
+        cursor_x += segment.advance_pt;
     }
     out.extend_from_slice(b"0 Ts ");
 }
