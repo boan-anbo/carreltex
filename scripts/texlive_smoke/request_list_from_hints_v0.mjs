@@ -208,6 +208,18 @@ export async function buildRequestListFromHintsV0(options = {}) {
       continue;
     }
 
+    if (hintType === 'class_file') {
+      const name = ensureDefaultExtensionV0(normalizeTexmfNameV0(value, hintType, caseId), 'cls');
+      const request = {
+        kind: 'texmf',
+        format: inferTexmfFormatV0(name, 'cls'),
+        name,
+        variant,
+      };
+      requestsByKey.set(requestKeyV0(request), request);
+      continue;
+    }
+
     if (hintType === 'hyperref_url') {
       const fontconfigRequest = parseFontconfigHintV0(value, caseId);
       if (fontconfigRequest) {

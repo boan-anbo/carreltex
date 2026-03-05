@@ -252,6 +252,11 @@ async function loadFixtureCasesV0() {
       fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_pkgopt_require_pass_probe_v0.tex',
     },
     {
+      id: 'typeset_demo_class_options_probe_v0',
+      mode: 'typeset',
+      fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_class_options_probe_v0.tex',
+    },
+    {
       id: 'typeset_demo_package_require_invalid_probe_v0',
       mode: 'typeset',
       fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_package_require_invalid_probe_v0.tex',
@@ -661,7 +666,14 @@ function addPkgoptEntryV0(entries, entry) {
 
 function extractPkgoptEntriesFromSourceV0(sourceBytes) {
   const entries = [];
-  const packageCommands = new Set(['usepackage', 'RequirePackage', 'PassOptionsToPackage', 'RequirePackageWithOptions']);
+  const packageCommands = new Set([
+    'usepackage',
+    'RequirePackage',
+    'PassOptionsToPackage',
+    'RequirePackageWithOptions',
+    'PassOptionsToClass',
+    'documentclass',
+  ]);
   let index = 0;
   while (index < sourceBytes.length) {
     if (sourceBytes[index] !== 0x5c) {
@@ -686,7 +698,7 @@ function extractPkgoptEntriesFromSourceV0(sourceBytes) {
     let packages = [];
     let endOffset = commandIndex;
 
-    if (command === 'PassOptionsToPackage') {
+    if (command === 'PassOptionsToPackage' || command === 'PassOptionsToClass') {
       const optionGroup = readBracedGroupV0(sourceBytes, commandIndex);
       if (!optionGroup.ok || optionGroup.value.length === 0) {
         index = commandIndex;
@@ -700,6 +712,24 @@ function extractPkgoptEntriesFromSourceV0(sourceBytes) {
       options = splitCommaValuesV0(optionGroup.value);
       packages = splitCommaValuesV0(packageGroup.value);
       endOffset = packageGroup.next;
+    } else if (command === 'documentclass') {
+      const optGroup = readBracketGroupV0(sourceBytes, commandIndex);
+      let next = commandIndex;
+      if (optGroup.ok) {
+        next = optGroup.next;
+      }
+      const classGroup = readBracedGroupV0(sourceBytes, next);
+      if (!classGroup.ok || classGroup.value.length === 0) {
+        index = commandIndex;
+        continue;
+      }
+      options = optGroup.ok ? splitCommaValuesV0(optGroup.value) : [];
+      if (options.length === 0) {
+        index = classGroup.next;
+        continue;
+      }
+      packages = splitCommaValuesV0(classGroup.value);
+      endOffset = classGroup.next;
     } else if (command === 'RequirePackageWithOptions') {
       const packageGroup = readBracedGroupV0(sourceBytes, commandIndex);
       if (!packageGroup.ok || packageGroup.value.length === 0) {
@@ -907,6 +937,22 @@ function extractResourceHintEntriesFromSourceV0(sourceBytes) {
       continue;
     }
 
+    if (command === 'documentclass') {
+      const optGroup = readBracketGroupV0(sourceBytes, commandIndex);
+      let next = commandIndex;
+      if (optGroup.ok) {
+        next = optGroup.next;
+      }
+      const classGroup = readBracedGroupV0(sourceBytes, next);
+      if (!classGroup.ok || classGroup.value.length === 0) {
+        index = commandIndex;
+        continue;
+      }
+      addHintValues('class_file', splitCommaValuesV0(classGroup.value), index, classGroup.next, 'cls', true);
+      index = classGroup.next;
+      continue;
+    }
+
     if (command === 'RequirePackageWithOptions') {
       const packageGroup = readBracedGroupV0(sourceBytes, commandIndex);
       if (!packageGroup.ok || packageGroup.value.length === 0) {
@@ -931,6 +977,22 @@ function extractResourceHintEntriesFromSourceV0(sourceBytes) {
       }
       addHintValues('package_file', splitCommaValuesV0(packageGroup.value), index, packageGroup.next, 'sty', true);
       index = packageGroup.next;
+      continue;
+    }
+
+    if (command === 'PassOptionsToClass') {
+      const optionGroup = readBracedGroupV0(sourceBytes, commandIndex);
+      if (!optionGroup.ok || optionGroup.value.length === 0) {
+        index = commandIndex;
+        continue;
+      }
+      const classGroup = readBracedGroupV0(sourceBytes, optionGroup.next);
+      if (!classGroup.ok || classGroup.value.length === 0) {
+        index = commandIndex;
+        continue;
+      }
+      addHintValues('class_file', splitCommaValuesV0(classGroup.value), index, classGroup.next, 'cls', true);
+      index = classGroup.next;
       continue;
     }
 
@@ -1348,11 +1410,11 @@ async function emitGraphicsTypedArtifactV0(caseOutDir, fixtureBytes) {
   };
 }
 
-async function emitResourceHintsArtifactV0(caseOutDir, fixtureBytes) {
+async function emitResourceHintsArtifactV0(caseOutDir, fixtureBytes, mode) {
   const payload = {
     version: 1,
     schema: 'resource_hints_v0',
-    entries: extractResourceHintEntriesFromSourceV0(fixtureBytes),
+    entries: mode === 'typeset' ? extractResourceHintEntriesFromSourceV0(fixtureBytes) : [],
   };
   const bytes = Buffer.from(`${JSON.stringify(payload, null, 2)}\n`, 'utf8');
   const relpath = 'resource_hints_v0.json';
@@ -1379,7 +1441,7 @@ async function emitTypedArtifactsV0(caseSpec, caseOutDir, typedArtifacts, fixtur
   if (caseSpec.id === 'typeset_demo_hyperref_probe_v0') {
     typedArtifacts.hyperref = await emitHyperrefTypedArtifactV0(caseOutDir, fixtureBytes);
   }
-  if (caseSpec.id === 'typeset_demo_pkgopt_probe_v0') {
+  if (caseSpec.id === 'typeset_demo_pkgopt_probe_v0' || caseSpec.id === 'typeset_demo_pkgopt_require_pass_probe_v0' || caseSpec.id === 'typeset_demo_class_options_probe_v0') {
     typedArtifacts.pkgopt = await emitPkgoptTypedArtifactV0(caseOutDir, fixtureBytes);
   }
   if (caseSpec.id === 'typeset_demo_graphics_probe_v0') {
@@ -1794,7 +1856,7 @@ async function runCaseV0(
     typed_artifacts_version: TYPED_ARTIFACTS_VERSION_V0,
     typed_artifacts: buildTypedArtifactsPlaceholderV0(),
   };
-  summary.resource_hints_v0 = await emitResourceHintsArtifactV0(caseOutDir, fixtureBytes);
+  summary.resource_hints_v0 = await emitResourceHintsArtifactV0(caseOutDir, fixtureBytes, caseSpec.mode);
   await emitTypedArtifactsV0(caseSpec, caseOutDir, summary.typed_artifacts, fixtureBytes);
   const typedArtifactRequests = await collectResolverRequestsFromResourceHintsV0(
     caseSpec,
