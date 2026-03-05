@@ -4,6 +4,8 @@ const ITALIC_START_MARKER_V0: u8 = b'[';
 const ITALIC_END_MARKER_V0: u8 = b']';
 const BOLD_START_MARKER_V0: u8 = b'{';
 const BOLD_END_MARKER_V0: u8 = b'}';
+const LINK_START_MARKER_V0: u8 = b'<';
+const LINK_END_MARKER_V0: u8 = b'>';
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LayoutPlanV0 {
@@ -34,7 +36,12 @@ fn is_supported_text_byte_v0(byte: u8) -> bool {
 pub(crate) fn is_style_marker_byte_v0(byte: u8) -> bool {
     matches!(
         byte,
-        ITALIC_START_MARKER_V0 | ITALIC_END_MARKER_V0 | BOLD_START_MARKER_V0 | BOLD_END_MARKER_V0
+        ITALIC_START_MARKER_V0
+            | ITALIC_END_MARKER_V0
+            | BOLD_START_MARKER_V0
+            | BOLD_END_MARKER_V0
+            | LINK_START_MARKER_V0
+            | LINK_END_MARKER_V0
     )
 }
 
