@@ -217,6 +217,16 @@ async function loadFixtureCasesV0() {
       fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_graphicspath_invalid_probe_v0.tex',
     },
     {
+      id: 'typeset_demo_graphics_multipath_probe_v0',
+      mode: 'typeset',
+      fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_graphics_multipath_probe_v0.tex',
+    },
+    {
+      id: 'typeset_demo_graphics_opts_invalid_probe_v0',
+      mode: 'typeset',
+      fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_graphics_opts_invalid_probe_v0.tex',
+    },
+    {
       id: 'typeset_demo_pkgopt_probe_v0',
       mode: 'typeset',
       fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_pkgopt_probe_v0.tex',
@@ -676,20 +686,24 @@ function normalizePathHintTokenV0(rawValue, hintType) {
   return normalized;
 }
 
-function parseOptionAssignmentsV0(rawValue) {
+function parseIncludegraphicsOptionsStrictV0(rawValue) {
   const assignments = new Map();
-  for (const item of splitCommaValuesV0(rawValue)) {
-    const equalsIndex = item.indexOf('=');
-    if (equalsIndex <= 0 || equalsIndex === item.length - 1) {
+  for (const chunk of rawValue.split(',')) {
+    const trimmed = chunk.trim();
+    if (trimmed.length === 0) {
+      throw new Error('resource_hints_v0 includegraphics options has empty entry');
+    }
+    const equalsIndex = trimmed.indexOf('=');
+    if (equalsIndex < 0) {
       continue;
     }
-    const key = item.slice(0, equalsIndex).trim().toLowerCase();
-    let value = item.slice(equalsIndex + 1).trim();
+    const key = trimmed.slice(0, equalsIndex).trim().toLowerCase();
+    let value = trimmed.slice(equalsIndex + 1).trim();
     while (value.length >= 2 && value.startsWith('{') && value.endsWith('}')) {
       value = value.slice(1, -1).trim();
     }
     if (key.length === 0 || value.length === 0) {
-      continue;
+      throw new Error(`resource_hints_v0 includegraphics option '${trimmed}' is malformed`);
     }
     assignments.set(key, value);
   }
@@ -1122,7 +1136,7 @@ function extractResourceHintEntriesFromSourceV0(sourceBytes) {
     if (command === 'includegraphics') {
       let next = commandIndex;
       const optionsGroup = readBracketGroupV0(sourceBytes, next);
-      const graphicsOptions = optionsGroup.ok ? parseOptionAssignmentsV0(optionsGroup.value) : new Map();
+      const graphicsOptions = optionsGroup.ok ? parseIncludegraphicsOptionsStrictV0(optionsGroup.value) : new Map();
       if (optionsGroup.ok) {
         next = optionsGroup.next;
       }
@@ -1131,12 +1145,26 @@ function extractResourceHintEntriesFromSourceV0(sourceBytes) {
         index = commandIndex;
         continue;
       }
-      const extRaw = (graphicsOptions.get('ext') ?? graphicsOptions.get('extension') ?? '').trim();
-      const extNormalized = /^[a-z0-9]+$/i.test(extRaw.replace(/^\./, '')) ? extRaw.replace(/^\./, '') : '';
+      const extRaw = (
+        graphicsOptions.get('ext')
+        ?? graphicsOptions.get('extension')
+        ?? graphicsOptions.get('type')
+        ?? ''
+      ).trim();
+      let extNormalized = '';
+      if (extRaw.length > 0) {
+        const extCandidate = extRaw.replace(/^\./, '');
+        if (!/^[a-z0-9]+$/i.test(extCandidate)) {
+          throw new Error(`resource_hints_v0 includegraphics rejects extension '${extRaw}'`);
+        }
+        extNormalized = extCandidate;
+      }
       const dirRaw = (graphicsOptions.get('dir') ?? graphicsOptions.get('path') ?? '').trim();
       const dirNormalized = normalizePathHintTokenV0(dirRaw, 'graphics_path');
+      const fileRaw = (graphicsOptions.get('file') ?? graphicsOptions.get('filename') ?? '').trim();
+      const includeValues = fileRaw.length > 0 ? splitCommaValuesV0(fileRaw) : splitCommaValuesV0(graphicsGroup.value);
       const candidates = [];
-      for (const value of splitCommaValuesV0(graphicsGroup.value)) {
+      for (const value of includeValues) {
         const useGraphicspathPrefixes = !dirNormalized
           && graphicspathPrefixes.length > 0
           && !value.includes('/')
