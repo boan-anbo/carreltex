@@ -37,6 +37,13 @@ function normalizeTexmfNameV0(rawValue, hintType, caseId) {
   return value;
 }
 
+function ensureDefaultExtensionV0(name, extension) {
+  if (name.includes('.')) {
+    return name;
+  }
+  return `${name}.${extension}`;
+}
+
 function inferTexmfFormatV0(name, fallback) {
   const dotIndex = name.lastIndexOf('.');
   if (dotIndex <= 0 || dotIndex === name.length - 1) {
@@ -133,10 +140,34 @@ export async function buildRequestListFromHintsV0(options = {}) {
     }
 
     if (hintType === 'bib_resource') {
-      const name = normalizeTexmfNameV0(value, hintType, caseId);
+      const name = ensureDefaultExtensionV0(normalizeTexmfNameV0(value, hintType, caseId), 'bib');
       const request = {
         kind: 'texmf',
         format: inferTexmfFormatV0(name, 'bib'),
+        name,
+        variant,
+      };
+      requestsByKey.set(requestKeyV0(request), request);
+      continue;
+    }
+
+    if (hintType === 'tex_input' || hintType === 'tex_include') {
+      const name = ensureDefaultExtensionV0(normalizeTexmfNameV0(value, hintType, caseId), 'tex');
+      const request = {
+        kind: 'texmf',
+        format: inferTexmfFormatV0(name, 'tex'),
+        name,
+        variant,
+      };
+      requestsByKey.set(requestKeyV0(request), request);
+      continue;
+    }
+
+    if (hintType === 'package_file') {
+      const name = ensureDefaultExtensionV0(normalizeTexmfNameV0(value, hintType, caseId), 'sty');
+      const request = {
+        kind: 'texmf',
+        format: inferTexmfFormatV0(name, 'sty'),
         name,
         variant,
       };

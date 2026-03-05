@@ -50,6 +50,24 @@
       "purpose": "Probes preamble package-option plumbing seam planned for future typed artifacts."
     },
     {
+      "id": "typeset_demo_input_include_probe_v0",
+      "tags": ["typeset", "input", "include", "probe", "ni"],
+      "expected_status": "INVALID",
+      "purpose": "Probes input/include resource-hint seam for deterministic on-demand request generation."
+    },
+    {
+      "id": "typeset_demo_package_require_probe_v0",
+      "tags": ["typeset", "packages", "requirepackage", "probe", "ni"],
+      "expected_status": "NI",
+      "purpose": "Probes usepackage/RequirePackage resource-hint seam for sty/cls requests."
+    },
+    {
+      "id": "typeset_demo_resource_hints_probe_v0",
+      "tags": ["typeset", "graphics", "bib", "resource-hints", "probe", "ni"],
+      "expected_status": "NI",
+      "purpose": "Probes includegraphics and bibliography resource-hint seams in one deterministic NI fixture."
+    },
+    {
       "id": "ok_demo_capabilities_v0",
       "tags": ["ok", "capabilities", "surface"],
       "expected_status": "OK",

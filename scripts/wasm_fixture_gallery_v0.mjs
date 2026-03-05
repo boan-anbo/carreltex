@@ -33,6 +33,8 @@ const MAX_PKGOPT_VALUE_BYTES_V0 = 256;
 const MAX_PKGOPT_OPTIONS_PER_ENTRY_V0 = 64;
 const MAX_GRAPHICS_ENTRIES_V0 = 256;
 const MAX_GRAPHICS_PATH_BYTES_V0 = 256;
+const MAX_RESOURCE_HINT_ENTRIES_V0 = 512;
+const MAX_RESOURCE_HINT_VALUE_BYTES_V0 = 256;
 
 function sha256HexV0(bytes) {
   return createHash('sha256').update(bytes).digest('hex');
@@ -193,6 +195,21 @@ async function loadFixtureCasesV0() {
       id: 'typeset_demo_pkgopt_probe_v0',
       mode: 'typeset',
       fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_pkgopt_probe_v0.tex',
+    },
+    {
+      id: 'typeset_demo_input_include_probe_v0',
+      mode: 'typeset',
+      fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_input_include_probe_v0.tex',
+    },
+    {
+      id: 'typeset_demo_package_require_probe_v0',
+      mode: 'typeset',
+      fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_package_require_probe_v0.tex',
+    },
+    {
+      id: 'typeset_demo_resource_hints_probe_v0',
+      mode: 'typeset',
+      fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_resource_hints_probe_v0.tex',
     },
   ];
 
@@ -436,6 +453,13 @@ function splitCommaValuesV0(rawValue) {
     .filter((item) => item.length > 0);
 }
 
+function ensureDefaultExtensionV0(value, extension) {
+  if (value.includes('.')) {
+    return value;
+  }
+  return `${value}.${extension}`;
+}
+
 function addBibEntryV0(entries, entry) {
   const value = entry.kind === 'cite_key' ? entry.key : entry.value;
   const valueBytes = Buffer.from(value, 'utf8');
@@ -581,6 +605,145 @@ function extractGraphicsEntriesFromSourceV0(sourceBytes) {
     }
     index = pathGroup.next;
   }
+  return entries;
+}
+
+function addResourceHintEntryV0(entries, sourceBytes, hintType, value, startByte, endByte) {
+  const valueBytes = Buffer.from(value, 'utf8');
+  if (valueBytes.length > MAX_RESOURCE_HINT_VALUE_BYTES_V0) {
+    throw new Error(`resource_hints_v0 value exceeds cap ${MAX_RESOURCE_HINT_VALUE_BYTES_V0}`);
+  }
+  entries.push({
+    kind: 'resource_hint',
+    hint_type: hintType,
+    value,
+    source_span: buildSourceSpanV0(sourceBytes, startByte, endByte, 'resource_hints_v0'),
+  });
+  if (entries.length > MAX_RESOURCE_HINT_ENTRIES_V0) {
+    throw new Error(`resource_hints_v0 entries exceed cap ${MAX_RESOURCE_HINT_ENTRIES_V0}`);
+  }
+}
+
+function extractResourceHintEntriesFromSourceV0(sourceBytes) {
+  const entries = [];
+  const seen = new Set();
+  let index = 0;
+
+  const addHintValues = (hintType, values, startByte, endByte, defaultExtension = null) => {
+    for (const rawValue of values) {
+      const normalized = defaultExtension ? ensureDefaultExtensionV0(rawValue, defaultExtension) : rawValue;
+      const dedupeKey = `${hintType}\u0000${normalized}`;
+      if (seen.has(dedupeKey)) {
+        continue;
+      }
+      seen.add(dedupeKey);
+      addResourceHintEntryV0(entries, sourceBytes, hintType, normalized, startByte, endByte);
+    }
+  };
+
+  while (index < sourceBytes.length) {
+    if (sourceBytes[index] !== 0x5c) {
+      index += 1;
+      continue;
+    }
+    let commandIndex = index + 1;
+    while (commandIndex < sourceBytes.length && isAsciiLetterByteV0(sourceBytes[commandIndex])) {
+      commandIndex += 1;
+    }
+    if (commandIndex === index + 1) {
+      index += 1;
+      continue;
+    }
+    const command = Buffer.from(sourceBytes.slice(index + 1, commandIndex)).toString('ascii');
+
+    if (command === 'input' || command === 'include') {
+      const group = readBracedGroupV0(sourceBytes, commandIndex);
+      if (!group.ok || group.value.length === 0) {
+        index = commandIndex;
+        continue;
+      }
+      addHintValues(command === 'input' ? 'tex_input' : 'tex_include', splitCommaValuesV0(group.value), index, group.next, 'tex');
+      index = group.next;
+      continue;
+    }
+
+    if (command === 'usepackage' || command === 'RequirePackage') {
+      let next = commandIndex;
+      const optionsGroup = readBracketGroupV0(sourceBytes, next);
+      if (optionsGroup.ok) {
+        next = optionsGroup.next;
+      }
+      const packageGroup = readBracedGroupV0(sourceBytes, next);
+      if (!packageGroup.ok || packageGroup.value.length === 0) {
+        index = commandIndex;
+        continue;
+      }
+      addHintValues('package_file', splitCommaValuesV0(packageGroup.value), index, packageGroup.next, 'sty');
+      index = packageGroup.next;
+      continue;
+    }
+
+    if (command === 'includegraphics') {
+      let next = commandIndex;
+      const optionsGroup = readBracketGroupV0(sourceBytes, next);
+      if (optionsGroup.ok) {
+        next = optionsGroup.next;
+      }
+      const graphicsGroup = readBracedGroupV0(sourceBytes, next);
+      if (!graphicsGroup.ok || graphicsGroup.value.length === 0) {
+        index = commandIndex;
+        continue;
+      }
+      addHintValues('graphics_path', splitCommaValuesV0(graphicsGroup.value), index, graphicsGroup.next);
+      index = graphicsGroup.next;
+      continue;
+    }
+
+    if (command === 'addbibresource' || command === 'bibliography') {
+      let next = commandIndex;
+      if (command === 'addbibresource') {
+        const optionsGroup = readBracketGroupV0(sourceBytes, next);
+        if (optionsGroup.ok) {
+          next = optionsGroup.next;
+        }
+      }
+      const bibGroup = readBracedGroupV0(sourceBytes, next);
+      if (!bibGroup.ok || bibGroup.value.length === 0) {
+        index = commandIndex;
+        continue;
+      }
+      addHintValues('bib_resource', splitCommaValuesV0(bibGroup.value), index, bibGroup.next, 'bib');
+      index = bibGroup.next;
+      continue;
+    }
+
+    if (command === 'url') {
+      const urlGroup = readBracedGroupV0(sourceBytes, commandIndex);
+      if (!urlGroup.ok || urlGroup.value.length === 0) {
+        index = commandIndex;
+        continue;
+      }
+      addHintValues('hyperref_url', [urlGroup.value], index, urlGroup.next);
+      index = urlGroup.next;
+      continue;
+    }
+
+    if (command === 'href') {
+      const urlGroup = readBracedGroupV0(sourceBytes, commandIndex);
+      if (!urlGroup.ok || urlGroup.value.length === 0) {
+        index = commandIndex;
+        continue;
+      }
+      const textGroup = readBracedGroupV0(sourceBytes, urlGroup.next);
+      const endOffset = textGroup.ok ? textGroup.next : urlGroup.next;
+      addHintValues('hyperref_url', [urlGroup.value], index, endOffset);
+      index = endOffset;
+      continue;
+    }
+
+    index = commandIndex;
+  }
+
   return entries;
 }
 
@@ -877,6 +1040,24 @@ async function emitGraphicsTypedArtifactV0(caseOutDir, fixtureBytes) {
   };
 }
 
+async function emitResourceHintsArtifactV0(caseOutDir, fixtureBytes) {
+  const payload = {
+    version: 1,
+    schema: 'resource_hints_v0',
+    entries: extractResourceHintEntriesFromSourceV0(fixtureBytes),
+  };
+  const bytes = Buffer.from(`${JSON.stringify(payload, null, 2)}\n`, 'utf8');
+  const relpath = 'resource_hints_v0.json';
+  const fullPath = path.join(caseOutDir, relpath);
+  await writeFile(fullPath, bytes);
+  return {
+    present: true,
+    items: payload.entries.length,
+    artifact_relpath: relpath,
+    artifact_sha256: sha256HexV0(bytes),
+  };
+}
+
 async function emitTypedArtifactsV0(caseSpec, caseOutDir, typedArtifacts, fixtureBytes) {
   if (caseSpec.id === 'typeset_demo_toc_probe_v0') {
     typedArtifacts.toc = await emitTocTypedArtifactV0(caseOutDir, fixtureBytes);
@@ -905,78 +1086,34 @@ async function buildResourceHintsRollupV0(outDir, summaries) {
 
   for (const summary of sortedSummaries) {
     const caseId = summary.case_id;
-    const typedArtifacts = summary.typed_artifacts ?? {};
-
-    const graphicsRelpath = typedArtifacts.graphics?.artifact_relpath;
-    if (typedArtifacts.graphics?.present === true && typeof graphicsRelpath === 'string' && graphicsRelpath.length > 0) {
-      const graphicsBytes = await readFile(path.join(outDir, caseId, graphicsRelpath));
-      const graphicsPayload = JSON.parse(graphicsBytes.toString('utf8'));
-      const graphicsEntries = Array.isArray(graphicsPayload?.entries) ? graphicsPayload.entries : [];
-      for (const entry of graphicsEntries) {
-        const value = typeof entry?.path === 'string' ? entry.path : '';
-        if (!value) {
-          continue;
-        }
-        const dedupeKey = `${caseId}\x1fgraphics_path\x1f${value}`;
-        if (seen.has(dedupeKey)) {
-          continue;
-        }
-        seen.add(dedupeKey);
-        entries.push({
-          case_id: caseId,
-          hint_type: 'graphics_path',
-          value,
-        });
-      }
+    const resourceHints = summary.resource_hints_v0 ?? {};
+    const relpath = resourceHints.artifact_relpath;
+    if (resourceHints.present !== true || typeof relpath !== 'string' || relpath.length === 0) {
+      continue;
     }
 
-    const bibRelpath = typedArtifacts.bib?.artifact_relpath;
-    if (typedArtifacts.bib?.present === true && typeof bibRelpath === 'string' && bibRelpath.length > 0) {
-      const bibBytes = await readFile(path.join(outDir, caseId, bibRelpath));
-      const bibPayload = JSON.parse(bibBytes.toString('utf8'));
-      const bibEntries = Array.isArray(bibPayload?.entries) ? bibPayload.entries : [];
-      for (const entry of bibEntries) {
-        if (entry?.kind !== 'resource_hint') {
-          continue;
-        }
-        const value = typeof entry?.value === 'string' ? entry.value : '';
-        if (!value) {
-          continue;
-        }
-        const dedupeKey = `${caseId}\x1fbib_resource\x1f${value}`;
-        if (seen.has(dedupeKey)) {
-          continue;
-        }
-        seen.add(dedupeKey);
-        entries.push({
-          case_id: caseId,
-          hint_type: 'bib_resource',
-          value,
-        });
-      }
+    const bytes = await readFile(path.join(outDir, caseId, relpath));
+    const payload = JSON.parse(bytes.toString('utf8'));
+    if (payload?.version !== 1 || payload?.schema !== 'resource_hints_v0' || !Array.isArray(payload?.entries)) {
+      throw new Error(`invalid resource_hints_v0 artifact for case ${caseId}`);
     }
 
-    const hyperrefRelpath = typedArtifacts.hyperref?.artifact_relpath;
-    if (typedArtifacts.hyperref?.present === true && typeof hyperrefRelpath === 'string' && hyperrefRelpath.length > 0) {
-      const hyperrefBytes = await readFile(path.join(outDir, caseId, hyperrefRelpath));
-      const hyperrefPayload = JSON.parse(hyperrefBytes.toString('utf8'));
-      const hyperrefEntries = Array.isArray(hyperrefPayload?.entries) ? hyperrefPayload.entries : [];
-      for (const entry of hyperrefEntries) {
-        const value = typeof entry?.target === 'string' ? entry.target : '';
-        if (!value) {
-          continue;
-        }
-        const dedupeKey = `${caseId}\x1fhyperref_url\x1f${value}`;
-        if (seen.has(dedupeKey)) {
-          continue;
-        }
-        seen.add(dedupeKey);
-        entries.push({
-          case_id: caseId,
-          hint_type: 'hyperref_url',
-          value,
-        });
+    for (const entry of payload.entries) {
+      const hintType = typeof entry?.hint_type === 'string' ? entry.hint_type : '';
+      const value = typeof entry?.value === 'string' ? entry.value : '';
+      if (!hintType || !value) {
+        continue;
       }
+      const dedupeKey = `${caseId}\x1f${hintType}\x1f${value}`;
+      if (seen.has(dedupeKey)) {
+        continue;
+      }
+      seen.add(dedupeKey);
+      entries.push({
+        case_id: caseId,
+        hint_type: hintType,
+        value,
+      });
     }
   }
 
@@ -1036,6 +1173,69 @@ function parseFontconfigHintTokenV0(value) {
 
 function resolverRequestKeyV0(request) {
   return `${request.kind}\u0000${request.format}\u0000${request.name}\u0000${request.variant}`;
+}
+
+async function collectResolverRequestsFromResourceHintsV0(caseSpec, caseOutDir, resourceHintsArtifact) {
+  if (resourceHintsArtifact?.present !== true) {
+    return [];
+  }
+  const relpath = resourceHintsArtifact?.artifact_relpath;
+  if (typeof relpath !== 'string' || relpath.length === 0) {
+    return [];
+  }
+  const payload = JSON.parse((await readFile(path.join(caseOutDir, relpath))).toString('utf8'));
+  const entries = Array.isArray(payload?.entries) ? payload.entries : [];
+  const requestsByKey = new Map();
+
+  const addTexmfRequest = (name, fallbackFormat, hintType) => {
+    if (!isSafeResolverTokenV0(name)) {
+      throw new Error(`unsafe resource hint token for ${hintType} in case ${caseSpec.id}`);
+    }
+    const format = inferTexmfFormatFromNameV0(name, fallbackFormat);
+    if (!isSafeResolverTokenV0(format)) {
+      throw new Error(`unsafe format token '${format}' for ${hintType} in case ${caseSpec.id}`);
+    }
+    const request = {
+      kind: 'texmf',
+      format,
+      name,
+      variant: caseSpec.mode,
+      hint_type: hintType,
+    };
+    requestsByKey.set(resolverRequestKeyV0(request), request);
+  };
+
+  for (const entry of entries) {
+    const hintType = typeof entry?.hint_type === 'string' ? entry.hint_type : '';
+    const value = typeof entry?.value === 'string' ? entry.value : '';
+    if (!hintType || !value) {
+      continue;
+    }
+    if (hintType === 'graphics_path') {
+      addTexmfRequest(value, 'graphic', hintType);
+      continue;
+    }
+    if (hintType === 'bib_resource') {
+      addTexmfRequest(ensureDefaultExtensionV0(value, 'bib'), 'bib', hintType);
+      continue;
+    }
+    if (hintType === 'tex_input' || hintType === 'tex_include') {
+      addTexmfRequest(ensureDefaultExtensionV0(value, 'tex'), 'tex', hintType);
+      continue;
+    }
+    if (hintType === 'package_file') {
+      addTexmfRequest(ensureDefaultExtensionV0(value, 'sty'), 'sty', hintType);
+      continue;
+    }
+    if (hintType === 'hyperref_url') {
+      const fontconfigRequest = parseFontconfigHintTokenV0(value);
+      if (fontconfigRequest) {
+        requestsByKey.set(resolverRequestKeyV0(fontconfigRequest), fontconfigRequest);
+      }
+    }
+  }
+
+  return [...requestsByKey.values()].sort((left, right) => resolverRequestKeyV0(left).localeCompare(resolverRequestKeyV0(right)));
 }
 
 async function collectResolverRequestsFromTypedArtifactsV0(caseSpec, caseOutDir, typedArtifacts) {
@@ -1286,11 +1486,12 @@ async function runCaseV0(
     typed_artifacts_version: TYPED_ARTIFACTS_VERSION_V0,
     typed_artifacts: buildTypedArtifactsPlaceholderV0(),
   };
+  summary.resource_hints_v0 = await emitResourceHintsArtifactV0(caseOutDir, fixtureBytes);
   await emitTypedArtifactsV0(caseSpec, caseOutDir, summary.typed_artifacts, fixtureBytes);
-  const typedArtifactRequests = await collectResolverRequestsFromTypedArtifactsV0(
+  const typedArtifactRequests = await collectResolverRequestsFromResourceHintsV0(
     caseSpec,
     caseOutDir,
-    summary.typed_artifacts,
+    summary.resource_hints_v0,
   );
   for (const request of typedArtifactRequests) {
     const resolutionFromHint = await resolver.resolve({
