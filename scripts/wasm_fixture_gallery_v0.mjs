@@ -248,38 +248,36 @@ function buildTypedArtifactsPlaceholderV0() {
   return typedArtifacts;
 }
 
+async function emitPlaceholderTypedArtifactV0(caseOutDir, artifactName, schemaName) {
+  const payload = {
+    version: 1,
+    schema: schemaName,
+    entries: [],
+  };
+  const bytes = Buffer.from(`${JSON.stringify(payload, null, 2)}\n`, 'utf8');
+  const relpath = `${artifactName}.json`;
+  const fullPath = path.join(caseOutDir, relpath);
+  await writeFile(fullPath, bytes);
+  return {
+    present: true,
+    items: payload.entries.length,
+    artifact_relpath: relpath,
+    artifact_sha256: sha256HexV0(bytes),
+  };
+}
+
 async function emitTypedArtifactsV0(caseSpec, caseOutDir, typedArtifacts) {
   if (caseSpec.id === 'typeset_demo_toc_probe_v0') {
-    const tocPayload = {
-      version: 1,
-      schema: 'toc_v0',
-      entries: [],
-    };
-    const tocBytes = Buffer.from(`${JSON.stringify(tocPayload, null, 2)}\n`, 'utf8');
-    const tocPath = path.join(caseOutDir, 'toc_v0.json');
-    await writeFile(tocPath, tocBytes);
-    typedArtifacts.toc = {
-      present: true,
-      items: tocPayload.entries.length,
-      artifact_relpath: 'toc_v0.json',
-      artifact_sha256: sha256HexV0(tocBytes),
-    };
+    typedArtifacts.toc = await emitPlaceholderTypedArtifactV0(caseOutDir, 'toc_v0', 'toc_v0');
   }
   if (caseSpec.id === 'typeset_demo_labels_probe_v0') {
-    const labelsPayload = {
-      version: 1,
-      schema: 'labels_v0',
-      entries: [],
-    };
-    const labelsBytes = Buffer.from(`${JSON.stringify(labelsPayload, null, 2)}\n`, 'utf8');
-    const labelsPath = path.join(caseOutDir, 'labels_v0.json');
-    await writeFile(labelsPath, labelsBytes);
-    typedArtifacts.labels = {
-      present: true,
-      items: labelsPayload.entries.length,
-      artifact_relpath: 'labels_v0.json',
-      artifact_sha256: sha256HexV0(labelsBytes),
-    };
+    typedArtifacts.labels = await emitPlaceholderTypedArtifactV0(caseOutDir, 'labels_v0', 'labels_v0');
+  }
+  if (caseSpec.id === 'typeset_demo_capabilities_v0') {
+    typedArtifacts.bib = await emitPlaceholderTypedArtifactV0(caseOutDir, 'bib_v0', 'bib_v0');
+  }
+  if (caseSpec.id === 'typeset_demo_hyperref_probe_v0') {
+    typedArtifacts.hyperref = await emitPlaceholderTypedArtifactV0(caseOutDir, 'hyperref_v0', 'hyperref_v0');
   }
 }
 
@@ -546,6 +544,21 @@ async function run() {
     resolved_resources_count: summaries.reduce(
       (sum, summary) => sum + (Array.isArray(summary.resolved_resources) ? summary.resolved_resources.length : 0),
       0,
+    ),
+    case_artifact_sha256: Object.fromEntries(
+      summaries.map((summary) => [
+        summary.case_id,
+        {
+          main_xdv: summary.artifact_sha256.main_xdv,
+          main_pdf: summary.artifact_sha256.main_pdf,
+          typed_artifacts: Object.fromEntries(
+            TYPED_ARTIFACT_KEYS_V0.map((key) => [
+              key,
+              summary.typed_artifacts?.[key]?.artifact_sha256 ?? null,
+            ]),
+          ),
+        },
+      ]),
     ),
     statuses: summaries.map((summary) => ({
       case_id: summary.case_id,

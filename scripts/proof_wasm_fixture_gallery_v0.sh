@@ -102,6 +102,44 @@ if (typeof tocShaFirst !== 'string' || !/^[0-9a-f]{64}$/.test(tocShaFirst)) {
   process.exit(1);
 }
 fs.writeFileSync(path.join(baselineDir, 'toc_v0_first.sha256'), `${tocShaFirst}\n`);
+
+const bibSummary = JSON.parse(
+  fs.readFileSync(path.join(outDir, 'typeset_demo_capabilities_v0', 'summary.json'), 'utf8'),
+);
+if (bibSummary?.typed_artifacts?.bib?.present !== true) {
+  console.error('FAIL: expected bib typed artifact present after first run');
+  process.exit(1);
+}
+const bibPath = path.join(outDir, 'typeset_demo_capabilities_v0', 'bib_v0.json');
+if (!fs.existsSync(bibPath)) {
+  console.error('FAIL: expected bib_v0.json artifact after first run');
+  process.exit(1);
+}
+const bibShaFirst = bibSummary.typed_artifacts.bib.artifact_sha256;
+if (typeof bibShaFirst !== 'string' || !/^[0-9a-f]{64}$/.test(bibShaFirst)) {
+  console.error('FAIL: expected bib artifact sha256 in first summary');
+  process.exit(1);
+}
+fs.writeFileSync(path.join(baselineDir, 'bib_v0_first.sha256'), `${bibShaFirst}\n`);
+
+const hyperrefSummary = JSON.parse(
+  fs.readFileSync(path.join(outDir, 'typeset_demo_hyperref_probe_v0', 'summary.json'), 'utf8'),
+);
+if (hyperrefSummary?.typed_artifacts?.hyperref?.present !== true) {
+  console.error('FAIL: expected hyperref typed artifact present after first run');
+  process.exit(1);
+}
+const hyperrefPath = path.join(outDir, 'typeset_demo_hyperref_probe_v0', 'hyperref_v0.json');
+if (!fs.existsSync(hyperrefPath)) {
+  console.error('FAIL: expected hyperref_v0.json artifact after first run');
+  process.exit(1);
+}
+const hyperrefShaFirst = hyperrefSummary.typed_artifacts.hyperref.artifact_sha256;
+if (typeof hyperrefShaFirst !== 'string' || !/^[0-9a-f]{64}$/.test(hyperrefShaFirst)) {
+  console.error('FAIL: expected hyperref artifact sha256 in first summary');
+  process.exit(1);
+}
+fs.writeFileSync(path.join(baselineDir, 'hyperref_v0_first.sha256'), `${hyperrefShaFirst}\n`);
 NODE
 
 TEXLIVE_RESOLVER_BACKEND_V0=offline_store_v0 \
@@ -125,6 +163,8 @@ const resolvedCount = Number(report.resolved_resources_count ?? 0);
 const requiredTypedKeys = ['toc', 'labels', 'bib', 'hyperref'];
 const labelsShaFirst = fs.readFileSync(path.join(`${outDir}_baseline`, 'labels_v0_first.sha256'), 'utf8').trim();
 const tocShaFirst = fs.readFileSync(path.join(`${outDir}_baseline`, 'toc_v0_first.sha256'), 'utf8').trim();
+const bibShaFirst = fs.readFileSync(path.join(`${outDir}_baseline`, 'bib_v0_first.sha256'), 'utf8').trim();
+const hyperrefShaFirst = fs.readFileSync(path.join(`${outDir}_baseline`, 'hyperref_v0_first.sha256'), 'utf8').trim();
 
 if (resolvedCount <= 0) {
   console.error('FAIL: expected at least one resolved resource in fixture gallery summaries');
@@ -201,11 +241,70 @@ if (tocShaSecond !== tocShaFirst) {
   process.exit(1);
 }
 
+const bibSummary = JSON.parse(
+  fs.readFileSync(path.join(outDir, 'typeset_demo_capabilities_v0', 'summary.json'), 'utf8'),
+);
+const bibArtifact = bibSummary?.typed_artifacts?.bib;
+if (!bibArtifact || bibArtifact.present !== true) {
+  console.error('FAIL: expected bib typed artifact present after second run');
+  process.exit(1);
+}
+const bibShaSecond = bibArtifact.artifact_sha256;
+if (bibShaSecond !== bibShaFirst) {
+  console.error('FAIL: bib_v0 artifact sha256 must be stable across reruns');
+  process.exit(1);
+}
+
+const hyperrefSummary = JSON.parse(
+  fs.readFileSync(path.join(outDir, 'typeset_demo_hyperref_probe_v0', 'summary.json'), 'utf8'),
+);
+const hyperrefArtifact = hyperrefSummary?.typed_artifacts?.hyperref;
+if (!hyperrefArtifact || hyperrefArtifact.present !== true) {
+  console.error('FAIL: expected hyperref typed artifact present after second run');
+  process.exit(1);
+}
+const hyperrefShaSecond = hyperrefArtifact.artifact_sha256;
+if (hyperrefShaSecond !== hyperrefShaFirst) {
+  console.error('FAIL: hyperref_v0 artifact sha256 must be stable across reruns');
+  process.exit(1);
+}
+
+const reportCaseSha = report.case_artifact_sha256;
+if (!reportCaseSha || typeof reportCaseSha !== 'object') {
+  console.error('FAIL: report missing top-level case_artifact_sha256');
+  process.exit(1);
+}
+for (const status of statuses) {
+  const caseSha = reportCaseSha[status.case_id];
+  if (!caseSha || typeof caseSha !== 'object') {
+    console.error(`FAIL: report missing case_artifact_sha256 for ${status.case_id}`);
+    process.exit(1);
+  }
+  if (typeof caseSha.main_xdv !== 'string' || typeof caseSha.main_pdf !== 'string') {
+    console.error(`FAIL: report case_artifact_sha256 malformed for ${status.case_id}`);
+    process.exit(1);
+  }
+  if (!caseSha.typed_artifacts || typeof caseSha.typed_artifacts !== 'object') {
+    console.error(`FAIL: report case_artifact_sha256 missing typed_artifacts for ${status.case_id}`);
+    process.exit(1);
+  }
+  for (const key of requiredTypedKeys) {
+    const value = caseSha.typed_artifacts[key];
+    if (!(value === null || (typeof value === 'string' && /^[0-9a-f]{64}$/.test(value)))) {
+      console.error(`FAIL: report typed artifact sha invalid for ${status.case_id}.${key}`);
+      process.exit(1);
+    }
+  }
+}
+
 console.log(`PASS: resolved_resources_count ${resolvedCount}`);
 console.log(`PASS: baseline_match MATCH=${baselineMatches} MISSING=${baselineMissing}`);
 console.log(`PASS: typed_artifacts keys ${requiredTypedKeys.join(',')}`);
 console.log(`PASS: labels_v0 sha stable ${labelsShaSecond}`);
 console.log(`PASS: toc_v0 sha stable ${tocShaSecond}`);
+console.log(`PASS: bib_v0 sha stable ${bibShaSecond}`);
+console.log(`PASS: hyperref_v0 sha stable ${hyperrefShaSecond}`);
+console.log('PASS: report top-level case_artifact_sha256 present');
 NODE
 
 echo "PASS: wasm fixture gallery artifacts $OUT_DIR"
