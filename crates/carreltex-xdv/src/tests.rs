@@ -302,6 +302,146 @@ fn max_tm_gap_pt_for_line_containing_v0(pdf: &[u8], needle: &str) -> Option<f32>
     None
 }
 
+fn tm_line_start_xs_for_segment_text_v0(pdf: &[u8], segment_text: &str) -> Vec<f32> {
+    let target_token = format!("({segment_text})");
+    let text = String::from_utf8_lossy(pdf);
+    let mut xs = Vec::<f32>::new();
+    for line in text.lines() {
+        if !line.contains(&target_token) || !line.contains(" Tm ") {
+            continue;
+        }
+        let fields = line.split_whitespace().collect::<Vec<_>>();
+        let mut index = 0usize;
+        while index + 6 < fields.len() {
+            let is_tm = fields[index] == "1"
+                && fields[index + 1] == "0"
+                && fields[index + 2] == "0"
+                && fields[index + 3] == "1"
+                && fields[index + 6] == "Tm";
+            if !is_tm {
+                index += 1;
+                continue;
+            }
+            if let Ok(x_pt) = fields[index + 4].parse::<f32>() {
+                xs.push(x_pt);
+            }
+            break;
+        }
+    }
+    xs
+}
+
+fn segment_width_pt_v0(segment: &[u8]) -> f32 {
+    let layout = plan_layout_width_v0(segment, 65_536, 786_432, 10_000_000, 16)
+        .expect("segment layout should parse");
+    let line = &layout.pages[0].lines[0];
+    line.width_sp as f32 / 65_536.0
+}
+
+fn decode_pdf_text_segments_from_line_v0(line: &str) -> Option<String> {
+    let mut out = Vec::<u8>::new();
+    let bytes = line.as_bytes();
+    let mut index = 0usize;
+    while index < bytes.len() {
+        if bytes[index] != b'(' {
+            index += 1;
+            continue;
+        }
+        index += 1;
+        while index < bytes.len() {
+            let byte = bytes[index];
+            if byte == b'\\' {
+                index += 1;
+                if index < bytes.len() {
+                    out.push(bytes[index]);
+                    index += 1;
+                }
+                continue;
+            }
+            if byte == b')' {
+                index += 1;
+                break;
+            }
+            out.push(byte);
+            index += 1;
+        }
+    }
+    String::from_utf8(out).ok()
+}
+
+fn rendered_text_for_line_containing_segment_v0(pdf: &[u8], segment_text: &str) -> Option<String> {
+    let target_token = format!("({segment_text})");
+    let text = String::from_utf8_lossy(pdf);
+    for line in text.lines() {
+        if !line.contains(&target_token) || !line.contains(" Tj ") {
+            continue;
+        }
+        return decode_pdf_text_segments_from_line_v0(line);
+    }
+    None
+}
+
+fn rendered_text_for_first_text_line_v0(pdf: &[u8]) -> Option<String> {
+    let text = String::from_utf8_lossy(pdf);
+    for line in text.lines() {
+        if line.contains(" Tj ") {
+            return decode_pdf_text_segments_from_line_v0(line);
+        }
+    }
+    None
+}
+
+fn parse_tm_positions_in_line_v0(line: &str) -> Vec<(usize, f32, f32)> {
+    let mut positions = Vec::<(usize, f32, f32)>::new();
+    let mut search_from = 0usize;
+    while let Some(rel_start) = line[search_from..].find("1 0 0 1 ") {
+        let start = search_from + rel_start + "1 0 0 1 ".len();
+        let x_end = match line[start..].find(' ') {
+            Some(value) => start + value,
+            None => break,
+        };
+        let x_pt = match line[start..x_end].parse::<f32>() {
+            Ok(value) => value,
+            Err(_) => break,
+        };
+        let y_start = x_end + 1;
+        let y_end = match line[y_start..].find(' ') {
+            Some(value) => y_start + value,
+            None => break,
+        };
+        let y_pt = match line[y_start..y_end].parse::<f32>() {
+            Ok(value) => value,
+            Err(_) => break,
+        };
+        if !line[y_end..].starts_with(" Tm") {
+            break;
+        }
+        let tm_end = y_end + " Tm".len();
+        positions.push((tm_end, x_pt, y_pt));
+        search_from = tm_end;
+    }
+    positions
+}
+
+fn tm_x_for_segment_substring_v0(pdf: &[u8], line_needle: &str, segment_substring: &str) -> Option<f32> {
+    let text = String::from_utf8_lossy(pdf);
+    for line in text.lines() {
+        if !line.contains(line_needle) || !line.contains(segment_substring) {
+            continue;
+        }
+        let target_index = line.find(segment_substring)?;
+        let positions = parse_tm_positions_in_line_v0(line);
+        let mut best_x = None::<f32>;
+        for (tm_end, x_pt, _) in positions {
+            if tm_end <= target_index {
+                best_x = Some(x_pt);
+            }
+        }
+        return best_x;
+    }
+    None
+}
+
 fn tm_count_for_line_containing_v0(pdf: &[u8], needle: &str) -> usize {
     let text = String::from_utf8_lossy(pdf);
     for line in text.lines() {
@@ -662,135 +802,89 @@ fn pdf_renderer_inline_wrapper_spacing_invariants_v0() {
         write_dvi_v2_text_page_v0(b"word[mid]word word [lead] trail,{bold}!")
             .expect("writer should accept styled text");
     let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
-    let line_text = String::from_utf8_lossy(&pdf);
+    let rendered = rendered_text_for_line_containing_segment_v0(&pdf, "word")
+        .expect("styled line should decode");
+    assert_eq!(rendered, "wordmidword word lead trail,bold!");
+
+    let word_x = tm_xs_for_segment_text_v0(&pdf, "word")[0];
+    let mid_x = tm_xs_for_segment_text_v0(&pdf, "mid")[0];
+    let trailing_word_x = tm_x_for_segment_substring_v0(&pdf, "(word)", "(word word )")
+        .expect("word word segment x");
+    let lead_x = tm_xs_for_segment_text_v0(&pdf, "lead")[0];
+    let trail_x = tm_x_for_segment_substring_v0(&pdf, "(word)", "( trail,)")
+        .expect("trail segment x");
+    let bold_x = tm_xs_for_segment_text_v0(&pdf, "bold")[0];
+
+    let epsilon_pt = 0.02f32;
     assert!(
-        line_text.contains("(word) Tj /F2 12 Tf (mid) Tj /F1 12 Tf (word word ) Tj /F2 12 Tf (lead) Tj"),
-        "styled boundary sequence missing: {line_text}"
+        ((mid_x - word_x) - segment_width_pt_v0(b"word")).abs() <= epsilon_pt,
+        "word->mid advance mismatch: word_x={word_x}, mid_x={mid_x}"
     );
     assert!(
-        line_text.contains("/F1 12 Tf ( trail,) Tj /F3 12 Tf (bold) Tj /F1 12 Tf (!) Tj"),
-        "styled punctuation sequence missing: {line_text}"
+        ((trailing_word_x - mid_x) - segment_width_pt_v0(b"mid")).abs() <= epsilon_pt,
+        "mid->trailing advance mismatch: mid_x={mid_x}, trailing_word_x={trailing_word_x}"
     );
     assert!(
-        !line_text.contains("(word ) Tj /F2 12 Tf (mid)"),
-        "unexpected extra space before inline emph boundary: {line_text}"
+        ((trail_x - lead_x) - segment_width_pt_v0(b"lead")).abs() <= epsilon_pt,
+        "lead->trail advance mismatch: lead_x={lead_x}, trail_x={trail_x}"
     );
-    let tm_count = tm_count_for_line_containing_v0(&pdf, "(word)");
-    assert_eq!(tm_count, 1, "styled line should use a single Tm: {line_text}");
-    let max_tm_gap = max_tm_gap_pt_for_line_containing_v0(&pdf, "(word)")
-        .expect("styled line should parse");
     assert!(
-        max_tm_gap <= 0.02,
-        "styled inline boundary should not create matrix gaps: {max_tm_gap}"
+        ((bold_x - trail_x) - segment_width_pt_v0(b" trail,")).abs() <= epsilon_pt,
+        "trail->bold advance mismatch: trail_x={trail_x}, bold_x={bold_x}"
     );
 }
 
 #[test]
 fn pdf_renderer_punctuation_adjacent_wrapper_gap_invariants_v0() {
     let xdv = write_dvi_v2_text_page_v0(
-        b"word[mid],word word,[mid]word word{mid}. (alpha[mid]beta) [lead], trail lead, [trail]",
+        b"word[mid],word word,[mid]word word{mid}. (a[mid]b) lead, [trail]",
     )
     .expect("writer should accept punctuation-adjacent styled text");
     let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
-    let line_text = String::from_utf8_lossy(&pdf);
-    assert!(
-        line_text.contains("(word) Tj /F2 12 Tf (mid) Tj /F1 12 Tf (,word word,) Tj /F2 12 Tf (mid) Tj"),
-        "first punctuation-adjacent styled sequence missing: {line_text}"
-    );
-    assert!(
-        line_text.contains("/F3 12 Tf (mid) Tj /F1 12 Tf (. \\(alpha) Tj /F2 12 Tf (mid) Tj"),
-        "second punctuation-adjacent styled sequence missing: {line_text}"
-    );
-    assert!(
-        line_text.contains("/F1 12 Tf (beta\\) ) Tj /F2 12 Tf (lead) Tj /F1 12 Tf (, trail lead,) Tj"),
-        "wrapper-near-punctuation trail sequence missing: {line_text}"
-    );
-    assert!(
-        line_text.contains("/F2 12 Tf (trail) Tj"),
-        "trailing styled segment missing: {line_text}"
-    );
-    assert!(
-        !line_text.contains("word ) Tj /F2 12 Tf (mid)"),
-        "unexpected extra space before wrapper boundary: {line_text}"
-    );
-    assert!(
-        !line_text.contains(") Tj /F1 12 Tf ( ,"),
-        "unexpected space inserted before punctuation at boundary: {line_text}"
-    );
-    let tm_count = tm_count_for_line_containing_v0(&pdf, "(word)");
+    let rendered = rendered_text_for_line_containing_segment_v0(&pdf, "word")
+        .expect("punctuation-adjacent line should decode");
     assert_eq!(
-        tm_count, 1,
-        "punctuation-adjacent styled line should use single Tm: {line_text}"
+        rendered,
+        "wordmid,word word,midword wordmid. (amidb) lead, trail"
     );
-    let max_tm_gap = max_tm_gap_pt_for_line_containing_v0(&pdf, "(word)")
-        .expect("punctuation-adjacent styled line should parse");
+
+    let word_x = tm_xs_for_segment_text_v0(&pdf, "word")[0];
+    let mid_x = tm_xs_for_segment_text_v0(&pdf, "mid")[0];
+    let comma_word_x = tm_x_for_segment_substring_v0(&pdf, "(word)", "(,word word,)")
+        .expect("comma-word segment x");
+    let epsilon_pt = 0.02f32;
     assert!(
-        max_tm_gap <= 0.02,
-        "punctuation-adjacent styled line should not create matrix gaps: {max_tm_gap}"
+        ((mid_x - word_x) - segment_width_pt_v0(b"word")).abs() <= epsilon_pt,
+        "word->mid punctuation boundary drifted: word_x={word_x}, mid_x={mid_x}"
+    );
+    assert!(
+        ((comma_word_x - mid_x) - segment_width_pt_v0(b"mid")).abs() <= epsilon_pt,
+        "mid->comma segment boundary drifted: mid_x={mid_x}, comma_word_x={comma_word_x}"
     );
 }
 
 #[test]
 fn pdf_renderer_wrapper_punctuation_patterns_are_stable_v0() {
-    let cases: [(&[u8], &str, &str); 6] = [
-        (
-            b"alpha[beta],gamma",
-            "(alpha) Tj /F2 12 Tf (beta) Tj /F1 12 Tf (,gamma) Tj",
-            "(alpha ) Tj /F2 12 Tf (beta)",
-        ),
-        (
-            b"alpha,[beta]gamma",
-            "(alpha,) Tj /F2 12 Tf (beta) Tj /F1 12 Tf (gamma) Tj",
-            "(alpha, ) Tj /F2 12 Tf (beta)",
-        ),
-        (
-            b"(alpha[beta]gamma)",
-            "(\\(alpha) Tj /F2 12 Tf (beta) Tj /F1 12 Tf (gamma\\)) Tj",
-            "(\\(alpha ) Tj /F2 12 Tf (beta)",
-        ),
-        (
-            b"alpha{beta}. gamma",
-            "(alpha) Tj /F3 12 Tf (beta) Tj /F1 12 Tf (. gamma) Tj",
-            "(alpha ) Tj /F3 12 Tf (beta)",
-        ),
-        (
-            b"{lead}, trail",
-            "/F3 12 Tf (lead) Tj /F1 12 Tf (, trail) Tj",
-            "/F3 12 Tf (lead) Tj /F1 12 Tf ( , trail) Tj",
-        ),
-        (
-            b"lead, [trail]",
-            "(lead, ) Tj /F2 12 Tf (trail) Tj",
-            "(lead,) Tj /F2 12 Tf (trail) Tj",
-        ),
+    let cases: [(&[u8], &str); 6] = [
+        (b"alpha[beta],gamma", "alphabeta,gamma"),
+        (b"alpha,[beta]gamma", "alpha,betagamma"),
+        (b"(alpha[beta]gamma)", "(alphabetagamma)"),
+        (b"alpha{beta}. gamma", "alphabeta. gamma"),
+        (b"{lead}, trail", "lead, trail"),
+        (b"lead, [trail]", "lead, trail"),
     ];
 
-    for (input, expected_fragment, forbidden_fragment) in cases {
+    for (input, expected_rendered) in cases {
         let xdv = write_dvi_v2_text_page_v0(input).expect("writer should accept punctuation case");
         let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
-        let line_text = String::from_utf8_lossy(&pdf);
+        let rendered =
+            rendered_text_for_first_text_line_v0(&pdf).expect("punctuation case should decode");
         assert!(
-            line_text.contains(expected_fragment),
-            "expected punctuation fragment missing for input {:?}: {line_text}",
+            rendered == expected_rendered,
+            "rendered punctuation mismatch for input {:?}: got {:?}, want {:?}",
             String::from_utf8_lossy(input),
-        );
-        assert!(
-            !line_text.contains(forbidden_fragment),
-            "forbidden punctuation fragment present for input {:?}: {line_text}",
-            String::from_utf8_lossy(input),
-        );
-        let tm_count = tm_count_for_line_containing_v0(&pdf, "(");
-        assert_eq!(
-            tm_count, 1,
-            "punctuation wrapper case should remain single-line Tm for input {:?}: {line_text}",
-            String::from_utf8_lossy(input),
-        );
-        let max_tm_gap = max_tm_gap_pt_for_line_containing_v0(&pdf, "(")
-            .expect("punctuation wrapper line should parse");
-        assert!(
-            max_tm_gap <= 0.02,
-            "punctuation wrapper case should not add matrix gaps for input {:?}: {max_tm_gap}",
-            String::from_utf8_lossy(input),
+            rendered,
+            expected_rendered,
         );
     }
 }
@@ -800,23 +894,24 @@ fn pdf_renderer_wrapper_punctuation_segment_positions_progress_monotonically_v0(
     let xdv = write_dvi_v2_text_page_v0(b"A[mid],B C,[mid]D E{mid}. F")
         .expect("writer should accept wrapper punctuation sequence");
     let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+    let rendered = rendered_text_for_line_containing_segment_v0(&pdf, "A")
+        .expect("wrapper punctuation line should decode");
+    assert_eq!(rendered, "Amid,B C,midD Emid. F");
 
-    let line_text = String::from_utf8_lossy(&pdf);
+    let a_x = tm_xs_for_segment_text_v0(&pdf, "A")[0];
+    let mid_x = tm_xs_for_segment_text_v0(&pdf, "mid")[0];
+    let trailing_x = tm_x_for_segment_substring_v0(&pdf, "(A)", "(,B C,)")
+        .expect("trailing punctuation segment x");
+    let mid_two_x = tm_xs_for_segment_text_v0(&pdf, "mid")[1];
+    assert!(a_x < mid_x && mid_x < trailing_x && trailing_x < mid_two_x);
+    let epsilon_pt = 0.02f32;
     assert!(
-        line_text.contains("(A) Tj /F2 12 Tf (mid) Tj /F1 12 Tf (,B C,) Tj /F2 12 Tf (mid) Tj"),
-        "expected first styled punctuation sequence missing: {line_text}"
+        ((mid_x - a_x) - segment_width_pt_v0(b"A")).abs() <= epsilon_pt,
+        "A->mid boundary drifted: a_x={a_x}, mid_x={mid_x}"
     );
     assert!(
-        line_text.contains("/F1 12 Tf (D E) Tj /F3 12 Tf (mid) Tj /F1 12 Tf (. F) Tj"),
-        "expected trailing styled punctuation sequence missing: {line_text}"
-    );
-    let tm_count = tm_count_for_line_containing_v0(&pdf, "(A)");
-    assert_eq!(tm_count, 1, "expected single matrix for test line: {line_text}");
-    let max_tm_gap = max_tm_gap_pt_for_line_containing_v0(&pdf, "(A)")
-        .expect("wrapper punctuation line should parse");
-    assert!(
-        max_tm_gap <= 0.02,
-        "wrapper punctuation matrix gaps should remain zero: {max_tm_gap}"
+        ((trailing_x - mid_x) - segment_width_pt_v0(b"mid")).abs() <= epsilon_pt,
+        "mid->trail boundary drifted: mid_x={mid_x}, trailing_x={trailing_x}"
     );
 }
 
@@ -1307,8 +1402,8 @@ fn pdf_renderer_enumerate_number_column_alignment_across_wraps_v0() {
     let ten_number_x = tm_xs_for_segment_text_v0(&pdf, "10.");
     let nine_start_x = tm_xs_for_segment_text_v0(&pdf, "NINESTART");
     let ten_start_x = tm_xs_for_segment_text_v0(&pdf, "TENSTART");
-    let nine_wrap_x = tm_xs_for_segment_text_v0(&pdf, "WRAPNINE");
-    let ten_wrap_x = tm_xs_for_segment_text_v0(&pdf, "WRAPTEN");
+    let nine_wrap_x = tm_line_start_xs_for_segment_text_v0(&pdf, "WRAPNINE");
+    let ten_wrap_x = tm_line_start_xs_for_segment_text_v0(&pdf, "WRAPTEN");
 
     assert_eq!(nine_number_x.len(), 1, "expected 9. number render");
     assert_eq!(ten_number_x.len(), 1, "expected 10. number render");
@@ -1356,9 +1451,9 @@ fn pdf_renderer_nested_list_indentation_and_wrap_invariants_v0() {
 
     let bullet_xs = tm_xs_for_segment_text_v0(&pdf, "-");
     let outer_start_x = tm_xs_for_segment_text_v0(&pdf, "OUTERSTART");
-    let outer_wrap_x = tm_xs_for_segment_text_v0(&pdf, "OUTERWRAPTOKEN");
+    let outer_wrap_x = tm_line_start_xs_for_segment_text_v0(&pdf, "OUTERWRAPTOKEN");
     let nested_start_x = tm_xs_for_segment_text_v0(&pdf, "NESTEDSTART");
-    let nested_wrap_x = tm_xs_for_segment_text_v0(&pdf, "NESTEDWRAPTOKEN");
+    let nested_wrap_x = tm_line_start_xs_for_segment_text_v0(&pdf, "NESTEDWRAPTOKEN");
 
     assert_eq!(bullet_xs.len(), 2, "expected two bullets: {bullet_xs:?}");
     assert_eq!(outer_start_x.len(), 1, "expected outer start render");
@@ -1595,6 +1690,117 @@ fn pdf_renderer_applies_right_alignment_per_line_width_v0() {
     let epsilon_pt = 0.02f32;
     assert!((x_one - expected_one).abs() <= epsilon_pt);
     assert!((x_two - expected_two).abs() <= epsilon_pt);
+}
+
+#[test]
+fn pdf_renderer_center_alignment_handles_styled_segments_without_drift_v0() {
+    let xdv = write_dvi_v2_text_page_v0(b"\n^ alpha[mid],gamma\n^ short{bold}.")
+        .expect("writer should accept styled centered lines");
+    let layout = parse_dvi_v2_text_page_to_layout_v0(&xdv, 786_432).expect("layout parse");
+    let line_one = layout.pages[0]
+        .lines
+        .iter()
+        .find(|line| {
+            line.glyphs.iter().map(|glyph| glyph.byte).collect::<Vec<_>>()
+                == b"^ alpha[mid],gamma"
+        })
+        .expect("center styled line one");
+    let line_two = layout.pages[0]
+        .lines
+        .iter()
+        .find(|line| {
+            line.glyphs.iter().map(|glyph| glyph.byte).collect::<Vec<_>>() == b"^ short{bold}."
+        })
+        .expect("center styled line two");
+
+    let expected_one = expected_center_x_pt_v0(
+        width_sp_for_prefixed_rendered_line_v0(line_one, [b'^', b' ']).expect("line one width"),
+    );
+    let expected_two = expected_center_x_pt_v0(
+        width_sp_for_prefixed_rendered_line_v0(line_two, [b'^', b' ']).expect("line two width"),
+    );
+
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+    let line_one_x = tm_x_for_line_containing_text_v0(&pdf, "(alpha)").expect("line one x");
+    let line_two_x = tm_x_for_line_containing_text_v0(&pdf, "(short)").expect("line two x");
+    let epsilon_pt = 0.02f32;
+    assert!(
+        (line_one_x - expected_one).abs() <= epsilon_pt,
+        "line one center drift: actual={line_one_x}, expected={expected_one}"
+    );
+    assert!(
+        (line_two_x - expected_two).abs() <= epsilon_pt,
+        "line two center drift: actual={line_two_x}, expected={expected_two}"
+    );
+
+    let alpha_x = tm_xs_for_segment_text_v0(&pdf, "alpha")[0];
+    let mid_x = tm_xs_for_segment_text_v0(&pdf, "mid")[0];
+    let gamma_x = tm_x_for_segment_substring_v0(&pdf, "(alpha)", "(,gamma)")
+        .expect("gamma segment x");
+    assert!(
+        ((mid_x - alpha_x) - segment_width_pt_v0(b"alpha")).abs() <= epsilon_pt,
+        "alpha->mid spacing drift: alpha_x={alpha_x}, mid_x={mid_x}"
+    );
+    assert!(
+        ((gamma_x - mid_x) - segment_width_pt_v0(b"mid")).abs() <= epsilon_pt,
+        "mid->gamma spacing drift: mid_x={mid_x}, gamma_x={gamma_x}"
+    );
+}
+
+#[test]
+fn pdf_renderer_right_alignment_handles_styled_segments_without_drift_v0() {
+    let xdv = write_dvi_v2_text_page_v0(b"\n| edge, [core] trail\n| alpha{beta}.")
+        .expect("writer should accept styled right-aligned lines");
+    let layout = parse_dvi_v2_text_page_to_layout_v0(&xdv, 786_432).expect("layout parse");
+    let line_one = layout.pages[0]
+        .lines
+        .iter()
+        .find(|line| {
+            line.glyphs.iter().map(|glyph| glyph.byte).collect::<Vec<_>>()
+                == b"| edge, [core] trail"
+        })
+        .expect("right styled line one");
+    let line_two = layout.pages[0]
+        .lines
+        .iter()
+        .find(|line| {
+            line.glyphs.iter().map(|glyph| glyph.byte).collect::<Vec<_>>() == b"| alpha{beta}."
+        })
+        .expect("right styled line two");
+
+    let expected_one = expected_right_x_pt_v0(
+        width_sp_for_prefixed_rendered_line_v0(line_one, [b'|', b' ']).expect("line one width"),
+    );
+    let expected_two = expected_right_x_pt_v0(
+        width_sp_for_prefixed_rendered_line_v0(line_two, [b'|', b' ']).expect("line two width"),
+    );
+
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+    let line_one_x = tm_x_for_line_containing_text_v0(&pdf, "(edge, )").expect("line one x");
+    let line_two_x = tm_x_for_line_containing_text_v0(&pdf, "(alpha)").expect("line two x");
+    let epsilon_pt = 0.02f32;
+    assert!(
+        (line_one_x - expected_one).abs() <= epsilon_pt,
+        "line one right drift: actual={line_one_x}, expected={expected_one}"
+    );
+    assert!(
+        (line_two_x - expected_two).abs() <= epsilon_pt,
+        "line two right drift: actual={line_two_x}, expected={expected_two}"
+    );
+
+    let edge_x = tm_x_for_segment_substring_v0(&pdf, "(edge, )", "(edge, )")
+        .expect("edge segment x");
+    let core_x = tm_xs_for_segment_text_v0(&pdf, "core")[0];
+    let trail_x = tm_x_for_segment_substring_v0(&pdf, "(edge, )", "( trail)")
+        .expect("trail segment x");
+    assert!(
+        ((core_x - edge_x) - segment_width_pt_v0(b"edge, ")).abs() <= epsilon_pt,
+        "edge->core spacing drift: edge_x={edge_x}, core_x={core_x}"
+    );
+    assert!(
+        ((trail_x - core_x) - segment_width_pt_v0(b"core")).abs() <= epsilon_pt,
+        "core->trail spacing drift: core_x={core_x}, trail_x={trail_x}"
+    );
 }
 
 #[test]
@@ -1879,18 +2085,22 @@ fn pdf_renderer_link_style_near_punctuation_stays_single_matrix_v0() {
     let xdv = write_dvi_v2_text_page_v0(b"See,{Example}. Tail")
         .expect("writer should accept styled punctuation link line");
     let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
-    let pdf_text = String::from_utf8_lossy(&pdf);
+    let rendered = rendered_text_for_line_containing_segment_v0(&pdf, "See,")
+        .expect("link punctuation line should decode");
+    assert_eq!(rendered, "See,Example. Tail");
+
+    let see_x = tm_xs_for_segment_text_v0(&pdf, "See,")[0];
+    let example_x = tm_xs_for_segment_text_v0(&pdf, "Example")[0];
+    let tail_x = tm_x_for_segment_substring_v0(&pdf, "(See,)", "(. Tail)")
+        .expect("tail segment x");
+    let epsilon_pt = 0.02f32;
     assert!(
-        pdf_text.contains("/F1 12 Tf (See,) Tj /F3 12 Tf (Example) Tj /F1 12 Tf (. Tail) Tj"),
-        "styled punctuation link sequence missing: {pdf_text}"
+        ((example_x - see_x) - segment_width_pt_v0(b"See,")).abs() <= epsilon_pt,
+        "See->Example boundary drifted: see_x={see_x}, example_x={example_x}"
     );
-    let tm_count = tm_count_for_line_containing_v0(&pdf, "(See,)");
-    assert_eq!(tm_count, 1, "expected single Tm for link punctuation line");
-    let max_tm_gap = max_tm_gap_pt_for_line_containing_v0(&pdf, "(See,)")
-        .expect("link punctuation line should parse");
     assert!(
-        max_tm_gap <= 0.02,
-        "link punctuation line should not create matrix gaps: {max_tm_gap}"
+        ((tail_x - example_x) - segment_width_pt_v0(b"Example")).abs() <= epsilon_pt,
+        "Example->tail boundary drifted: example_x={example_x}, tail_x={tail_x}"
     );
 }
 
