@@ -192,6 +192,11 @@ async function loadFixtureCasesV0() {
       fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_bibstyle_probe_v0.tex',
     },
     {
+      id: 'typeset_demo_bib_resources_probe_v0',
+      mode: 'typeset',
+      fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_bib_resources_probe_v0.tex',
+    },
+    {
       id: 'typeset_demo_graphics_probe_v0',
       mode: 'typeset',
       fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_graphics_probe_v0.tex',

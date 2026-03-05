@@ -44,6 +44,12 @@
       "purpose": "Probes bibliography style/resource hint extraction for deterministic bst+bib requests."
     },
     {
+      "id": "typeset_demo_bib_resources_probe_v0",
+      "tags": ["typeset", "bib", "resources", "probe", "ni"],
+      "expected_status": "NI",
+      "purpose": "Probes addbibresource+bibliography list extraction into deterministic bib requests."
+    },
+    {
       "id": "typeset_demo_graphics_probe_v0",
       "tags": ["typeset", "graphics", "probe", "ni"],
       "expected_status": "NI",
