@@ -101,51 +101,122 @@ function parseTmYForNeedleV0(streamBody, needle) {
 
 function maxTmGapPtV0(pdfBytes) {
   const text = Buffer.from(pdfBytes).toString('utf8');
+  const BASE_GLYPH_PT_V0 = 7.2;
+  const glyphWidthPtForByteV0 = (byte) => {
+    if (
+      byte === 0x5b || // [
+      byte === 0x5d || // ]
+      byte === 0x7b || // {
+      byte === 0x7d || // }
+      byte === 0x3c || // <
+      byte === 0x3e // >
+    ) {
+      return 0.0;
+    }
+    if (
+      byte === 0x20 || // space
+      byte === 0x2e || // .
+      byte === 0x2c || // ,
+      byte === 0x3b || // ;
+      byte === 0x3a || // :
+      byte === 0x21 || // !
+      byte === 0x3f || // ?
+      byte === 0x27 || // '
+      byte === 0x22 || // "
+      byte === 0x69 || // i
+      byte === 0x6c || // l
+      byte === 0x49 || // I
+      byte === 0x7c // |
+    ) {
+      return BASE_GLYPH_PT_V0 * 0.5;
+    }
+    if (
+      byte === 0x6d || // m
+      byte === 0x77 || // w
+      byte === 0x4d || // M
+      byte === 0x57 // W
+    ) {
+      return BASE_GLYPH_PT_V0 * 1.5;
+    }
+    return BASE_GLYPH_PT_V0;
+  };
+
+  const parsePdfStringTokenV0 = (line, startIndex) => {
+    if (line[startIndex] !== '(') return null;
+    const out = [];
+    let index = startIndex + 1;
+    while (index < line.length) {
+      const ch = line[index];
+      if (ch === '\\') {
+        index += 1;
+        if (index >= line.length) return null;
+        out.push(line[index]);
+        index += 1;
+        continue;
+      }
+      if (ch === ')') {
+        return { text: out.join(''), end: index + 1 };
+      }
+      out.push(ch);
+      index += 1;
+    }
+    return null;
+  };
+
+  const parseTmSegmentsForLineV0 = (line) => {
+    const segments = [];
+    let index = 0;
+    while (index < line.length) {
+      const tmStart = line.indexOf('1 0 0 1 ', index);
+      if (tmStart < 0) break;
+      const tmMatch = line
+        .slice(tmStart)
+        .match(/^1 0 0 1 ([+-]?\d+(?:\.\d+)?) ([+-]?\d+(?:\.\d+)?) Tm /);
+      if (!tmMatch) break;
+      const x = Number.parseFloat(tmMatch[1]);
+      if (!Number.isFinite(x)) break;
+      let cursor = tmStart + tmMatch[0].length;
+      const openParen = line.indexOf('(', cursor);
+      if (openParen < 0) break;
+      const parsed = parsePdfStringTokenV0(line, openParen);
+      if (!parsed) break;
+      const tjStart = line.indexOf(' Tj', parsed.end);
+      if (tjStart < 0) break;
+      const fontMatch = line
+        .slice(tmStart, parsed.end)
+        .match(/\/(F[123])\s+[+-]?\d+(?:\.\d+)?\s+Tf\s+\(/);
+      const font = fontMatch ? fontMatch[1] : '';
+      segments.push({ x, text: parsed.text, font });
+      index = tjStart + 3;
+    }
+    return segments;
+  };
+
+  const segmentAdvancePtV0 = (segmentText) => {
+    const bytes = Buffer.from(segmentText, 'utf8');
+    let total = 0;
+    for (const byte of bytes) {
+      total += glyphWidthPtForByteV0(byte);
+    }
+    return total;
+  };
+
   let maxGapPt = 0;
   for (const line of text.split('\n')) {
-    const fields = line.trim().split(/\s+/).filter((field) => field.length > 0);
-    const segments = [];
-    for (let index = 0; index + 6 < fields.length; index += 1) {
-      if (
-        fields[index] === '1' &&
-        fields[index + 1] === '0' &&
-        fields[index + 2] === '0' &&
-        fields[index + 3] === '1' &&
-        fields[index + 6] === 'Tm'
-      ) {
-        const parsedX = Number.parseFloat(fields[index + 4]);
-        if (!Number.isFinite(parsedX)) {
-          throw new Error(`invalid Tm x field: ${fields[index + 4]}`);
-        }
-        let textToken = '';
-        let cursor = index + 7;
-        while (cursor < fields.length) {
-          if (
-            fields[cursor] === '1' &&
-            cursor + 6 < fields.length &&
-            fields[cursor + 1] === '0' &&
-            fields[cursor + 2] === '0' &&
-            fields[cursor + 3] === '1' &&
-            fields[cursor + 6] === 'Tm'
-          ) {
-            break;
-          }
-          if (fields[cursor].startsWith('(') && fields[cursor].endsWith(')')) {
-            textToken = fields[cursor].slice(1, -1);
-          }
-          cursor += 1;
-        }
-        segments.push({ x: parsedX, text: textToken });
-      }
-    }
+    if (!line.includes(' Tm ') || !line.includes(' Tj')) continue;
+    const segments = parseTmSegmentsForLineV0(line);
     if (segments.length < 2) continue;
-    for (let index = 1; index < segments.length; index += 1) {
-      const previous = segments[index - 1];
-      const current = segments[index];
+    for (let segIndex = 1; segIndex < segments.length; segIndex += 1) {
+      const previous = segments[segIndex - 1];
+      const current = segments[segIndex];
       if (previous.text === '-' || /^\d+\.$/.test(previous.text)) {
         continue;
       }
-      const gapPt = current.x - previous.x;
+      if (!previous.font || !current.font || previous.font === current.font) {
+        continue;
+      }
+      const expectedCurrentX = previous.x + segmentAdvancePtV0(previous.text);
+      const gapPt = current.x - expectedCurrentX;
       if (gapPt > maxGapPt) {
         maxGapPt = gapPt;
       }

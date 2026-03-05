@@ -533,6 +533,28 @@ fn is_punctuation_spacing_target_v0(byte: u8) -> bool {
     matches!(byte, b'.' | b',' | b';' | b':' | b'!' | b'?')
 }
 
+fn normalize_space_before_punctuation_v0(body: &[u8]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(body.len());
+    let mut index = 0usize;
+    while index < body.len() {
+        let byte = body[index];
+        if byte != b' ' {
+            out.push(byte);
+            index += 1;
+            continue;
+        }
+        let spaces_start = index;
+        while index < body.len() && body[index] == b' ' {
+            index += 1;
+        }
+        if index < body.len() && is_punctuation_spacing_target_v0(body[index]) {
+            continue;
+        }
+        out.extend_from_slice(&body[spaces_start..index]);
+    }
+    out
+}
+
 fn normalize_punctuation_spacing_v0(body: &[u8]) -> Vec<u8> {
     let mut out = Vec::with_capacity(body.len());
     let mut index = 0usize;
@@ -694,6 +716,48 @@ fn normalize_bracket_spacing_v0(body: &[u8]) -> Vec<u8> {
         index += 1;
     }
 
+    out
+}
+
+fn is_style_wrapper_start_marker_v0(byte: u8) -> bool {
+    byte == ITALIC_START_MARKER_V0 || byte == BOLD_START_MARKER_V0
+}
+
+fn is_style_wrapper_end_marker_v0(byte: u8) -> bool {
+    byte == ITALIC_END_MARKER_V0 || byte == BOLD_END_MARKER_V0
+}
+
+fn normalize_wrapper_marker_spacing_v0(body: &[u8]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(body.len());
+    let mut index = 0usize;
+    while index < body.len() {
+        let byte = body[index];
+        if is_style_wrapper_start_marker_v0(byte) {
+            out.push(byte);
+            index += 1;
+            while index < body.len() && body[index] == b' ' {
+                let next = body.get(index + 1).copied().unwrap_or_default();
+                if next == NEWLINE_MARKER_V0 || next == PAGE_BREAK_MARKER_V0 {
+                    break;
+                }
+                index += 1;
+            }
+            continue;
+        }
+        if byte == b' ' {
+            let spaces_start = index;
+            while index < body.len() && body[index] == b' ' {
+                index += 1;
+            }
+            if index < body.len() && is_style_wrapper_end_marker_v0(body[index]) {
+                continue;
+            }
+            out.extend_from_slice(&body[spaces_start..index]);
+            continue;
+        }
+        out.push(byte);
+        index += 1;
+    }
     out
 }
 
@@ -2014,11 +2078,13 @@ pub(crate) fn extract_typeset_minimal_text_body_v0(tokens: &[TokenV0]) -> Option
         return None;
     }
 
+    body = normalize_space_before_punctuation_v0(&body);
     body = normalize_punctuation_spacing_v0(&body);
     body = normalize_tex_double_quotes_v0(&body);
     body = normalize_tex_dashes_v0(&body);
     body = normalize_tex_ellipsis_v0(&body);
     body = normalize_bracket_spacing_v0(&body);
+    body = normalize_wrapper_marker_spacing_v0(&body);
     body = resolve_ref_markers_v0(&body, &labels_by_key, &mut ref_occurrences)?;
     let bibitems_by_key = bibitems
         .iter()

@@ -658,6 +658,16 @@ fn typeset_minimal_punctuation_collapses_following_spaces_to_one() {
 }
 
 #[test]
+fn typeset_minimal_punctuation_removes_spaces_before_markers_and_punctuation() {
+    let main = b"\\documentclass{article}\\begin{document}lead\\emph{core} , trail and lead\\textbf{core} ! done.\\end{document}";
+    let body = extract_typeset_body(main);
+    let text = String::from_utf8(body).expect("body should be valid utf8");
+    assert!(text.contains("lead[core], trail and lead{core}! done."), "body={text:?}");
+    assert!(!text.contains("[core] ,"), "body={text:?}");
+    assert!(!text.contains("{core} !"), "body={text:?}");
+}
+
+#[test]
 fn typeset_minimal_tex_double_quotes_normalize_to_ascii_quote() {
     let main = b"\\documentclass{article}\\begin{document}``Hello''\\end{document}";
     let body = extract_typeset_body(main);
@@ -711,6 +721,26 @@ fn typeset_minimal_brackets_and_braces_remove_inner_spaces_same_line() {
     assert!(text.contains("[A] {B}"), "body={text:?}");
     assert!(!text.contains("[ A ]"), "body={text:?}");
     assert!(!text.contains("{ B }"), "body={text:?}");
+}
+
+#[test]
+fn typeset_minimal_wrapper_markers_trim_inner_spaces_without_newlines() {
+    let main = b"\\documentclass{article}\\begin{document}\\emph{   lead   } and \\textbf{  core  }\\end{document}";
+    let body = extract_typeset_body(main);
+    let text = String::from_utf8(body).expect("body should be valid utf8");
+    assert!(text.contains("[lead] and {core}"), "body={text:?}");
+    assert!(!text.contains("[ lead"), "body={text:?}");
+    assert!(!text.contains("core }"), "body={text:?}");
+}
+
+#[test]
+fn typeset_minimal_nested_wrapper_boundary_spacing_is_stable() {
+    let main = b"\\documentclass{article}\\begin{document}word\\emph{\\textbf{ mid }}word and word\\textbf{\\emph{ core }} ,trail\\end{document}";
+    let body = extract_typeset_body(main);
+    let text = String::from_utf8(body).expect("body should be valid utf8");
+    assert!(text.contains("word[{mid}]word and word{[core]},trail"), "body={text:?}");
+    assert!(!text.contains("word [{mid}]word"), "body={text:?}");
+    assert!(!text.contains("} ,trail"), "body={text:?}");
 }
 
 #[test]
