@@ -4,7 +4,9 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT_DIR="${1:-$ROOT_DIR/target/wasm_fixture_gallery_v0}"
 STORE_DIR="${OUT_DIR}_store"
-BASELINE_DIR="${OUT_DIR}_baseline"
+BASELINE_ROOT="${OUT_DIR}_baseline"
+BASELINE_DIR_A="$BASELINE_ROOT/run1"
+BASELINE_DIR_B="$BASELINE_ROOT/run2"
 REQUEST_LIST="$OUT_DIR/requests.json"
 FIXTURE_SOURCE_DIR="$OUT_DIR/fixture_source_v0"
 SOURCE_DATE_EPOCH="${SOURCE_DATE_EPOCH:-1700000000}"
@@ -13,8 +15,8 @@ export TZ=UTC
 
 "$ROOT_DIR/scripts/wasm_smoke_build.sh"
 
-rm -rf "$OUT_DIR" "$STORE_DIR" "$BASELINE_DIR"
-mkdir -p "$OUT_DIR" "$FIXTURE_SOURCE_DIR/xetex/tex"
+rm -rf "$OUT_DIR" "$STORE_DIR" "$BASELINE_ROOT"
+mkdir -p "$OUT_DIR" "$FIXTURE_SOURCE_DIR/xetex/tex" "$BASELINE_ROOT"
 
 printf 'fixture-bytes-for-typeset-minimal-v0\n' > "$FIXTURE_SOURCE_DIR/xetex/tex/typeset_demo_minimal_v0"
 
@@ -36,34 +38,14 @@ TEXLIVE_RESOLVER_BACKEND_V0=offline_store_v0 \
 TEXLIVE_STORE_DIR_V0="$STORE_DIR" \
 node "$ROOT_DIR/scripts/wasm_fixture_gallery_v0.mjs" "$OUT_DIR"
 
-node - "$OUT_DIR" "$BASELINE_DIR" <<'NODE'
+node - "$OUT_DIR" "$BASELINE_ROOT" <<'NODE'
 const fs = require('node:fs');
 const path = require('node:path');
 
 const outDir = process.argv[2];
-const baselineDir = process.argv[3];
+const baselineRoot = process.argv[3];
 
-const matchCase = 'typeset_demo_minimal_v0';
-const missingCase = 'ok_demo_v0';
-const matchSummary = JSON.parse(
-  fs.readFileSync(path.join(outDir, matchCase, 'summary.json'), 'utf8'),
-);
-
-fs.mkdirSync(path.join(baselineDir, matchCase), { recursive: true });
-fs.writeFileSync(
-  path.join(baselineDir, matchCase, 'main.xdv.sha256'),
-  `${matchSummary.artifact_sha256.main_xdv}\n`,
-);
-fs.writeFileSync(
-  path.join(baselineDir, matchCase, 'main.pdf.sha256'),
-  `${matchSummary.artifact_sha256.main_pdf}\n`,
-);
-
-fs.mkdirSync(path.join(baselineDir, missingCase), { recursive: true });
-fs.writeFileSync(
-  path.join(baselineDir, missingCase, 'main.xdv.sha256'),
-  '0'.repeat(64) + '\n',
-);
+const firstRunShaPath = (name) => path.join(baselineRoot, `${name}_first.sha256`);
 
 const labelsSummary = JSON.parse(
   fs.readFileSync(path.join(outDir, 'typeset_demo_labels_probe_v0', 'summary.json'), 'utf8'),
@@ -82,7 +64,7 @@ if (typeof labelsShaFirst !== 'string' || !/^[0-9a-f]{64}$/.test(labelsShaFirst)
   console.error('FAIL: expected labels artifact sha256 in first summary');
   process.exit(1);
 }
-fs.writeFileSync(path.join(baselineDir, 'labels_v0_first.sha256'), `${labelsShaFirst}\n`);
+fs.writeFileSync(firstRunShaPath('labels_v0'), `${labelsShaFirst}\n`);
 
 const tocSummary = JSON.parse(
   fs.readFileSync(path.join(outDir, 'typeset_demo_toc_probe_v0', 'summary.json'), 'utf8'),
@@ -101,7 +83,7 @@ if (typeof tocShaFirst !== 'string' || !/^[0-9a-f]{64}$/.test(tocShaFirst)) {
   console.error('FAIL: expected toc artifact sha256 in first summary');
   process.exit(1);
 }
-fs.writeFileSync(path.join(baselineDir, 'toc_v0_first.sha256'), `${tocShaFirst}\n`);
+fs.writeFileSync(firstRunShaPath('toc_v0'), `${tocShaFirst}\n`);
 
 const bibSummary = JSON.parse(
   fs.readFileSync(path.join(outDir, 'typeset_demo_capabilities_v0', 'summary.json'), 'utf8'),
@@ -120,7 +102,7 @@ if (typeof bibShaFirst !== 'string' || !/^[0-9a-f]{64}$/.test(bibShaFirst)) {
   console.error('FAIL: expected bib artifact sha256 in first summary');
   process.exit(1);
 }
-fs.writeFileSync(path.join(baselineDir, 'bib_v0_first.sha256'), `${bibShaFirst}\n`);
+fs.writeFileSync(firstRunShaPath('bib_v0'), `${bibShaFirst}\n`);
 
 const hyperrefSummary = JSON.parse(
   fs.readFileSync(path.join(outDir, 'typeset_demo_hyperref_probe_v0', 'summary.json'), 'utf8'),
@@ -139,12 +121,100 @@ if (typeof hyperrefShaFirst !== 'string' || !/^[0-9a-f]{64}$/.test(hyperrefShaFi
   console.error('FAIL: expected hyperref artifact sha256 in first summary');
   process.exit(1);
 }
-fs.writeFileSync(path.join(baselineDir, 'hyperref_v0_first.sha256'), `${hyperrefShaFirst}\n`);
+fs.writeFileSync(firstRunShaPath('hyperref_v0'), `${hyperrefShaFirst}\n`);
+NODE
+
+node "$ROOT_DIR/scripts/texlive_smoke/baselines_v0/generate_v0.mjs" "$OUT_DIR" "$BASELINE_DIR_A"
+node "$ROOT_DIR/scripts/texlive_smoke/baselines_v0/generate_v0.mjs" "$OUT_DIR" "$BASELINE_DIR_B"
+
+node - "$BASELINE_DIR_A" "$BASELINE_DIR_B" <<'NODE'
+const fs = require('node:fs');
+const path = require('node:path');
+const crypto = require('node:crypto');
+
+const baselineDirA = process.argv[2];
+const baselineDirB = process.argv[3];
+
+const sha256 = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex');
+const readJson = (p) => JSON.parse(fs.readFileSync(p, 'utf8'));
+
+const indexAPath = path.join(baselineDirA, 'index.json');
+const indexBPath = path.join(baselineDirB, 'index.json');
+const indexABytes = fs.readFileSync(indexAPath);
+const indexBBytes = fs.readFileSync(indexBPath);
+const indexASha = sha256(indexABytes);
+const indexBSha = sha256(indexBBytes);
+if (indexASha !== indexBSha) {
+  console.error('FAIL: baseline generator must be deterministic (index.json sha mismatch)');
+  process.exit(1);
+}
+
+const indexA = readJson(indexAPath);
+const indexB = readJson(indexBPath);
+if (indexA.engine_rev !== indexB.engine_rev || indexA.config_hash !== indexB.config_hash) {
+  console.error('FAIL: baseline generator metadata mismatch between reruns');
+  process.exit(1);
+}
+if (typeof indexA.engine_rev !== 'string' || indexA.engine_rev.length !== 40) {
+  console.error('FAIL: baseline index missing valid engine_rev pin');
+  process.exit(1);
+}
+if (!/^[0-9a-f]{64}$/.test(indexA.config_hash)) {
+  console.error('FAIL: baseline index missing valid config_hash pin');
+  process.exit(1);
+}
+
+const casesA = Array.isArray(indexA.cases) ? indexA.cases : [];
+const casesB = Array.isArray(indexB.cases) ? indexB.cases : [];
+if (casesA.length === 0 || casesA.length !== casesB.length) {
+  console.error('FAIL: baseline index cases missing or length mismatch');
+  process.exit(1);
+}
+
+for (const caseEntry of casesA) {
+  const caseId = caseEntry.case_id;
+  if (typeof caseId !== 'string' || caseId.length === 0) {
+    console.error('FAIL: baseline case id invalid');
+    process.exit(1);
+  }
+  const matchB = casesB.find((it) => it.case_id === caseId);
+  if (!matchB) {
+    console.error(`FAIL: baseline rerun missing case ${caseId}`);
+    process.exit(1);
+  }
+
+  const filePairs = [
+    ['main.xdv.sha256', 'main_xdv'],
+    ['main.pdf.sha256', 'main_pdf'],
+  ];
+  for (const [filename, key] of filePairs) {
+    const pathA = path.join(baselineDirA, caseId, filename);
+    const pathB = path.join(baselineDirB, caseId, filename);
+    const valueA = fs.readFileSync(pathA, 'utf8').trim();
+    const valueB = fs.readFileSync(pathB, 'utf8').trim();
+    if (valueA !== valueB) {
+      console.error(`FAIL: baseline rerun mismatch for ${caseId}/${filename}`);
+      process.exit(1);
+    }
+    if (!/^[0-9a-f]{64}$/.test(valueA)) {
+      console.error(`FAIL: baseline file ${caseId}/${filename} must contain sha256`);
+      process.exit(1);
+    }
+    if (caseEntry.artifact_sha256?.[key] !== valueA || matchB.artifact_sha256?.[key] !== valueA) {
+      console.error(`FAIL: baseline index artifact sha mismatch for ${caseId}.${key}`);
+      process.exit(1);
+    }
+  }
+}
+
+console.log(`PASS: baseline generator deterministic index_sha256 ${indexASha}`);
+console.log(`PASS: baseline generator pinned engine_rev ${indexA.engine_rev}`);
+console.log(`PASS: baseline generator pinned config_hash ${indexA.config_hash}`);
 NODE
 
 TEXLIVE_RESOLVER_BACKEND_V0=offline_store_v0 \
 TEXLIVE_STORE_DIR_V0="$STORE_DIR" \
-TEXLIVE_BASELINE_DIR="$BASELINE_DIR" \
+TEXLIVE_BASELINE_DIR="$BASELINE_DIR_A" \
 node "$ROOT_DIR/scripts/wasm_fixture_gallery_v0.mjs" "$OUT_DIR"
 
 if [[ ! -s "$OUT_DIR/report.json" ]]; then
@@ -170,15 +240,16 @@ if (resolvedCount <= 0) {
   console.error('FAIL: expected at least one resolved resource in fixture gallery summaries');
   process.exit(1);
 }
-const baselineMatches = statuses.filter((entry) => entry.baseline_match === 'MATCH').length;
-const baselineMissing = statuses.filter((entry) => entry.baseline_match === 'MISSING').length;
-if (baselineMatches <= 0) {
-  console.error('FAIL: expected at least one baseline_match=MATCH');
+const okStatuses = statuses.filter((entry) => entry.status === 'OK');
+if (okStatuses.length <= 0) {
+  console.error('FAIL: expected at least one OK case in fixture gallery report');
   process.exit(1);
 }
-if (baselineMissing <= 0) {
-  console.error('FAIL: expected at least one baseline_match=MISSING');
-  process.exit(1);
+for (const status of okStatuses) {
+  if (status.baseline_match !== 'MATCH') {
+    console.error(`FAIL: expected baseline_match=MATCH for OK case ${status.case_id}`);
+    process.exit(1);
+  }
 }
 
 for (const status of statuses) {
@@ -298,7 +369,7 @@ for (const status of statuses) {
 }
 
 console.log(`PASS: resolved_resources_count ${resolvedCount}`);
-console.log(`PASS: baseline_match MATCH=${baselineMatches} MISSING=${baselineMissing}`);
+console.log(`PASS: baseline_match MATCH for all OK cases (${okStatuses.length})`);
 console.log(`PASS: typed_artifacts keys ${requiredTypedKeys.join(',')}`);
 console.log(`PASS: labels_v0 sha stable ${labelsShaSecond}`);
 console.log(`PASS: toc_v0 sha stable ${tocShaSecond}`);
