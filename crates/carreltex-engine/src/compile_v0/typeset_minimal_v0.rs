@@ -43,6 +43,7 @@ const HREF_URL_LINE_PREFIX_MARKER_V0: &[u8] = b"!u ";
 const LABEL_LINE_PREFIX_MARKER_V0: &[u8] = b"!l ";
 const REF_LINE_PREFIX_MARKER_V0: &[u8] = b"!r ";
 const REF_ANCHOR_LINK_LINE_PREFIX_MARKER_V0: &[u8] = b"!ra ";
+const EQUATION_LINE_PREFIX_MARKER_V0: &[u8] = b"!eq ";
 const BIBITEM_LINE_PREFIX_MARKER_V0: &[u8] = b"!b ";
 const CITE_LINE_PREFIX_MARKER_V0: &[u8] = b"!c ";
 const TABLE_ROW_PREFIX_MARKER_V0: &[u8] = b"!t ";
@@ -83,6 +84,7 @@ struct TocEntryMetaV0 {
 enum LabelKindV0 {
     Heading,
     Figure,
+    Equation,
 }
 
 #[derive(Clone)]
@@ -91,6 +93,7 @@ struct LabelEntryMetaV0 {
     kind: LabelKindV0,
     level: Option<u8>,
     figure_ordinal: Option<u32>,
+    equation_ordinal: Option<u32>,
     title: Option<Vec<u8>>,
 }
 
@@ -100,6 +103,7 @@ struct PendingLabelTargetV0 {
     kind: LabelKindV0,
     level: Option<u8>,
     figure_ordinal: Option<u32>,
+    equation_ordinal: Option<u32>,
     title: Option<Vec<u8>>,
 }
 
@@ -120,6 +124,12 @@ struct HrefLinkMetaV0 {
 struct RefAnchorLinkMetaV0 {
     link_id: u32,
     anchor_id: u32,
+}
+
+#[derive(Clone)]
+struct EquationMetaV0 {
+    anchor_id: u32,
+    ordinal: u32,
 }
 
 struct CrossRefArtifactsV1 {
@@ -2152,6 +2162,7 @@ fn apply_crossref_pass_v1(
             let resolved_value = resolved_label.and_then(|entry| match entry.kind {
                 LabelKindV0::Heading => Some(entry.anchor_id),
                 LabelKindV0::Figure => entry.figure_ordinal,
+                LabelKindV0::Equation => entry.equation_ordinal,
             });
             if resolved_anchor_id.is_some() != resolved_value.is_some() {
                 return None;
@@ -2164,6 +2175,9 @@ fn apply_crossref_pass_v1(
                     return None;
                 }
                 if matches!(label.kind, LabelKindV0::Figure) && label.figure_ordinal.is_none() {
+                    return None;
+                }
+                if matches!(label.kind, LabelKindV0::Equation) && label.equation_ordinal.is_none() {
                     return None;
                 }
             }
@@ -2338,6 +2352,9 @@ fn consume_label_command_v0(
     if matches!(target.kind, LabelKindV0::Figure) && target.figure_ordinal.is_none() {
         return None;
     }
+    if matches!(target.kind, LabelKindV0::Equation) && target.equation_ordinal.is_none() {
+        return None;
+    }
     let (key, next) = parse_label_or_ref_key_group_v0(tokens, index)?;
     if labels_by_key.contains_key(&key) {
         return None;
@@ -2349,6 +2366,7 @@ fn consume_label_command_v0(
             kind: target.kind,
             level: target.level,
             figure_ordinal: target.figure_ordinal,
+            equation_ordinal: target.equation_ordinal,
             title: target.title,
         },
     );
@@ -2640,10 +2658,12 @@ pub(crate) fn extract_typeset_minimal_text_body_with_external_bib_v0(
     let mut cite_occurrences = Vec::<CiteOccurrenceMetaV0>::new();
     let mut next_anchor_id = 1u32;
     let mut next_figure_ordinal = 1u32;
+    let mut next_equation_ordinal = 1u32;
     let mut saw_maketitle = false;
     let mut saw_body_content_after_maketitle = false;
     let mut toc_requested = false;
     let mut pending_noindent_after_heading = false;
+    let mut equations = Vec::<EquationMetaV0>::new();
     let mut pending_label_target = None::<PendingLabelTargetV0>;
     loop {
         match tokens.get(index) {
@@ -2695,6 +2715,7 @@ pub(crate) fn extract_typeset_minimal_text_body_with_external_bib_v0(
                         kind: LabelKindV0::Figure,
                         level: None,
                         figure_ordinal: Some(figure_ordinal),
+                        equation_ordinal: None,
                         title: None,
                     });
                 } else if env_name.as_slice() == THEBIBLIOGRAPHY_ENV_V0 {
@@ -2740,6 +2761,30 @@ pub(crate) fn extract_typeset_minimal_text_body_with_external_bib_v0(
                 );
                 pending_label_target = None;
                 index = consume_href_command_v0(tokens, index, &mut body, &mut href_urls)?;
+            }
+            Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"[" => {
+                saw_body_content_after_maketitle = true;
+                maybe_emit_pending_noindent_prefix_v0(
+                    &mut body,
+                    &mut pending_noindent_after_heading,
+                );
+                let anchor_id = next_anchor_id;
+                next_anchor_id = next_anchor_id.checked_add(1)?;
+                let equation_ordinal = next_equation_ordinal;
+                next_equation_ordinal = next_equation_ordinal.checked_add(1)?;
+                index = consume_display_math_command_v0(tokens, index, &mut body)?;
+                equations.push(EquationMetaV0 {
+                    anchor_id,
+                    ordinal: equation_ordinal,
+                });
+                pending_label_target = Some(PendingLabelTargetV0 {
+                    anchor_id,
+                    kind: LabelKindV0::Equation,
+                    level: None,
+                    figure_ordinal: None,
+                    equation_ordinal: Some(equation_ordinal),
+                    title: None,
+                });
             }
             Some(TokenV0::ControlSeq(name)) if name.as_slice() == LABEL_CONTROL_V0 => {
                 saw_body_content_after_maketitle = true;
@@ -2819,6 +2864,7 @@ pub(crate) fn extract_typeset_minimal_text_body_with_external_bib_v0(
                         kind: LabelKindV0::Heading,
                         level: Some(level),
                         figure_ordinal: None,
+                        equation_ordinal: None,
                         title: Some(title),
                     });
                 } else {
@@ -2950,6 +2996,16 @@ pub(crate) fn extract_typeset_minimal_text_body_with_external_bib_v0(
             push_newline(&mut body);
         }
     }
+    if !equations.is_empty() {
+        push_paragraph_break(&mut body);
+        for equation in &equations {
+            body.extend_from_slice(EQUATION_LINE_PREFIX_MARKER_V0);
+            body.extend_from_slice(equation.anchor_id.to_string().as_bytes());
+            body.push(b' ');
+            body.extend_from_slice(equation.ordinal.to_string().as_bytes());
+            push_newline(&mut body);
+        }
+    }
     if !labels_by_key.is_empty() {
         push_paragraph_break(&mut body);
         for (key, entry) in &labels_by_key {
@@ -2961,13 +3017,15 @@ pub(crate) fn extract_typeset_minimal_text_body_with_external_bib_v0(
             body.extend_from_slice(match entry.kind {
                 LabelKindV0::Heading => b"heading",
                 LabelKindV0::Figure => b"figure",
+                LabelKindV0::Equation => b"equation",
             });
             body.push(b' ');
-            let level_or_figure = match entry.kind {
+            let level_or_ordinal = match entry.kind {
                 LabelKindV0::Heading => u32::from(entry.level.unwrap_or(0)),
                 LabelKindV0::Figure => entry.figure_ordinal.unwrap_or(0),
+                LabelKindV0::Equation => entry.equation_ordinal.unwrap_or(0),
             };
-            body.extend_from_slice(level_or_figure.to_string().as_bytes());
+            body.extend_from_slice(level_or_ordinal.to_string().as_bytes());
             body.push(b' ');
             if let Some(title) = &entry.title {
                 body.extend_from_slice(title);
