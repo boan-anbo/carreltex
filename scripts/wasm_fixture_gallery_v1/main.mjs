@@ -23,7 +23,7 @@ const STATUS_FAIL_V0 = 'FAIL';
 const STATUS_MISMATCH_V0 = 'MISMATCH';
 const EXPECTED_STATUS_VALUES_V0 = new Set([STATUS_OK_V0, STATUS_NI_V0, STATUS_INVALID_V0, STATUS_FAIL_V0]);
 const DEFAULT_ONDEMAND_FIXEDPOINT_MAX_ITERS_V1 = 3;
-const TYPED_ARTIFACT_KEYS_V0 = ['toc', 'labels', 'refs', 'bib', 'hyperref', 'pkgopt', 'graphics'];
+const TYPED_ARTIFACT_KEYS_V0 = ['toc', 'labels', 'refs', 'bib', 'bibitems', 'cites', 'hyperref', 'pkgopt', 'graphics'];
 const TYPED_ARTIFACTS_VERSION_V0 = 1;
 const MAX_TOC_ENTRIES_V0 = 256;
 const MAX_TOC_TITLE_BYTES_V0 = 256;
@@ -1823,6 +1823,193 @@ function extractBibEntriesFromSourceV0(sourceBytes) {
   return entries;
 }
 
+function extractBibitemsAndCitesFromSourceV1(sourceBytes) {
+  const bibitems = [];
+  const bibOrdinalByKey = new Map();
+  const citesByKey = new Map();
+  const citeCommands = new Set(['cite']);
+  let inBibliography = false;
+  let index = 0;
+
+  const addBibitem = (key, text, startByte, endByte) => {
+    const keyBytes = Buffer.from(key, 'utf8');
+    if (keyBytes.length > MAX_BIB_VALUE_BYTES_V0) {
+      throw new Error(`bibitems_v1 key exceeds cap ${MAX_BIB_VALUE_BYTES_V0}`);
+    }
+    const textBytes = Buffer.from(text, 'utf8');
+    if (textBytes.length > MAX_BIB_VALUE_BYTES_V0 * 8) {
+      throw new Error(`bibitems_v1 text exceeds cap ${MAX_BIB_VALUE_BYTES_V0 * 8}`);
+    }
+    if (bibOrdinalByKey.has(key)) {
+      throw new Error(`bibitems_v1 duplicate key '${key}'`);
+    }
+    const ordinal = bibitems.length + 1;
+    const sourceSpan = buildSourceSpanV0(sourceBytes, startByte, endByte, 'bibitems_v1');
+    bibOrdinalByKey.set(key, ordinal);
+    bibitems.push({
+      key,
+      ordinal,
+      text_sha256: sha256HexV0(textBytes),
+      source_span: sourceSpan,
+    });
+    if (bibitems.length > MAX_BIB_ENTRIES_V0) {
+      throw new Error(`bibitems_v1 entries exceed cap ${MAX_BIB_ENTRIES_V0}`);
+    }
+  };
+
+  const addCiteOccurrence = (key, startByte, endByte) => {
+    const keyBytes = Buffer.from(key, 'utf8');
+    if (keyBytes.length > MAX_BIB_VALUE_BYTES_V0) {
+      throw new Error(`cites_v1 key exceeds cap ${MAX_BIB_VALUE_BYTES_V0}`);
+    }
+    let entry = citesByKey.get(key);
+    if (!entry) {
+      entry = {
+        key,
+        occurrences: [],
+        resolved: false,
+        ordinal: null,
+        source_span: buildSourceSpanV0(sourceBytes, startByte, endByte, 'cites_v1'),
+      };
+      citesByKey.set(key, entry);
+    }
+    entry.occurrences.push({
+      line_index: lineIndexForByteOffsetV1(sourceBytes, startByte),
+    });
+    if (entry.occurrences.length > MAX_REF_OCCURRENCES_PER_KEY_V0) {
+      throw new Error(`cites_v1 occurrences exceed cap ${MAX_REF_OCCURRENCES_PER_KEY_V0} for key ${key}`);
+    }
+  };
+
+  const normalizeBibitemText = (bytes) => {
+    const raw = Buffer.from(bytes).toString('utf8');
+    return raw.replace(/\s+/g, ' ').trim();
+  };
+
+  while (index < sourceBytes.length) {
+    if (sourceBytes[index] !== 0x5c) {
+      index += 1;
+      continue;
+    }
+    let commandIndex = index + 1;
+    while (commandIndex < sourceBytes.length && isAsciiLetterByteV0(sourceBytes[commandIndex])) {
+      commandIndex += 1;
+    }
+    if (commandIndex === index + 1) {
+      index += 1;
+      continue;
+    }
+    const command = Buffer.from(sourceBytes.slice(index + 1, commandIndex)).toString('ascii');
+
+    if (command === 'begin' || command === 'end') {
+      const envGroup = readBracedGroupV0(sourceBytes, commandIndex);
+      if (!envGroup.ok) {
+        index = commandIndex;
+        continue;
+      }
+      const envName = envGroup.value.trim();
+      if (envName === 'thebibliography') {
+        inBibliography = command === 'begin';
+      }
+      index = envGroup.next;
+      continue;
+    }
+
+    if (inBibliography && command === 'bibitem') {
+      const keyGroup = readBracedGroupV0(sourceBytes, commandIndex);
+      if (!keyGroup.ok) {
+        index = commandIndex;
+        continue;
+      }
+      const key = keyGroup.value.trim();
+      if (!isSafeLabelRefKeyValueV1(key)) {
+        index = keyGroup.next;
+        continue;
+      }
+      let cursor = keyGroup.next;
+      let textEnd = cursor;
+      while (cursor < sourceBytes.length) {
+        if (sourceBytes[cursor] !== 0x5c) {
+          cursor += 1;
+          continue;
+        }
+        let nestedCommandEnd = cursor + 1;
+        while (
+          nestedCommandEnd < sourceBytes.length
+          && isAsciiLetterByteV0(sourceBytes[nestedCommandEnd])
+        ) {
+          nestedCommandEnd += 1;
+        }
+        if (nestedCommandEnd === cursor + 1) {
+          cursor += 1;
+          continue;
+        }
+        const nestedCommand = Buffer.from(sourceBytes.slice(cursor + 1, nestedCommandEnd)).toString('ascii');
+        if (nestedCommand === 'bibitem') {
+          break;
+        }
+        if (nestedCommand === 'end') {
+          const envGroup = readBracedGroupV0(sourceBytes, nestedCommandEnd);
+          if (envGroup.ok && envGroup.value.trim() === 'thebibliography') {
+            break;
+          }
+        }
+        cursor = nestedCommandEnd;
+      }
+      textEnd = cursor;
+      const text = normalizeBibitemText(sourceBytes.slice(keyGroup.next, textEnd));
+      if (text.length > 0) {
+        addBibitem(key, text, index, textEnd);
+      }
+      index = textEnd;
+      continue;
+    }
+
+    if (citeCommands.has(command)) {
+      let next = commandIndex;
+      for (let i = 0; i < 2; i += 1) {
+        const optGroup = readBracketGroupV0(sourceBytes, next);
+        if (!optGroup.ok) {
+          break;
+        }
+        next = optGroup.next;
+      }
+      const citeGroup = readBracedGroupV0(sourceBytes, next);
+      if (!citeGroup.ok) {
+        index = commandIndex;
+        continue;
+      }
+      for (const key of splitCommaValuesV0(citeGroup.value)) {
+        if (!isSafeLabelRefKeyValueV1(key)) {
+          continue;
+        }
+        addCiteOccurrence(key, index, citeGroup.next);
+      }
+      index = citeGroup.next;
+      continue;
+    }
+
+    index = commandIndex;
+  }
+
+  const cites = [...citesByKey.values()].sort((left, right) => left.key.localeCompare(right.key));
+  for (const cite of cites) {
+    const ordinal = bibOrdinalByKey.get(cite.key);
+    if (ordinal) {
+      cite.resolved = true;
+      cite.ordinal = ordinal;
+    }
+  }
+  if (cites.length > MAX_BIB_ENTRIES_V0) {
+    throw new Error(`cites_v1 entries exceed cap ${MAX_BIB_ENTRIES_V0}`);
+  }
+
+  return {
+    bibitems,
+    cites,
+  };
+}
+
 function extractHyperrefLinksFromSourceV0(sourceBytes) {
   const links = [];
   let index = 0;
@@ -2171,6 +2358,44 @@ async function emitBibTypedArtifactV0(caseOutDir, fixtureBytes) {
   };
 }
 
+async function emitBibitemsTypedArtifactV0(caseOutDir, fixtureBytes) {
+  const extracted = extractBibitemsAndCitesFromSourceV1(fixtureBytes);
+  const payload = {
+    version: TYPED_ARTIFACTS_VERSION_V0,
+    schema: 'bibitems_v1',
+    entries: extracted.bibitems,
+  };
+  const bytes = Buffer.from(`${JSON.stringify(payload, null, 2)}\n`, 'utf8');
+  const relpath = 'bibitems_v1.json';
+  const fullPath = path.join(caseOutDir, relpath);
+  await writeFile(fullPath, bytes);
+  return {
+    present: true,
+    items: payload.entries.length,
+    artifact_relpath: relpath,
+    artifact_sha256: sha256HexV0(bytes),
+  };
+}
+
+async function emitCitesTypedArtifactV0(caseOutDir, fixtureBytes) {
+  const extracted = extractBibitemsAndCitesFromSourceV1(fixtureBytes);
+  const payload = {
+    version: TYPED_ARTIFACTS_VERSION_V0,
+    schema: 'cites_v1',
+    entries: extracted.cites,
+  };
+  const bytes = Buffer.from(`${JSON.stringify(payload, null, 2)}\n`, 'utf8');
+  const relpath = 'cites_v1.json';
+  const fullPath = path.join(caseOutDir, relpath);
+  await writeFile(fullPath, bytes);
+  return {
+    present: true,
+    items: payload.entries.length,
+    artifact_relpath: relpath,
+    artifact_sha256: sha256HexV0(bytes),
+  };
+}
+
 async function emitPkgoptTypedArtifactV0(caseOutDir, fixtureBytes) {
   const payload = {
     version: TYPED_ARTIFACTS_VERSION_V0,
@@ -2258,6 +2483,10 @@ async function emitTypedArtifactsV0(caseSpec, caseOutDir, typedArtifacts, fixtur
   }
   if (caseSpec.id === 'typeset_demo_bib_probe_v0') {
     typedArtifacts.bib = await emitBibTypedArtifactV0(caseOutDir, fixtureBytes);
+  }
+  if (caseSpec.id === 'typeset_demo_minimal_v0') {
+    typedArtifacts.bibitems = await emitBibitemsTypedArtifactV0(caseOutDir, fixtureBytes);
+    typedArtifacts.cites = await emitCitesTypedArtifactV0(caseOutDir, fixtureBytes);
   }
   if (caseSpec.id === 'typeset_demo_hyperref_probe_v0') {
     typedArtifacts.hyperref = await emitHyperrefTypedArtifactV0(caseOutDir, fixtureBytes);

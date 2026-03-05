@@ -2013,6 +2013,47 @@ fn pdf_renderer_multipage_footnotes_and_annots_associate_per_page_v0() {
 }
 
 #[test]
+fn pdf_renderer_accepts_bibliography_and_cite_metadata_lines_v0() {
+    let xdv = write_dvi_v2_text_page_v0(
+        b"Body cite [1] and unresolved [?].\n\n!b ref:a 1 Alpha source text.\n!c ref:a 1 1\n!c missing 1 0",
+    )
+    .expect("writer should accept bibliography marker lines");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+    let pdf_text = String::from_utf8_lossy(&pdf);
+    assert!(
+        pdf_text.contains("(Body cite "),
+        "body prefix text should render: {pdf_text}"
+    );
+    assert!(
+        pdf_text.contains("(1) Tj"),
+        "resolved cite token should render: {pdf_text}"
+    );
+    assert!(
+        pdf_text.contains("(?) Tj"),
+        "unresolved cite token should render: {pdf_text}"
+    );
+    assert!(
+        !pdf_text.contains("!b ref:a"),
+        "bibliography metadata prefix should be hidden in pdf output: {pdf_text}"
+    );
+    assert!(
+        !pdf_text.contains("!c ref:a"),
+        "cite metadata prefix should be hidden in pdf output: {pdf_text}"
+    );
+}
+
+#[test]
+fn pdf_renderer_rejects_malformed_cite_metadata_line_v0() {
+    let xdv = write_dvi_v2_text_page_v0(b"Body text.\n\n!c ref:a 0 1")
+        .expect("writer should accept marker text bytes");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv);
+    assert!(
+        pdf.is_none(),
+        "renderer should fail-closed on malformed cite metadata line"
+    );
+}
+
+#[test]
 fn pdf_renderer_table_rows_use_stable_column_x_offsets_v0() {
     let xdv = write_dvi_v2_text_page_v0(
         b"Before.\n\n!t Alpha||Beta||Gamma\n!t Delta||Epsilon||Zeta\n\nAfter.",
