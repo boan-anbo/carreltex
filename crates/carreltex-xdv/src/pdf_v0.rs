@@ -275,6 +275,22 @@ fn emit_styled_segments_v0(
     }
 }
 
+fn is_heading_line_segments_v0(segments: &[PdfStyledSegmentV0]) -> bool {
+    if segments.is_empty() {
+        return false;
+    }
+    let mut saw_non_space = false;
+    for segment in segments {
+        if segment.style != PdfTextStyleV0::Bold {
+            return false;
+        }
+        if segment.bytes.iter().any(|byte| *byte != b' ') {
+            saw_non_space = true;
+        }
+    }
+    saw_non_space
+}
+
 fn build_page_content_stream_v0(lines: &[LinePlanV0]) -> Option<Vec<u8>> {
     let mut out = Vec::new();
     out.extend_from_slice(b"BT\n");
@@ -344,9 +360,27 @@ fn build_page_content_stream_v0(lines: &[LinePlanV0]) -> Option<Vec<u8>> {
         } else {
             FONT_SIZE_PT_V0
         };
+        let next_raw_line_is_empty = lines
+            .get(line_index + 1)
+            .map(|next_line| next_line.glyphs.is_empty())
+            .unwrap_or(false);
+        let heading_centered = !in_title_block
+            && !line_is_empty
+            && quote_prefix_advance_pt.is_none()
+            && !center_prefixed
+            && !right_prefixed
+            && !noindent_prefixed
+            && list_prefix.is_none()
+            && previous_rendered_line_was_empty
+            && next_raw_line_is_empty
+            && is_heading_line_segments_v0(&segments);
         if !line_is_empty {
             let line_width_pt: f32 = segments.iter().map(|segment| segment.advance_pt).sum();
             let line_x = if in_title_block {
+                centered_line_x_v0(line_width_pt)
+            } else if heading_centered {
+                active_quote_indent_pt = 0.0;
+                active_hang_indent_pt = 0.0;
                 centered_line_x_v0(line_width_pt)
             } else if center_prefixed {
                 active_quote_indent_pt = 0.0;
