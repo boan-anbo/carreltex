@@ -148,12 +148,13 @@ function countStatusesV0(statuses) {
     OK: 0,
     NI: 0,
     INVALID: 0,
+    MISMATCH: 0,
     FAIL: 0,
     OTHER: 0,
   };
   for (const statusEntry of statuses) {
     const status = statusEntry?.status;
-    if (status === 'OK' || status === 'NI' || status === 'INVALID' || status === 'FAIL') {
+    if (status === 'OK' || status === 'NI' || status === 'INVALID' || status === 'MISMATCH' || status === 'FAIL') {
       counts[status] += 1;
     } else {
       counts.OTHER += 1;
