@@ -110,6 +110,12 @@
       "purpose": "Probes usepackage/RequirePackage resource-hint seam for sty/cls requests."
     },
     {
+      "id": "typeset_demo_pkgopt_require_pass_probe_v0",
+      "tags": ["typeset", "packages", "pkgopt", "requirepackagewithoptions", "passoptionstopackage", "probe", "ni"],
+      "expected_status": "NI",
+      "purpose": "Probes RequirePackageWithOptions and PassOptionsToPackage seams for package hints and pkgopt artifact extraction."
+    },
+    {
       "id": "typeset_demo_package_require_invalid_probe_v0",
       "tags": ["typeset", "packages", "requirepackage", "unsafe-path", "probe", "invalid"],
       "expected_status": "INVALID",
