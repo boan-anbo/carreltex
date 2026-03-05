@@ -167,6 +167,21 @@ async function loadFixtureCasesV0() {
       mode: 'typeset',
       fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_hyperref_probe_v0.tex',
     },
+    {
+      id: 'typeset_demo_bib_probe_v0',
+      mode: 'typeset',
+      fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_bib_probe_v0.tex',
+    },
+    {
+      id: 'typeset_demo_graphics_probe_v0',
+      mode: 'typeset',
+      fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_graphics_probe_v0.tex',
+    },
+    {
+      id: 'typeset_demo_pkgopt_probe_v0',
+      mode: 'typeset',
+      fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_pkgopt_probe_v0.tex',
+    },
   ];
 
   const okFixtureDir = path.join(rootDir, 'scripts', 'wasm_smoke_js', 'fixtures');
