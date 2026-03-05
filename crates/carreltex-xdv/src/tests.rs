@@ -1,6 +1,7 @@
 use super::{
     count_dvi_v2_text_movements_v0, count_dvi_v2_text_pages_v0,
     count_dvi_v2_text_pages_with_advance_v0, validate_dvi_v2_empty_page_v0,
+    LinePlanV0,
     parse_dvi_v2_text_page_to_layout_v0, plan_layout_v0, plan_layout_width_v0,
     recompute_line_width_sp_v0,
     render_dvi_v2_text_page_to_pdf_v0,
@@ -283,6 +284,26 @@ fn expected_center_x_pt_v0(width_sp: u32) -> f32 {
     ((612.0 - width_pt) * 0.5).clamp(72.0, 612.0 - 72.0)
 }
 
+fn expected_right_x_pt_v0(width_sp: u32) -> f32 {
+    let width_pt = (width_sp as f32) / 65_536.0;
+    (612.0 - 72.0 - width_pt).max(72.0)
+}
+
+fn width_sp_for_prefixed_rendered_line_v0(line: &LinePlanV0, prefix: [u8; 2]) -> Option<u32> {
+    if line.glyphs.len() < 2 {
+        return None;
+    }
+    if line.glyphs[0].byte != prefix[0] || line.glyphs[1].byte != prefix[1] {
+        return None;
+    }
+    let mut width_sp = 0u32;
+    for glyph in &line.glyphs[2..] {
+        let advance = u32::try_from(glyph.advance_sp).ok()?;
+        width_sp = width_sp.checked_add(advance)?;
+    }
+    Some(width_sp)
+}
+
 #[test]
 fn pdf_renderer_caps_segment_tm_gap_for_styled_line_v0() {
     let xdv = write_dvi_v2_text_page_v0(b"Styled [emphasis] and {bold} run.")
@@ -393,6 +414,15 @@ fn pdf_renderer_applies_quote_indent_and_hides_prefix_v0() {
 fn pdf_renderer_hides_center_prefix_and_centers_line_v0() {
     let xdv =
         write_dvi_v2_text_page_v0(b"\n^ centered line").expect("writer should accept centered text");
+    let layout = parse_dvi_v2_text_page_to_layout_v0(&xdv, 786_432).expect("layout parse");
+    let centered_line = layout.pages[0]
+        .lines
+        .iter()
+        .find(|line| width_sp_for_prefixed_rendered_line_v0(line, [b'^', b' ']).is_some())
+        .expect("center-prefixed line");
+    let expected_x = expected_center_x_pt_v0(
+        width_sp_for_prefixed_rendered_line_v0(centered_line, [b'^', b' ']).expect("prefixed width"),
+    );
     let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
     assert!(
         !pdf.windows(b"(^ centered line) Tj".len())
@@ -402,25 +432,12 @@ fn pdf_renderer_hides_center_prefix_and_centers_line_v0() {
         pdf.windows(b"(centered line) Tj".len())
             .any(|w| w == b"(centered line) Tj")
     );
-
-    let pdf_text = String::from_utf8_lossy(&pdf);
-    let mut xs = Vec::<f32>::new();
-    for line in pdf_text.lines() {
-        if !line.contains(" Tm ") {
-            continue;
-        }
-        let fields = line.split_whitespace().collect::<Vec<_>>();
-        if fields.len() < 7 || fields[6] != "Tm" {
-            continue;
-        }
-        if let Ok(x_pt) = fields[4].parse::<f32>() {
-            xs.push(x_pt);
-        }
-    }
-    assert!(!xs.is_empty(), "expected centered Tm position");
+    let x_pt = tm_x_for_line_containing_text_v0(&pdf, "(centered line)")
+        .expect("centered Tm position");
+    let epsilon_pt = 0.02f32;
     assert!(
-        (xs[0] - 72.0).abs() > 0.02,
-        "centered line should not be at margin: {xs:?}"
+        (x_pt - expected_x).abs() <= epsilon_pt,
+        "center line x mismatch: actual={x_pt}, expected={expected_x}"
     );
 }
 
@@ -428,6 +445,15 @@ fn pdf_renderer_hides_center_prefix_and_centers_line_v0() {
 fn pdf_renderer_hides_right_prefix_and_right_aligns_line_v0() {
     let xdv =
         write_dvi_v2_text_page_v0(b"\n| right aligned line").expect("writer should accept right text");
+    let layout = parse_dvi_v2_text_page_to_layout_v0(&xdv, 786_432).expect("layout parse");
+    let right_line = layout.pages[0]
+        .lines
+        .iter()
+        .find(|line| width_sp_for_prefixed_rendered_line_v0(line, [b'|', b' ']).is_some())
+        .expect("right-prefixed line");
+    let expected_x = expected_right_x_pt_v0(
+        width_sp_for_prefixed_rendered_line_v0(right_line, [b'|', b' ']).expect("prefixed width"),
+    );
     let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
     assert!(
         !pdf.windows(b"(| right aligned line) Tj".len())
@@ -437,24 +463,85 @@ fn pdf_renderer_hides_right_prefix_and_right_aligns_line_v0() {
         pdf.windows(b"(right aligned line) Tj".len())
             .any(|w| w == b"(right aligned line) Tj")
     );
+    let x_pt = tm_x_for_line_containing_text_v0(&pdf, "(right aligned line)")
+        .expect("right-aligned Tm position");
+    let epsilon_pt = 0.02f32;
+    assert!(
+        (x_pt - expected_x).abs() <= epsilon_pt,
+        "right line x mismatch: actual={x_pt}, expected={expected_x}"
+    );
+}
 
-    let pdf_text = String::from_utf8_lossy(&pdf);
-    let mut xs = Vec::<f32>::new();
-    for line in pdf_text.lines() {
-        if !line.contains(" Tm ") {
-            continue;
-        }
-        let fields = line.split_whitespace().collect::<Vec<_>>();
-        if fields.len() < 7 || fields[6] != "Tm" {
-            continue;
-        }
-        if let Ok(x_pt) = fields[4].parse::<f32>() {
-            xs.push(x_pt);
-        }
-    }
-    assert!(!xs.is_empty(), "expected right-aligned Tm position");
-    assert!((xs[0] - 72.0).abs() > 0.02, "line should not be at margin: {xs:?}");
-    assert!(xs[0] > 306.0, "right-aligned line should be on right half: {xs:?}");
+#[test]
+fn pdf_renderer_applies_center_alignment_per_line_width_v0() {
+    let xdv = write_dvi_v2_text_page_v0(b"\n^ center one\n^ center line two")
+        .expect("writer should accept centered lines");
+    let layout = parse_dvi_v2_text_page_to_layout_v0(&xdv, 786_432).expect("layout parse");
+    let line_one = layout.pages[0]
+        .lines
+        .iter()
+        .find(|line| {
+            line.glyphs.iter().map(|glyph| glyph.byte).collect::<Vec<_>>() == b"^ center one"
+        })
+        .expect("center line one");
+    let line_two = layout.pages[0]
+        .lines
+        .iter()
+        .find(|line| {
+            line.glyphs.iter().map(|glyph| glyph.byte).collect::<Vec<_>>() == b"^ center line two"
+        })
+        .expect("center line two");
+
+    let expected_one = expected_center_x_pt_v0(
+        width_sp_for_prefixed_rendered_line_v0(line_one, [b'^', b' ']).expect("line one width"),
+    );
+    let expected_two = expected_center_x_pt_v0(
+        width_sp_for_prefixed_rendered_line_v0(line_two, [b'^', b' ']).expect("line two width"),
+    );
+
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+    let x_one = tm_x_for_line_containing_text_v0(&pdf, "(center one)").expect("center one x");
+    let x_two =
+        tm_x_for_line_containing_text_v0(&pdf, "(center line two)").expect("center line two x");
+    let epsilon_pt = 0.02f32;
+    assert!((x_one - expected_one).abs() <= epsilon_pt);
+    assert!((x_two - expected_two).abs() <= epsilon_pt);
+}
+
+#[test]
+fn pdf_renderer_applies_right_alignment_per_line_width_v0() {
+    let xdv = write_dvi_v2_text_page_v0(b"\n| right one\n| right line two")
+        .expect("writer should accept right-aligned lines");
+    let layout = parse_dvi_v2_text_page_to_layout_v0(&xdv, 786_432).expect("layout parse");
+    let line_one = layout.pages[0]
+        .lines
+        .iter()
+        .find(|line| {
+            line.glyphs.iter().map(|glyph| glyph.byte).collect::<Vec<_>>() == b"| right one"
+        })
+        .expect("right line one");
+    let line_two = layout.pages[0]
+        .lines
+        .iter()
+        .find(|line| {
+            line.glyphs.iter().map(|glyph| glyph.byte).collect::<Vec<_>>() == b"| right line two"
+        })
+        .expect("right line two");
+
+    let expected_one = expected_right_x_pt_v0(
+        width_sp_for_prefixed_rendered_line_v0(line_one, [b'|', b' ']).expect("line one width"),
+    );
+    let expected_two = expected_right_x_pt_v0(
+        width_sp_for_prefixed_rendered_line_v0(line_two, [b'|', b' ']).expect("line two width"),
+    );
+
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+    let x_one = tm_x_for_line_containing_text_v0(&pdf, "(right one)").expect("right one x");
+    let x_two =
+        tm_x_for_line_containing_text_v0(&pdf, "(right line two)").expect("right line two x");
+    let epsilon_pt = 0.02f32;
+    assert!((x_one - expected_one).abs() <= epsilon_pt);
+    assert!((x_two - expected_two).abs() <= epsilon_pt);
 }
 
 #[test]
