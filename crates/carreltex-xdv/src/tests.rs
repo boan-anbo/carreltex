@@ -261,6 +261,28 @@ fn max_tm_gap_pt_for_line_containing_v0(pdf: &[u8], needle: &str) -> Option<f32>
     None
 }
 
+fn tm_x_for_line_containing_text_v0(pdf: &[u8], needle: &str) -> Option<f32> {
+    let text = String::from_utf8_lossy(pdf);
+    for line in text.lines() {
+        if !line.contains(needle) || !line.contains(" Tm ") {
+            continue;
+        }
+        let fields = line.split_whitespace().collect::<Vec<_>>();
+        if fields.len() < 7 || fields[6] != "Tm" {
+            continue;
+        }
+        if let Ok(x_pt) = fields[4].parse::<f32>() {
+            return Some(x_pt);
+        }
+    }
+    None
+}
+
+fn expected_center_x_pt_v0(width_sp: u32) -> f32 {
+    let width_pt = (width_sp as f32) / 65_536.0;
+    ((612.0 - width_pt) * 0.5).clamp(72.0, 612.0 - 72.0)
+}
+
 #[test]
 fn pdf_renderer_caps_segment_tm_gap_for_styled_line_v0() {
     let xdv = write_dvi_v2_text_page_v0(b"Styled [emphasis] and {bold} run.")
@@ -271,6 +293,42 @@ fn pdf_renderer_caps_segment_tm_gap_for_styled_line_v0() {
     assert!(
         max_tm_gap <= 24.0,
         "styled line tm gap should be capped, got {max_tm_gap}"
+    );
+}
+
+#[test]
+fn pdf_renderer_centers_title_block_lines_within_epsilon_v0() {
+    let demo_text = b"Centering Accuracy Title\nAlice Bob\n2026-03-05\n\nBody line.";
+    let xdv = write_dvi_v2_text_page_v0(demo_text).expect("writer should accept demo text");
+    let layout = parse_dvi_v2_text_page_to_layout_v0(&xdv, 786_432).expect("layout parse");
+    assert!(!layout.pages.is_empty(), "layout should contain a page");
+    assert!(
+        layout.pages[0].lines.len() >= 3,
+        "layout should contain title block lines"
+    );
+
+    let expected_title_x = expected_center_x_pt_v0(layout.pages[0].lines[0].width_sp);
+    let expected_author_x = expected_center_x_pt_v0(layout.pages[0].lines[1].width_sp);
+    let expected_date_x = expected_center_x_pt_v0(layout.pages[0].lines[2].width_sp);
+
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+    let title_x = tm_x_for_line_containing_text_v0(&pdf, "(Centering Accuracy Title)")
+        .expect("title line x");
+    let author_x = tm_x_for_line_containing_text_v0(&pdf, "(Alice Bob)").expect("author line x");
+    let date_x = tm_x_for_line_containing_text_v0(&pdf, "(2026-03-05)").expect("date line x");
+
+    let epsilon_pt = 0.02f32;
+    assert!(
+        (title_x - expected_title_x).abs() <= epsilon_pt,
+        "title x mismatch: actual={title_x}, expected={expected_title_x}"
+    );
+    assert!(
+        (author_x - expected_author_x).abs() <= epsilon_pt,
+        "author x mismatch: actual={author_x}, expected={expected_author_x}"
+    );
+    assert!(
+        (date_x - expected_date_x).abs() <= epsilon_pt,
+        "date x mismatch: actual={date_x}, expected={expected_date_x}"
     );
 }
 
