@@ -4,6 +4,8 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT_DIR="${1:-$ROOT_DIR/target/wasm_fixture_gallery_v0}"
 STORE_DIR="${OUT_DIR}_store"
+HINT_STORE_DIR_A="${OUT_DIR}_store_from_hints_a"
+HINT_STORE_DIR_B="${OUT_DIR}_store_from_hints_b"
 BASELINE_ROOT="${OUT_DIR}_baseline"
 BASELINE_DIR_A="$BASELINE_ROOT/run1"
 BASELINE_DIR_B="$BASELINE_ROOT/run2"
@@ -12,17 +14,19 @@ BASELINE_AUTO_PACK_DIR="${BASELINE_PACKS_ROOT}/auto_pack"
 REQUEST_LIST="$OUT_DIR/requests.json"
 HINT_REQUEST_LIST_A="$OUT_DIR/request_list_from_hints_a.json"
 HINT_REQUEST_LIST_B="$OUT_DIR/request_list_from_hints_b.json"
-FIXTURE_SOURCE_DIR="$OUT_DIR/fixture_source_v0"
+FIXTURE_SOURCE_DIR="${OUT_DIR}_fixture_source_v0"
 SOURCE_DATE_EPOCH="${SOURCE_DATE_EPOCH:-1700000000}"
 export SOURCE_DATE_EPOCH
 export TZ=UTC
 
 "$ROOT_DIR/scripts/wasm_smoke_build.sh"
 
-rm -rf "$OUT_DIR" "$STORE_DIR" "$BASELINE_ROOT"
-mkdir -p "$OUT_DIR" "$FIXTURE_SOURCE_DIR/xetex/tex" "$BASELINE_ROOT" "$BASELINE_PACKS_ROOT"
+rm -rf "$OUT_DIR" "$STORE_DIR" "$HINT_STORE_DIR_A" "$HINT_STORE_DIR_B" "$FIXTURE_SOURCE_DIR" "$BASELINE_ROOT"
+mkdir -p "$OUT_DIR" "$FIXTURE_SOURCE_DIR/xetex/tex" "$FIXTURE_SOURCE_DIR/xetex/bib" "$FIXTURE_SOURCE_DIR/xetex/png" "$BASELINE_ROOT" "$BASELINE_PACKS_ROOT"
 
 printf 'fixture-bytes-for-typeset-minimal-v0\n' > "$FIXTURE_SOURCE_DIR/xetex/tex/typeset_demo_minimal_v0"
+printf '%s\n' '% placeholder bib fixture for hints proof' > "$FIXTURE_SOURCE_DIR/xetex/bib/refs.bib"
+printf 'fixture-bytes-for-demo-image-png\n' > "$FIXTURE_SOURCE_DIR/xetex/png/demo-image.png"
 
 cat > "$REQUEST_LIST" <<'JSON'
 {
@@ -365,7 +369,48 @@ fs.writeFileSync(
   path.join(baselineRoot, 'typed_artifact_sha256_first.json'),
   `${JSON.stringify(typedArtifactShaMap, null, 2)}\n`,
 );
+fs.writeFileSync(firstRunShaPath('resolved_resources_count'), `${Number(report.resolved_resources_count ?? 0)}\n`);
 NODE
+
+TEXLIVE_RESOLVER_BACKEND_V0=fixture_dir_v0 \
+TEXLIVE_STORE_SOURCE_DIR_V0="$FIXTURE_SOURCE_DIR" \
+node "$ROOT_DIR/scripts/texlive_store_gen_v0.mjs" "$HINT_REQUEST_LIST_A" "$HINT_STORE_DIR_A"
+TEXLIVE_RESOLVER_BACKEND_V0=fixture_dir_v0 \
+TEXLIVE_STORE_SOURCE_DIR_V0="$FIXTURE_SOURCE_DIR" \
+node "$ROOT_DIR/scripts/texlive_store_gen_v0.mjs" "$HINT_REQUEST_LIST_B" "$HINT_STORE_DIR_B"
+
+node - "$HINT_STORE_DIR_A" "$HINT_STORE_DIR_B" <<'NODE'
+const fs = require('node:fs');
+const path = require('node:path');
+const crypto = require('node:crypto');
+
+const storeDirA = process.argv[2];
+const storeDirB = process.argv[3];
+const sha256 = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex');
+
+const indexAPath = path.join(storeDirA, 'index.json');
+const indexBPath = path.join(storeDirB, 'index.json');
+const summaryAPath = path.join(storeDirA, 'summary.json');
+const summaryBPath = path.join(storeDirB, 'summary.json');
+const indexASha = sha256(fs.readFileSync(indexAPath));
+const indexBSha = sha256(fs.readFileSync(indexBPath));
+if (indexASha !== indexBSha) {
+  console.error('FAIL: texlive_store_gen_v0 from hints must be deterministic');
+  process.exit(1);
+}
+const summaryA = JSON.parse(fs.readFileSync(summaryAPath, 'utf8'));
+const summaryB = JSON.parse(fs.readFileSync(summaryBPath, 'utf8'));
+if (summaryA.index_sha256 !== summaryB.index_sha256 || summaryA.found_count !== summaryB.found_count) {
+  console.error('FAIL: texlive_store_gen_v0 hint summaries must match across reruns');
+  process.exit(1);
+}
+console.log(`PASS: texlive_store_gen_v0 from hints deterministic index_sha256 ${indexASha}`);
+console.log(`PASS: texlive_store_gen_v0 from hints found=${summaryA.found_count} missing=${summaryA.missing_count}`);
+NODE
+
+TEXLIVE_RESOLVER_BACKEND_V0=offline_store_v0 \
+TEXLIVE_STORE_DIR_V0="$HINT_STORE_DIR_A" \
+node "$ROOT_DIR/scripts/wasm_fixture_gallery_v0.mjs" "$OUT_DIR"
 
 node "$ROOT_DIR/scripts/texlive_smoke/baselines_v0/generate_v0.mjs" "$OUT_DIR" "$BASELINE_DIR_A"
 node "$ROOT_DIR/scripts/texlive_smoke/baselines_v0/generate_v0.mjs" "$OUT_DIR" "$BASELINE_DIR_B"
@@ -490,6 +535,9 @@ NODE
 
 node "$ROOT_DIR/scripts/texlive_smoke/baselines_v0/generate_v0.mjs" "$OUT_DIR" "$BASELINE_AUTO_PACK_DIR"
 
+rm -rf "$STORE_DIR"
+cp -R "$HINT_STORE_DIR_A" "$STORE_DIR"
+
 WASM_FIXTURE_GALLERY_SKIP_PROOF_V0=1 \
 WASM_FIXTURE_GALLERY_NO_OPEN_V0=1 \
 WASM_FIXTURE_GALLERY_AUTO_BASELINE_PACK_V0=1 \
@@ -510,6 +558,9 @@ const outDir = process.argv[2];
 const report = JSON.parse(fs.readFileSync(path.join(outDir, 'report.json'), 'utf8'));
 const statuses = Array.isArray(report.statuses) ? report.statuses : [];
 const resolvedCount = Number(report.resolved_resources_count ?? 0);
+const resolvedCountFirst = Number(
+  fs.readFileSync(path.join(`${outDir}_baseline`, 'resolved_resources_count_first.sha256'), 'utf8').trim(),
+);
 const sha256 = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex');
 if (report?.typed_artifacts_version !== 1) {
   console.error('FAIL: expected report.typed_artifacts_version=1 after rerun');
@@ -544,6 +595,12 @@ const graphicsShaFirst = fs.readFileSync(path.join(`${outDir}_baseline`, 'graphi
 
 if (resolvedCount <= 0) {
   console.error('FAIL: expected at least one resolved resource in fixture gallery summaries');
+  process.exit(1);
+}
+if (!(resolvedCount > resolvedCountFirst)) {
+  console.error(
+    `FAIL: expected resolved_resources_count to increase after hint-driven store (${resolvedCountFirst} -> ${resolvedCount})`,
+  );
   process.exit(1);
 }
 const okStatuses = statuses.filter((entry) => entry.status === 'OK');
@@ -779,6 +836,7 @@ for (const status of statuses) {
 }
 
 console.log(`PASS: resolved_resources_count ${resolvedCount}`);
+console.log(`PASS: resolved_resources_count increased from ${resolvedCountFirst} to ${resolvedCount}`);
 console.log(`PASS: baseline_match MATCH for all OK cases (${okStatuses.length})`);
 console.log(`PASS: typed_artifacts keys ${requiredTypedKeys.join(',')}`);
 console.log('PASS: typed_artifacts_version gate 1');
