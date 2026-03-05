@@ -7,6 +7,8 @@ STORE_DIR="${OUT_DIR}_store"
 BASELINE_ROOT="${OUT_DIR}_baseline"
 BASELINE_DIR_A="$BASELINE_ROOT/run1"
 BASELINE_DIR_B="$BASELINE_ROOT/run2"
+BASELINE_PACKS_ROOT="${BASELINE_ROOT}/packs"
+BASELINE_AUTO_PACK_DIR="${BASELINE_PACKS_ROOT}/auto_pack"
 REQUEST_LIST="$OUT_DIR/requests.json"
 FIXTURE_SOURCE_DIR="$OUT_DIR/fixture_source_v0"
 SOURCE_DATE_EPOCH="${SOURCE_DATE_EPOCH:-1700000000}"
@@ -16,7 +18,7 @@ export TZ=UTC
 "$ROOT_DIR/scripts/wasm_smoke_build.sh"
 
 rm -rf "$OUT_DIR" "$STORE_DIR" "$BASELINE_ROOT"
-mkdir -p "$OUT_DIR" "$FIXTURE_SOURCE_DIR/xetex/tex" "$BASELINE_ROOT"
+mkdir -p "$OUT_DIR" "$FIXTURE_SOURCE_DIR/xetex/tex" "$BASELINE_ROOT" "$BASELINE_PACKS_ROOT"
 
 printf 'fixture-bytes-for-typeset-minimal-v0\n' > "$FIXTURE_SOURCE_DIR/xetex/tex/typeset_demo_minimal_v0"
 
@@ -212,10 +214,13 @@ console.log(`PASS: baseline generator pinned engine_rev ${indexA.engine_rev}`);
 console.log(`PASS: baseline generator pinned config_hash ${indexA.config_hash}`);
 NODE
 
-TEXLIVE_RESOLVER_BACKEND_V0=offline_store_v0 \
-TEXLIVE_STORE_DIR_V0="$STORE_DIR" \
-TEXLIVE_BASELINE_DIR="$BASELINE_DIR_A" \
-node "$ROOT_DIR/scripts/wasm_fixture_gallery_v0.mjs" "$OUT_DIR"
+node "$ROOT_DIR/scripts/texlive_smoke/baselines_v0/generate_v0.mjs" "$OUT_DIR" "$BASELINE_AUTO_PACK_DIR"
+
+WASM_FIXTURE_GALLERY_SKIP_PROOF_V0=1 \
+WASM_FIXTURE_GALLERY_NO_OPEN_V0=1 \
+WASM_FIXTURE_GALLERY_AUTO_BASELINE_PACK_V0=1 \
+TEXLIVE_BASELINE_PACKS_DIR_V0="$BASELINE_PACKS_ROOT" \
+"$ROOT_DIR/scripts/open_wasm_fixture_gallery_v0.sh" "$OUT_DIR"
 
 if [[ ! -s "$OUT_DIR/report.json" ]]; then
   echo "FAIL: expected non-empty $OUT_DIR/report.json" >&2
