@@ -2124,6 +2124,128 @@ fn pdf_renderer_figure_block_spacing_invariants_v0() {
 }
 
 #[test]
+fn pdf_renderer_renders_toc_block_with_level_indentation_v0() {
+    let xdv = write_dvi_v2_text_page_v0(
+        b"Before paragraph.\n\n!toc\n\nAfter paragraph.\n\n!toc 1 1 Intro entry\n!toc 2 2 Detail entry",
+    )
+    .expect("writer should accept toc marker lines");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+    let pdf_text = String::from_utf8_lossy(&pdf);
+
+    assert!(!pdf_text.contains("!toc 1 1"), "toc metadata lines must not be visible");
+    assert!(!pdf_text.contains("!toc 2 2"), "toc metadata lines must not be visible");
+    assert!(pdf_text.contains("(Contents) Tj"), "toc title should render");
+    assert!(pdf_text.contains("(Intro entry) Tj"), "toc level 1 entry should render");
+    assert!(pdf_text.contains("(Detail entry) Tj"), "toc level 2 entry should render");
+
+    let intro_x =
+        tm_x_for_line_containing_text_v0(&pdf, "(Intro entry)").expect("toc level 1 position");
+    let detail_x =
+        tm_x_for_line_containing_text_v0(&pdf, "(Detail entry)").expect("toc level 2 position");
+    assert!(
+        detail_x > intro_x + 8.0,
+        "toc level 2 should be indented from level 1: {intro_x} vs {detail_x}"
+    );
+}
+
+#[test]
+fn pdf_renderer_rejects_toc_entries_with_unsupported_level_v0() {
+    let xdv =
+        write_dvi_v2_text_page_v0(b"!toc\n\n!toc 3 1 Too deep").expect("writer should accept bytes");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv);
+    assert!(pdf.is_none(), "renderer should fail-closed for unsupported toc level");
+}
+
+#[test]
+fn pdf_renderer_toc_block_renders_between_surrounding_paragraphs_v0() {
+    let xdv = write_dvi_v2_text_page_v0(
+        b"Before block.\n\n!toc\n\nAfter block.\n\n!toc 1 1 Intro\n!toc 2 2 Detail",
+    )
+    .expect("writer should accept toc marker lines");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+    let (before_x, before_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "(Before block.)").expect("before");
+    let (toc_title_x, toc_title_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "(Contents)").expect("toc title");
+    let (_, toc_intro_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "(Intro)").expect("toc intro");
+    let (_, toc_detail_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "(Detail)").expect("toc detail");
+    let (after_x, after_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "(After block.)").expect("after");
+
+    assert!(before_y > toc_title_y, "toc block should appear below preceding paragraph");
+    assert!(toc_title_y > toc_intro_y, "toc entries should appear below toc title");
+    assert!(toc_intro_y > toc_detail_y, "toc level 2 line should appear below level 1 line");
+    assert!(toc_detail_y > after_y, "toc block should appear above following paragraph");
+    assert!(toc_title_x >= 72.0, "toc title should remain in printable area");
+    assert!(before_x > 0.0 && after_x > 0.0, "paragraph coordinates must be valid");
+}
+
+#[test]
+fn pdf_renderer_toc_without_entries_renders_title_only_v0() {
+    let xdv =
+        write_dvi_v2_text_page_v0(b"Intro.\n\n!toc\n\nOutro.").expect("writer should accept bytes");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+    let pdf_text = String::from_utf8_lossy(&pdf);
+    assert!(pdf_text.contains("(Contents) Tj"), "toc title should render");
+    assert!(!pdf_text.contains("!toc"), "toc placeholder should be hidden");
+}
+
+#[test]
+fn pdf_renderer_rejects_toc_entry_with_non_numeric_anchor_id_v0() {
+    let xdv = write_dvi_v2_text_page_v0(
+        b"!toc\n\n!toc 1 abc Intro",
+    )
+    .expect("writer should accept bytes");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv);
+    assert!(pdf.is_none(), "renderer should fail-closed on non-numeric toc anchor ids");
+}
+
+#[test]
+fn pdf_renderer_rejects_toc_entry_with_empty_title_v0() {
+    let xdv = write_dvi_v2_text_page_v0(
+        b"!toc\n\n!toc 1 1 ",
+    )
+    .expect("writer should accept bytes");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv);
+    assert!(pdf.is_none(), "renderer should fail-closed on empty toc titles");
+}
+
+#[test]
+fn pdf_renderer_rejects_toc_entry_with_zero_anchor_id_v0() {
+    let xdv = write_dvi_v2_text_page_v0(
+        b"!toc\n\n!toc 1 0 Intro",
+    )
+    .expect("writer should accept bytes");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv);
+    assert!(pdf.is_none(), "renderer should fail-closed on zero toc anchors");
+}
+
+#[test]
+fn pdf_renderer_rejects_toc_entry_with_unterminated_metadata_shape_v0() {
+    let xdv = write_dvi_v2_text_page_v0(
+        b"!toc\n\n!toc 1",
+    )
+    .expect("writer should accept bytes");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv);
+    assert!(
+        pdf.is_none(),
+        "renderer should fail-closed on malformed toc metadata lines"
+    );
+}
+
+#[test]
+fn pdf_renderer_rejects_duplicate_toc_anchor_ids_v0() {
+    let xdv = write_dvi_v2_text_page_v0(
+        b"!toc\n\n!toc 1 1 Intro\n!toc 2 1 Duplicate anchor",
+    )
+    .expect("writer should accept bytes");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv);
+    assert!(pdf.is_none(), "renderer should fail-closed on duplicate toc anchors");
+}
+
+#[test]
 fn validator_rejects_wrong_movement_amount() {
     let mut bytes = write_dvi_v2_text_page_v0(b"ABCD").expect("writer should accept ABCD");
     let right_index = bytes

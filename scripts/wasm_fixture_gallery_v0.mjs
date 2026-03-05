@@ -933,11 +933,12 @@ function extractTocEntriesFromSourceV0(sourceBytes) {
   const commandLevel = new Map([
     ['section', 1],
     ['subsection', 2],
-    ['subsubsection', 3],
-    ['paragraph', 4],
-    ['subparagraph', 5],
   ]);
   const entries = [];
+  const sourceText = Buffer.from(sourceBytes).toString('utf8');
+  if (!sourceText.includes('\\tableofcontents')) {
+    return entries;
+  }
 
   let index = 0;
   while (index < sourceBytes.length) {
@@ -980,15 +981,18 @@ function extractTocEntriesFromSourceV0(sourceBytes) {
     if (titleGroup.value.length > 0) {
       const titleBytes = Buffer.from(titleGroup.value, 'utf8');
       if (titleBytes.length > MAX_TOC_TITLE_BYTES_V0) {
-        throw new Error(`toc_v0 title exceeds cap ${MAX_TOC_TITLE_BYTES_V0}`);
+        throw new Error(`toc_v1 title exceeds cap ${MAX_TOC_TITLE_BYTES_V0}`);
       }
+      const anchorId = `h${entries.length + 1}`;
       entries.push({
         level,
         title: titleGroup.value,
-        source_span: buildSourceSpanV0(sourceBytes, index, titleGroup.next, 'toc_v0'),
+        anchor_id: anchorId,
+        page: null,
+        source_span: buildSourceSpanV0(sourceBytes, index, titleGroup.next, 'toc_v1'),
       });
       if (entries.length > MAX_TOC_ENTRIES_V0) {
-        throw new Error(`toc_v0 entries exceed cap ${MAX_TOC_ENTRIES_V0}`);
+        throw new Error(`toc_v1 entries exceed cap ${MAX_TOC_ENTRIES_V0}`);
       }
     }
 
@@ -1934,11 +1938,11 @@ async function emitLabelsTypedArtifactV0(caseOutDir, fixtureBytes) {
 async function emitTocTypedArtifactV0(caseOutDir, fixtureBytes) {
   const payload = {
     version: TYPED_ARTIFACTS_VERSION_V0,
-    schema: 'toc_v0',
+    schema: 'toc_v1',
     entries: extractTocEntriesFromSourceV0(fixtureBytes),
   };
   const bytes = Buffer.from(`${JSON.stringify(payload, null, 2)}\n`, 'utf8');
-  const relpath = 'toc_v0.json';
+  const relpath = 'toc_v1.json';
   const fullPath = path.join(caseOutDir, relpath);
   await writeFile(fullPath, bytes);
   return {
