@@ -64,6 +64,25 @@ fs.writeFileSync(
   path.join(baselineDir, missingCase, 'main.xdv.sha256'),
   '0'.repeat(64) + '\n',
 );
+
+const labelsSummary = JSON.parse(
+  fs.readFileSync(path.join(outDir, 'typeset_demo_labels_probe_v0', 'summary.json'), 'utf8'),
+);
+if (labelsSummary?.typed_artifacts?.labels?.present !== true) {
+  console.error('FAIL: expected labels typed artifact present after first run');
+  process.exit(1);
+}
+const labelsPath = path.join(outDir, 'typeset_demo_labels_probe_v0', 'labels_v0.json');
+if (!fs.existsSync(labelsPath)) {
+  console.error('FAIL: expected labels_v0.json artifact after first run');
+  process.exit(1);
+}
+const labelsShaFirst = labelsSummary.typed_artifacts.labels.artifact_sha256;
+if (typeof labelsShaFirst !== 'string' || !/^[0-9a-f]{64}$/.test(labelsShaFirst)) {
+  console.error('FAIL: expected labels artifact sha256 in first summary');
+  process.exit(1);
+}
+fs.writeFileSync(path.join(baselineDir, 'labels_v0_first.sha256'), `${labelsShaFirst}\n`);
 NODE
 
 TEXLIVE_RESOLVER_BACKEND_V0=offline_store_v0 \
@@ -85,6 +104,7 @@ const report = JSON.parse(fs.readFileSync(path.join(outDir, 'report.json'), 'utf
 const statuses = Array.isArray(report.statuses) ? report.statuses : [];
 const resolvedCount = Number(report.resolved_resources_count ?? 0);
 const requiredTypedKeys = ['toc', 'labels', 'bib', 'hyperref'];
+const labelsShaFirst = fs.readFileSync(path.join(`${outDir}_baseline`, 'labels_v0_first.sha256'), 'utf8').trim();
 
 if (resolvedCount <= 0) {
   console.error('FAIL: expected at least one resolved resource in fixture gallery summaries');
@@ -133,9 +153,24 @@ for (const status of statuses) {
   }
 }
 
+const labelsSummary = JSON.parse(
+  fs.readFileSync(path.join(outDir, 'typeset_demo_labels_probe_v0', 'summary.json'), 'utf8'),
+);
+const labelsArtifact = labelsSummary?.typed_artifacts?.labels;
+if (!labelsArtifact || labelsArtifact.present !== true) {
+  console.error('FAIL: expected labels typed artifact present after second run');
+  process.exit(1);
+}
+const labelsShaSecond = labelsArtifact.artifact_sha256;
+if (labelsShaSecond !== labelsShaFirst) {
+  console.error('FAIL: labels_v0 artifact sha256 must be stable across reruns');
+  process.exit(1);
+}
+
 console.log(`PASS: resolved_resources_count ${resolvedCount}`);
 console.log(`PASS: baseline_match MATCH=${baselineMatches} MISSING=${baselineMissing}`);
 console.log(`PASS: typed_artifacts keys ${requiredTypedKeys.join(',')}`);
+console.log(`PASS: labels_v0 sha stable ${labelsShaSecond}`);
 NODE
 
 echo "PASS: wasm fixture gallery artifacts $OUT_DIR"
