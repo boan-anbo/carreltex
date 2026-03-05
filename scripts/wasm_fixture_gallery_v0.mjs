@@ -282,6 +282,16 @@ async function loadFixtureCasesV0() {
       fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_documentclass_emptyopts_invalid_probe_v0.tex',
     },
     {
+      id: 'typeset_demo_usepackage_opts_multi_probe_v0',
+      mode: 'typeset',
+      fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_usepackage_opts_multi_probe_v0.tex',
+    },
+    {
+      id: 'typeset_demo_usepackage_emptyopts_invalid_probe_v0',
+      mode: 'typeset',
+      fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_usepackage_emptyopts_invalid_probe_v0.tex',
+    },
+    {
       id: 'typeset_demo_package_require_invalid_probe_v0',
       mode: 'typeset',
       fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_package_require_invalid_probe_v0.tex',
@@ -557,6 +567,51 @@ function dedupeValuesPreserveOrderV0(values) {
   return deduped;
 }
 
+function mergePkgoptUsepackageEntriesV0(entries) {
+  const merged = [];
+  const indexByKey = new Map();
+  for (const entry of entries) {
+    const command = typeof entry?.command === 'string' ? entry.command : '';
+    if (command !== 'usepackage' && command !== 'RequirePackage') {
+      merged.push(entry);
+      continue;
+    }
+    const packageName = typeof entry?.package === 'string' ? entry.package : '';
+    const key = `${command}\u0000${packageName.toLowerCase()}`;
+    const existingIndex = indexByKey.get(key);
+    if (existingIndex === undefined) {
+      indexByKey.set(key, merged.length);
+      merged.push({
+        ...entry,
+        options: dedupeValuesPreserveOrderV0(Array.isArray(entry.options) ? entry.options : []),
+      });
+      continue;
+    }
+    const existing = merged[existingIndex];
+    const mergedOptions = dedupeValuesPreserveOrderV0([
+      ...(Array.isArray(existing.options) ? existing.options : []),
+      ...(Array.isArray(entry.options) ? entry.options : []),
+    ]);
+    const start = Math.min(
+      existing.source_span?.start_byte ?? Number.MAX_SAFE_INTEGER,
+      entry.source_span?.start_byte ?? Number.MAX_SAFE_INTEGER,
+    );
+    const end = Math.max(
+      existing.source_span?.end_byte ?? 0,
+      entry.source_span?.end_byte ?? 0,
+    );
+    merged[existingIndex] = {
+      ...existing,
+      options: mergedOptions,
+      source_span: {
+        start_byte: start,
+        end_byte: end,
+      },
+    };
+  }
+  return merged;
+}
+
 function splitCommaOptionsStrictV0(rawValue, context) {
   const values = [];
   for (const chunk of rawValue.split(',')) {
@@ -760,7 +815,7 @@ function extractPkgoptEntriesFromSourceV0(sourceBytes) {
         index = commandIndex;
         continue;
       }
-      if (command === 'PassOptionsToClass') {
+      if (command === 'PassOptionsToClass' || command === 'usepackage' || command === 'RequirePackage') {
         options = splitCommaOptionsStrictV0(optionGroup.value, 'pkgopt_v0 PassOptionsToClass');
       } else {
         options = dedupeValuesPreserveOrderV0(splitCommaValuesV0(optionGroup.value));
@@ -820,7 +875,7 @@ function extractPkgoptEntriesFromSourceV0(sourceBytes) {
     }
     index = endOffset;
   }
-  return entries;
+  return mergePkgoptUsepackageEntriesV0(entries);
 }
 
 function extractGraphicsEntriesFromSourceV0(sourceBytes) {
@@ -980,6 +1035,7 @@ function extractResourceHintEntriesFromSourceV0(sourceBytes) {
       let next = commandIndex;
       const optionsGroup = readBracketGroupV0(sourceBytes, next);
       if (optionsGroup.ok) {
+        splitCommaOptionsStrictV0(optionsGroup.value, 'resource_hints_v0 usepackage options');
         next = optionsGroup.next;
       }
       const packageGroup = readBracedGroupV0(sourceBytes, next);
@@ -1523,6 +1579,7 @@ async function emitTypedArtifactsV0(caseSpec, caseOutDir, typedArtifacts, fixtur
     || caseSpec.id === 'typeset_demo_documentclass_opts_probe_v0'
     || caseSpec.id === 'typeset_demo_documentclass_opts_multi_probe_v0'
     || caseSpec.id === 'typeset_demo_passoptionstoclass_probe_v0'
+    || caseSpec.id === 'typeset_demo_usepackage_opts_multi_probe_v0'
   ) {
     typedArtifacts.pkgopt = await emitPkgoptTypedArtifactV0(caseOutDir, fixtureBytes);
   }
