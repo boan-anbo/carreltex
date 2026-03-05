@@ -871,6 +871,10 @@ if (resourceHints.version !== 1) {
   console.error('FAIL: expected report.resource_hints_v0.version=1 after first run');
   process.exit(1);
 }
+if (resourceHints.resource_hints_v0_version !== 1) {
+  console.error('FAIL: expected report.resource_hints_v0.resource_hints_v0_version=1 after first run');
+  process.exit(1);
+}
 if (!Array.isArray(resourceHints.entries)) {
   console.error('FAIL: expected report.resource_hints_v0.entries array after first run');
   process.exit(1);
@@ -879,17 +883,51 @@ if (resourceHints.entries.length <= 0) {
   console.error('FAIL: expected non-empty report.resource_hints_v0.entries after first run');
   process.exit(1);
 }
+const allowedHintTypes = new Set([
+  'tex_input',
+  'tex_include',
+  'tex_includeonly',
+  'package_file',
+  'class_file',
+  'graphics_path',
+  'bib_resource',
+  'bib_style',
+  'hyperref_url',
+]);
+const fixtureBytesByCase = new Map();
 for (const [index, entry] of resourceHints.entries.entries()) {
+  if (entry?.kind !== 'resource_hint') {
+    console.error(`FAIL: resource_hints_v0.entries[${index}] invalid kind`);
+    process.exit(1);
+  }
   if (typeof entry?.case_id !== 'string' || entry.case_id.length === 0) {
     console.error(`FAIL: resource_hints_v0.entries[${index}] invalid case_id`);
     process.exit(1);
   }
-  if (typeof entry?.hint_type !== 'string' || entry.hint_type.length === 0) {
+  if (typeof entry?.hint_type !== 'string' || !allowedHintTypes.has(entry.hint_type)) {
     console.error(`FAIL: resource_hints_v0.entries[${index}] invalid hint_type`);
     process.exit(1);
   }
   if (typeof entry?.value !== 'string' || entry.value.length === 0) {
     console.error(`FAIL: resource_hints_v0.entries[${index}] invalid value`);
+    process.exit(1);
+  }
+  const sourceSpan = entry?.source_span;
+  if (!sourceSpan || !Number.isInteger(sourceSpan.start_byte) || !Number.isInteger(sourceSpan.end_byte)) {
+    console.error(`FAIL: resource_hints_v0.entries[${index}] missing source_span`);
+    process.exit(1);
+  }
+  if (sourceSpan.start_byte < 0 || sourceSpan.end_byte <= sourceSpan.start_byte) {
+    console.error(`FAIL: resource_hints_v0.entries[${index}] source_span must satisfy start<end`);
+    process.exit(1);
+  }
+  if (!fixtureBytesByCase.has(entry.case_id)) {
+    const fixturePath = path.join(outDir, entry.case_id, 'main.tex');
+    fixtureBytesByCase.set(entry.case_id, fs.readFileSync(fixturePath));
+  }
+  const fixtureBytes = fixtureBytesByCase.get(entry.case_id);
+  if (sourceSpan.end_byte > fixtureBytes.length) {
+    console.error(`FAIL: resource_hints_v0.entries[${index}] source_span out of fixture bounds`);
     process.exit(1);
   }
 }
@@ -1176,6 +1214,10 @@ if (resourceHints.version !== 1) {
   console.error('FAIL: expected report.resource_hints_v0.version=1 after rerun');
   process.exit(1);
 }
+if (resourceHints.resource_hints_v0_version !== 1) {
+  console.error('FAIL: expected report.resource_hints_v0.resource_hints_v0_version=1 after rerun');
+  process.exit(1);
+}
 if (!Array.isArray(resourceHints.entries)) {
   console.error('FAIL: expected report.resource_hints_v0.entries array after rerun');
   process.exit(1);
@@ -1236,6 +1278,11 @@ if (!usepackageMultipackageInvalidStatus || usepackageMultipackageInvalidStatus.
 const graphicsOptionsInvalidStatus = statuses.find((entry) => entry.case_id === 'typeset_demo_graphics_opts_invalid_probe_v0');
 if (!graphicsOptionsInvalidStatus || graphicsOptionsInvalidStatus.status !== 'INVALID') {
   console.error('FAIL: expected typeset_demo_graphics_opts_invalid_probe_v0 status INVALID');
+  process.exit(1);
+}
+const resourceHintsInvalidStatus = statuses.find((entry) => entry.case_id === 'typeset_demo_resource_hints_invalid_probe_v0');
+if (!resourceHintsInvalidStatus || resourceHintsInvalidStatus.status !== 'INVALID') {
+  console.error('FAIL: expected typeset_demo_resource_hints_invalid_probe_v0 status INVALID');
   process.exit(1);
 }
 for (const status of okStatuses) {
