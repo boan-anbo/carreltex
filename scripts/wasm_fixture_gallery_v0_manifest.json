@@ -128,6 +128,24 @@
       "purpose": "Exercises combined input/include inclusion with deterministic page-break semantics for include."
     },
     {
+      "id": "typeset_demo_hyperref_input_label_probe_v0",
+      "tags": ["typeset", "hyperref", "input", "labels", "refs", "probe", "ok"],
+      "expected_status": "OK",
+      "purpose": "Exercises label/ref hyperlink resolution when section anchors are defined inside input-expanded content."
+    },
+    {
+      "id": "typeset_demo_hyperref_include_label_probe_v0",
+      "tags": ["typeset", "hyperref", "include", "labels", "refs", "figure", "equation", "probe", "ok"],
+      "expected_status": "OK",
+      "purpose": "Exercises deterministic ref target mapping across include page boundaries for heading/figure/equation anchors."
+    },
+    {
+      "id": "typeset_demo_hyperref_toc_input_probe_v0",
+      "tags": ["typeset", "hyperref", "toc", "input", "probe", "ok"],
+      "expected_status": "OK",
+      "purpose": "Exercises TOC hyperlink anchor mapping when headings originate from input-expanded files."
+    },
+    {
       "id": "typeset_demo_resource_hints_invalid_probe_v0",
       "tags": ["typeset", "resource-hints", "invalid", "unsafe-path", "probe"],
       "expected_status": "INVALID",

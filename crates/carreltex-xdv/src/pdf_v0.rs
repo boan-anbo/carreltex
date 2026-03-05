@@ -351,9 +351,35 @@ fn split_superscript_segments_v0(segments: &[PdfStyledSegmentV0]) -> Vec<PdfRend
     out
 }
 
+fn is_structured_non_title_line_v0(glyphs: &[GlyphPlanV0]) -> bool {
+    detect_heading_prefix_v0(glyphs).is_some()
+        || detect_list_prefix_v0(glyphs).is_some()
+        || detect_quote_prefix_advance_pt_v0(glyphs).is_some()
+        || has_center_prefix_v0(glyphs)
+        || has_right_prefix_v0(glyphs)
+        || has_noindent_prefix_v0(glyphs)
+        || has_table_row_prefix_v0(glyphs)
+        || has_figure_box_prefix_v0(glyphs)
+        || has_figure_caption_prefix_v0(glyphs)
+        || has_figure_image_prefix_v0(glyphs)
+        || has_toc_placeholder_line_v0(glyphs)
+        || has_toc_entry_line_prefix_v0(glyphs)
+        || has_footnote_line_prefix_v0(glyphs)
+        || has_href_url_line_prefix_v0(glyphs)
+        || has_label_line_prefix_v0(glyphs)
+        || has_ref_line_prefix_v0(glyphs)
+        || has_ref_anchor_link_line_prefix_v0(glyphs)
+        || has_equation_line_prefix_v0(glyphs)
+        || has_bibitem_line_prefix_v0(glyphs)
+        || has_cite_line_prefix_v0(glyphs)
+}
+
 fn detect_title_block_len_v0(lines: &[LinePlanV0]) -> usize {
     let mut index = 0usize;
-    while index < lines.len() && !lines[index].glyphs.is_empty() {
+    while index < lines.len()
+        && !lines[index].glyphs.is_empty()
+        && !is_structured_non_title_line_v0(&lines[index].glyphs)
+    {
         index += 1;
     }
     if index > 0 && index < lines.len() {

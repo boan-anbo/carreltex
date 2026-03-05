@@ -46,6 +46,28 @@ fn layout_lines_bytes(main: &[u8]) -> Vec<Vec<u8>> {
         .collect()
 }
 
+fn layout_text_from_xdv_bytes(xdv_bytes: &[u8]) -> String {
+    let layout = parse_dvi_v2_text_page_to_layout_v0(xdv_bytes, 917_504).expect("layout parse");
+    let mut out = Vec::<u8>::new();
+    for (page_index, page) in layout.pages.iter().enumerate() {
+        if page_index > 0 {
+            out.push(0x0c);
+            out.push(b'\n');
+        }
+        for line in &page.lines {
+            out.extend(line.glyphs.iter().map(|glyph| glyph.byte));
+            out.push(b'\n');
+        }
+    }
+    String::from_utf8_lossy(&out).to_string()
+}
+
+fn compile_typeset_text_with_files(main: &[u8], extra_files: &[(&[u8], &[u8])]) -> String {
+    let result = compile_typeset_with_files(main, extra_files);
+    assert_eq!(result.status, CompileStatus::Ok);
+    layout_text_from_xdv_bytes(&result.main_xdv_bytes)
+}
+
 #[test]
 fn typeset_minimal_subset_compiles_ok() {
     let main = b"\\documentclass{article}\\title{CarrelTeX Minimal Typeset Demo}\\author{Alice \\and Bob}\\date{2026-03-04}\\begin{document}\\maketitle Hello, world. This is a paragraph with \\emph{emphasis} and \\textbf{bold}.\\end{document}";
@@ -103,6 +125,39 @@ fn typeset_minimal_include_emits_forced_page_break_before_inlined_file() {
     .to_string();
     assert!(page1.contains("PageA"), "page1={page1:?}");
     assert!(page2.contains("Included section. PageB"), "page2={page2:?}");
+}
+
+#[test]
+fn typeset_minimal_hyperref_labels_from_input_resolve_in_main_document_order_v2() {
+    let main = b"\\documentclass{article}\\begin{document}\\input{sections/one}Main ref \\ref{sec:one}.\\href{https://example.com}{link}\\end{document}";
+    let included = b"\\section{Included One}\\label{sec:one}Included body.";
+    let text = compile_typeset_text_with_files(main, &[(b"sections/one.tex", included)]);
+    assert!(text.contains("@S {Included One}"), "text={text:?}");
+    assert!(
+        text.contains("!l sec:one 1 heading 1 Included One"),
+        "text={text:?}"
+    );
+    assert!(text.contains("Main ref <1>."), "text={text:?}");
+    assert!(text.contains("!r sec:one "), "text={text:?}");
+    assert!(text.contains("!ra 1 1"), "text={text:?}");
+}
+
+#[test]
+fn typeset_minimal_hyperref_refs_keep_anchor_order_across_include_boundaries_v2() {
+    let main = b"\\documentclass{article}\\begin{document}\\section{Main}\\label{sec:main}\\include{sections/two}Refs: \\ref{sec:two}, \\ref{fig:two}, \\ref{eq:two}.\\href{https://example.com}{link}\\end{document}";
+    let included = b"\\section{Included Two}\\label{sec:two}\\begin{figure}\\caption{Included figure}\\end{figure}\\label{fig:two}\\[x+y\\]\\label{eq:two}";
+    let text = compile_typeset_text_with_files(main, &[(b"sections/two.tex", included)]);
+    assert!(text.contains("!l sec:main 1 heading 1 Main"), "text={text:?}");
+    assert!(
+        text.contains("!l sec:two 2 heading 1 Included Two"),
+        "text={text:?}"
+    );
+    assert!(text.contains("!l fig:two 3 figure 1 -"), "text={text:?}");
+    assert!(text.contains("!l eq:two 4 equation 1 -"), "text={text:?}");
+    assert!(text.contains("Refs: <2>, <1>, <1>."), "text={text:?}");
+    assert!(text.contains("!ra 1 2"), "text={text:?}");
+    assert!(text.contains("!ra 2 3"), "text={text:?}");
+    assert!(text.contains("!ra 3 4"), "text={text:?}");
 }
 
 #[test]
@@ -230,6 +285,19 @@ fn typeset_minimal_toc_entries_follow_heading_order_with_stable_anchors() {
     let second = text.find("!toc 2 2 Two").expect("second toc entry");
     let third = text.find("!toc 1 3 Three").expect("third toc entry");
     assert!(first < second && second < third, "body={text:?}");
+}
+
+#[test]
+fn typeset_minimal_toc_links_keep_input_heading_anchor_order_with_hyperref_v2() {
+    let main = b"\\documentclass{article}\\title{T}\\author{A}\\date{D}\\begin{document}\\maketitle\\tableofcontents\\input{sections/toc}\\section{Tail}\\href{https://example.com}{link}\\end{document}";
+    let included = b"\\section{Input Section}\\subsection{Input Detail}";
+    let text = compile_typeset_text_with_files(main, &[(b"sections/toc.tex", included)]);
+    let first = text.find("!toc 1 1 <Input Section>").expect("first toc entry");
+    let second = text
+        .find("!toc 2 2 <Input Detail>")
+        .expect("second toc entry");
+    let third = text.find("!toc 1 3 <Tail>").expect("third toc entry");
+    assert!(first < second && second < third, "text={text:?}");
 }
 
 #[test]

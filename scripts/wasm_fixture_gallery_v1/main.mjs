@@ -673,6 +673,21 @@ async function loadFixtureCasesV0() {
       fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_input_include_probe_v0.tex',
     },
     {
+      id: 'typeset_demo_hyperref_input_label_probe_v0',
+      mode: 'typeset',
+      fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_hyperref_input_label_probe_v0.tex',
+    },
+    {
+      id: 'typeset_demo_hyperref_include_label_probe_v0',
+      mode: 'typeset',
+      fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_hyperref_include_label_probe_v0.tex',
+    },
+    {
+      id: 'typeset_demo_hyperref_toc_input_probe_v0',
+      mode: 'typeset',
+      fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_hyperref_toc_input_probe_v0.tex',
+    },
+    {
       id: 'typeset_demo_input_probe_v0',
       mode: 'typeset',
       fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_input_probe_v0.tex',
