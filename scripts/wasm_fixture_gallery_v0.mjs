@@ -297,6 +297,14 @@ function isAsciiLetterByteV0(byte) {
   return (byte >= 0x41 && byte <= 0x5a) || (byte >= 0x61 && byte <= 0x7a);
 }
 
+function isSafeResolverTokenV0(value) {
+  return typeof value === 'string'
+    && value.length > 0
+    && !value.includes('/')
+    && !value.includes('\\')
+    && !value.includes('..');
+}
+
 function skipSpacesV0(bytes, start) {
   let index = start;
   while (index < bytes.length && (bytes[index] === 0x20 || bytes[index] === 0x09 || bytes[index] === 0x0a || bytes[index] === 0x0d)) {
@@ -990,6 +998,109 @@ async function buildResourceHintsRollupV0(outDir, summaries) {
   };
 }
 
+function inferTexmfFormatFromNameV0(name, fallback) {
+  const dotIndex = name.lastIndexOf('.');
+  if (dotIndex <= 0 || dotIndex === name.length - 1) {
+    return fallback;
+  }
+  const ext = name.slice(dotIndex + 1).toLowerCase();
+  if (!/^[a-z0-9]+$/.test(ext)) {
+    return fallback;
+  }
+  return ext;
+}
+
+function parseFontconfigHintTokenV0(value) {
+  const prefix = 'fontconfig:';
+  if (!value.startsWith(prefix)) {
+    return null;
+  }
+  const payload = value.slice(prefix.length);
+  const firstColon = payload.indexOf(':');
+  if (firstColon <= 0 || firstColon === payload.length - 1) {
+    return null;
+  }
+  const variant = payload.slice(0, firstColon).trim();
+  const name = payload.slice(firstColon + 1).trim();
+  if (!isSafeResolverTokenV0(variant) || !isSafeResolverTokenV0(name)) {
+    return null;
+  }
+  return {
+    kind: 'fontconfig',
+    format: 'name',
+    name,
+    variant,
+    hint_type: 'hyperref_url',
+  };
+}
+
+function resolverRequestKeyV0(request) {
+  return `${request.kind}\u0000${request.format}\u0000${request.name}\u0000${request.variant}`;
+}
+
+async function collectResolverRequestsFromTypedArtifactsV0(caseSpec, caseOutDir, typedArtifacts) {
+  const requestsByKey = new Map();
+
+  const addTexmfRequest = (name, fallbackFormat, hintType) => {
+    if (!isSafeResolverTokenV0(name)) {
+      throw new Error(`unsafe resource hint token for ${hintType} in case ${caseSpec.id}`);
+    }
+    const format = inferTexmfFormatFromNameV0(name, fallbackFormat);
+    if (!isSafeResolverTokenV0(format)) {
+      throw new Error(`unsafe format token '${format}' for ${hintType} in case ${caseSpec.id}`);
+    }
+    const variant = caseSpec.mode;
+    const request = {
+      kind: 'texmf',
+      format,
+      name,
+      variant,
+      hint_type: hintType,
+    };
+    requestsByKey.set(resolverRequestKeyV0(request), request);
+  };
+
+  const graphicsRelpath = typedArtifacts?.graphics?.artifact_relpath;
+  if (typedArtifacts?.graphics?.present === true && typeof graphicsRelpath === 'string' && graphicsRelpath.length > 0) {
+    const graphicsPayload = JSON.parse((await readFile(path.join(caseOutDir, graphicsRelpath))).toString('utf8'));
+    const graphicsEntries = Array.isArray(graphicsPayload?.entries) ? graphicsPayload.entries : [];
+    for (const entry of graphicsEntries) {
+      if (typeof entry?.path === 'string' && entry.path.length > 0) {
+        addTexmfRequest(entry.path, 'graphic', 'graphics_path');
+      }
+    }
+  }
+
+  const bibRelpath = typedArtifacts?.bib?.artifact_relpath;
+  if (typedArtifacts?.bib?.present === true && typeof bibRelpath === 'string' && bibRelpath.length > 0) {
+    const bibPayload = JSON.parse((await readFile(path.join(caseOutDir, bibRelpath))).toString('utf8'));
+    const bibEntries = Array.isArray(bibPayload?.entries) ? bibPayload.entries : [];
+    for (const entry of bibEntries) {
+      if (entry?.kind === 'resource_hint' && typeof entry?.value === 'string' && entry.value.length > 0) {
+        addTexmfRequest(entry.value, 'bib', 'bib_resource');
+      }
+    }
+  }
+
+  const hyperrefRelpath = typedArtifacts?.hyperref?.artifact_relpath;
+  if (typedArtifacts?.hyperref?.present === true && typeof hyperrefRelpath === 'string' && hyperrefRelpath.length > 0) {
+    const hyperrefPayload = JSON.parse((await readFile(path.join(caseOutDir, hyperrefRelpath))).toString('utf8'));
+    const hyperrefEntries = Array.isArray(hyperrefPayload?.entries) ? hyperrefPayload.entries : [];
+    for (const entry of hyperrefEntries) {
+      if (typeof entry?.target !== 'string' || entry.target.length === 0) {
+        continue;
+      }
+      const fontconfigRequest = parseFontconfigHintTokenV0(entry.target);
+      if (!fontconfigRequest) {
+        continue;
+      }
+      requestsByKey.set(resolverRequestKeyV0(fontconfigRequest), fontconfigRequest);
+    }
+  }
+
+  return [...requestsByKey.values()].sort((left, right) => resolverRequestKeyV0(left).localeCompare(resolverRequestKeyV0(right)));
+}
+
 async function computeBaselineMatchV0(caseId, artifactSha256, baselineDir) {
   if (!baselineDir) {
     return null;
@@ -1176,6 +1287,32 @@ async function runCaseV0(
     typed_artifacts: buildTypedArtifactsPlaceholderV0(),
   };
   await emitTypedArtifactsV0(caseSpec, caseOutDir, summary.typed_artifacts, fixtureBytes);
+  const typedArtifactRequests = await collectResolverRequestsFromTypedArtifactsV0(
+    caseSpec,
+    caseOutDir,
+    summary.typed_artifacts,
+  );
+  for (const request of typedArtifactRequests) {
+    const resolutionFromHint = await resolver.resolve({
+      kind: request.kind,
+      format: request.format,
+      name: request.name,
+      variant: request.variant,
+      resolver_id: resolver.resolverId,
+    });
+    if (resolutionFromHint.tag !== 'Found') {
+      continue;
+    }
+    resolvedResources.push({
+      kind: request.kind,
+      format: request.format,
+      name: request.name,
+      variant: request.variant,
+      stable_id: resolutionFromHint.stable_id,
+      sha256: resolutionFromHint.sha256,
+      cache_hit: resolutionFromHint.cache_hit,
+    });
+  }
   summary.baseline_match = await computeBaselineMatchV0(caseSpec.id, summary.artifact_sha256, baselineDir);
   if (errorMessage) {
     summary.error = errorMessage;
