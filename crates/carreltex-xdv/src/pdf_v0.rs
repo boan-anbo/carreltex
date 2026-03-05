@@ -9,6 +9,8 @@ const MARGIN_PT_V0: f32 = 72.0;
 const FONT_SIZE_PT_V0: f32 = 12.0;
 const TITLE_FONT_SIZE_PT_V0: f32 = 18.0;
 const INDENT_PT_V0: f32 = FONT_SIZE_PT_V0 * 2.0;
+const LIST_BODY_INDENT_PT_V0: f32 = INDENT_PT_V0;
+const ENUM_NUMBER_COLUMN_RIGHT_PT_V0: f32 = MARGIN_PT_V0 + (FONT_SIZE_PT_V0 * 1.5);
 const LEADING_PT_V0: f32 = 14.0;
 const TITLE_EXTRA_GAP_PT_V0: f32 = LEADING_PT_V0;
 const NOINDENT_PREFIX_MARKER_V0: u8 = b'~';
@@ -165,12 +167,26 @@ fn centered_line_x_v0(line_width_pt: f32) -> f32 {
     centered.clamp(MARGIN_PT_V0, PAGE_WIDTH_PT_V0 - MARGIN_PT_V0)
 }
 
-fn detect_list_prefix_advance_pt_v0(glyphs: &[GlyphPlanV0]) -> Option<f32> {
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ListPrefixKindV0 {
+    Itemize,
+    Enumerate,
+}
+
+#[derive(Clone, Copy)]
+struct ListPrefixV0 {
+    kind: ListPrefixKindV0,
+    prefix_len: usize,
+    display_prefix_len: usize,
+}
+
+fn detect_list_prefix_v0(glyphs: &[GlyphPlanV0]) -> Option<ListPrefixV0> {
     if glyphs.len() >= 2 && glyphs[0].byte == b'-' && glyphs[1].byte == b' ' {
-        let prefix_sp = glyphs[0]
-            .advance_sp
-            .checked_add(glyphs[1].advance_sp)?;
-        return Some((prefix_sp as f32) / 65_536.0);
+        return Some(ListPrefixV0 {
+            kind: ListPrefixKindV0::Itemize,
+            prefix_len: 2,
+            display_prefix_len: 1,
+        });
     }
 
     let mut index = 0usize;
@@ -183,11 +199,11 @@ fn detect_list_prefix_advance_pt_v0(glyphs: &[GlyphPlanV0]) -> Option<f32> {
     if glyphs[index].byte != b'.' || glyphs[index + 1].byte != b' ' {
         return None;
     }
-    let mut prefix_sp = 0i32;
-    for glyph in &glyphs[..=index + 1] {
-        prefix_sp = prefix_sp.checked_add(glyph.advance_sp)?;
-    }
-    Some((prefix_sp as f32) / 65_536.0)
+    Some(ListPrefixV0 {
+        kind: ListPrefixKindV0::Enumerate,
+        prefix_len: index + 2,
+        display_prefix_len: index + 1,
+    })
 }
 
 fn detect_quote_prefix_advance_pt_v0(glyphs: &[GlyphPlanV0]) -> Option<f32> {
@@ -208,6 +224,40 @@ fn has_right_prefix_v0(glyphs: &[GlyphPlanV0]) -> bool {
 
 fn has_noindent_prefix_v0(glyphs: &[GlyphPlanV0]) -> bool {
     glyphs.len() >= 2 && glyphs[0].byte == NOINDENT_PREFIX_MARKER_V0 && glyphs[1].byte == b' '
+}
+
+fn glyphs_advance_pt_v0(glyphs: &[GlyphPlanV0]) -> f32 {
+    glyphs
+        .iter()
+        .map(|glyph| (glyph.advance_sp as f32) / 65_536.0)
+        .sum()
+}
+
+fn emit_styled_segments_v0(
+    out: &mut Vec<u8>,
+    segments: &[PdfStyledSegmentV0],
+    x_pt: f32,
+    y_pt: f32,
+    font_size_pt: f32,
+) {
+    if segments.is_empty() {
+        return;
+    }
+    out.extend_from_slice(b"1 0 0 1 ");
+    out.extend_from_slice(format!("{:.2} {:.2} Tm ", x_pt, y_pt).as_bytes());
+    for segment in segments {
+        if segment.bytes.is_empty() {
+            continue;
+        }
+        let escaped = escape_pdf_string_bytes(&segment.bytes);
+        out.extend_from_slice(b"/");
+        out.extend_from_slice(style_font_alias_v0(segment.style));
+        out.extend_from_slice(b" ");
+        out.extend_from_slice(format!("{font_size_pt}").as_bytes());
+        out.extend_from_slice(b" Tf (");
+        out.extend_from_slice(&escaped);
+        out.extend_from_slice(b") Tj ");
+    }
 }
 
 fn build_page_content_stream_v0(lines: &[LinePlanV0]) -> Option<Vec<u8>> {
@@ -242,7 +292,7 @@ fn build_page_content_stream_v0(lines: &[LinePlanV0]) -> Option<Vec<u8>> {
             && !center_prefixed
             && !right_prefixed
             && has_noindent_prefix_v0(&line.glyphs);
-        let render_glyphs: &[GlyphPlanV0] = if quote_prefix_advance_pt.is_some() {
+        let render_glyphs_base: &[GlyphPlanV0] = if quote_prefix_advance_pt.is_some() {
             &line.glyphs[2..]
         } else if center_prefixed {
             &line.glyphs[2..]
@@ -252,6 +302,23 @@ fn build_page_content_stream_v0(lines: &[LinePlanV0]) -> Option<Vec<u8>> {
             &line.glyphs[2..]
         } else {
             &line.glyphs
+        };
+        let list_prefix = if line_index >= title_block_len
+            && quote_prefix_advance_pt.is_none()
+            && !center_prefixed
+            && !right_prefixed
+            && !noindent_prefixed
+        {
+            detect_list_prefix_v0(render_glyphs_base)
+        } else {
+            None
+        };
+        let render_glyphs: &[GlyphPlanV0] = if quote_prefix_advance_pt.is_some() {
+            render_glyphs_base
+        } else if let Some(prefix) = list_prefix {
+            &render_glyphs_base[prefix.prefix_len..]
+        } else {
+            render_glyphs_base
         };
 
         let segments = parse_styled_segments_v0(render_glyphs)?;
@@ -264,11 +331,6 @@ fn build_page_content_stream_v0(lines: &[LinePlanV0]) -> Option<Vec<u8>> {
         };
         if !line_is_empty {
             let line_width_pt: f32 = segments.iter().map(|segment| segment.advance_pt).sum();
-            let list_prefix_advance_pt = if in_title_block {
-                None
-            } else {
-                detect_list_prefix_advance_pt_v0(render_glyphs)
-            };
             let line_x = if in_title_block {
                 centered_line_x_v0(line_width_pt)
             } else if center_prefixed {
@@ -283,10 +345,10 @@ fn build_page_content_stream_v0(lines: &[LinePlanV0]) -> Option<Vec<u8>> {
                 active_quote_indent_pt = (FONT_SIZE_PT_V0 * 2.0).max(prefix_advance_pt);
                 active_hang_indent_pt = 0.0;
                 MARGIN_PT_V0 + active_quote_indent_pt
-            } else if let Some(prefix_advance_pt) = list_prefix_advance_pt {
-                active_hang_indent_pt = prefix_advance_pt;
+            } else if list_prefix.is_some() {
+                active_hang_indent_pt = LIST_BODY_INDENT_PT_V0;
                 active_quote_indent_pt = 0.0;
-                MARGIN_PT_V0
+                MARGIN_PT_V0 + LIST_BODY_INDENT_PT_V0
             } else if noindent_prefixed {
                 active_hang_indent_pt = 0.0;
                 active_quote_indent_pt = 0.0;
@@ -300,21 +362,17 @@ fn build_page_content_stream_v0(lines: &[LinePlanV0]) -> Option<Vec<u8>> {
             } else {
                 MARGIN_PT_V0
             };
-            out.extend_from_slice(b"1 0 0 1 ");
-            out.extend_from_slice(format!("{:.2} {:.2} Tm ", line_x, y).as_bytes());
-            for segment in segments {
-                if segment.bytes.is_empty() {
-                    continue;
-                }
-                let escaped = escape_pdf_string_bytes(&segment.bytes);
-                out.extend_from_slice(b"/");
-                out.extend_from_slice(style_font_alias_v0(segment.style));
-                out.extend_from_slice(b" ");
-                out.extend_from_slice(format!("{font_size_pt}").as_bytes());
-                out.extend_from_slice(b" Tf (");
-                out.extend_from_slice(&escaped);
-                out.extend_from_slice(b") Tj ");
+            if let Some(prefix) = list_prefix {
+                let display_prefix_glyphs = &render_glyphs_base[..prefix.display_prefix_len];
+                let display_prefix_segments = parse_styled_segments_v0(display_prefix_glyphs)?;
+                let prefix_width_pt = glyphs_advance_pt_v0(display_prefix_glyphs);
+                let prefix_x = match prefix.kind {
+                    ListPrefixKindV0::Itemize => MARGIN_PT_V0,
+                    ListPrefixKindV0::Enumerate => ENUM_NUMBER_COLUMN_RIGHT_PT_V0 - prefix_width_pt,
+                };
+                emit_styled_segments_v0(&mut out, &display_prefix_segments, prefix_x, y, font_size_pt);
             }
+            emit_styled_segments_v0(&mut out, &segments, line_x, y, font_size_pt);
             out.extend_from_slice(b"\n");
             if !in_title_block && skip_indent_after_title_block {
                 skip_indent_after_title_block = false;
