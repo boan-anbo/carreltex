@@ -133,6 +133,15 @@ fn typeset_minimal_lists_emit_expected_itemize_and_enumerate_lines() {
 }
 
 #[test]
+fn typeset_minimal_enumerate_emits_double_digit_items() {
+    let main = b"\\documentclass{article}\\begin{document}\\begin{enumerate}\\item One\\item Two\\item Three\\item Four\\item Five\\item Six\\item Seven\\item Eight\\item Nine\\item Ten\\end{enumerate}\\end{document}";
+    let body = extract_typeset_body(main);
+    let text = String::from_utf8(body).expect("body should be valid utf8");
+    assert!(text.contains("9. Nine"), "body={text:?}");
+    assert!(text.contains("10. Ten"), "body={text:?}");
+}
+
+#[test]
 fn typeset_minimal_rejects_nested_lists() {
     let main = b"\\documentclass{article}\\begin{document}\\begin{itemize}\\item Outer\\begin{enumerate}\\item Inner\\end{enumerate}\\end{itemize}\\end{document}";
     let result = compile_typeset(main);

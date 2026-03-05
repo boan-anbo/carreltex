@@ -296,6 +296,57 @@ fn tm_position_for_line_containing_text_v0(pdf: &[u8], needle: &str) -> Option<(
     None
 }
 
+fn tm_xs_for_segment_text_v0(pdf: &[u8], segment_text: &str) -> Vec<f32> {
+    let target_token = format!("({segment_text})");
+    let text = String::from_utf8_lossy(pdf);
+    let mut xs = Vec::<f32>::new();
+    for line in text.lines() {
+        if !line.contains(&target_token) || !line.contains(" Tm ") {
+            continue;
+        }
+        let fields = line.split_whitespace().collect::<Vec<_>>();
+        let mut index = 0usize;
+        while index + 6 < fields.len() {
+            let is_tm = fields[index] == "1"
+                && fields[index + 1] == "0"
+                && fields[index + 2] == "0"
+                && fields[index + 3] == "1"
+                && fields[index + 6] == "Tm";
+            if !is_tm {
+                index += 1;
+                continue;
+            }
+            let Some(x_pt) = fields[index + 4].parse::<f32>().ok() else {
+                index += 7;
+                continue;
+            };
+            let mut cursor = index + 7;
+            let mut matched = false;
+            while cursor < fields.len() {
+                if fields[cursor] == "1"
+                    && cursor + 6 < fields.len()
+                    && fields[cursor + 1] == "0"
+                    && fields[cursor + 2] == "0"
+                    && fields[cursor + 3] == "1"
+                    && fields[cursor + 6] == "Tm"
+                {
+                    break;
+                }
+                if fields[cursor] == target_token {
+                    matched = true;
+                    break;
+                }
+                cursor += 1;
+            }
+            if matched {
+                xs.push(x_pt);
+            }
+            index += 7;
+        }
+    }
+    xs
+}
+
 fn expected_center_x_pt_v0(width_sp: u32) -> f32 {
     let width_pt = (width_sp as f32) / 65_536.0;
     ((612.0 - width_pt) * 0.5).clamp(72.0, 612.0 - 72.0)
@@ -448,6 +499,81 @@ fn pdf_renderer_applies_hanging_indent_for_list_continuation_v0() {
     assert!(xs.len() >= 2, "expected at least two text lines, got {xs:?}");
     assert!((xs[0] - 72.0).abs() <= 0.02, "first list line x={}", xs[0]);
     assert!(xs[1] > xs[0], "continuation should hang-indent: {xs:?}");
+}
+
+#[test]
+fn pdf_renderer_itemize_bullet_and_body_x_offsets_invariants_v0() {
+    let xdv = write_dvi_v2_text_page_v0(b"- alpha\ncontinuation\n- beta\ncontinuationtwo")
+        .expect("writer should accept list text");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+    assert!(
+        !pdf.windows(b"(- alpha) Tj".len()).any(|w| w == b"(- alpha) Tj"),
+        "prefix should be split from body"
+    );
+
+    let bullet_xs = tm_xs_for_segment_text_v0(&pdf, "-");
+    let alpha_xs = tm_xs_for_segment_text_v0(&pdf, "alpha");
+    let beta_xs = tm_xs_for_segment_text_v0(&pdf, "beta");
+    let continuation_xs = tm_xs_for_segment_text_v0(&pdf, "continuation");
+    let continuation_two_xs = tm_xs_for_segment_text_v0(&pdf, "continuationtwo");
+
+    assert_eq!(bullet_xs.len(), 2, "expected two bullet renders: {bullet_xs:?}");
+    assert_eq!(alpha_xs.len(), 1, "expected alpha render");
+    assert_eq!(beta_xs.len(), 1, "expected beta render");
+    assert_eq!(continuation_xs.len(), 1, "expected continuation render");
+    assert_eq!(continuation_two_xs.len(), 1, "expected continuationtwo render");
+
+    let epsilon_pt = 0.02f32;
+    for x in &bullet_xs {
+        assert!((*x - 72.0).abs() <= epsilon_pt, "bullet x mismatch: {x}");
+    }
+    for x in [
+        alpha_xs[0],
+        beta_xs[0],
+        continuation_xs[0],
+        continuation_two_xs[0],
+    ] {
+        assert!((x - 96.0).abs() <= epsilon_pt, "item body x mismatch: {x}");
+    }
+}
+
+#[test]
+fn pdf_renderer_enumerate_number_column_alignment_invariants_v0() {
+    let xdv = write_dvi_v2_text_page_v0(b"9. nine\n10. ten")
+        .expect("writer should accept enumerate text");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+    assert!(
+        !pdf.windows(b"(9. nine) Tj".len()).any(|w| w == b"(9. nine) Tj"),
+        "prefix should be split from body"
+    );
+
+    let nine_number_x = tm_xs_for_segment_text_v0(&pdf, "9.");
+    let ten_number_x = tm_xs_for_segment_text_v0(&pdf, "10.");
+    let nine_body_x = tm_xs_for_segment_text_v0(&pdf, "nine");
+    let ten_body_x = tm_xs_for_segment_text_v0(&pdf, "ten");
+
+    assert_eq!(nine_number_x.len(), 1, "expected 9. number render");
+    assert_eq!(ten_number_x.len(), 1, "expected 10. number render");
+    assert_eq!(nine_body_x.len(), 1, "expected nine body render");
+    assert_eq!(ten_body_x.len(), 1, "expected ten body render");
+
+    let epsilon_pt = 0.02f32;
+    assert!(
+        nine_number_x[0] > ten_number_x[0],
+        "single-digit number should start further right: nine={:?}, ten={:?}",
+        nine_number_x,
+        ten_number_x
+    );
+    assert!(
+        (nine_body_x[0] - 96.0).abs() <= epsilon_pt,
+        "nine body x mismatch: {}",
+        nine_body_x[0]
+    );
+    assert!(
+        (ten_body_x[0] - 96.0).abs() <= epsilon_pt,
+        "ten body x mismatch: {}",
+        ten_body_x[0]
+    );
 }
 
 #[test]
