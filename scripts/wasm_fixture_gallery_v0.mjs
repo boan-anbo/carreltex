@@ -281,7 +281,104 @@ async function emitPlaceholderTypedArtifactV0(caseOutDir, artifactName, schemaNa
   };
 }
 
-async function emitTypedArtifactsV0(caseSpec, caseOutDir, typedArtifacts) {
+function isAsciiLetterByteV0(byte) {
+  return (byte >= 0x41 && byte <= 0x5a) || (byte >= 0x61 && byte <= 0x7a);
+}
+
+function skipSpacesV0(bytes, start) {
+  let index = start;
+  while (index < bytes.length && (bytes[index] === 0x20 || bytes[index] === 0x09 || bytes[index] === 0x0a || bytes[index] === 0x0d)) {
+    index += 1;
+  }
+  return index;
+}
+
+function readBracedGroupV0(bytes, start) {
+  let index = skipSpacesV0(bytes, start);
+  if (index >= bytes.length || bytes[index] !== 0x7b) {
+    return { ok: false, next: start, value: '' };
+  }
+  index += 1;
+  const begin = index;
+  let depth = 1;
+  while (index < bytes.length) {
+    const byte = bytes[index];
+    if (byte === 0x7b) {
+      depth += 1;
+    } else if (byte === 0x7d) {
+      depth -= 1;
+      if (depth === 0) {
+        const value = Buffer.from(bytes.slice(begin, index)).toString('utf8').trim();
+        return { ok: true, next: index + 1, value };
+      }
+    }
+    index += 1;
+  }
+  return { ok: false, next: start, value: '' };
+}
+
+function extractHyperrefLinksFromSourceV0(sourceBytes) {
+  const links = [];
+  let index = 0;
+  while (index < sourceBytes.length) {
+    if (sourceBytes[index] !== 0x5c) {
+      index += 1;
+      continue;
+    }
+    let commandIndex = index + 1;
+    while (commandIndex < sourceBytes.length && isAsciiLetterByteV0(sourceBytes[commandIndex])) {
+      commandIndex += 1;
+    }
+    if (commandIndex === index + 1) {
+      index += 1;
+      continue;
+    }
+    const command = Buffer.from(sourceBytes.slice(index + 1, commandIndex)).toString('ascii');
+    if (command === 'url') {
+      const urlGroup = readBracedGroupV0(sourceBytes, commandIndex);
+      if (urlGroup.ok && urlGroup.value.length > 0) {
+        links.push({ command: 'url', target: urlGroup.value });
+      }
+      index = urlGroup.ok ? urlGroup.next : commandIndex;
+      continue;
+    }
+    if (command === 'href') {
+      const urlGroup = readBracedGroupV0(sourceBytes, commandIndex);
+      if (!urlGroup.ok) {
+        index = commandIndex;
+        continue;
+      }
+      const textGroup = readBracedGroupV0(sourceBytes, urlGroup.next);
+      if (textGroup.ok && urlGroup.value.length > 0) {
+        links.push({ command: 'href', target: urlGroup.value });
+      }
+      index = textGroup.ok ? textGroup.next : urlGroup.next;
+      continue;
+    }
+    index = commandIndex;
+  }
+  return links;
+}
+
+async function emitHyperrefTypedArtifactV0(caseOutDir, fixtureBytes) {
+  const payload = {
+    version: 1,
+    schema: 'hyperref_v0',
+    links: extractHyperrefLinksFromSourceV0(fixtureBytes),
+  };
+  const bytes = Buffer.from(`${JSON.stringify(payload, null, 2)}\n`, 'utf8');
+  const relpath = 'hyperref_v0.json';
+  const fullPath = path.join(caseOutDir, relpath);
+  await writeFile(fullPath, bytes);
+  return {
+    present: true,
+    items: payload.links.length,
+    artifact_relpath: relpath,
+    artifact_sha256: sha256HexV0(bytes),
+  };
+}
+
+async function emitTypedArtifactsV0(caseSpec, caseOutDir, typedArtifacts, fixtureBytes) {
   if (caseSpec.id === 'typeset_demo_toc_probe_v0') {
     typedArtifacts.toc = await emitPlaceholderTypedArtifactV0(caseOutDir, 'toc_v0', 'toc_v0');
   }
@@ -292,7 +389,7 @@ async function emitTypedArtifactsV0(caseSpec, caseOutDir, typedArtifacts) {
     typedArtifacts.bib = await emitPlaceholderTypedArtifactV0(caseOutDir, 'bib_v0', 'bib_v0');
   }
   if (caseSpec.id === 'typeset_demo_hyperref_probe_v0') {
-    typedArtifacts.hyperref = await emitPlaceholderTypedArtifactV0(caseOutDir, 'hyperref_v0', 'hyperref_v0');
+    typedArtifacts.hyperref = await emitHyperrefTypedArtifactV0(caseOutDir, fixtureBytes);
   }
 }
 
@@ -480,7 +577,7 @@ async function runCaseV0(
     resolved_resources: resolvedResources,
     typed_artifacts: buildTypedArtifactsPlaceholderV0(),
   };
-  await emitTypedArtifactsV0(caseSpec, caseOutDir, summary.typed_artifacts);
+  await emitTypedArtifactsV0(caseSpec, caseOutDir, summary.typed_artifacts, fixtureBytes);
   summary.baseline_match = await computeBaselineMatchV0(caseSpec.id, summary.artifact_sha256, baselineDir);
   if (errorMessage) {
     summary.error = errorMessage;
