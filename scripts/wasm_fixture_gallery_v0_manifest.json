@@ -32,6 +32,24 @@
       "purpose": "Probes hyperref/url seam planned for future typed artifacts."
     },
     {
+      "id": "typeset_demo_bib_probe_v0",
+      "tags": ["typeset", "bib", "cite", "probe", "ni"],
+      "expected_status": "NI",
+      "purpose": "Probes bibliography and cite seam planned for future typed artifacts."
+    },
+    {
+      "id": "typeset_demo_graphics_probe_v0",
+      "tags": ["typeset", "graphics", "probe", "ni"],
+      "expected_status": "NI",
+      "purpose": "Probes graphics include seam planned for future typed artifacts."
+    },
+    {
+      "id": "typeset_demo_pkgopt_probe_v0",
+      "tags": ["typeset", "package-options", "probe", "ni"],
+      "expected_status": "NI",
+      "purpose": "Probes preamble package-option plumbing seam planned for future typed artifacts."
+    },
+    {
       "id": "ok_demo_capabilities_v0",
       "tags": ["ok", "capabilities", "surface"],
       "expected_status": "OK",
