@@ -8,6 +8,7 @@ const HARD_LINE_BREAK_CONTROL_V0: &[u8] = b"\\";
 const NEWLINE_ALIAS_CONTROL_V0: &[u8] = b"newline";
 const LINEBREAK_ALIAS_CONTROL_V0: &[u8] = b"linebreak";
 const PAGEBREAK_ALIAS_CONTROL_V0: &[u8] = b"pagebreak";
+const TABLEOFCONTENTS_CONTROL_V0: &[u8] = b"tableofcontents";
 const BEGIN_CONTROL_V0: &[u8] = b"begin";
 const END_CONTROL_V0: &[u8] = b"end";
 const ITEM_CONTROL_V0: &[u8] = b"item";
@@ -30,6 +31,8 @@ const HREF_URL_LINE_PREFIX_MARKER_V0: &[u8] = b"!u ";
 const TABLE_ROW_PREFIX_MARKER_V0: &[u8] = b"!t ";
 const FIGURE_BOX_PREFIX_MARKER_V0: &[u8] = b"!gbox";
 const FIGURE_CAPTION_PREFIX_MARKER_V0: &[u8] = b"!gcap ";
+const TOC_PLACEHOLDER_MARKER_V0: &[u8] = b"!toc";
+const TOC_ENTRY_LINE_PREFIX_MARKER_V0: &[u8] = b"!toc ";
 const LINK_START_MARKER_V0: u8 = b'<';
 const LINK_END_MARKER_V0: u8 = b'>';
 const NOINDENT_PREFIX_MARKER_V0: &[u8] = b"~ ";
@@ -44,6 +47,13 @@ const SUBSECTION_CONTROL_V0: &[u8] = b"subsection";
 const SUBSUBSECTION_CONTROL_V0: &[u8] = b"subsubsection";
 const PARAGRAPH_CONTROL_V0: &[u8] = b"paragraph";
 const SUBPARAGRAPH_CONTROL_V0: &[u8] = b"subparagraph";
+
+#[derive(Clone)]
+struct TocEntryMetaV0 {
+    level: u8,
+    anchor_id: u32,
+    title: Vec<u8>,
+}
 
 #[derive(Default)]
 struct TitleMetaV0 {
@@ -646,7 +656,22 @@ fn heading_prefix_for_control_v0(name: &[u8]) -> Option<&'static [u8]> {
     }
 }
 
-fn consume_heading_command_v0(tokens: &[TokenV0], index: usize, out: &mut Vec<u8>) -> Option<usize> {
+fn heading_toc_level_for_control_v0(name: &[u8]) -> Option<u8> {
+    if name == SECTION_CONTROL_V0 {
+        Some(1)
+    } else if name == SUBSECTION_CONTROL_V0 {
+        Some(2)
+    } else {
+        None
+    }
+}
+
+fn consume_heading_command_v0(
+    tokens: &[TokenV0],
+    index: usize,
+    out: &mut Vec<u8>,
+    toc_entries: Option<(&mut Vec<TocEntryMetaV0>, &mut u32)>,
+) -> Option<usize> {
     let TokenV0::ControlSeq(name) = tokens.get(index)? else {
         return None;
     };
@@ -658,12 +683,26 @@ fn consume_heading_command_v0(tokens: &[TokenV0], index: usize, out: &mut Vec<u8
     let mut heading = Vec::new();
     consume_fragment_range_v0(tokens, group_start, group_end, &mut heading, false, true)?;
     trim_trailing_spaces(&mut heading);
+    if heading.is_empty() {
+        return None;
+    }
     push_paragraph_break(out);
     out.extend_from_slice(heading_prefix);
     out.push(BOLD_START_MARKER_V0);
     out.extend_from_slice(&heading);
     out.push(BOLD_END_MARKER_V0);
     push_paragraph_break(out);
+
+    if let Some((entries, next_anchor_id)) = toc_entries {
+        let level = heading_toc_level_for_control_v0(name.as_slice())?;
+        let anchor_id = *next_anchor_id;
+        *next_anchor_id = next_anchor_id.checked_add(1)?;
+        entries.push(TocEntryMetaV0 {
+            level,
+            anchor_id,
+            title: heading,
+        });
+    }
     Some(next)
 }
 
@@ -1380,6 +1419,11 @@ pub(crate) fn extract_typeset_minimal_text_body_v0(tokens: &[TokenV0]) -> Option
     let mut body = Vec::<u8>::new();
     let mut footnotes = Vec::<Vec<u8>>::new();
     let mut href_urls = Vec::<Vec<u8>>::new();
+    let mut toc_entries = Vec::<TocEntryMetaV0>::new();
+    let mut next_toc_anchor_id = 1u32;
+    let mut saw_maketitle = false;
+    let mut saw_body_content_after_maketitle = false;
+    let mut toc_requested = false;
     let mut pending_noindent_after_heading = false;
     loop {
         match tokens.get(index) {
@@ -1389,7 +1433,19 @@ pub(crate) fn extract_typeset_minimal_text_body_v0(tokens: &[TokenV0]) -> Option
             }
             Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"maketitle" => {
                 emit_maketitle_block_v0(&mut body, &meta);
+                saw_maketitle = true;
                 pending_noindent_after_heading = false;
+                index += 1;
+            }
+            Some(TokenV0::ControlSeq(name)) if name.as_slice() == TABLEOFCONTENTS_CONTROL_V0 => {
+                if !saw_maketitle || saw_body_content_after_maketitle || toc_requested {
+                    return None;
+                }
+                push_paragraph_break(&mut body);
+                body.extend_from_slice(TOC_PLACEHOLDER_MARKER_V0);
+                push_newline(&mut body);
+                push_paragraph_break(&mut body);
+                toc_requested = true;
                 index += 1;
             }
             Some(TokenV0::ControlSeq(name)) if name.as_slice() == END_CONTROL_V0 => {
@@ -1397,6 +1453,7 @@ pub(crate) fn extract_typeset_minimal_text_body_v0(tokens: &[TokenV0]) -> Option
                 break;
             }
             Some(TokenV0::ControlSeq(name)) if name.as_slice() == BEGIN_CONTROL_V0 => {
+                saw_body_content_after_maketitle = true;
                 pending_noindent_after_heading = false;
                 index = consume_body_environment_v0(tokens, index, &mut body)?;
             }
@@ -1405,26 +1462,41 @@ pub(crate) fn extract_typeset_minimal_text_body_v0(tokens: &[TokenV0]) -> Option
                 index += 1;
             }
             Some(TokenV0::ControlSeq(name)) if name.as_slice() == CENTERLINE_CONTROL_V0 => {
+                saw_body_content_after_maketitle = true;
                 pending_noindent_after_heading = false;
                 index = consume_centerline_command_v0(tokens, index, &mut body)?;
             }
             Some(TokenV0::ControlSeq(name)) if name.as_slice() == RIGHTLINE_CONTROL_V0 => {
+                saw_body_content_after_maketitle = true;
                 pending_noindent_after_heading = false;
                 index = consume_rightline_command_v0(tokens, index, &mut body)?;
             }
             Some(TokenV0::ControlSeq(name)) if name.as_slice() == FOOTNOTE_CONTROL_V0 => {
+                saw_body_content_after_maketitle = true;
                 maybe_emit_pending_noindent_prefix_v0(&mut body, &mut pending_noindent_after_heading);
                 index = consume_footnote_command_v0(tokens, index, &mut body, &mut footnotes)?;
             }
             Some(TokenV0::ControlSeq(name)) if name.as_slice() == HREF_CONTROL_V0 => {
+                saw_body_content_after_maketitle = true;
                 maybe_emit_pending_noindent_prefix_v0(&mut body, &mut pending_noindent_after_heading);
                 index = consume_href_command_v0(tokens, index, &mut body, &mut href_urls)?;
             }
             Some(TokenV0::ControlSeq(name)) if is_heading_control_v0(name.as_slice()) => {
-                index = consume_heading_command_v0(tokens, index, &mut body)?;
+                saw_body_content_after_maketitle = true;
+                index = if toc_requested {
+                    consume_heading_command_v0(
+                        tokens,
+                        index,
+                        &mut body,
+                        Some((&mut toc_entries, &mut next_toc_anchor_id)),
+                    )?
+                } else {
+                    consume_heading_command_v0(tokens, index, &mut body, None)?
+                };
                 pending_noindent_after_heading = true;
             }
             Some(_) => {
+                saw_body_content_after_maketitle = true;
                 maybe_emit_pending_noindent_prefix_v0(&mut body, &mut pending_noindent_after_heading);
                 index = consume_fragment_token_v0(tokens, index, &mut body, false, true)?;
             }
@@ -1462,6 +1534,18 @@ pub(crate) fn extract_typeset_minimal_text_body_v0(tokens: &[TokenV0]) -> Option
             body.extend_from_slice((href_index + 1).to_string().as_bytes());
             body.push(b' ');
             body.extend_from_slice(href_url);
+            push_newline(&mut body);
+        }
+    }
+    if toc_requested {
+        push_paragraph_break(&mut body);
+        for entry in &toc_entries {
+            body.extend_from_slice(TOC_ENTRY_LINE_PREFIX_MARKER_V0);
+            body.extend_from_slice(entry.level.to_string().as_bytes());
+            body.push(b' ');
+            body.extend_from_slice(entry.anchor_id.to_string().as_bytes());
+            body.push(b' ');
+            body.extend_from_slice(&entry.title);
             push_newline(&mut body);
         }
     }
