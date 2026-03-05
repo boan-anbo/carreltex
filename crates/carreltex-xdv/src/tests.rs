@@ -365,6 +365,35 @@ fn pdf_renderer_applies_maketitle_typography_v0() {
 }
 
 #[test]
+fn pdf_renderer_centers_title_using_layout_width_v0() {
+    let wide = write_dvi_v2_text_page_v0(b"WW\nA\n2026-03-04\n\nBody").expect("wide xdv");
+    let narrow = write_dvi_v2_text_page_v0(b"ii\nA\n2026-03-04\n\nBody").expect("narrow xdv");
+    let wide_pdf = render_dvi_v2_text_page_to_pdf_v0(&wide).expect("wide pdf");
+    let narrow_pdf = render_dvi_v2_text_page_to_pdf_v0(&narrow).expect("narrow pdf");
+
+    fn first_tm_x_v0(pdf: &[u8]) -> Option<f32> {
+        let text = String::from_utf8_lossy(pdf);
+        for line in text.lines() {
+            if !line.contains(" Tm ") {
+                continue;
+            }
+            let fields = line.split_whitespace().collect::<Vec<_>>();
+            if fields.len() < 7 || fields[6] != "Tm" {
+                continue;
+            }
+            if let Ok(x) = fields[4].parse::<f32>() {
+                return Some(x);
+            }
+        }
+        None
+    }
+
+    let wide_x = first_tm_x_v0(&wide_pdf).expect("wide title tm");
+    let narrow_x = first_tm_x_v0(&narrow_pdf).expect("narrow title tm");
+    assert!(wide_x < narrow_x, "wide_x={wide_x}, narrow_x={narrow_x}");
+}
+
+#[test]
 fn pdf_renderer_indents_body_paragraph_start_after_blank_line_v0() {
     let demo_text = b"Title\nAuthor\n2026-03-04\n\nFirst body line after title.\n\nIndented paragraph starts here.\nContinuation line.";
     let xdv = write_dvi_v2_text_page_v0(demo_text).expect("writer should accept demo text");
