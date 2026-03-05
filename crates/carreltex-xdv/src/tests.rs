@@ -316,6 +316,39 @@ fn pdf_renderer_hides_center_prefix_and_centers_line_v0() {
 }
 
 #[test]
+fn pdf_renderer_hides_right_prefix_and_right_aligns_line_v0() {
+    let xdv =
+        write_dvi_v2_text_page_v0(b"\n| right aligned line").expect("writer should accept right text");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+    assert!(
+        !pdf.windows(b"(| right aligned line) Tj".len())
+            .any(|w| w == b"(| right aligned line) Tj")
+    );
+    assert!(
+        pdf.windows(b"(right aligned line) Tj".len())
+            .any(|w| w == b"(right aligned line) Tj")
+    );
+
+    let pdf_text = String::from_utf8_lossy(&pdf);
+    let mut xs = Vec::<f32>::new();
+    for line in pdf_text.lines() {
+        if !line.contains(" Tm ") {
+            continue;
+        }
+        let fields = line.split_whitespace().collect::<Vec<_>>();
+        if fields.len() < 7 || fields[6] != "Tm" {
+            continue;
+        }
+        if let Ok(x_pt) = fields[4].parse::<f32>() {
+            xs.push(x_pt);
+        }
+    }
+    assert!(!xs.is_empty(), "expected right-aligned Tm position");
+    assert!((xs[0] - 72.0).abs() > 0.02, "line should not be at margin: {xs:?}");
+    assert!(xs[0] > 306.0, "right-aligned line should be on right half: {xs:?}");
+}
+
+#[test]
 fn parse_roundtrips_writer_layout_for_wrap_and_paging() {
     let text = b"word word word word word word word word word word";
     let layout = plan_layout_v0(text, 65_536, 786_432, 10, 1).expect("layout plan");

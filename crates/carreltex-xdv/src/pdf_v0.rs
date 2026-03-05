@@ -201,6 +201,10 @@ fn has_center_prefix_v0(glyphs: &[GlyphPlanV0]) -> bool {
     glyphs.len() >= 2 && glyphs[0].byte == b'^' && glyphs[1].byte == b' '
 }
 
+fn has_right_prefix_v0(glyphs: &[GlyphPlanV0]) -> bool {
+    glyphs.len() >= 2 && glyphs[0].byte == b'|' && glyphs[1].byte == b' '
+}
+
 fn build_page_content_stream_v0(lines: &[LinePlanV0]) -> Option<Vec<u8>> {
     let mut out = Vec::new();
     out.extend_from_slice(b"BT\n");
@@ -224,9 +228,15 @@ fn build_page_content_stream_v0(lines: &[LinePlanV0]) -> Option<Vec<u8>> {
         let center_prefixed = line_index >= title_block_len
             && quote_prefix_advance_pt.is_none()
             && has_center_prefix_v0(&line.glyphs);
+        let right_prefixed = line_index >= title_block_len
+            && quote_prefix_advance_pt.is_none()
+            && !center_prefixed
+            && has_right_prefix_v0(&line.glyphs);
         let render_glyphs: &[GlyphPlanV0] = if quote_prefix_advance_pt.is_some() {
             &line.glyphs[2..]
         } else if center_prefixed {
+            &line.glyphs[2..]
+        } else if right_prefixed {
             &line.glyphs[2..]
         } else {
             &line.glyphs
@@ -253,6 +263,10 @@ fn build_page_content_stream_v0(lines: &[LinePlanV0]) -> Option<Vec<u8>> {
                 active_quote_indent_pt = 0.0;
                 active_hang_indent_pt = 0.0;
                 centered_line_x_v0(line_width_pt)
+            } else if right_prefixed {
+                active_quote_indent_pt = 0.0;
+                active_hang_indent_pt = 0.0;
+                (PAGE_WIDTH_PT_V0 - MARGIN_PT_V0 - line_width_pt).max(MARGIN_PT_V0)
             } else if let Some(prefix_advance_pt) = quote_prefix_advance_pt {
                 active_quote_indent_pt = (FONT_SIZE_PT_V0 * 2.0).max(prefix_advance_pt);
                 active_hang_indent_pt = 0.0;

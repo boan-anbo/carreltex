@@ -177,6 +177,33 @@ fn typeset_minimal_centerline_rejects_multiline_content() {
 }
 
 #[test]
+fn typeset_minimal_flushright_environment_prefixes_each_line() {
+    let main = b"\\documentclass{article}\n\\begin{document}\nBefore.\n\\begin{flushright}\nRight one\\linebreak Right two\n\nRight paragraph\n\\end{flushright}\nAfter.\n\\end{document}\n";
+    let body = extract_typeset_body(main);
+    let text = String::from_utf8(body).expect("body should be valid utf8");
+    assert!(
+        text.contains("Before.\n\n| Right one\n| Right two\n\n| Right paragraph\n\nAfter."),
+        "body={text:?}"
+    );
+}
+
+#[test]
+fn typeset_minimal_rightline_emits_single_right_aligned_line() {
+    let main = b"\\documentclass{article}\\begin{document}Before.\\rightline{A \\textbf{B}}After.\\end{document}";
+    let body = extract_typeset_body(main);
+    let text = String::from_utf8(body).expect("body should be valid utf8");
+    assert!(text.contains("Before.\n\n| A {B}\n\nAfter."), "body={text:?}");
+}
+
+#[test]
+fn typeset_minimal_rightline_rejects_multiline_content() {
+    let main = b"\\documentclass{article}\\begin{document}\\rightline{A\\\\B}\\end{document}";
+    let result = compile_typeset(main);
+    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert!(result.main_xdv_bytes.is_empty());
+}
+
+#[test]
 fn typeset_minimal_long_paragraph_wraps_to_multiple_lines() {
     let main = b"\\documentclass{article}\\begin{document}This is a long paragraph that should wrap deterministically to multiple physical lines in the minimal typeset pipeline when width-based layout is enabled and the content exceeds the configured line width for the page body area.\\end{document}";
     let result = compile_typeset(main);
