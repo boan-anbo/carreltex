@@ -20,13 +20,16 @@ const STATUS_NI_V0 = 'NI';
 const STATUS_INVALID_V0 = 'INVALID';
 const STATUS_FAIL_V0 = 'FAIL';
 const EXPECTED_STATUS_VALUES_V0 = new Set([STATUS_OK_V0, STATUS_NI_V0, STATUS_INVALID_V0, STATUS_FAIL_V0]);
-const TYPED_ARTIFACT_KEYS_V0 = ['toc', 'labels', 'bib', 'hyperref'];
+const TYPED_ARTIFACT_KEYS_V0 = ['toc', 'labels', 'bib', 'hyperref', 'pkgopt'];
 const MAX_TOC_ENTRIES_V0 = 256;
 const MAX_TOC_TITLE_BYTES_V0 = 256;
 const MAX_LABEL_ENTRIES_V0 = 256;
 const MAX_LABEL_VALUE_BYTES_V0 = 256;
 const MAX_BIB_ENTRIES_V0 = 256;
 const MAX_BIB_VALUE_BYTES_V0 = 256;
+const MAX_PKGOPT_ENTRIES_V0 = 256;
+const MAX_PKGOPT_VALUE_BYTES_V0 = 256;
+const MAX_PKGOPT_OPTIONS_PER_ENTRY_V0 = 64;
 
 function sha256HexV0(bytes) {
   return createHash('sha256').update(bytes).digest('hex');
@@ -437,6 +440,75 @@ function addBibEntryV0(entries, entry) {
   }
 }
 
+function addPkgoptEntryV0(entries, entry) {
+  const packageBytes = Buffer.from(entry.package, 'utf8');
+  if (packageBytes.length > MAX_PKGOPT_VALUE_BYTES_V0) {
+    throw new Error(`pkgopt_v0 package exceeds cap ${MAX_PKGOPT_VALUE_BYTES_V0}`);
+  }
+  if (entry.options.length > MAX_PKGOPT_OPTIONS_PER_ENTRY_V0) {
+    throw new Error(`pkgopt_v0 options exceed cap ${MAX_PKGOPT_OPTIONS_PER_ENTRY_V0}`);
+  }
+  for (const option of entry.options) {
+    const optionBytes = Buffer.from(option, 'utf8');
+    if (optionBytes.length > MAX_PKGOPT_VALUE_BYTES_V0) {
+      throw new Error(`pkgopt_v0 option exceeds cap ${MAX_PKGOPT_VALUE_BYTES_V0}`);
+    }
+  }
+  entries.push(entry);
+  if (entries.length > MAX_PKGOPT_ENTRIES_V0) {
+    throw new Error(`pkgopt_v0 entries exceed cap ${MAX_PKGOPT_ENTRIES_V0}`);
+  }
+}
+
+function extractPkgoptEntriesFromSourceV0(sourceBytes) {
+  const entries = [];
+  const packageCommands = new Set(['usepackage', 'RequirePackage']);
+  let index = 0;
+  while (index < sourceBytes.length) {
+    if (sourceBytes[index] !== 0x5c) {
+      index += 1;
+      continue;
+    }
+    let commandIndex = index + 1;
+    while (commandIndex < sourceBytes.length && isAsciiLetterByteV0(sourceBytes[commandIndex])) {
+      commandIndex += 1;
+    }
+    if (commandIndex === index + 1) {
+      index += 1;
+      continue;
+    }
+    const command = Buffer.from(sourceBytes.slice(index + 1, commandIndex)).toString('ascii');
+    if (!packageCommands.has(command)) {
+      index = commandIndex;
+      continue;
+    }
+
+    const optGroup = readBracketGroupV0(sourceBytes, commandIndex);
+    if (!optGroup.ok || optGroup.value.length === 0) {
+      index = commandIndex;
+      continue;
+    }
+
+    const pkgGroup = readBracedGroupV0(sourceBytes, optGroup.next);
+    if (!pkgGroup.ok || pkgGroup.value.length === 0) {
+      index = commandIndex;
+      continue;
+    }
+
+    const options = splitCommaValuesV0(optGroup.value);
+    const packages = splitCommaValuesV0(pkgGroup.value);
+    for (const pkgName of packages) {
+      addPkgoptEntryV0(entries, {
+        command,
+        package: pkgName,
+        options,
+      });
+    }
+    index = pkgGroup.next;
+  }
+  return entries;
+}
+
 function extractBibEntriesFromSourceV0(sourceBytes) {
   const entries = [];
   const citeCommands = new Set([
@@ -675,6 +747,24 @@ async function emitBibTypedArtifactV0(caseOutDir, fixtureBytes) {
   };
 }
 
+async function emitPkgoptTypedArtifactV0(caseOutDir, fixtureBytes) {
+  const payload = {
+    version: 1,
+    schema: 'pkgopt_v0',
+    entries: extractPkgoptEntriesFromSourceV0(fixtureBytes),
+  };
+  const bytes = Buffer.from(`${JSON.stringify(payload, null, 2)}\n`, 'utf8');
+  const relpath = 'pkgopt_v0.json';
+  const fullPath = path.join(caseOutDir, relpath);
+  await writeFile(fullPath, bytes);
+  return {
+    present: true,
+    items: payload.entries.length,
+    artifact_relpath: relpath,
+    artifact_sha256: sha256HexV0(bytes),
+  };
+}
+
 async function emitTypedArtifactsV0(caseSpec, caseOutDir, typedArtifacts, fixtureBytes) {
   if (caseSpec.id === 'typeset_demo_toc_probe_v0') {
     typedArtifacts.toc = await emitTocTypedArtifactV0(caseOutDir, fixtureBytes);
@@ -687,6 +777,9 @@ async function emitTypedArtifactsV0(caseSpec, caseOutDir, typedArtifacts, fixtur
   }
   if (caseSpec.id === 'typeset_demo_hyperref_probe_v0') {
     typedArtifacts.hyperref = await emitHyperrefTypedArtifactV0(caseOutDir, fixtureBytes);
+  }
+  if (caseSpec.id === 'typeset_demo_pkgopt_probe_v0') {
+    typedArtifacts.pkgopt = await emitPkgoptTypedArtifactV0(caseOutDir, fixtureBytes);
   }
 }
 
