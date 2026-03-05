@@ -58,6 +58,8 @@ printf 'fixture-bytes-for-probe-figure-png\n' > "$FIXTURE_SOURCE_DIR/xetex/png/p
 printf 'fixture-bytes-for-figs-diagram-pdf\n' > "$FIXTURE_SOURCE_DIR/xetex/pdf/figs__diagram.pdf"
 printf 'fixture-bytes-for-figs-demo-graphic-pdf\n' > "$FIXTURE_SOURCE_DIR/xetex/pdf/figs__demo_graphic.pdf"
 printf 'fixture-bytes-for-plots-demo-graphic-pdf\n' > "$FIXTURE_SOURCE_DIR/xetex/pdf/plots__demo_graphic.pdf"
+printf 'fixture-bytes-for-figs-banner-graphic-pdf\n' > "$FIXTURE_SOURCE_DIR/xetex/pdf/figs__banner_graphic.pdf"
+printf 'fixture-bytes-for-figs-sub-banner-graphic-pdf\n' > "$FIXTURE_SOURCE_DIR/xetex/pdf/figs__sub__banner_graphic.pdf"
 printf 'fixture-bytes-for-refs-bib\n' > "$FIXTURE_SOURCE_DIR/xetex/bib/refs.bib"
 printf 'fixture-bytes-for-styleprobe-refs-bib\n' > "$FIXTURE_SOURCE_DIR/xetex/bib/styleprobe_refs.bib"
 printf 'fixture-bytes-for-multiadd-refs-bib\n' > "$FIXTURE_SOURCE_DIR/xetex/bib/multiadd_refs.bib"
@@ -241,6 +243,24 @@ const graphicspathRequestB = listA.requests.find(
 );
 if (!graphicspathRequestB) {
   console.error('FAIL: request list must include graphicspath hint request for plots__demo_graphic.pdf');
+  process.exit(1);
+}
+const graphicspathExplicitRequestA = listA.requests.find(
+  (request) => request.kind === 'texmf' && request.format === 'pdf' && request.name === 'figs__banner_graphic.pdf' && request.variant === 'typeset',
+);
+if (!graphicspathExplicitRequestA) {
+  console.error('FAIL: request list must include explicit-ext graphicspath hint request for figs__banner_graphic.pdf');
+  process.exit(1);
+}
+const graphicspathExplicitRequestB = listA.requests.find(
+  (request) => request.kind === 'texmf' && request.format === 'pdf' && request.name === 'figs__sub__banner_graphic.pdf' && request.variant === 'typeset',
+);
+if (!graphicspathExplicitRequestB) {
+  console.error('FAIL: request list must include explicit-ext graphicspath hint request for figs__sub__banner_graphic.pdf');
+  process.exit(1);
+}
+if (listA.requests.some((request) => request.name === 'bad__danger_graphic.pdf' || request.name === 'abs__danger_graphic.pdf')) {
+  console.error('FAIL: request list must fail-closed for unsafe graphicspath entries');
   process.exit(1);
 }
 const nestedBibRequest = listA.requests.find(
@@ -692,6 +712,8 @@ const requiredEntries = [
   ['texmf', 'pdf', 'figs__diagram.pdf', 'typeset'],
   ['texmf', 'pdf', 'figs__demo_graphic.pdf', 'typeset'],
   ['texmf', 'pdf', 'plots__demo_graphic.pdf', 'typeset'],
+  ['texmf', 'pdf', 'figs__banner_graphic.pdf', 'typeset'],
+  ['texmf', 'pdf', 'figs__sub__banner_graphic.pdf', 'typeset'],
   ['fontconfig', 'name', 'FoundSans', 'public'],
 ];
 for (const [kind, format, name, variant] of requiredEntries) {
@@ -903,8 +925,8 @@ if (!(resolvedCount > resolvedCountFirst)) {
   );
   process.exit(1);
 }
-if (resolvedCount < 29) {
-  console.error(`FAIL: expected resolved_resources_count >= 29 after graphicspath hint expansion, got ${resolvedCount}`);
+if (resolvedCount < 31) {
+  console.error(`FAIL: expected resolved_resources_count >= 31 after graphicspath explicit-ext expansion, got ${resolvedCount}`);
   process.exit(1);
 }
 const okStatuses = statuses.filter((entry) => entry.status === 'OK');
@@ -1138,7 +1160,7 @@ for (const status of statuses) {
 
 console.log(`PASS: resolved_resources_count ${resolvedCount}`);
 console.log(`PASS: resolved_resources_count increased from ${resolvedCountFirst} to ${resolvedCount}`);
-console.log('PASS: resolved_resources_count meets floor >= 29');
+console.log('PASS: resolved_resources_count meets floor >= 31');
 console.log(`PASS: baseline_match MATCH for all OK cases (${okStatuses.length})`);
 console.log(`PASS: typed_artifacts keys ${requiredTypedKeys.join(',')}`);
 console.log('PASS: typed_artifacts_version gate 1');
