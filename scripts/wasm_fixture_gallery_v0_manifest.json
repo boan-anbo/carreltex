@@ -62,6 +62,18 @@
       "purpose": "Probes graphicspath normalization and includegraphics request mapping."
     },
     {
+      "id": "typeset_demo_graphicspath_explicit_ext_probe_v0",
+      "tags": ["typeset", "graphics", "graphicspath", "explicit-ext", "probe", "ni"],
+      "expected_status": "NI",
+      "purpose": "Probes explicit extension includegraphics with ordered graphicspath expansion."
+    },
+    {
+      "id": "typeset_demo_graphicspath_invalid_probe_v0",
+      "tags": ["typeset", "graphics", "graphicspath", "negative", "probe", "ni"],
+      "expected_status": "NI",
+      "purpose": "Probes fail-closed graphicspath handling for unsafe ../ and absolute path entries."
+    },
+    {
       "id": "typeset_demo_pkgopt_probe_v0",
       "tags": ["typeset", "package-options", "probe", "ni"],
       "expected_status": "NI",
