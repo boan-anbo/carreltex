@@ -24,10 +24,33 @@ function sha256HexV0(bytes) {
   return createHash('sha256').update(bytes).digest('hex');
 }
 
+function stableRequestPayloadShaV0(requests) {
+  return sha256HexV0(Buffer.from(JSON.stringify(requests), 'utf8'));
+}
+
 function assertV0(condition, message) {
   if (!condition) {
     throw new Error(message);
   }
+}
+
+async function readJsonFileV0(jsonPath) {
+  return JSON.parse((await readFile(jsonPath)).toString('utf8'));
+}
+
+async function countResolvedResourcesFromSummariesV0(galleryOutDir, statuses) {
+  let count = 0;
+  for (const statusEntry of statuses) {
+    const caseId = `${statusEntry?.case_id ?? ''}`;
+    if (caseId.length === 0) {
+      continue;
+    }
+    const summaryPath = path.join(galleryOutDir, caseId, 'summary.json');
+    const summary = await readJsonFileV0(summaryPath);
+    const resolvedResources = Array.isArray(summary.resolved_resources) ? summary.resolved_resources : [];
+    count += resolvedResources.length;
+  }
+  return count;
 }
 
 function endpointPathForRequestV0(request) {
@@ -116,11 +139,27 @@ function runGalleryV0(galleryOutDir, storeDir, sourceDateEpoch) {
   });
 }
 
-async function verifyPhase2ProbeStatusesV0(galleryOutDir) {
-  const reportPath = path.join(galleryOutDir, 'report.json');
-  const report = JSON.parse((await readFile(reportPath)).toString('utf8'));
-  const statuses = Array.isArray(report.statuses) ? report.statuses : [];
+function countStatusesV0(statuses) {
+  const counts = {
+    OK: 0,
+    NI: 0,
+    INVALID: 0,
+    FAIL: 0,
+    OTHER: 0,
+  };
+  for (const statusEntry of statuses) {
+    const status = statusEntry?.status;
+    if (status === 'OK' || status === 'NI' || status === 'INVALID' || status === 'FAIL') {
+      counts[status] += 1;
+    } else {
+      counts.OTHER += 1;
+    }
+  }
+  return counts;
+}
 
+async function buildProbeCaseTableV0(galleryOutDir, report) {
+  const statuses = Array.isArray(report.statuses) ? report.statuses : [];
   const probeChecks = [];
   for (const caseId of PHASE2_PROBE_CASE_IDS_V0) {
     const statusEntry = statuses.find((entry) => entry?.case_id === caseId);
@@ -140,6 +179,9 @@ async function verifyPhase2ProbeStatusesV0(galleryOutDir) {
     assertV0(resourceHints.present === true, `phase2 probe resource_hints missing for ${caseId}`);
     const hintItems = Number(resourceHints.items ?? 0);
     assertV0(hintItems > 0, `phase2 probe resource_hints must be non-empty for ${caseId}`);
+    const hintSha = `${resourceHints.artifact_sha256 ?? ''}`;
+    assertV0(/^[0-9a-f]{64}$/.test(hintSha), `phase2 probe resource_hints sha missing for ${caseId}`);
+    const resolvedResources = Array.isArray(summary.resolved_resources) ? summary.resolved_resources : [];
 
     probeChecks.push({
       case_id: caseId,
@@ -147,18 +189,14 @@ async function verifyPhase2ProbeStatusesV0(galleryOutDir) {
       actual_status: statusEntry.status,
       expected_vs_actual: statusEntry.expected_vs_actual,
       resource_hints_items: hintItems,
+      resource_hints_sha256: hintSha,
+      resolved_resources_count: resolvedResources.length,
     });
   }
   return probeChecks;
 }
 
-async function runFixedpointProofV0(outDir) {
-  const sourceDateEpochRaw = process.env.SOURCE_DATE_EPOCH ?? `${DEFAULT_SOURCE_DATE_EPOCH_V0}`;
-  const sourceDateEpoch = Number.parseInt(`${sourceDateEpochRaw}`, 10);
-  assertV0(Number.isInteger(sourceDateEpoch) && sourceDateEpoch > 0, 'SOURCE_DATE_EPOCH must be a positive integer');
-  assertV0(process.env.TZ === 'UTC', 'TZ must be UTC');
-
-  await mkdir(outDir, { recursive: true });
+async function runFixedpointPassV0(outDir, sourceDateEpoch) {
   const runRoot = await mkdtemp(path.join(outDir, 'run_'));
   const storeDir = path.join(runRoot, 'store');
   await mkdir(storeDir, { recursive: true });
@@ -168,15 +206,25 @@ async function runFixedpointProofV0(outDir) {
   let sawImprovement = false;
   let fixedpointIteration = 0;
   let fixedpointGalleryOutDir = '';
+  let fixedpointReport = null;
 
   for (let iter = 1; iter <= MAX_ITERS_V0; iter += 1) {
     const galleryOutDir = path.join(runRoot, `gallery_iter_${iter}`);
     runGalleryV0(galleryOutDir, storeDir, sourceDateEpoch);
 
     const reportPath = path.join(galleryOutDir, 'report.json');
-    const reportBytes = await readFile(reportPath);
-    const report = JSON.parse(reportBytes.toString('utf8'));
+    const report = await readJsonFileV0(reportPath);
+    const statuses = Array.isArray(report.statuses) ? report.statuses : [];
+    assertV0(statuses.length > 0, `gallery report statuses missing at iteration ${iter}`);
+    assertV0(Number.isInteger(report.case_count), `gallery report case_count missing at iteration ${iter}`);
+    assertV0(report.case_count === statuses.length, `gallery report case_count mismatch at iteration ${iter}`);
+
     const resolvedResourcesCount = Number(report.resolved_resources_count ?? 0);
+    const recomputedResolvedCount = await countResolvedResourcesFromSummariesV0(galleryOutDir, statuses);
+    assertV0(
+      resolvedResourcesCount === recomputedResolvedCount,
+      `resolved_resources_count mismatch at iteration ${iter}`,
+    );
 
     const requestListPath = path.join(runRoot, `request_list_iter_${iter}.json`);
     await buildRequestListFromHintsV0({
@@ -184,9 +232,12 @@ async function runFixedpointProofV0(outDir) {
       reportPath,
       outputPath: requestListPath,
     });
-    const requestList = JSON.parse((await readFile(requestListPath)).toString('utf8'));
+    const requestList = await readJsonFileV0(requestListPath);
     const requests = Array.isArray(requestList.requests) ? requestList.requests : [];
     const requestCount = Number(requestList.request_count ?? requests.length);
+    assertV0(requestCount === requests.length, `request_count mismatch at iteration ${iter}`);
+    const requestListSha256 = sha256HexV0(Buffer.from(JSON.stringify(requestList), 'utf8'));
+    const requestPayloadSha256 = stableRequestPayloadShaV0(requests);
 
     const resourceMap = buildStubResourceMapV0(requests);
     const stub = await startStubServerV0(resourceMap);
@@ -203,13 +254,37 @@ async function runFixedpointProofV0(outDir) {
     } finally {
       await stub.close();
     }
+    const storeSummary = await readJsonFileV0(path.join(storeDir, 'summary.json'));
+    const storeFound = Number(storeSummary.found_count ?? storeResult.foundCount);
+    const storeMissing = Number(storeSummary.missing_count ?? storeResult.missingCount);
+    assertV0(storeFound === storeResult.foundCount, `store found_count mismatch at iteration ${iter}`);
+    assertV0(storeMissing === storeResult.missingCount, `store missing_count mismatch at iteration ${iter}`);
+    assertV0(Number(storeSummary.request_count ?? requestCount) === requestCount, `store request_count mismatch at iteration ${iter}`);
+    assertV0(
+      typeof storeSummary.index_sha256 === 'string' && /^[0-9a-f]{64}$/.test(storeSummary.index_sha256),
+      `store index_sha256 missing at iteration ${iter}`,
+    );
+    assertV0(
+      typeof storeSummary.resolver_id === 'string' && storeSummary.resolver_id.length > 0,
+      `store resolver_id missing at iteration ${iter}`,
+    );
+
+    const statusCounts = countStatusesV0(statuses);
+    assertV0(statusCounts.OTHER === 0, `unsupported case status found at iteration ${iter}`);
+    const probeCases = await buildProbeCaseTableV0(galleryOutDir, report);
 
     const iteration = {
       iteration: iter,
       resolved_resources_count: resolvedResourcesCount,
-      found: storeResult.foundCount,
-      missing: storeResult.missingCount,
+      found: storeFound,
+      missing: storeMissing,
       request_count: requestCount,
+      request_list_sha256: requestListSha256,
+      request_payload_sha256: requestPayloadSha256,
+      store_index_sha256: storeSummary.index_sha256,
+      store_resolver_id: storeSummary.resolver_id,
+      status_counts: statusCounts,
+      probe_cases: probeCases,
     };
     iterations.push(iteration);
 
@@ -234,6 +309,7 @@ async function runFixedpointProofV0(outDir) {
       fixedpointReached = true;
       fixedpointIteration = iter;
       fixedpointGalleryOutDir = galleryOutDir;
+      fixedpointReport = report;
       break;
     }
     throw new Error(`fixedpoint transition must improve or stabilize at iteration ${iter}`);
@@ -242,21 +318,20 @@ async function runFixedpointProofV0(outDir) {
   assertV0(fixedpointReached, `fixedpoint not reached within ${MAX_ITERS_V0} iterations`);
   const finalIter = iterations[iterations.length - 1];
   assertV0(finalIter.missing === 0, `fixedpoint must converge with missing=0, got ${finalIter.missing}`);
+  assertV0(fixedpointReport !== null, 'fixedpoint report missing');
 
-  const phase2GalleryOutDir = path.join(runRoot, `gallery_phase2_after_fixedpoint`);
+  const phase2GalleryOutDir = path.join(runRoot, 'gallery_phase2_after_fixedpoint');
   runGalleryV0(phase2GalleryOutDir, storeDir, sourceDateEpoch);
-  const phase2ProbeChecks = await verifyPhase2ProbeStatusesV0(phase2GalleryOutDir);
-  const phase2Report = JSON.parse(
-    (await readFile(path.join(phase2GalleryOutDir, 'report.json'))).toString('utf8'),
-  );
+  const phase2Report = await readJsonFileV0(path.join(phase2GalleryOutDir, 'report.json'));
+  const phase2ProbeChecks = await buildProbeCaseTableV0(phase2GalleryOutDir, phase2Report);
+  const phase2StatusCounts = countStatusesV0(Array.isArray(phase2Report.statuses) ? phase2Report.statuses : []);
   const phase2ResolvedResources = Number(phase2Report.resolved_resources_count ?? 0);
   assertV0(
     phase2ResolvedResources === finalIter.resolved_resources_count,
     `phase2 rerun must preserve fixedpoint resolved count (${finalIter.resolved_resources_count} != ${phase2ResolvedResources})`,
   );
 
-  const summary = {
-    version: 1,
+  return {
     schema: 'ondemand_fixedpoint_summary_v0',
     source_date_epoch: sourceDateEpoch,
     store_path: storeDir,
@@ -265,19 +340,68 @@ async function runFixedpointProofV0(outDir) {
     fixedpoint_resolved_resources_count: finalIter.resolved_resources_count,
     fixedpoint_missing_count: finalIter.missing,
     phase2_probe_checks: phase2ProbeChecks,
+    phase2_status_counts: phase2StatusCounts,
     phase2_resolved_resources_count: phase2ResolvedResources,
     fixedpoint_gallery_relpath: path.relative(runRoot, fixedpointGalleryOutDir),
     phase2_gallery_relpath: path.relative(runRoot, phase2GalleryOutDir),
     final_status: 'PASS',
+  };
+}
+
+function canonicalSummaryPayloadV0(summary) {
+  const iterations = Array.isArray(summary.iterations)
+    ? summary.iterations.map((iter) => ({
+      ...iter,
+      store_resolver_id: '<store_resolver_id>',
+      request_list_sha256: '<request_list_sha256>',
+    }))
+    : [];
+  return {
+    ...summary,
+    store_path: '<store_path>',
+    iterations,
+  };
+}
+
+async function runFixedpointProofV0(outDir) {
+  const sourceDateEpochRaw = process.env.SOURCE_DATE_EPOCH ?? `${DEFAULT_SOURCE_DATE_EPOCH_V0}`;
+  const sourceDateEpoch = Number.parseInt(`${sourceDateEpochRaw}`, 10);
+  assertV0(Number.isInteger(sourceDateEpoch) && sourceDateEpoch > 0, 'SOURCE_DATE_EPOCH must be a positive integer');
+  assertV0(process.env.TZ === 'UTC', 'TZ must be UTC');
+
+  await mkdir(outDir, { recursive: true });
+  const summaryA = await runFixedpointPassV0(outDir, sourceDateEpoch);
+  const summaryB = await runFixedpointPassV0(outDir, sourceDateEpoch);
+
+  const canonicalA = canonicalSummaryPayloadV0(summaryA);
+  const canonicalB = canonicalSummaryPayloadV0(summaryB);
+  const canonicalABytes = Buffer.from(JSON.stringify(canonicalA), 'utf8');
+  const canonicalBBytes = Buffer.from(JSON.stringify(canonicalB), 'utf8');
+  const canonicalShaA = sha256HexV0(canonicalABytes);
+  const canonicalShaB = sha256HexV0(canonicalBBytes);
+  await writeFile(path.join(outDir, 'ondemand_fixedpoint_canonical_a.json'), `${JSON.stringify(canonicalA, null, 2)}\n`);
+  await writeFile(path.join(outDir, 'ondemand_fixedpoint_canonical_b.json'), `${JSON.stringify(canonicalB, null, 2)}\n`);
+  assertV0(canonicalShaA === canonicalShaB, 'ondemand fixedpoint summary must be deterministic across reruns');
+
+  const summary = {
+    version: 1,
+    ...summaryA,
+    determinism: {
+      reruns: 2,
+      canonical_summary_sha256_a: canonicalShaA,
+      canonical_summary_sha256_b: canonicalShaB,
+      canonical_summary_stable: canonicalShaA === canonicalShaB,
+    },
   };
   const summaryPath = path.join(outDir, 'ondemand_fixedpoint_summary.json');
   await writeFile(summaryPath, `${JSON.stringify(summary, null, 2)}\n`);
 
   return {
     summaryPath,
-    storeDir,
-    iterations,
-    phase2ProbeChecks,
+    storeDir: summaryA.store_path,
+    iterations: summaryA.iterations,
+    phase2ProbeChecks: summaryA.phase2_probe_checks,
+    determinism: summary.determinism,
   };
 }
 
@@ -290,6 +414,9 @@ async function runCliV0() {
   console.log(`PASS: fixedpoint iterations ${result.iterations.length}`);
   console.log(`PASS: final resolved=${finalIter.resolved_resources_count} missing=${finalIter.missing}`);
   console.log(`PASS: phase2 probes ${result.phase2ProbeChecks.length} status+hint checks`);
+  console.log(
+    `PASS: deterministic summary sha256 ${result.determinism.canonical_summary_sha256_a}`,
+  );
   console.log('PASS: on-demand fixedpoint proof v0');
 }
 

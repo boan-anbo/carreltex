@@ -14,5 +14,7 @@ if [[ ! -s "$OUT_DIR/ondemand_fixedpoint_summary.json" ]]; then
   exit 1
 fi
 
+node "$ROOT_DIR/scripts/ondemand_fixedpoint_v0_validate.mjs" "$OUT_DIR/ondemand_fixedpoint_summary.json"
+
 echo "PASS: on-demand fixedpoint proof artifacts $OUT_DIR"
 echo "PASS: on-demand fixedpoint proof"
