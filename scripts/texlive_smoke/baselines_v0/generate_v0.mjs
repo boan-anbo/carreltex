@@ -65,6 +65,8 @@ export async function generateBaselinePackV0(options = {}) {
   const engineRev = report?.engine_rev;
   const configHash = report?.config_hash;
   const sourceDateEpoch = report?.source_date_epoch;
+  const typedArtifactsVersion = report?.typed_artifacts_version;
+  const typedArtifactShaMap = report?.typed_artifact_sha256;
   const statuses = Array.isArray(report?.statuses) ? report.statuses : [];
   const caseArtifactSha = report?.case_artifact_sha256;
 
@@ -76,6 +78,23 @@ export async function generateBaselinePackV0(options = {}) {
   }
   if (!Number.isInteger(sourceDateEpoch) || sourceDateEpoch <= 0) {
     throw new Error('report.source_date_epoch must be a positive integer');
+  }
+  if (!Number.isInteger(typedArtifactsVersion) || typedArtifactsVersion <= 0) {
+    throw new Error('report.typed_artifacts_version must be a positive integer');
+  }
+  if (!typedArtifactShaMap || typeof typedArtifactShaMap !== 'object') {
+    throw new Error('report.typed_artifact_sha256 must be present');
+  }
+  const typedArtifactShaEntries = Object.entries(typedArtifactShaMap)
+    .filter(([key]) => typeof key === 'string' && key.length > 0)
+    .sort(([left], [right]) => left.localeCompare(right));
+  if (typedArtifactShaEntries.length === 0) {
+    throw new Error('report.typed_artifact_sha256 must contain at least one artifact key');
+  }
+  for (const [key, value] of typedArtifactShaEntries) {
+    if (!isSha256HexV0(value)) {
+      throw new Error(`report.typed_artifact_sha256.${key} must be sha256 hex`);
+    }
   }
   if (!Array.isArray(statuses) || statuses.length === 0) {
     throw new Error('report.statuses must be a non-empty array');
@@ -110,6 +129,8 @@ export async function generateBaselinePackV0(options = {}) {
     source: 'wasm_fixture_gallery_v0',
     engine_rev: engineRev,
     config_hash: configHash,
+    typed_artifacts_version: typedArtifactsVersion,
+    typed_artifact_sha256: Object.fromEntries(typedArtifactShaEntries),
     source_date_epoch: sourceDateEpoch,
     report_sha256: sha256HexV0(reportBytes),
     case_count: normalizedCases.length,
