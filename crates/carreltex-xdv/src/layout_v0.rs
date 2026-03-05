@@ -1,5 +1,9 @@
 const PAGEBREAK_MARKER_V0: u8 = 0x0c;
 const NEWLINE_MARKER_V0: u8 = 0x0a;
+const ITALIC_START_MARKER_V0: u8 = b'[';
+const ITALIC_END_MARKER_V0: u8 = b']';
+const BOLD_START_MARKER_V0: u8 = b'{';
+const BOLD_END_MARKER_V0: u8 = b'}';
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LayoutPlanV0 {
@@ -27,6 +31,13 @@ fn is_supported_text_byte_v0(byte: u8) -> bool {
     (0x20..=0x7e).contains(&byte)
 }
 
+pub(crate) fn is_style_marker_byte_v0(byte: u8) -> bool {
+    matches!(
+        byte,
+        ITALIC_START_MARKER_V0 | ITALIC_END_MARKER_V0 | BOLD_START_MARKER_V0 | BOLD_END_MARKER_V0
+    )
+}
+
 fn glyph_width_ratio_v0(byte: u8) -> (u32, u32) {
     match byte {
         b' ' => (1, 2),
@@ -40,6 +51,9 @@ fn glyph_width_ratio_v0(byte: u8) -> (u32, u32) {
 pub(crate) fn glyph_width_sp_v0(byte: u8, glyph_advance_sp: i32) -> Option<i32> {
     if glyph_advance_sp <= 0 {
         return None;
+    }
+    if is_style_marker_byte_v0(byte) {
+        return Some(0);
     }
     let (num, den) = glyph_width_ratio_v0(byte);
     let glyph_advance = i64::from(glyph_advance_sp);
@@ -56,8 +70,14 @@ pub(crate) fn glyph_width_sp_v0(byte: u8, glyph_advance_sp: i32) -> Option<i32> 
 pub fn recompute_line_width_sp_v0(line: &LinePlanV0) -> Option<u32> {
     let mut total = 0u32;
     for glyph in &line.glyphs {
-        if glyph.advance_sp <= 0 || glyph.advance_sp > 8_388_607 {
+        if glyph.advance_sp < 0 || glyph.advance_sp > 8_388_607 {
             return None;
+        }
+        if glyph.advance_sp == 0 {
+            if !is_style_marker_byte_v0(glyph.byte) {
+                return None;
+            }
+            continue;
         }
         total = total.checked_add(u32::try_from(glyph.advance_sp).ok()?)?;
     }
