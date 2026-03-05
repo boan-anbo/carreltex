@@ -197,6 +197,10 @@ fn detect_quote_prefix_advance_pt_v0(glyphs: &[GlyphPlanV0]) -> Option<f32> {
     Some((prefix_sp as f32) / 65_536.0)
 }
 
+fn has_center_prefix_v0(glyphs: &[GlyphPlanV0]) -> bool {
+    glyphs.len() >= 2 && glyphs[0].byte == b'^' && glyphs[1].byte == b' '
+}
+
 fn build_page_content_stream_v0(lines: &[LinePlanV0]) -> Option<Vec<u8>> {
     let mut out = Vec::new();
     out.extend_from_slice(b"BT\n");
@@ -217,7 +221,12 @@ fn build_page_content_stream_v0(lines: &[LinePlanV0]) -> Option<Vec<u8>> {
         } else {
             None
         };
+        let center_prefixed = line_index >= title_block_len
+            && quote_prefix_advance_pt.is_none()
+            && has_center_prefix_v0(&line.glyphs);
         let render_glyphs: &[GlyphPlanV0] = if quote_prefix_advance_pt.is_some() {
+            &line.glyphs[2..]
+        } else if center_prefixed {
             &line.glyphs[2..]
         } else {
             &line.glyphs
@@ -232,13 +241,17 @@ fn build_page_content_stream_v0(lines: &[LinePlanV0]) -> Option<Vec<u8>> {
             FONT_SIZE_PT_V0
         };
         if !line_is_empty {
-            let line_width_pt = (line.width_sp as f32) / 65_536.0;
+            let line_width_pt: f32 = segments.iter().map(|segment| segment.advance_pt).sum();
             let list_prefix_advance_pt = if in_title_block {
                 None
             } else {
                 detect_list_prefix_advance_pt_v0(render_glyphs)
             };
             let line_x = if in_title_block {
+                centered_line_x_v0(line_width_pt)
+            } else if center_prefixed {
+                active_quote_indent_pt = 0.0;
+                active_hang_indent_pt = 0.0;
                 centered_line_x_v0(line_width_pt)
             } else if let Some(prefix_advance_pt) = quote_prefix_advance_pt {
                 active_quote_indent_pt = (FONT_SIZE_PT_V0 * 2.0).max(prefix_advance_pt);
