@@ -257,6 +257,21 @@ async function loadFixtureCasesV0() {
       fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_class_options_probe_v0.tex',
     },
     {
+      id: 'typeset_demo_documentclass_opts_probe_v0',
+      mode: 'typeset',
+      fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_documentclass_opts_probe_v0.tex',
+    },
+    {
+      id: 'typeset_demo_passoptionstoclass_probe_v0',
+      mode: 'typeset',
+      fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_passoptionstoclass_probe_v0.tex',
+    },
+    {
+      id: 'typeset_demo_documentclass_invalid_probe_v0',
+      mode: 'typeset',
+      fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_documentclass_invalid_probe_v0.tex',
+    },
+    {
       id: 'typeset_demo_package_require_invalid_probe_v0',
       mode: 'typeset',
       fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_package_require_invalid_probe_v0.tex',
@@ -518,6 +533,20 @@ function splitCommaValuesV0(rawValue) {
     .filter((item) => item.length > 0);
 }
 
+function dedupeValuesPreserveOrderV0(values) {
+  const deduped = [];
+  const seen = new Set();
+  for (const value of values) {
+    const key = value.toLowerCase();
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    deduped.push(value);
+  }
+  return deduped;
+}
+
 function ensureDefaultExtensionV0(value, extension) {
   if (value.includes('.')) {
     return value;
@@ -709,8 +738,8 @@ function extractPkgoptEntriesFromSourceV0(sourceBytes) {
         index = commandIndex;
         continue;
       }
-      options = splitCommaValuesV0(optionGroup.value);
-      packages = splitCommaValuesV0(packageGroup.value);
+      options = dedupeValuesPreserveOrderV0(splitCommaValuesV0(optionGroup.value));
+      packages = dedupeValuesPreserveOrderV0(splitCommaValuesV0(packageGroup.value));
       endOffset = packageGroup.next;
     } else if (command === 'documentclass') {
       const optGroup = readBracketGroupV0(sourceBytes, commandIndex);
@@ -723,12 +752,12 @@ function extractPkgoptEntriesFromSourceV0(sourceBytes) {
         index = commandIndex;
         continue;
       }
-      options = optGroup.ok ? splitCommaValuesV0(optGroup.value) : [];
+      options = optGroup.ok ? dedupeValuesPreserveOrderV0(splitCommaValuesV0(optGroup.value)) : [];
       if (options.length === 0) {
         index = classGroup.next;
         continue;
       }
-      packages = splitCommaValuesV0(classGroup.value);
+      packages = dedupeValuesPreserveOrderV0(splitCommaValuesV0(classGroup.value));
       endOffset = classGroup.next;
     } else if (command === 'RequirePackageWithOptions') {
       const packageGroup = readBracedGroupV0(sourceBytes, commandIndex);
@@ -737,7 +766,7 @@ function extractPkgoptEntriesFromSourceV0(sourceBytes) {
         continue;
       }
       options = ['withoptions'];
-      packages = splitCommaValuesV0(packageGroup.value);
+      packages = dedupeValuesPreserveOrderV0(splitCommaValuesV0(packageGroup.value));
       endOffset = packageGroup.next;
     } else {
       const optGroup = readBracketGroupV0(sourceBytes, commandIndex);
@@ -750,8 +779,8 @@ function extractPkgoptEntriesFromSourceV0(sourceBytes) {
         index = commandIndex;
         continue;
       }
-      options = splitCommaValuesV0(optGroup.value);
-      packages = splitCommaValuesV0(pkgGroup.value);
+      options = dedupeValuesPreserveOrderV0(splitCommaValuesV0(optGroup.value));
+      packages = dedupeValuesPreserveOrderV0(splitCommaValuesV0(pkgGroup.value));
       endOffset = pkgGroup.next;
     }
 
@@ -948,7 +977,7 @@ function extractResourceHintEntriesFromSourceV0(sourceBytes) {
         index = commandIndex;
         continue;
       }
-      addHintValues('class_file', splitCommaValuesV0(classGroup.value), index, classGroup.next, 'cls', true);
+      addHintValues('class_file', splitCommaValuesV0(classGroup.value), index, classGroup.next, 'cls');
       index = classGroup.next;
       continue;
     }
@@ -991,7 +1020,7 @@ function extractResourceHintEntriesFromSourceV0(sourceBytes) {
         index = commandIndex;
         continue;
       }
-      addHintValues('class_file', splitCommaValuesV0(classGroup.value), index, classGroup.next, 'cls', true);
+      addHintValues('class_file', splitCommaValuesV0(classGroup.value), index, classGroup.next, 'cls');
       index = classGroup.next;
       continue;
     }
@@ -1428,6 +1457,24 @@ async function emitResourceHintsArtifactV0(caseOutDir, fixtureBytes, mode) {
   };
 }
 
+async function emitEmptyResourceHintsArtifactV0(caseOutDir) {
+  const payload = {
+    version: 1,
+    schema: 'resource_hints_v0',
+    entries: [],
+  };
+  const bytes = Buffer.from(`${JSON.stringify(payload, null, 2)}\n`, 'utf8');
+  const relpath = 'resource_hints_v0.json';
+  const fullPath = path.join(caseOutDir, relpath);
+  await writeFile(fullPath, bytes);
+  return {
+    present: true,
+    items: 0,
+    artifact_relpath: relpath,
+    artifact_sha256: sha256HexV0(bytes),
+  };
+}
+
 async function emitTypedArtifactsV0(caseSpec, caseOutDir, typedArtifacts, fixtureBytes) {
   if (caseSpec.id === 'typeset_demo_toc_probe_v0') {
     typedArtifacts.toc = await emitTocTypedArtifactV0(caseOutDir, fixtureBytes);
@@ -1441,7 +1488,13 @@ async function emitTypedArtifactsV0(caseSpec, caseOutDir, typedArtifacts, fixtur
   if (caseSpec.id === 'typeset_demo_hyperref_probe_v0') {
     typedArtifacts.hyperref = await emitHyperrefTypedArtifactV0(caseOutDir, fixtureBytes);
   }
-  if (caseSpec.id === 'typeset_demo_pkgopt_probe_v0' || caseSpec.id === 'typeset_demo_pkgopt_require_pass_probe_v0' || caseSpec.id === 'typeset_demo_class_options_probe_v0') {
+  if (
+    caseSpec.id === 'typeset_demo_pkgopt_probe_v0'
+    || caseSpec.id === 'typeset_demo_pkgopt_require_pass_probe_v0'
+    || caseSpec.id === 'typeset_demo_class_options_probe_v0'
+    || caseSpec.id === 'typeset_demo_documentclass_opts_probe_v0'
+    || caseSpec.id === 'typeset_demo_passoptionstoclass_probe_v0'
+  ) {
     typedArtifacts.pkgopt = await emitPkgoptTypedArtifactV0(caseOutDir, fixtureBytes);
   }
   if (caseSpec.id === 'typeset_demo_graphics_probe_v0') {
@@ -1856,7 +1909,15 @@ async function runCaseV0(
     typed_artifacts_version: TYPED_ARTIFACTS_VERSION_V0,
     typed_artifacts: buildTypedArtifactsPlaceholderV0(),
   };
-  summary.resource_hints_v0 = await emitResourceHintsArtifactV0(caseOutDir, fixtureBytes, caseSpec.mode);
+  try {
+    summary.resource_hints_v0 = await emitResourceHintsArtifactV0(caseOutDir, fixtureBytes, caseSpec.mode);
+  } catch (error) {
+    summary.resource_hints_v0 = await emitEmptyResourceHintsArtifactV0(caseOutDir);
+    caseStatus = STATUS_INVALID_V0;
+    const message = error instanceof Error ? error.message : String(error);
+    errorMessage = errorMessage ? `${errorMessage}; ${message}` : message;
+    summary.status = caseStatus;
+  }
   await emitTypedArtifactsV0(caseSpec, caseOutDir, summary.typed_artifacts, fixtureBytes);
   const typedArtifactRequests = await collectResolverRequestsFromResourceHintsV0(
     caseSpec,
