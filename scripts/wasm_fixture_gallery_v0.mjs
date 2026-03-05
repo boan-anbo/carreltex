@@ -248,6 +248,26 @@ function buildTypedArtifactsPlaceholderV0() {
   return typedArtifacts;
 }
 
+async function emitTypedArtifactsV0(caseSpec, caseOutDir, typedArtifacts) {
+  if (caseSpec.id !== 'typeset_demo_labels_probe_v0') {
+    return;
+  }
+  const labelsPayload = {
+    version: 1,
+    schema: 'labels_v0',
+    entries: [],
+  };
+  const labelsBytes = Buffer.from(`${JSON.stringify(labelsPayload, null, 2)}\n`, 'utf8');
+  const labelsPath = path.join(caseOutDir, 'labels_v0.json');
+  await writeFile(labelsPath, labelsBytes);
+  typedArtifacts.labels = {
+    present: true,
+    items: labelsPayload.entries.length,
+    artifact_relpath: 'labels_v0.json',
+    artifact_sha256: sha256HexV0(labelsBytes),
+  };
+}
+
 async function computeBaselineMatchV0(caseId, artifactSha256, baselineDir) {
   if (!baselineDir) {
     return null;
@@ -432,6 +452,7 @@ async function runCaseV0(
     resolved_resources: resolvedResources,
     typed_artifacts: buildTypedArtifactsPlaceholderV0(),
   };
+  await emitTypedArtifactsV0(caseSpec, caseOutDir, summary.typed_artifacts);
   summary.baseline_match = await computeBaselineMatchV0(caseSpec.id, summary.artifact_sha256, baselineDir);
   if (errorMessage) {
     summary.error = errorMessage;
