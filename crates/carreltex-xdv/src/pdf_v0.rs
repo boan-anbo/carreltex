@@ -1,4 +1,7 @@
-use crate::{parse_dvi_v2_text_page_to_layout_v0, GlyphPlanV0, LinePlanV0, PagePlanV0, DEFAULT_LINE_ADVANCE_SP_V0};
+use crate::{
+    parse_dvi_v2_text_page_to_layout_v0, GlyphPlanV0, LinePlanV0, PagePlanV0,
+    DEFAULT_LINE_ADVANCE_SP_V0,
+};
 use std::collections::BTreeMap;
 
 const PDF_VERSION: &[u8] = b"%PDF-1.4\n";
@@ -291,7 +294,9 @@ fn split_superscript_segments_v0(segments: &[PdfStyledSegmentV0]) -> Vec<PdfRend
                 continue;
             }
             let mut marker_end = cursor + 2;
-            while marker_end < segment.glyphs.len() && segment.glyphs[marker_end].byte.is_ascii_digit() {
+            while marker_end < segment.glyphs.len()
+                && segment.glyphs[marker_end].byte.is_ascii_digit()
+            {
                 marker_end += 1;
             }
             if cursor > normal_start {
@@ -381,7 +386,10 @@ fn detect_list_prefix_v0(glyphs: &[GlyphPlanV0]) -> Option<ListPrefixV0> {
         .map(|glyph| (glyph.advance_sp as f32) / 65_536.0)
         .sum();
 
-    if glyphs.len() >= leading + 2 && glyphs[leading].byte == b'-' && glyphs[leading + 1].byte == b' ' {
+    if glyphs.len() >= leading + 2
+        && glyphs[leading].byte == b'-'
+        && glyphs[leading + 1].byte == b' '
+    {
         return Some(ListPrefixV0 {
             kind: ListPrefixKindV0::Itemize,
             prefix_len: leading + 2,
@@ -533,7 +541,8 @@ fn parse_table_row_cells_v0(glyphs: &[GlyphPlanV0]) -> Option<Vec<Vec<GlyphPlanV
     let mut current = Vec::<GlyphPlanV0>::new();
     let mut index = TABLE_ROW_PREFIX_MARKER_V0.len();
     while index < glyphs.len() {
-        if index + 1 < glyphs.len() && glyphs[index].byte == b'|' && glyphs[index + 1].byte == b'|' {
+        if index + 1 < glyphs.len() && glyphs[index].byte == b'|' && glyphs[index + 1].byte == b'|'
+        {
             cells.push(trim_space_glyph_edges_v0(&current));
             current.clear();
             index += 2;
@@ -647,10 +656,16 @@ fn emit_table_block_v0(
         for (col_index, cell_glyphs) in cells.iter().enumerate() {
             let segments = parse_styled_segments_v0(cell_glyphs)?;
             let render_segments = split_superscript_segments_v0(&segments);
-            if render_segments.iter().any(|segment| segment.superscript || segment.is_link) {
+            if render_segments
+                .iter()
+                .any(|segment| segment.superscript || segment.is_link)
+            {
                 return None;
             }
-            let width_pt = render_segments.iter().map(|segment| segment.advance_pt).sum::<f32>();
+            let width_pt = render_segments
+                .iter()
+                .map(|segment| segment.advance_pt)
+                .sum::<f32>();
             col_max_width_pt[col_index] = col_max_width_pt[col_index].max(width_pt);
             parsed_cells.push(render_segments);
         }
@@ -660,7 +675,9 @@ fn emit_table_block_v0(
     let table_width_pt = col_max_width_pt
         .iter()
         .copied()
-        .fold(0.0f32, |acc, width_pt| acc + width_pt + (TABLE_CELL_PADDING_PT_V0 * 2.0));
+        .fold(0.0f32, |acc, width_pt| {
+            acc + width_pt + (TABLE_CELL_PADDING_PT_V0 * 2.0)
+        });
     let max_content_width_pt = PAGE_WIDTH_PT_V0 - (2.0 * MARGIN_PT_V0);
     if table_width_pt > max_content_width_pt {
         return None;
@@ -732,10 +749,7 @@ fn emit_table_block_v0(
         out.extend_from_slice(
             format!(
                 "{:.2} {:.2} m {:.2} {:.2} l S\n",
-                table_left_x_pt,
-                y_pt,
-                table_right_x_pt,
-                y_pt,
+                table_left_x_pt, y_pt, table_right_x_pt, y_pt,
             )
             .as_bytes(),
         );
@@ -745,10 +759,7 @@ fn emit_table_block_v0(
         out.extend_from_slice(
             format!(
                 "{:.2} {:.2} m {:.2} {:.2} l S\n",
-                x_pt,
-                table_top_y_pt,
-                x_pt,
-                table_bottom_y_pt,
+                x_pt, table_top_y_pt, x_pt, table_bottom_y_pt,
             )
             .as_bytes(),
         );
@@ -819,6 +830,7 @@ fn emit_toc_block_v0(
     toc_entries: &[TocEntryMetadataV0],
     y: &mut f32,
     min_body_y_pt: f32,
+    annotations: &mut Vec<PdfLinkAnnotationV0>,
 ) -> Option<()> {
     if *y < min_body_y_pt {
         return None;
@@ -841,7 +853,13 @@ fn emit_toc_block_v0(
         glyphs: title_glyphs,
         is_link: false,
     }];
-    emit_styled_segments_v0(out, &title_segments, MARGIN_PT_V0, *y, TOC_TITLE_FONT_SIZE_PT_V0);
+    emit_styled_segments_v0(
+        out,
+        &title_segments,
+        MARGIN_PT_V0,
+        *y,
+        TOC_TITLE_FONT_SIZE_PT_V0,
+    );
     out.extend_from_slice(b"\n");
     *y -= LEADING_PT_V0;
 
@@ -851,14 +869,19 @@ fn emit_toc_block_v0(
         }
         let base_segments = parse_styled_segments_v0(&entry.title_glyphs)?;
         let render_segments = split_superscript_segments_v0(&base_segments);
-        if render_segments
-            .iter()
-            .any(|segment| segment.superscript || segment.is_link)
-        {
+        if render_segments.iter().any(|segment| segment.superscript) {
             return None;
         }
         let indent_steps = f32::from(entry.level.saturating_sub(1));
         let x_pt = MARGIN_PT_V0 + (indent_steps * TOC_ENTRY_INDENT_STEP_PT_V0);
+        let mut toc_annotations = collect_toc_anchor_annotations_for_line_v0(
+            &render_segments,
+            x_pt,
+            *y,
+            FONT_SIZE_PT_V0,
+            entry.anchor_id,
+        )?;
+        annotations.append(&mut toc_annotations);
         emit_render_segments_with_superscript_v0(out, &render_segments, x_pt, *y, FONT_SIZE_PT_V0);
         out.extend_from_slice(b"\n");
         *y -= LEADING_PT_V0;
@@ -959,8 +982,7 @@ fn is_safe_link_uri_byte_v0(byte: u8) -> bool {
     byte.is_ascii_alphanumeric()
         || matches!(
             byte,
-            b':'
-                | b'/'
+            b':' | b'/'
                 | b'?'
                 | b'#'
                 | b'['
@@ -1381,6 +1403,69 @@ fn collect_link_annotations_for_line_v0(
     Some(annotations)
 }
 
+fn collect_toc_anchor_annotations_for_line_v0(
+    segments: &[PdfRenderSegmentV0],
+    line_x_pt: f32,
+    line_y_pt: f32,
+    font_size_pt: f32,
+    anchor_id: u32,
+) -> Option<Vec<PdfLinkAnnotationV0>> {
+    let mut annotations = Vec::<PdfLinkAnnotationV0>::new();
+    let mut cursor_x = line_x_pt;
+    let mut run_start_x = None::<f32>;
+    let mut run_end_x = line_x_pt;
+
+    for segment in segments {
+        let start_x = cursor_x;
+        let end_x = cursor_x + segment.advance_pt;
+        if segment.is_link {
+            if run_start_x.is_none() {
+                run_start_x = Some(start_x);
+            }
+            run_end_x = end_x;
+        } else if let Some(run_x) = run_start_x.take() {
+            if run_end_x <= run_x {
+                return None;
+            }
+            let rect = [
+                run_x.clamp(0.0, PAGE_WIDTH_PT_V0),
+                (line_y_pt - font_size_pt * 0.30).clamp(0.0, PAGE_HEIGHT_PT_V0),
+                run_end_x.clamp(0.0, PAGE_WIDTH_PT_V0),
+                (line_y_pt + font_size_pt * 0.85).clamp(0.0, PAGE_HEIGHT_PT_V0),
+            ];
+            if rect[2] <= rect[0] || rect[3] <= rect[1] {
+                return None;
+            }
+            annotations.push(PdfLinkAnnotationV0 {
+                target: PdfLinkTargetV0::Anchor(anchor_id),
+                rect,
+            });
+        }
+        cursor_x = end_x;
+    }
+
+    if let Some(run_x) = run_start_x {
+        if run_end_x <= run_x {
+            return None;
+        }
+        let rect = [
+            run_x.clamp(0.0, PAGE_WIDTH_PT_V0),
+            (line_y_pt - font_size_pt * 0.30).clamp(0.0, PAGE_HEIGHT_PT_V0),
+            run_end_x.clamp(0.0, PAGE_WIDTH_PT_V0),
+            (line_y_pt + font_size_pt * 0.85).clamp(0.0, PAGE_HEIGHT_PT_V0),
+        ];
+        if rect[2] <= rect[0] || rect[3] <= rect[1] {
+            return None;
+        }
+        annotations.push(PdfLinkAnnotationV0 {
+            target: PdfLinkTargetV0::Anchor(anchor_id),
+            rect,
+        });
+    }
+
+    Some(annotations)
+}
+
 fn collect_footnote_marker_ids_from_glyphs_v0(
     glyphs: &[GlyphPlanV0],
     marker_ids: &mut Vec<u32>,
@@ -1417,7 +1502,9 @@ fn collect_page_footnote_marker_ids_v0(lines: &[LinePlanV0]) -> Option<Vec<u32>>
     Some(marker_ids)
 }
 
-fn split_body_and_metadata_lines_v0(pages: &[PagePlanV0]) -> (Vec<Vec<LinePlanV0>>, Vec<LinePlanV0>) {
+fn split_body_and_metadata_lines_v0(
+    pages: &[PagePlanV0],
+) -> (Vec<Vec<LinePlanV0>>, Vec<LinePlanV0>) {
     let mut body_pages = vec![Vec::<LinePlanV0>::new(); pages.len()];
     let mut metadata_lines = Vec::<LinePlanV0>::new();
     let mut in_metadata = false;
@@ -1442,13 +1529,69 @@ fn split_body_and_metadata_lines_v0(pages: &[PagePlanV0]) -> (Vec<Vec<LinePlanV0
         }
     }
     while body_pages.len() > 1 {
-        let should_pop = body_pages.last().map(|lines| lines.is_empty()).unwrap_or(false);
+        let should_pop = body_pages
+            .last()
+            .map(|lines| lines.is_empty())
+            .unwrap_or(false);
         if !should_pop {
             break;
         }
         body_pages.pop();
     }
     (body_pages, metadata_lines)
+}
+
+fn collect_nominal_anchor_destinations_v0(
+    body_pages: &[Vec<LinePlanV0>],
+) -> Option<BTreeMap<u32, AnchorDestinationV0>> {
+    let mut anchor_destinations = BTreeMap::<u32, AnchorDestinationV0>::new();
+    let mut next_anchor_id = 1u32;
+    for (page_index, lines) in body_pages.iter().enumerate() {
+        let title_block_len = if page_index == 0 {
+            detect_title_block_len_v0(lines)
+        } else {
+            0
+        };
+        let mut y = PAGE_HEIGHT_PT_V0 - MARGIN_PT_V0 - TITLE_FONT_SIZE_PT_V0;
+        for (line_index, line) in lines.iter().enumerate() {
+            if line_index >= title_block_len && has_figure_box_prefix_v0(&line.glyphs) {
+                if anchor_destinations
+                    .insert(
+                        next_anchor_id,
+                        AnchorDestinationV0 {
+                            page_index,
+                            y_pt: y,
+                        },
+                    )
+                    .is_some()
+                {
+                    return None;
+                }
+                next_anchor_id = next_anchor_id.checked_add(1)?;
+            } else if line_index >= title_block_len
+                && detect_heading_prefix_v0(&line.glyphs).is_some()
+            {
+                if anchor_destinations
+                    .insert(
+                        next_anchor_id,
+                        AnchorDestinationV0 {
+                            page_index,
+                            y_pt: y,
+                        },
+                    )
+                    .is_some()
+                {
+                    return None;
+                }
+                next_anchor_id = next_anchor_id.checked_add(1)?;
+            }
+            y -= LEADING_PT_V0;
+            if title_block_len > 0 && line_index + 1 == title_block_len {
+                y -= TITLE_EXTRA_GAP_PT_V0;
+            }
+        }
+    }
+    Some(anchor_destinations)
 }
 
 fn parse_metadata_lines_v0(
@@ -1463,7 +1606,8 @@ fn parse_metadata_lines_v0(
     let mut toc_entries = Vec::<TocEntryMetadataV0>::new();
     let mut current_footnote_id = None::<u32>;
     for line in metadata_lines {
-        if let Some((footnote_id, footnote_line)) = parse_footnote_definition_line_v0(&line.glyphs) {
+        if let Some((footnote_id, footnote_line)) = parse_footnote_definition_line_v0(&line.glyphs)
+        {
             if footnote_defs_by_id.contains_key(&footnote_id) {
                 return None;
             }
@@ -1483,7 +1627,10 @@ fn parse_metadata_lines_v0(
         }
         if let Some(ref_link) = parse_ref_anchor_link_line_v0(&line.glyphs) {
             if link_targets_by_id
-                .insert(ref_link.link_id, PdfLinkTargetV0::Anchor(ref_link.anchor_id))
+                .insert(
+                    ref_link.link_id,
+                    PdfLinkTargetV0::Anchor(ref_link.anchor_id),
+                )
                 .is_some()
             {
                 return None;
@@ -1525,7 +1672,9 @@ fn parse_metadata_lines_v0(
             continue;
         }
         let footnote_id = current_footnote_id?;
-        footnote_defs_by_id.get_mut(&footnote_id)?.push(line.glyphs.clone());
+        footnote_defs_by_id
+            .get_mut(&footnote_id)?
+            .push(line.glyphs.clone());
     }
     toc_entries.sort_by_key(|entry| entry.anchor_id);
     Some((footnote_defs_by_id, link_targets_by_id, toc_entries))
@@ -1549,7 +1698,9 @@ fn build_page_content_stream_v0(
     let page_footnote_ids = collect_page_footnote_marker_ids_v0(lines)?;
     let mut footnote_line_count = 0usize;
     for footnote_id in &page_footnote_ids {
-        let Some(footnote_lines) = footnote_defs_by_id.get(footnote_id) else { return None; };
+        let Some(footnote_lines) = footnote_defs_by_id.get(footnote_id) else {
+            return None;
+        };
         footnote_line_count = footnote_line_count.checked_add(footnote_lines.len())?;
     }
     let footnote_reserved_height_pt = if footnote_line_count == 0 {
@@ -1591,7 +1742,12 @@ fn build_page_content_stream_v0(
             while table_end < lines.len() && has_table_row_prefix_v0(&lines[table_end].glyphs) {
                 table_end += 1;
             }
-            emit_table_block_v0(&mut out, &lines[line_index..table_end], &mut y, min_body_y_pt)?;
+            emit_table_block_v0(
+                &mut out,
+                &lines[line_index..table_end],
+                &mut y,
+                min_body_y_pt,
+            )?;
             previous_rendered_line_was_empty = false;
             skip_indent_after_title_block = false;
             active_hang_indent_pt = 0.0;
@@ -1646,7 +1802,13 @@ fn build_page_content_stream_v0(
             return None;
         }
         if line_index >= title_block_len && has_toc_placeholder_line_v0(&line.glyphs) {
-            emit_toc_block_v0(&mut out, toc_entries, &mut y, min_body_y_pt)?;
+            emit_toc_block_v0(
+                &mut out,
+                toc_entries,
+                &mut y,
+                min_body_y_pt,
+                &mut annotations,
+            )?;
             previous_rendered_line_was_empty = false;
             skip_indent_after_title_block = false;
             active_hang_indent_pt = 0.0;
@@ -1721,7 +1883,9 @@ fn build_page_content_stream_v0(
             &mut style_stack,
             &mut current_style,
             &mut link_active,
-        ) else { return None; };
+        ) else {
+            return None;
+        };
         let render_segments = split_superscript_segments_v0(&segments);
         let line_is_empty = render_segments.is_empty();
         let in_title_block = title_block_len > 0 && line_index < title_block_len;
@@ -1749,7 +1913,10 @@ fn build_page_content_stream_v0(
             && next_raw_line_is_empty
             && is_heading_line_segments_v0(&segments);
         if !line_is_empty {
-            let line_width_pt: f32 = render_segments.iter().map(|segment| segment.advance_pt).sum();
+            let line_width_pt: f32 = render_segments
+                .iter()
+                .map(|segment| segment.advance_pt)
+                .sum();
             let line_x = if in_title_block {
                 centered_line_x_v0(line_width_pt)
             } else if heading_kind.is_some() || heading_centered {
@@ -1804,7 +1971,8 @@ fn build_page_content_stream_v0(
             if let Some(prefix) = list_prefix {
                 let display_prefix_glyphs = &render_glyphs_base
                     [prefix.display_start..prefix.display_start + prefix.display_len];
-                let Some(display_prefix_segments) = parse_styled_segments_v0(display_prefix_glyphs) else {
+                let Some(display_prefix_segments) = parse_styled_segments_v0(display_prefix_glyphs)
+                else {
                     return None;
                 };
                 let prefix_width_pt = glyphs_advance_pt_v0(display_prefix_glyphs);
@@ -1814,7 +1982,13 @@ fn build_page_content_stream_v0(
                         ENUM_NUMBER_COLUMN_RIGHT_PT_V0 + prefix.leading_advance_pt - prefix_width_pt
                     }
                 };
-                emit_styled_segments_v0(&mut out, &display_prefix_segments, prefix_x, y, font_size_pt);
+                emit_styled_segments_v0(
+                    &mut out,
+                    &display_prefix_segments,
+                    prefix_x,
+                    y,
+                    font_size_pt,
+                );
             }
             let mut line_annotations = collect_link_annotations_for_line_v0(
                 &render_segments,
@@ -1862,14 +2036,15 @@ fn build_page_content_stream_v0(
     }
 
     if footnote_line_count > 0 {
-        let mut footnote_y =
-            MARGIN_PT_V0 + footnote_reserved_height_pt - FOOTNOTE_LEADING_PT_V0;
+        let mut footnote_y = MARGIN_PT_V0 + footnote_reserved_height_pt - FOOTNOTE_LEADING_PT_V0;
         for footnote_id in &page_footnote_ids {
             for footnote_line in footnote_defs_by_id.get(footnote_id)? {
                 if footnote_y < MARGIN_PT_V0 {
                     return None;
                 }
-                let Some(segments) = parse_styled_segments_v0(footnote_line) else { return None; };
+                let Some(segments) = parse_styled_segments_v0(footnote_line) else {
+                    return None;
+                };
                 if !segments.is_empty() {
                     let render_segments = split_superscript_segments_v0(&segments);
                     let has_superscript = render_segments.iter().any(|segment| segment.superscript);
@@ -1911,6 +2086,10 @@ fn build_pdf_for_pages_v0(pages: &[PagePlanV0]) -> Vec<u8> {
     else {
         return Vec::new();
     };
+    let Some(nominal_anchor_destinations) = collect_nominal_anchor_destinations_v0(&body_pages)
+    else {
+        return Vec::new();
+    };
 
     let mut next_link_id = 1u32;
     let mut next_anchor_id = 1u32;
@@ -1927,8 +2106,13 @@ fn build_pdf_for_pages_v0(pages: &[PagePlanV0]) -> Vec<u8> {
             &mut next_anchor_id,
             &mut anchor_destinations,
             page_index == 0,
-        ) else { return Vec::new(); };
+        ) else {
+            return Vec::new();
+        };
         page_renders.push(rendered);
+    }
+    for (anchor_id, destination) in nominal_anchor_destinations {
+        anchor_destinations.entry(anchor_id).or_insert(destination);
     }
     if usize::try_from(next_link_id.saturating_sub(1)).ok() != Some(link_targets_by_id.len()) {
         return Vec::new();
@@ -2052,7 +2236,11 @@ fn build_pdf_for_pages_v0(pages: &[PagePlanV0]) -> Vec<u8> {
                         annotation.rect[2],
                         annotation.rect[3],
                     );
-                    offsets.push(write_pdf_obj(&mut out, annotation_id, annot_body.as_bytes()));
+                    offsets.push(write_pdf_obj(
+                        &mut out,
+                        annotation_id,
+                        annot_body.as_bytes(),
+                    ));
                     let mut action_body = Vec::<u8>::new();
                     action_body.extend_from_slice(b"<< /S /URI /URI (");
                     action_body.extend_from_slice(&escape_pdf_string_bytes(uri));
@@ -2063,7 +2251,8 @@ fn build_pdf_for_pages_v0(pages: &[PagePlanV0]) -> Vec<u8> {
                     let Some(destination) = anchor_destinations.get(anchor_id).copied() else {
                         return Vec::new();
                     };
-                    let destination_page_id = first_page_id + u32::try_from(destination.page_index).unwrap_or(0);
+                    let destination_page_id =
+                        first_page_id + u32::try_from(destination.page_index).unwrap_or(0);
                     if destination_page_id >= first_stream_id {
                         return Vec::new();
                     }
@@ -2076,7 +2265,11 @@ fn build_pdf_for_pages_v0(pages: &[PagePlanV0]) -> Vec<u8> {
                         MARGIN_PT_V0,
                         destination.y_pt,
                     );
-                    offsets.push(write_pdf_obj(&mut out, annotation_id, annot_body.as_bytes()));
+                    offsets.push(write_pdf_obj(
+                        &mut out,
+                        annotation_id,
+                        annot_body.as_bytes(),
+                    ));
                 }
             }
             annotation_counter += 1;
