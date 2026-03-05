@@ -30,7 +30,14 @@ function normalizeTexmfNameV0(rawValue, hintType, caseId) {
   if (typeof rawValue !== 'string' || rawValue.trim() === '') {
     throw new Error(`resource hint ${hintType} in case ${caseId} must be non-empty`);
   }
-  const value = rawValue.trim().replace(/\\/g, '/');
+  const rawTrimmed = rawValue.trim();
+  if (rawTrimmed.startsWith('/') || rawTrimmed.startsWith('\\')) {
+    throw new Error(`resource hint ${hintType} in case ${caseId} rejects absolute path '${rawTrimmed}'`);
+  }
+  if (/^[A-Za-z]:([\\/]|$)/.test(rawTrimmed)) {
+    throw new Error(`resource hint ${hintType} in case ${caseId} rejects drive path '${rawTrimmed}'`);
+  }
+  const value = rawTrimmed.replace(/\\/g, '/');
   const segments = value
     .split('/')
     .map((segment) => segment.trim())
@@ -40,6 +47,9 @@ function normalizeTexmfNameV0(rawValue, hintType, caseId) {
   }
   if (segments.some((segment) => segment === '..' || segment.includes('..'))) {
     throw new Error(`resource hint ${hintType} in case ${caseId} has unsafe token '${value}'`);
+  }
+  if (segments.some((segment) => !/^[A-Za-z0-9._-]+$/.test(segment))) {
+    throw new Error(`resource hint ${hintType} in case ${caseId} has unsupported path segment '${value}'`);
   }
   const normalized = segments.join('__');
   if (!isSafeTokenV0(normalized)) {
