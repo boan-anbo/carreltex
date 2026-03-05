@@ -11,6 +11,93 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const rootDir = path.resolve(__dirname, '..');
 const MAX_SEGMENT_TM_GAP_PT_V0 = 24.0;
+const PAGE_WIDTH_PT_V0 = 612.0;
+const PAGE_HEIGHT_PT_V0 = 792.0;
+const MARGIN_PT_V0 = 72.0;
+
+function parsePdfObjectsV0(pdfBytes) {
+  const text = Buffer.from(pdfBytes).toString('utf8');
+  const objects = [];
+  const objectPattern = /(\d+)\s+0\s+obj\n([\s\S]*?)\nendobj\n/g;
+  let match;
+  while ((match = objectPattern.exec(text)) !== null) {
+    objects.push({ id: Number.parseInt(match[1], 10), body: match[2] });
+  }
+  return objects;
+}
+
+function parsePdfRefIdsV0(body, key) {
+  const marker = `${key} [`;
+  const start = body.indexOf(marker);
+  if (start < 0) return [];
+  const valuesStart = start + marker.length;
+  const valuesEnd = body.indexOf(']', valuesStart);
+  if (valuesEnd < 0) return [];
+  const fields = body.slice(valuesStart, valuesEnd).trim().split(/\s+/).filter(Boolean);
+  const ids = [];
+  for (let index = 0; index + 2 < fields.length; index += 3) {
+    if (fields[index + 1] === '0' && fields[index + 2] === 'R') {
+      const id = Number.parseInt(fields[index], 10);
+      if (Number.isFinite(id)) ids.push(id);
+    }
+  }
+  return ids;
+}
+
+function parsePdfAnnotationActionIdV0(body) {
+  const match = body.match(/\/A\s+(\d+)\s+0\s+R/);
+  if (!match) return null;
+  const id = Number.parseInt(match[1], 10);
+  return Number.isFinite(id) ? id : null;
+}
+
+function parsePdfActionUriV0(body) {
+  const match = body.match(/\/URI \(([^)]*)\)/);
+  return match ? match[1] : null;
+}
+
+function parsePdfAnnotationRectV0(body) {
+  const match = body.match(/\/Rect \[([^\]]+)\]/);
+  if (!match) return null;
+  const values = match[1]
+    .trim()
+    .split(/\s+/)
+    .map((value) => Number.parseFloat(value))
+    .filter((value) => Number.isFinite(value));
+  if (values.length !== 4) return null;
+  return values;
+}
+
+function extractPageXObjectIdsV0(objects) {
+  const pageObjects = objects.filter((obj) => obj.body.includes('/Type /Page /Parent'));
+  return pageObjects.map((obj) => obj.id);
+}
+
+function parsePageContentStreamIdV0(pageBody) {
+  const match = pageBody.match(/\/Contents\s+(\d+)\s+0\s+R/);
+  if (!match) return null;
+  const id = Number.parseInt(match[1], 10);
+  return Number.isFinite(id) ? id : null;
+}
+
+function parseTmYForNeedleV0(streamBody, needle) {
+  for (const line of streamBody.split('\n')) {
+    if (!line.includes(' Tm ') || !line.includes(needle)) continue;
+    const fields = line.trim().split(/\s+/).filter(Boolean);
+    for (let index = 0; index + 6 < fields.length; index += 1) {
+      const isTm =
+        fields[index] === '1' &&
+        fields[index + 1] === '0' &&
+        fields[index + 2] === '0' &&
+        fields[index + 3] === '1' &&
+        fields[index + 6] === 'Tm';
+      if (!isTm) continue;
+      const y = Number.parseFloat(fields[index + 5]);
+      if (Number.isFinite(y)) return y;
+    }
+  }
+  return null;
+}
 
 function maxTmGapPtV0(pdfBytes) {
   const text = Buffer.from(pdfBytes).toString('utf8');
@@ -144,6 +231,115 @@ async function run() {
   }
   summary.max_segment_tm_gap_pt = Number(maxTmGapPt.toFixed(2));
   summary.max_segment_tm_gap_threshold_pt = MAX_SEGMENT_TM_GAP_PT_V0;
+
+  const objects = parsePdfObjectsV0(pdfBytes);
+  const objectById = new Map(objects.map((obj) => [obj.id, obj.body]));
+  const pageIds = extractPageXObjectIdsV0(objects);
+  if (pageIds.length < 2) {
+    throw new Error(`expected at least 2 PDF pages, got ${pageIds.length}`);
+  }
+
+  const pageOneBody = objectById.get(pageIds[0]);
+  const pageTwoBody = objectById.get(pageIds[1]);
+  if (!pageOneBody || !pageTwoBody) {
+    throw new Error('expected page objects for first two pages');
+  }
+  const pageOneAnnotIds = parsePdfRefIdsV0(pageOneBody, '/Annots');
+  const pageTwoAnnotIds = parsePdfRefIdsV0(pageTwoBody, '/Annots');
+  if (pageOneAnnotIds.length === 0 || pageTwoAnnotIds.length === 0) {
+    throw new Error('expected non-empty /Annots for page 1 and page 2');
+  }
+
+  const pageOneUris = [];
+  for (const annotId of pageOneAnnotIds) {
+    const annotBody = objectById.get(annotId);
+    if (!annotBody || !annotBody.includes('/Subtype /Link')) {
+      throw new Error(`page 1 annotation ${annotId} missing /Subtype /Link`);
+    }
+    const actionId = parsePdfAnnotationActionIdV0(annotBody);
+    if (!actionId) throw new Error(`page 1 annotation ${annotId} missing action`);
+    const actionBody = objectById.get(actionId);
+    if (!actionBody) throw new Error(`page 1 action ${actionId} missing`);
+    const uri = parsePdfActionUriV0(actionBody);
+    if (!uri) throw new Error(`page 1 action ${actionId} missing URI`);
+    pageOneUris.push(uri);
+    const rect = parsePdfAnnotationRectV0(annotBody);
+    if (!rect) throw new Error(`page 1 annotation ${annotId} missing rect`);
+    if (
+      !(rect[2] > rect[0]) ||
+      !(rect[3] > rect[1]) ||
+      rect[0] < 0.0 ||
+      rect[1] < 0.0 ||
+      rect[2] > PAGE_WIDTH_PT_V0 ||
+      rect[3] > PAGE_HEIGHT_PT_V0
+    ) {
+      throw new Error(`page 1 annotation ${annotId} has invalid rect`);
+    }
+  }
+
+  const pageTwoUris = [];
+  for (const annotId of pageTwoAnnotIds) {
+    const annotBody = objectById.get(annotId);
+    if (!annotBody || !annotBody.includes('/Subtype /Link')) {
+      throw new Error(`page 2 annotation ${annotId} missing /Subtype /Link`);
+    }
+    const actionId = parsePdfAnnotationActionIdV0(annotBody);
+    if (!actionId) throw new Error(`page 2 annotation ${annotId} missing action`);
+    const actionBody = objectById.get(actionId);
+    if (!actionBody) throw new Error(`page 2 action ${actionId} missing`);
+    const uri = parsePdfActionUriV0(actionBody);
+    if (!uri) throw new Error(`page 2 action ${actionId} missing URI`);
+    pageTwoUris.push(uri);
+    const rect = parsePdfAnnotationRectV0(annotBody);
+    if (!rect) throw new Error(`page 2 annotation ${annotId} missing rect`);
+    if (
+      !(rect[2] > rect[0]) ||
+      !(rect[3] > rect[1]) ||
+      rect[0] < 0.0 ||
+      rect[1] < 0.0 ||
+      rect[2] > PAGE_WIDTH_PT_V0 ||
+      rect[3] > PAGE_HEIGHT_PT_V0
+    ) {
+      throw new Error(`page 2 annotation ${annotId} has invalid rect`);
+    }
+  }
+  if (!pageOneUris.every((uri) => uri === 'https://example.com/page1')) {
+    throw new Error(`expected page 1 URIs to be page1 links, got ${JSON.stringify(pageOneUris)}`);
+  }
+  if (!pageTwoUris.every((uri) => uri === 'https://example.com/page2')) {
+    throw new Error(`expected page 2 URIs to be page2 links, got ${JSON.stringify(pageTwoUris)}`);
+  }
+
+  const streamOneId = parsePageContentStreamIdV0(pageOneBody);
+  const streamTwoId = parsePageContentStreamIdV0(pageTwoBody);
+  if (!streamOneId || !streamTwoId) {
+    throw new Error('expected content streams for first two pages');
+  }
+  const streamOneBody = objectById.get(streamOneId);
+  const streamTwoBody = objectById.get(streamTwoId);
+  if (!streamOneBody || !streamTwoBody) {
+    throw new Error('missing content stream object bodies');
+  }
+  const footnoteOneY = parseTmYForNeedleV0(streamOneBody, '(1');
+  const footnoteTwoY = parseTmYForNeedleV0(streamTwoBody, '(2');
+  if (footnoteOneY == null || footnoteTwoY == null) {
+    throw new Error('expected footnote lines on both page 1 and page 2');
+  }
+  if (
+    !(footnoteOneY >= MARGIN_PT_V0 && footnoteOneY <= 140.0) ||
+    !(footnoteTwoY >= MARGIN_PT_V0 && footnoteTwoY <= 140.0)
+  ) {
+    throw new Error(
+      `expected page footnotes near bottom margin, got y1=${footnoteOneY}, y2=${footnoteTwoY}`,
+    );
+  }
+
+  summary.pdf_page_count = pageIds.length;
+  summary.page_one_annotation_count = pageOneAnnotIds.length;
+  summary.page_two_annotation_count = pageTwoAnnotIds.length;
+  summary.page_one_footnote_y_pt = Number(footnoteOneY.toFixed(2));
+  summary.page_two_footnote_y_pt = Number(footnoteTwoY.toFixed(2));
+
   await writeFile(summaryPath, `${JSON.stringify(summary, null, 2)}\n`);
 
   console.log(`PASS: wasm typeset minimal emitted ${xdvPath}`);
@@ -153,6 +349,9 @@ async function run() {
   console.log(`PASS: pdf_sha256 ${summary.pdf_sha256}`);
   console.log(
     `PASS: max_segment_tm_gap_pt ${summary.max_segment_tm_gap_pt.toFixed(2)} <= ${MAX_SEGMENT_TM_GAP_PT_V0.toFixed(2)}`,
+  );
+  console.log(
+    `PASS: multipage+annots+footnotes pages=${summary.pdf_page_count} p1_annots=${summary.page_one_annotation_count} p2_annots=${summary.page_two_annotation_count}`,
   );
 }
 
