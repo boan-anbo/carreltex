@@ -47,6 +47,9 @@ printf 'fixture-bytes-for-probe-figure-png\n' > "$FIXTURE_SOURCE_DIR/xetex/png/p
 printf 'fixture-bytes-for-figs-diagram-pdf\n' > "$FIXTURE_SOURCE_DIR/xetex/pdf/figs__diagram.pdf"
 printf 'fixture-bytes-for-refs-bib\n' > "$FIXTURE_SOURCE_DIR/xetex/bib/refs.bib"
 printf 'fixture-bytes-for-styleprobe-refs-bib\n' > "$FIXTURE_SOURCE_DIR/xetex/bib/styleprobe_refs.bib"
+printf 'fixture-bytes-for-multiadd-refs-bib\n' > "$FIXTURE_SOURCE_DIR/xetex/bib/multiadd_refs.bib"
+printf 'fixture-bytes-for-multibib-a-bib\n' > "$FIXTURE_SOURCE_DIR/xetex/bib/multibib_a.bib"
+printf 'fixture-bytes-for-multibib-b-bib\n' > "$FIXTURE_SOURCE_DIR/xetex/bib/multibib_b.bib"
 printf 'fixture-bytes-for-legacyrefs-bib\n' > "$FIXTURE_SOURCE_DIR/xetex/bib/legacyrefs.bib"
 printf 'fixture-bytes-for-bib-deep-refs-local-bib\n' > "$FIXTURE_SOURCE_DIR/xetex/bib/bib__deep__refs-local.bib"
 printf 'fixture-bytes-for-legacy-deeprefs-bib\n' > "$FIXTURE_SOURCE_DIR/xetex/bib/legacy__deeprefs.bib"
@@ -204,6 +207,31 @@ const bibStyleResourceRequest = listA.requests.find(
 );
 if (!bibStyleResourceRequest) {
   console.error('FAIL: request list must include bibliography hint request for styleprobe_refs.bib');
+  process.exit(1);
+}
+const multiAddBibRequest = listA.requests.find(
+  (request) => request.kind === 'texmf' && request.format === 'bib' && request.name === 'multiadd_refs.bib' && request.variant === 'typeset',
+);
+if (!multiAddBibRequest) {
+  console.error('FAIL: request list must include addbibresource hint request for multiadd_refs.bib');
+  process.exit(1);
+}
+const multiBibARequest = listA.requests.find(
+  (request) => request.kind === 'texmf' && request.format === 'bib' && request.name === 'multibib_a.bib' && request.variant === 'typeset',
+);
+if (!multiBibARequest) {
+  console.error('FAIL: request list must include bibliography list hint request for multibib_a.bib');
+  process.exit(1);
+}
+const multiBibBRequest = listA.requests.find(
+  (request) => request.kind === 'texmf' && request.format === 'bib' && request.name === 'multibib_b.bib' && request.variant === 'typeset',
+);
+if (!multiBibBRequest) {
+  console.error('FAIL: request list must include bibliography list hint request for multibib_b.bib');
+  process.exit(1);
+}
+if (listA.requests.some((request) => request.name === 'multiadd_refs.bib.bib')) {
+  console.error('FAIL: request list must not duplicate extension for addbibresource multiadd_refs.bib');
   process.exit(1);
 }
 if (listA.requests.some((request) => request.name === 'demo-image.png')) {
@@ -592,6 +620,9 @@ const requiredEntries = [
   ['texmf', 'sty', 'xcolor.sty', 'typeset'],
   ['texmf', 'bib', 'refs.bib', 'typeset'],
   ['texmf', 'bib', 'styleprobe_refs.bib', 'typeset'],
+  ['texmf', 'bib', 'multiadd_refs.bib', 'typeset'],
+  ['texmf', 'bib', 'multibib_a.bib', 'typeset'],
+  ['texmf', 'bib', 'multibib_b.bib', 'typeset'],
   ['texmf', 'bib', 'legacyrefs.bib', 'typeset'],
   ['texmf', 'bib', 'bib__deep__refs-local.bib', 'typeset'],
   ['texmf', 'bib', 'legacy__deeprefs.bib', 'typeset'],
