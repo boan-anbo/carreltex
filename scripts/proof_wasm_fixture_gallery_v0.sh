@@ -151,12 +151,12 @@ if (typeof hyperrefShaFirst !== 'string' || !/^[0-9a-f]{64}$/.test(hyperrefShaFi
   process.exit(1);
 }
 const hyperrefArtifactFirst = JSON.parse(fs.readFileSync(hyperrefPath, 'utf8'));
-if (!Array.isArray(hyperrefArtifactFirst?.links)) {
-  console.error('FAIL: expected hyperref_v0.links array in first-run artifact');
+if (!Array.isArray(hyperrefArtifactFirst?.entries)) {
+  console.error('FAIL: expected hyperref_v0.entries array in first-run artifact');
   process.exit(1);
 }
-if (hyperrefArtifactFirst.links.length <= 0) {
-  console.error('FAIL: expected hyperref_v0.links to include at least one link in probe fixture');
+if (hyperrefArtifactFirst.entries.length <= 0) {
+  console.error('FAIL: expected hyperref_v0.entries to include at least one link in probe fixture');
   process.exit(1);
 }
 fs.writeFileSync(firstRunShaPath('hyperref_v0'), `${hyperrefShaFirst}\n`);
@@ -216,6 +216,25 @@ if (graphicsArtifactFirst.entries.length <= 0) {
   process.exit(1);
 }
 fs.writeFileSync(firstRunShaPath('graphics_v0'), `${graphicsShaFirst}\n`);
+
+const report = JSON.parse(fs.readFileSync(path.join(outDir, 'report.json'), 'utf8'));
+const typedArtifactShaMap = report?.typed_artifact_sha256;
+if (!typedArtifactShaMap || typeof typedArtifactShaMap !== 'object') {
+  console.error('FAIL: expected report.typed_artifact_sha256 map after first run');
+  process.exit(1);
+}
+const typedKeys = ['toc', 'labels', 'bib', 'hyperref', 'pkgopt', 'graphics'];
+for (const key of typedKeys) {
+  const value = typedArtifactShaMap[key];
+  if (typeof value !== 'string' || !/^[0-9a-f]{64}$/.test(value)) {
+    console.error(`FAIL: expected report.typed_artifact_sha256.${key} sha256 after first run`);
+    process.exit(1);
+  }
+}
+fs.writeFileSync(
+  path.join(baselineRoot, 'typed_artifact_sha256_first.json'),
+  `${JSON.stringify(typedArtifactShaMap, null, 2)}\n`,
+);
 NODE
 
 node "$ROOT_DIR/scripts/texlive_smoke/baselines_v0/generate_v0.mjs" "$OUT_DIR" "$BASELINE_DIR_A"
@@ -462,8 +481,8 @@ if (hyperrefShaSecond !== hyperrefShaFirst) {
 const hyperrefArtifactSecond = JSON.parse(
   fs.readFileSync(path.join(outDir, 'typeset_demo_hyperref_probe_v0', 'hyperref_v0.json'), 'utf8'),
 );
-if (!Array.isArray(hyperrefArtifactSecond?.links) || hyperrefArtifactSecond.links.length <= 0) {
-  console.error('FAIL: expected non-empty hyperref_v0.links array after rerun');
+if (!Array.isArray(hyperrefArtifactSecond?.entries) || hyperrefArtifactSecond.entries.length <= 0) {
+  console.error('FAIL: expected non-empty hyperref_v0.entries array after rerun');
   process.exit(1);
 }
 
@@ -514,6 +533,25 @@ if (!reportCaseSha || typeof reportCaseSha !== 'object') {
   console.error('FAIL: report missing top-level case_artifact_sha256');
   process.exit(1);
 }
+const reportTypedSha = report.typed_artifact_sha256;
+if (!reportTypedSha || typeof reportTypedSha !== 'object') {
+  console.error('FAIL: report missing top-level typed_artifact_sha256');
+  process.exit(1);
+}
+const reportTypedShaFirst = JSON.parse(
+  fs.readFileSync(path.join(`${outDir}_baseline`, 'typed_artifact_sha256_first.json'), 'utf8'),
+);
+for (const key of requiredTypedKeys) {
+  const value = reportTypedSha[key];
+  if (typeof value !== 'string' || !/^[0-9a-f]{64}$/.test(value)) {
+    console.error(`FAIL: report typed_artifact_sha256.${key} missing or invalid`);
+    process.exit(1);
+  }
+  if (value !== reportTypedShaFirst[key]) {
+    console.error(`FAIL: report typed_artifact_sha256.${key} must be stable across reruns`);
+    process.exit(1);
+  }
+}
 for (const status of statuses) {
   const caseSha = reportCaseSha[status.case_id];
   if (!caseSha || typeof caseSha !== 'object') {
@@ -546,6 +584,7 @@ console.log(`PASS: bib_v0 sha stable ${bibShaSecond}`);
 console.log(`PASS: hyperref_v0 sha stable ${hyperrefShaSecond}`);
 console.log(`PASS: pkgopt_v0 sha stable ${pkgoptShaSecond}`);
 console.log(`PASS: graphics_v0 sha stable ${graphicsShaSecond}`);
+console.log('PASS: report typed_artifact_sha256 map present and stable');
 console.log('PASS: report top-level case_artifact_sha256 present');
 NODE
 
