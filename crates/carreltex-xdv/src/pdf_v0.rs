@@ -177,23 +177,36 @@ enum ListPrefixKindV0 {
 struct ListPrefixV0 {
     kind: ListPrefixKindV0,
     prefix_len: usize,
-    display_prefix_len: usize,
+    display_start: usize,
+    display_len: usize,
+    leading_advance_pt: f32,
 }
 
 fn detect_list_prefix_v0(glyphs: &[GlyphPlanV0]) -> Option<ListPrefixV0> {
-    if glyphs.len() >= 2 && glyphs[0].byte == b'-' && glyphs[1].byte == b' ' {
+    let mut leading = 0usize;
+    while leading < glyphs.len() && glyphs[leading].byte == b' ' {
+        leading += 1;
+    }
+    let leading_advance_pt: f32 = glyphs[..leading]
+        .iter()
+        .map(|glyph| (glyph.advance_sp as f32) / 65_536.0)
+        .sum();
+
+    if glyphs.len() >= leading + 2 && glyphs[leading].byte == b'-' && glyphs[leading + 1].byte == b' ' {
         return Some(ListPrefixV0 {
             kind: ListPrefixKindV0::Itemize,
-            prefix_len: 2,
-            display_prefix_len: 1,
+            prefix_len: leading + 2,
+            display_start: leading,
+            display_len: 1,
+            leading_advance_pt,
         });
     }
 
-    let mut index = 0usize;
+    let mut index = leading;
     while index < glyphs.len() && glyphs[index].byte.is_ascii_digit() {
         index += 1;
     }
-    if index == 0 || index + 1 >= glyphs.len() {
+    if index == leading || index + 1 >= glyphs.len() {
         return None;
     }
     if glyphs[index].byte != b'.' || glyphs[index + 1].byte != b' ' {
@@ -202,7 +215,9 @@ fn detect_list_prefix_v0(glyphs: &[GlyphPlanV0]) -> Option<ListPrefixV0> {
     Some(ListPrefixV0 {
         kind: ListPrefixKindV0::Enumerate,
         prefix_len: index + 2,
-        display_prefix_len: index + 1,
+        display_start: leading,
+        display_len: index - leading + 1,
+        leading_advance_pt,
     })
 }
 
@@ -345,10 +360,10 @@ fn build_page_content_stream_v0(lines: &[LinePlanV0]) -> Option<Vec<u8>> {
                 active_quote_indent_pt = (FONT_SIZE_PT_V0 * 2.0).max(prefix_advance_pt);
                 active_hang_indent_pt = 0.0;
                 MARGIN_PT_V0 + active_quote_indent_pt
-            } else if list_prefix.is_some() {
-                active_hang_indent_pt = LIST_BODY_INDENT_PT_V0;
+            } else if let Some(prefix) = list_prefix {
+                active_hang_indent_pt = LIST_BODY_INDENT_PT_V0 + prefix.leading_advance_pt;
                 active_quote_indent_pt = 0.0;
-                MARGIN_PT_V0 + LIST_BODY_INDENT_PT_V0
+                MARGIN_PT_V0 + active_hang_indent_pt
             } else if noindent_prefixed {
                 active_hang_indent_pt = 0.0;
                 active_quote_indent_pt = 0.0;
@@ -363,12 +378,15 @@ fn build_page_content_stream_v0(lines: &[LinePlanV0]) -> Option<Vec<u8>> {
                 MARGIN_PT_V0
             };
             if let Some(prefix) = list_prefix {
-                let display_prefix_glyphs = &render_glyphs_base[..prefix.display_prefix_len];
+                let display_prefix_glyphs = &render_glyphs_base
+                    [prefix.display_start..prefix.display_start + prefix.display_len];
                 let display_prefix_segments = parse_styled_segments_v0(display_prefix_glyphs)?;
                 let prefix_width_pt = glyphs_advance_pt_v0(display_prefix_glyphs);
                 let prefix_x = match prefix.kind {
-                    ListPrefixKindV0::Itemize => MARGIN_PT_V0,
-                    ListPrefixKindV0::Enumerate => ENUM_NUMBER_COLUMN_RIGHT_PT_V0 - prefix_width_pt,
+                    ListPrefixKindV0::Itemize => MARGIN_PT_V0 + prefix.leading_advance_pt,
+                    ListPrefixKindV0::Enumerate => {
+                        ENUM_NUMBER_COLUMN_RIGHT_PT_V0 + prefix.leading_advance_pt - prefix_width_pt
+                    }
                 };
                 emit_styled_segments_v0(&mut out, &display_prefix_segments, prefix_x, y, font_size_pt);
             }

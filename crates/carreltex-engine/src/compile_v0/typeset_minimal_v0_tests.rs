@@ -155,8 +155,19 @@ fn typeset_minimal_inline_wrapper_boundaries_preserve_expected_spacing() {
 }
 
 #[test]
-fn typeset_minimal_rejects_nested_lists() {
-    let main = b"\\documentclass{article}\\begin{document}\\begin{itemize}\\item Outer\\begin{enumerate}\\item Inner\\end{enumerate}\\end{itemize}\\end{document}";
+fn typeset_minimal_accepts_single_level_nested_lists() {
+    let main = b"\\documentclass{article}\\begin{document}\\begin{itemize}\\item Outer item\\begin{enumerate}\\item Inner one\\item Inner two\\end{enumerate}\\item Outer tail\\end{itemize}\\end{document}";
+    let body = extract_typeset_body(main);
+    let text = String::from_utf8(body).expect("body should be valid utf8");
+    assert!(
+        text.contains("- Outer item\n\n  1. Inner one\n  2. Inner two\n\n- Outer tail"),
+        "body={text:?}"
+    );
+}
+
+#[test]
+fn typeset_minimal_rejects_lists_nested_deeper_than_one_level() {
+    let main = b"\\documentclass{article}\\begin{document}\\begin{itemize}\\item Outer\\begin{enumerate}\\item Inner\\begin{itemize}\\item Too deep\\end{itemize}\\end{enumerate}\\end{itemize}\\end{document}";
     let result = compile_typeset(main);
     assert_eq!(result.status, CompileStatus::NotImplemented);
     assert!(result.main_xdv_bytes.is_empty());
@@ -169,6 +180,17 @@ fn typeset_minimal_quote_environment_prefixes_each_line() {
     let text = String::from_utf8(body).expect("body should be valid utf8");
     assert!(
         text.contains("Before.\n\n> Quoted one\n> Quoted two\n\n> New paragraph\n\nAfter."),
+        "body={text:?}"
+    );
+}
+
+#[test]
+fn typeset_minimal_heading_list_quote_rhythm_markers_are_stable() {
+    let main = b"\\documentclass{article}\\begin{document}\\section{Heading}After heading.\\begin{itemize}\\item First item\\item Second item\\end{itemize}\\begin{quote}Quoted line one\\linebreak Quoted line two\\end{quote}After quote.\\end{document}";
+    let body = extract_typeset_body(main);
+    let text = String::from_utf8(body).expect("body should be valid utf8");
+    assert!(
+        text.contains("{Heading}\n\n~ After heading.\n\n- First item\n- Second item\n\n> Quoted line one\n> Quoted line two\n\nAfter quote."),
         "body={text:?}"
     );
 }
