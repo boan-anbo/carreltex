@@ -187,6 +187,11 @@ async function loadFixtureCasesV0() {
       fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_bib_probe_v0.tex',
     },
     {
+      id: 'typeset_demo_bibstyle_probe_v0',
+      mode: 'typeset',
+      fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_bibstyle_probe_v0.tex',
+    },
+    {
       id: 'typeset_demo_graphics_probe_v0',
       mode: 'typeset',
       fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_graphics_probe_v0.tex',
@@ -788,6 +793,17 @@ function extractResourceHintEntriesFromSourceV0(sourceBytes) {
       continue;
     }
 
+    if (command === 'bibliographystyle') {
+      const styleGroup = readBracedGroupV0(sourceBytes, commandIndex);
+      if (!styleGroup.ok || styleGroup.value.length === 0) {
+        index = commandIndex;
+        continue;
+      }
+      addHintValues('bib_style', splitCommaValuesV0(styleGroup.value), index, styleGroup.next, 'bst');
+      index = styleGroup.next;
+      continue;
+    }
+
     if (command === 'url') {
       const urlGroup = readBracedGroupV0(sourceBytes, commandIndex);
       if (!urlGroup.ok || urlGroup.value.length === 0) {
@@ -833,7 +849,7 @@ function extractBibEntriesFromSourceV0(sourceBytes) {
     'citeyearpar',
     'nocite',
   ]);
-  const resourceCommands = new Set(['addbibresource', 'bibliography']);
+  const resourceCommands = new Set(['addbibresource', 'bibliography', 'bibliographystyle']);
 
   let index = 0;
   while (index < sourceBytes.length) {
@@ -864,9 +880,10 @@ function extractBibEntriesFromSourceV0(sourceBytes) {
         index = commandIndex;
         continue;
       }
+      const entryKind = command === 'bibliographystyle' ? 'style_hint' : 'resource_hint';
       for (const value of splitCommaValuesV0(resourceGroup.value)) {
         addBibEntryV0(entries, {
-          kind: 'resource_hint',
+          kind: entryKind,
           command,
           value,
           source_span: buildSourceSpanV0(sourceBytes, index, resourceGroup.next, 'bib_v0'),
