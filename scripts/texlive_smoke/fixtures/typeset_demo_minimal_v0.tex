@@ -25,21 +25,25 @@ first-line indentation, and width-sensitive wrapping are visible in the PDF prev
 
 \subsection{Lists}
 \begin{itemize}
-\item First bullet with \emph{emphasis}.
-\item Second bullet with \textbf{bold}.
+\item First bullet with \emph{emphasis} and a deliberately long sentence to force wrapping so body alignment remains stable across continuation lines in the preview renderer.
+\item Second bullet with \textbf{bold} plus another long continuation sentence that should wrap without shifting the bullet column.
+\begin{itemize}
+\item Nested bullet item with enough words to wrap and verify one-level nested indentation remains stable in continuation lines.
+\item Another nested bullet with \emph{styled words} near punctuation,like this, to stress inline wrappers inside list content.
+\end{itemize}
 \end{itemize}
 
 \begin{enumerate}
-\item First numbered item.
-\item Second numbered item.
+\item First numbered item with a wrapping sentence to keep the body column stable.
+\item Second numbered item with enough words for continuation-line alignment checks.
 \item Third numbered item.
 \item Fourth numbered item.
 \item Fifth numbered item.
 \item Sixth numbered item.
 \item Seventh numbered item.
 \item Eighth numbered item.
-\item Ninth numbered item.
-\item Tenth numbered item.
+\item Ninth numbered item with a long tail to stress single-digit alignment.
+\item Tenth numbered item with a matching long tail to stress double-digit alignment.
 \end{enumerate}
 
 \subsection{Quote}
