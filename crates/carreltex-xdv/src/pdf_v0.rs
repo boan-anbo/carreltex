@@ -35,6 +35,7 @@ const FOOTNOTE_MARKER_FONT_SIZE_PT_V0: f32 = 8.0;
 const FOOTNOTE_MARKER_RISE_PT_V0: f32 = 4.0;
 const TABLE_ROW_PREFIX_MARKER_V0: &[u8] = b"!t ";
 const FIGURE_BOX_PREFIX_MARKER_V0: &[u8] = b"!gbox";
+const FIGURE_IMAGE_PREFIX_MARKER_V0: &[u8] = b"!gimg ";
 const FIGURE_CAPTION_PREFIX_MARKER_V0: &[u8] = b"!gcap ";
 const TOC_PLACEHOLDER_MARKER_V0: &[u8] = b"!toc";
 const TOC_ENTRY_LINE_PREFIX_MARKER_V0: &[u8] = b"!toc ";
@@ -466,6 +467,14 @@ fn has_figure_caption_prefix_v0(glyphs: &[GlyphPlanV0]) -> bool {
             .eq(FIGURE_CAPTION_PREFIX_MARKER_V0.iter().copied())
 }
 
+fn has_figure_image_prefix_v0(glyphs: &[GlyphPlanV0]) -> bool {
+    glyphs.len() >= FIGURE_IMAGE_PREFIX_MARKER_V0.len()
+        && glyphs[..FIGURE_IMAGE_PREFIX_MARKER_V0.len()]
+            .iter()
+            .map(|glyph| glyph.byte)
+            .eq(FIGURE_IMAGE_PREFIX_MARKER_V0.iter().copied())
+}
+
 fn has_toc_placeholder_line_v0(glyphs: &[GlyphPlanV0]) -> bool {
     glyphs.len() == TOC_PLACEHOLDER_MARKER_V0.len()
         && glyphs
@@ -529,8 +538,57 @@ fn parse_figure_caption_line_v0(glyphs: &[GlyphPlanV0]) -> Option<Vec<GlyphPlanV
     Some(caption)
 }
 
-fn placeholder_segments_v0() -> Vec<PdfStyledSegmentV0> {
-    let glyphs: Vec<GlyphPlanV0> = FIGURE_PLACEHOLDER_LINE_V0
+fn is_safe_figure_image_path_byte_v0(byte: u8) -> bool {
+    byte.is_ascii_alphanumeric() || matches!(byte, b'/' | b'.' | b'_' | b'-')
+}
+
+fn parse_figure_image_line_v0(glyphs: &[GlyphPlanV0]) -> Option<(u32, Vec<u8>)> {
+    if !has_figure_image_prefix_v0(glyphs) {
+        return None;
+    }
+    let mut cursor = FIGURE_IMAGE_PREFIX_MARKER_V0.len();
+    let mut anchor_id = 0u32;
+    let mut saw_anchor_digit = false;
+    while cursor < glyphs.len() && glyphs[cursor].byte.is_ascii_digit() {
+        anchor_id = anchor_id
+            .checked_mul(10)?
+            .checked_add(u32::from(glyphs[cursor].byte - b'0'))?;
+        saw_anchor_digit = true;
+        cursor += 1;
+    }
+    if !saw_anchor_digit || anchor_id == 0 {
+        return None;
+    }
+    if cursor >= glyphs.len() || glyphs[cursor].byte != b' ' {
+        return None;
+    }
+    cursor += 1;
+    if cursor >= glyphs.len() {
+        return None;
+    }
+    let mut image_path = Vec::<u8>::new();
+    for glyph in &glyphs[cursor..] {
+        if !is_safe_figure_image_path_byte_v0(glyph.byte) {
+            return None;
+        }
+        image_path.push(glyph.byte);
+    }
+    if image_path.is_empty() {
+        return None;
+    }
+    Some((anchor_id, image_path))
+}
+
+fn placeholder_segments_v0(image_path: Option<&[u8]>) -> Vec<PdfStyledSegmentV0> {
+    let mut placeholder_bytes = Vec::<u8>::new();
+    if let Some(path) = image_path {
+        placeholder_bytes.extend_from_slice(b"[ Figure placeholder: ");
+        placeholder_bytes.extend_from_slice(path);
+        placeholder_bytes.extend_from_slice(b" ]");
+    } else {
+        placeholder_bytes.extend_from_slice(FIGURE_PLACEHOLDER_LINE_V0);
+    }
+    let glyphs: Vec<GlyphPlanV0> = placeholder_bytes
         .iter()
         .copied()
         .map(|byte| GlyphPlanV0 {
@@ -620,6 +678,7 @@ fn emit_table_block_v0(
 
 fn emit_figure_block_v0(
     out: &mut Vec<u8>,
+    image_path: Option<&[u8]>,
     caption_glyphs: &[GlyphPlanV0],
     y: &mut f32,
     min_body_y_pt: f32,
@@ -628,7 +687,7 @@ fn emit_figure_block_v0(
         return None;
     }
 
-    let placeholder_segments = placeholder_segments_v0();
+    let placeholder_segments = placeholder_segments_v0(image_path);
     let placeholder_render_segments = split_superscript_segments_v0(&placeholder_segments);
     let placeholder_width_pt = placeholder_render_segments
         .iter()
@@ -1409,15 +1468,33 @@ fn build_page_content_stream_v0(
             continue;
         }
         if line_index >= title_block_len && has_figure_box_prefix_v0(&line.glyphs) {
-            let caption_line = lines.get(line_index + 1)?;
+            let mut cursor = line_index + 1;
+            let mut image_path: Option<Vec<u8>> = None;
+            if let Some(image_line) = lines.get(cursor) {
+                if has_figure_image_prefix_v0(&image_line.glyphs) {
+                    let (_, parsed_path) = parse_figure_image_line_v0(&image_line.glyphs)?;
+                    image_path = Some(parsed_path);
+                    cursor += 1;
+                }
+            }
+            let caption_line = lines.get(cursor)?;
             let caption_glyphs = parse_figure_caption_line_v0(&caption_line.glyphs)?;
-            emit_figure_block_v0(&mut out, &caption_glyphs, &mut y, min_body_y_pt)?;
+            emit_figure_block_v0(
+                &mut out,
+                image_path.as_deref(),
+                &caption_glyphs,
+                &mut y,
+                min_body_y_pt,
+            )?;
             previous_rendered_line_was_empty = false;
             skip_indent_after_title_block = false;
             active_hang_indent_pt = 0.0;
             active_quote_indent_pt = 0.0;
-            line_index += 2;
+            line_index = cursor + 1;
             continue;
+        }
+        if line_index >= title_block_len && has_figure_image_prefix_v0(&line.glyphs) {
+            return None;
         }
         if line_index >= title_block_len && has_figure_caption_prefix_v0(&line.glyphs) {
             return None;

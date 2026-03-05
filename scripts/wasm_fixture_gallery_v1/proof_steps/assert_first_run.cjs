@@ -365,9 +365,9 @@ if (graphicsSummary?.typed_artifacts?.graphics?.present !== true) {
   console.error('FAIL: expected graphics typed artifact present after first run');
   process.exit(1);
 }
-const graphicsPath = path.join(outDir, 'typeset_demo_graphics_probe_v0', 'graphics_v0.json');
+const graphicsPath = path.join(outDir, 'typeset_demo_graphics_probe_v0', 'graphics_v1.json');
 if (!fs.existsSync(graphicsPath)) {
-  console.error('FAIL: expected graphics_v0.json artifact after first run');
+  console.error('FAIL: expected graphics_v1.json artifact after first run');
   process.exit(1);
 }
 const graphicsShaFirst = graphicsSummary.typed_artifacts.graphics.artifact_sha256;
@@ -377,15 +377,15 @@ if (typeof graphicsShaFirst !== 'string' || !/^[0-9a-f]{64}$/.test(graphicsShaFi
 }
 const graphicsArtifactFirst = JSON.parse(fs.readFileSync(graphicsPath, 'utf8'));
 if (!Array.isArray(graphicsArtifactFirst?.entries)) {
-  console.error('FAIL: expected graphics_v0.entries array in first-run artifact');
+  console.error('FAIL: expected graphics_v1.entries array in first-run artifact');
   process.exit(1);
 }
 if (graphicsArtifactFirst.entries.length <= 0) {
-  console.error('FAIL: expected non-empty graphics_v0.entries for graphics probe');
+  console.error('FAIL: expected non-empty graphics_v1.entries for graphics probe');
   process.exit(1);
 }
-assertEntrySourceSpans('typeset_demo_graphics_probe_v0', 'graphics_v0', graphicsArtifactFirst.entries);
-fs.writeFileSync(firstRunShaPath('graphics_v0'), `${graphicsShaFirst}\n`);
+assertEntrySourceSpans('typeset_demo_graphics_probe_v0', 'graphics_v1', graphicsArtifactFirst.entries);
+fs.writeFileSync(firstRunShaPath('graphics_v1'), `${graphicsShaFirst}\n`);
 
 const mathSummary = JSON.parse(
   fs.readFileSync(path.join(outDir, 'typeset_demo_minimal_v0', 'summary.json'), 'utf8'),
