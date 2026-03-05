@@ -14,6 +14,7 @@ const ITEM_CONTROL_V0: &[u8] = b"item";
 const DOCUMENT_ENV_V0: &[u8] = b"document";
 const ITEMIZE_ENV_V0: &[u8] = b"itemize";
 const ENUMERATE_ENV_V0: &[u8] = b"enumerate";
+const QUOTE_ENV_V0: &[u8] = b"quote";
 const ITALIC_START_MARKER_V0: u8 = b'[';
 const ITALIC_END_MARKER_V0: u8 = b']';
 const BOLD_START_MARKER_V0: u8 = b'{';
@@ -689,6 +690,71 @@ fn consume_list_environment_v0(tokens: &[TokenV0], index: usize, out: &mut Vec<u
     }
 }
 
+fn prefix_quote_lines_v0(content: &[u8]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(content.len().saturating_add(8));
+    let mut at_line_start = true;
+    for &byte in content {
+        if matches!(byte, NEWLINE_MARKER_V0 | PAGE_BREAK_MARKER_V0) {
+            out.push(byte);
+            at_line_start = true;
+            continue;
+        }
+        if at_line_start {
+            out.extend_from_slice(b"> ");
+            at_line_start = false;
+        }
+        out.push(byte);
+    }
+    out
+}
+
+fn consume_quote_environment_v0(tokens: &[TokenV0], index: usize, out: &mut Vec<u8>) -> Option<usize> {
+    let (env_name, mut cursor) = consume_env_name_command_v0(tokens, index, BEGIN_CONTROL_V0)?;
+    if env_name.as_slice() != QUOTE_ENV_V0 {
+        return None;
+    }
+
+    push_paragraph_break(out);
+    let mut quoted = Vec::<u8>::new();
+    loop {
+        match tokens.get(cursor) {
+            Some(TokenV0::ControlSeq(name)) if name.as_slice() == END_CONTROL_V0 => {
+                let (end_env, next) = consume_env_name_command_v0(tokens, cursor, END_CONTROL_V0)?;
+                if end_env.as_slice() != QUOTE_ENV_V0 {
+                    return None;
+                }
+                trim_trailing_spaces(&mut quoted);
+                let prefixed = prefix_quote_lines_v0(&quoted);
+                out.extend_from_slice(&prefixed);
+                push_paragraph_break(out);
+                return Some(next);
+            }
+            Some(TokenV0::ControlSeq(name)) if name.as_slice() == BEGIN_CONTROL_V0 => {
+                return None;
+            }
+            Some(TokenV0::ControlSeq(name)) if name.as_slice() == CARRELPAR_MARKER_CONTROL_V0 => {
+                push_paragraph_break(&mut quoted);
+                cursor += 1;
+            }
+            Some(_) => {
+                cursor = consume_fragment_token_v0(tokens, cursor, &mut quoted, false, true)?;
+            }
+            None => return None,
+        }
+    }
+}
+
+fn consume_body_environment_v0(tokens: &[TokenV0], index: usize, out: &mut Vec<u8>) -> Option<usize> {
+    let (env_name, _) = consume_env_name_command_v0(tokens, index, BEGIN_CONTROL_V0)?;
+    if env_name.as_slice() == ITEMIZE_ENV_V0 || env_name.as_slice() == ENUMERATE_ENV_V0 {
+        return consume_list_environment_v0(tokens, index, out);
+    }
+    if env_name.as_slice() == QUOTE_ENV_V0 {
+        return consume_quote_environment_v0(tokens, index, out);
+    }
+    None
+}
+
 fn consume_meta_declaration_v0(
     tokens: &[TokenV0],
     index: usize,
@@ -788,7 +854,7 @@ pub(crate) fn extract_typeset_minimal_text_body_v0(tokens: &[TokenV0]) -> Option
                 break;
             }
             Some(TokenV0::ControlSeq(name)) if name.as_slice() == BEGIN_CONTROL_V0 => {
-                index = consume_list_environment_v0(tokens, index, &mut body)?;
+                index = consume_body_environment_v0(tokens, index, &mut body)?;
             }
             Some(TokenV0::ControlSeq(name)) if name.as_slice() == CARRELPAR_MARKER_CONTROL_V0 => {
                 push_paragraph_break(&mut body);

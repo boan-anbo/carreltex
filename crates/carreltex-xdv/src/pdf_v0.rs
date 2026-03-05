@@ -164,28 +164,36 @@ fn centered_line_x_v0(line_width_pt: f32) -> f32 {
     centered.clamp(MARGIN_PT_V0, PAGE_WIDTH_PT_V0 - MARGIN_PT_V0)
 }
 
-fn detect_list_prefix_advance_pt_v0(line: &LinePlanV0) -> Option<f32> {
-    if line.glyphs.len() >= 2 && line.glyphs[0].byte == b'-' && line.glyphs[1].byte == b' ' {
-        let prefix_sp = line.glyphs[0]
+fn detect_list_prefix_advance_pt_v0(glyphs: &[GlyphPlanV0]) -> Option<f32> {
+    if glyphs.len() >= 2 && glyphs[0].byte == b'-' && glyphs[1].byte == b' ' {
+        let prefix_sp = glyphs[0]
             .advance_sp
-            .checked_add(line.glyphs[1].advance_sp)?;
+            .checked_add(glyphs[1].advance_sp)?;
         return Some((prefix_sp as f32) / 65_536.0);
     }
 
     let mut index = 0usize;
-    while index < line.glyphs.len() && line.glyphs[index].byte.is_ascii_digit() {
+    while index < glyphs.len() && glyphs[index].byte.is_ascii_digit() {
         index += 1;
     }
-    if index == 0 || index + 1 >= line.glyphs.len() {
+    if index == 0 || index + 1 >= glyphs.len() {
         return None;
     }
-    if line.glyphs[index].byte != b'.' || line.glyphs[index + 1].byte != b' ' {
+    if glyphs[index].byte != b'.' || glyphs[index + 1].byte != b' ' {
         return None;
     }
     let mut prefix_sp = 0i32;
-    for glyph in &line.glyphs[..=index + 1] {
+    for glyph in &glyphs[..=index + 1] {
         prefix_sp = prefix_sp.checked_add(glyph.advance_sp)?;
     }
+    Some((prefix_sp as f32) / 65_536.0)
+}
+
+fn detect_quote_prefix_advance_pt_v0(glyphs: &[GlyphPlanV0]) -> Option<f32> {
+    if glyphs.len() < 2 || glyphs[0].byte != b'>' || glyphs[1].byte != b' ' {
+        return None;
+    }
+    let prefix_sp = glyphs[0].advance_sp.checked_add(glyphs[1].advance_sp)?;
     Some((prefix_sp as f32) / 65_536.0)
 }
 
@@ -199,11 +207,23 @@ fn build_page_content_stream_v0(lines: &[LinePlanV0]) -> Option<Vec<u8>> {
     let mut previous_rendered_line_was_empty = false;
     let mut skip_indent_after_title_block = title_block_len > 0;
     let mut active_hang_indent_pt = 0.0f32;
+    let mut active_quote_indent_pt = 0.0f32;
     for (line_index, line) in lines.iter().enumerate() {
         if y < MARGIN_PT_V0 {
             break;
         }
-        let segments = parse_styled_segments_v0(&line.glyphs)?;
+        let quote_prefix_advance_pt = if line_index >= title_block_len {
+            detect_quote_prefix_advance_pt_v0(&line.glyphs)
+        } else {
+            None
+        };
+        let render_glyphs: &[GlyphPlanV0] = if quote_prefix_advance_pt.is_some() {
+            &line.glyphs[2..]
+        } else {
+            &line.glyphs
+        };
+
+        let segments = parse_styled_segments_v0(render_glyphs)?;
         let line_is_empty = segments.is_empty();
         let in_title_block = title_block_len > 0 && line_index < title_block_len;
         let font_size_pt = if in_title_block && line_index == 0 {
@@ -216,13 +236,20 @@ fn build_page_content_stream_v0(lines: &[LinePlanV0]) -> Option<Vec<u8>> {
             let list_prefix_advance_pt = if in_title_block {
                 None
             } else {
-                detect_list_prefix_advance_pt_v0(line)
+                detect_list_prefix_advance_pt_v0(render_glyphs)
             };
             let line_x = if in_title_block {
                 centered_line_x_v0(line_width_pt)
+            } else if let Some(prefix_advance_pt) = quote_prefix_advance_pt {
+                active_quote_indent_pt = (FONT_SIZE_PT_V0 * 2.0).max(prefix_advance_pt);
+                active_hang_indent_pt = 0.0;
+                MARGIN_PT_V0 + active_quote_indent_pt
             } else if let Some(prefix_advance_pt) = list_prefix_advance_pt {
                 active_hang_indent_pt = prefix_advance_pt;
+                active_quote_indent_pt = 0.0;
                 MARGIN_PT_V0
+            } else if active_quote_indent_pt > 0.0 {
+                MARGIN_PT_V0 + active_quote_indent_pt
             } else if active_hang_indent_pt > 0.0 {
                 MARGIN_PT_V0 + active_hang_indent_pt
             } else if previous_rendered_line_was_empty && !skip_indent_after_title_block {
@@ -254,6 +281,7 @@ fn build_page_content_stream_v0(lines: &[LinePlanV0]) -> Option<Vec<u8>> {
             }
         } else {
             active_hang_indent_pt = 0.0;
+            active_quote_indent_pt = 0.0;
         }
         previous_rendered_line_was_empty = line_is_empty;
         y -= LEADING_PT_V0;
