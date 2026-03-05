@@ -23,8 +23,13 @@ const FLUSHRIGHT_ENV_V0: &[u8] = b"flushright";
 const RIGHTLINE_CONTROL_V0: &[u8] = b"rightline";
 const TABULAR_ENV_V0: &[u8] = b"tabular";
 const FIGURE_ENV_V0: &[u8] = b"figure";
+const THEBIBLIOGRAPHY_ENV_V0: &[u8] = b"thebibliography";
 const CAPTION_CONTROL_V0: &[u8] = b"caption";
 const INCLUDEGRAPHICS_CONTROL_V0: &[u8] = b"includegraphics";
+const BIBITEM_CONTROL_V0: &[u8] = b"bibitem";
+const BIBLIOGRAPHY_CONTROL_V0: &[u8] = b"bibliography";
+const BIBLIOGRAPHYSTYLE_CONTROL_V0: &[u8] = b"bibliographystyle";
+const CITE_CONTROL_V0: &[u8] = b"cite";
 const FOOTNOTE_CONTROL_V0: &[u8] = b"footnote";
 const HREF_CONTROL_V0: &[u8] = b"href";
 const LABEL_CONTROL_V0: &[u8] = b"label";
@@ -33,6 +38,8 @@ const FOOTNOTE_LINE_PREFIX_MARKER_V0: &[u8] = b"!f ";
 const HREF_URL_LINE_PREFIX_MARKER_V0: &[u8] = b"!u ";
 const LABEL_LINE_PREFIX_MARKER_V0: &[u8] = b"!l ";
 const REF_LINE_PREFIX_MARKER_V0: &[u8] = b"!r ";
+const BIBITEM_LINE_PREFIX_MARKER_V0: &[u8] = b"!b ";
+const CITE_LINE_PREFIX_MARKER_V0: &[u8] = b"!c ";
 const TABLE_ROW_PREFIX_MARKER_V0: &[u8] = b"!t ";
 const FIGURE_BOX_PREFIX_MARKER_V0: &[u8] = b"!gbox";
 const FIGURE_CAPTION_PREFIX_MARKER_V0: &[u8] = b"!gcap ";
@@ -40,6 +47,8 @@ const TOC_PLACEHOLDER_MARKER_V0: &[u8] = b"!toc";
 const TOC_ENTRY_LINE_PREFIX_MARKER_V0: &[u8] = b"!toc ";
 const REF_MARKER_PREFIX_V0: &[u8] = b"@@REF:";
 const REF_MARKER_SUFFIX_V0: &[u8] = b"@@";
+const CITE_MARKER_PREFIX_V0: &[u8] = b"@@CITE:";
+const CITE_MARKER_SUFFIX_V0: &[u8] = b"@@";
 const LINK_START_MARKER_V0: u8 = b'<';
 const LINK_END_MARKER_V0: u8 = b'>';
 const NOINDENT_PREFIX_MARKER_V0: &[u8] = b"~ ";
@@ -89,6 +98,21 @@ struct RefOccurrenceMetaV0 {
     key: Vec<u8>,
     line_index: u32,
     resolved_anchor_id: Option<u32>,
+}
+
+#[derive(Clone)]
+struct BibItemMetaV0 {
+    key: Vec<u8>,
+    ordinal: u32,
+    text: Vec<u8>,
+    text_len: u32,
+}
+
+#[derive(Clone)]
+struct CiteOccurrenceMetaV0 {
+    key: Vec<u8>,
+    line_index: u32,
+    resolved_ordinal: Option<u32>,
 }
 
 #[derive(Default)]
@@ -1399,6 +1423,60 @@ fn resolve_ref_markers_v0(
     Some(out)
 }
 
+fn resolve_cite_markers_v0(
+    body: &[u8],
+    bibitems_by_key: &BTreeMap<Vec<u8>, u32>,
+    cite_occurrences: &mut Vec<CiteOccurrenceMetaV0>,
+) -> Option<Vec<u8>> {
+    let mut out = Vec::<u8>::with_capacity(body.len());
+    let mut index = 0usize;
+    let mut line_index = 1u32;
+
+    while index < body.len() {
+        if body[index..].starts_with(CITE_MARKER_PREFIX_V0) {
+            let key_start = index + CITE_MARKER_PREFIX_V0.len();
+            let mut key_end = key_start;
+            while key_end < body.len() {
+                if body[key_end..].starts_with(CITE_MARKER_SUFFIX_V0) {
+                    break;
+                }
+                if !is_safe_label_key_byte_v0(body[key_end]) {
+                    return None;
+                }
+                key_end += 1;
+            }
+            if key_end == key_start || key_end >= body.len() {
+                return None;
+            }
+            let key = body[key_start..key_end].to_vec();
+            let resolved_ordinal = bibitems_by_key.get(&key).copied();
+            cite_occurrences.push(CiteOccurrenceMetaV0 {
+                key,
+                line_index,
+                resolved_ordinal,
+            });
+
+            if let Some(ordinal) = resolved_ordinal {
+                out.push(b'[');
+                out.extend_from_slice(ordinal.to_string().as_bytes());
+                out.push(b']');
+            } else {
+                out.extend_from_slice(b"[?]");
+            }
+            index = key_end + CITE_MARKER_SUFFIX_V0.len();
+            continue;
+        }
+
+        let byte = body[index];
+        out.push(byte);
+        if byte == NEWLINE_MARKER_V0 {
+            line_index = line_index.checked_add(1)?;
+        }
+        index += 1;
+    }
+    Some(out)
+}
+
 fn consume_label_command_v0(
     tokens: &[TokenV0],
     index: usize,
@@ -1440,6 +1518,117 @@ fn consume_ref_command_v0(tokens: &[TokenV0], index: usize, out: &mut Vec<u8>) -
     out.extend_from_slice(&key);
     out.extend_from_slice(REF_MARKER_SUFFIX_V0);
     Some(next)
+}
+
+fn consume_cite_command_v0(tokens: &[TokenV0], index: usize, out: &mut Vec<u8>) -> Option<usize> {
+    if !matches!(
+        tokens.get(index),
+        Some(TokenV0::ControlSeq(name)) if name.as_slice() == CITE_CONTROL_V0
+    ) {
+        return None;
+    }
+    let (key, next) = parse_label_or_ref_key_group_v0(tokens, index)?;
+    out.extend_from_slice(CITE_MARKER_PREFIX_V0);
+    out.extend_from_slice(&key);
+    out.extend_from_slice(CITE_MARKER_SUFFIX_V0);
+    Some(next)
+}
+
+fn emit_bibliography_block_v0(out: &mut Vec<u8>, items: &[BibItemMetaV0]) {
+    push_paragraph_break(out);
+    out.extend_from_slice(SECTION_HEADING_PREFIX_MARKER_V0);
+    out.push(BOLD_START_MARKER_V0);
+    out.extend_from_slice(b"References");
+    out.push(BOLD_END_MARKER_V0);
+    push_paragraph_break(out);
+    for item in items {
+        out.push(b'[');
+        out.extend_from_slice(item.ordinal.to_string().as_bytes());
+        out.extend_from_slice(b"] ");
+        out.extend_from_slice(&item.text);
+        push_newline(out);
+    }
+    push_paragraph_break(out);
+}
+
+fn consume_thebibliography_environment_v0(
+    tokens: &[TokenV0],
+    index: usize,
+    out: &mut Vec<u8>,
+    bibitems: &mut Vec<BibItemMetaV0>,
+) -> Option<usize> {
+    let (env_name, mut cursor) = consume_env_name_command_v0(tokens, index, BEGIN_CONTROL_V0)?;
+    if env_name.as_slice() != THEBIBLIOGRAPHY_ENV_V0 {
+        return None;
+    }
+
+    let (width_group_start, width_group_end, width_group_next) = consume_group_bounds(tokens, cursor)?;
+    let width_hint = parse_char_space_group_trimmed_v0(tokens, width_group_start, width_group_end)?;
+    if width_hint.is_empty() {
+        return None;
+    }
+    cursor = width_group_next;
+
+    let mut local_items = Vec::<BibItemMetaV0>::new();
+    loop {
+        cursor = skip_spaces(tokens, cursor);
+        if matches!(
+            tokens.get(cursor),
+            Some(TokenV0::ControlSeq(name)) if name.as_slice() == END_CONTROL_V0
+        ) {
+            let (end_env, next) = consume_env_name_command_v0(tokens, cursor, END_CONTROL_V0)?;
+            if end_env.as_slice() != THEBIBLIOGRAPHY_ENV_V0 || local_items.is_empty() {
+                return None;
+            }
+            emit_bibliography_block_v0(out, &local_items);
+            bibitems.extend(local_items);
+            return Some(next);
+        }
+
+        if !matches!(
+            tokens.get(cursor),
+            Some(TokenV0::ControlSeq(name)) if name.as_slice() == BIBITEM_CONTROL_V0
+        ) {
+            return None;
+        }
+
+        let (key, next_after_key) = parse_label_or_ref_key_group_v0(tokens, cursor)?;
+        if local_items.iter().any(|item| item.key == key) || bibitems.iter().any(|item| item.key == key) {
+            return None;
+        }
+        cursor = next_after_key;
+
+        let mut item_text = Vec::<u8>::new();
+        loop {
+            match tokens.get(cursor) {
+                Some(TokenV0::ControlSeq(name)) if name.as_slice() == BIBITEM_CONTROL_V0 => break,
+                Some(TokenV0::ControlSeq(name)) if name.as_slice() == END_CONTROL_V0 => break,
+                Some(TokenV0::ControlSeq(name)) if name.as_slice() == BEGIN_CONTROL_V0 => return None,
+                Some(_) => {
+                    cursor = consume_fragment_token_v0(tokens, cursor, &mut item_text, false, true)?;
+                }
+                None => return None,
+            }
+        }
+        trim_trailing_spaces(&mut item_text);
+        if item_text.is_empty() {
+            return None;
+        }
+        let ordinal = u32::try_from(
+            bibitems
+                .len()
+                .checked_add(local_items.len())?
+                .checked_add(1)?,
+        )
+        .ok()?;
+        let text_len = u32::try_from(item_text.len()).ok()?;
+        local_items.push(BibItemMetaV0 {
+            key,
+            ordinal,
+            text: item_text,
+            text_len,
+        });
+    }
 }
 
 fn consume_footnote_command_v0(
@@ -1569,9 +1758,11 @@ pub(crate) fn extract_typeset_minimal_text_body_v0(tokens: &[TokenV0]) -> Option
     let mut body = Vec::<u8>::new();
     let mut footnotes = Vec::<Vec<u8>>::new();
     let mut href_urls = Vec::<Vec<u8>>::new();
+    let mut bibitems = Vec::<BibItemMetaV0>::new();
     let mut toc_entries = Vec::<TocEntryMetaV0>::new();
     let mut labels_by_key = BTreeMap::<Vec<u8>, LabelEntryMetaV0>::new();
     let mut ref_occurrences = Vec::<RefOccurrenceMetaV0>::new();
+    let mut cite_occurrences = Vec::<CiteOccurrenceMetaV0>::new();
     let mut next_anchor_id = 1u32;
     let mut saw_maketitle = false;
     let mut saw_body_content_after_maketitle = false;
@@ -1621,6 +1812,9 @@ pub(crate) fn extract_typeset_minimal_text_body_v0(tokens: &[TokenV0]) -> Option
                         level: None,
                         title: None,
                     });
+                } else if env_name.as_slice() == THEBIBLIOGRAPHY_ENV_V0 {
+                    pending_label_target = None;
+                    index = consume_thebibliography_environment_v0(tokens, index, &mut body, &mut bibitems)?;
                 } else {
                     pending_label_target = None;
                     index = consume_body_environment_v0(tokens, index, &mut body)?;
@@ -1669,6 +1863,18 @@ pub(crate) fn extract_typeset_minimal_text_body_v0(tokens: &[TokenV0]) -> Option
                 maybe_emit_pending_noindent_prefix_v0(&mut body, &mut pending_noindent_after_heading);
                 pending_label_target = None;
                 index = consume_ref_command_v0(tokens, index, &mut body)?;
+            }
+            Some(TokenV0::ControlSeq(name)) if name.as_slice() == CITE_CONTROL_V0 => {
+                saw_body_content_after_maketitle = true;
+                maybe_emit_pending_noindent_prefix_v0(&mut body, &mut pending_noindent_after_heading);
+                pending_label_target = None;
+                index = consume_cite_command_v0(tokens, index, &mut body)?;
+            }
+            Some(TokenV0::ControlSeq(name))
+                if name.as_slice() == BIBLIOGRAPHY_CONTROL_V0
+                    || name.as_slice() == BIBLIOGRAPHYSTYLE_CONTROL_V0 =>
+            {
+                return None;
             }
             Some(TokenV0::ControlSeq(name)) if is_heading_control_v0(name.as_slice()) => {
                 saw_body_content_after_maketitle = true;
@@ -1719,6 +1925,11 @@ pub(crate) fn extract_typeset_minimal_text_body_v0(tokens: &[TokenV0]) -> Option
     body = normalize_tex_ellipsis_v0(&body);
     body = normalize_bracket_spacing_v0(&body);
     body = resolve_ref_markers_v0(&body, &labels_by_key, &mut ref_occurrences)?;
+    let bibitems_by_key = bibitems
+        .iter()
+        .map(|item| (item.key.clone(), item.ordinal))
+        .collect::<BTreeMap<Vec<u8>, u32>>();
+    body = resolve_cite_markers_v0(&body, &bibitems_by_key, &mut cite_occurrences)?;
 
     if !footnotes.is_empty() {
         push_paragraph_break(&mut body);
@@ -1787,6 +1998,36 @@ pub(crate) fn extract_typeset_minimal_text_body_v0(tokens: &[TokenV0]) -> Option
             body.extend_from_slice(
                 occurrence
                     .resolved_anchor_id
+                    .unwrap_or(0)
+                    .to_string()
+                    .as_bytes(),
+            );
+            push_newline(&mut body);
+        }
+    }
+    if !bibitems.is_empty() {
+        push_paragraph_break(&mut body);
+        for item in &bibitems {
+            body.extend_from_slice(BIBITEM_LINE_PREFIX_MARKER_V0);
+            body.extend_from_slice(&item.key);
+            body.push(b' ');
+            body.extend_from_slice(item.ordinal.to_string().as_bytes());
+            body.push(b' ');
+            body.extend_from_slice(item.text_len.to_string().as_bytes());
+            push_newline(&mut body);
+        }
+    }
+    if !cite_occurrences.is_empty() {
+        push_paragraph_break(&mut body);
+        for occurrence in &cite_occurrences {
+            body.extend_from_slice(CITE_LINE_PREFIX_MARKER_V0);
+            body.extend_from_slice(&occurrence.key);
+            body.push(b' ');
+            body.extend_from_slice(occurrence.line_index.to_string().as_bytes());
+            body.push(b' ');
+            body.extend_from_slice(
+                occurrence
+                    .resolved_ordinal
                     .unwrap_or(0)
                     .to_string()
                     .as_bytes(),

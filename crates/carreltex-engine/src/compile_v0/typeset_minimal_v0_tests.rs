@@ -304,6 +304,43 @@ fn typeset_minimal_rejects_duplicate_label_keys() {
 }
 
 #[test]
+fn typeset_minimal_bibliography_and_cites_emit_block_and_metadata() {
+    let main = b"\\documentclass{article}\\begin{document}See \\cite{ref:a} and \\cite{missing}.\\begin{thebibliography}{9}\\bibitem{ref:a}Alpha source text.\\end{thebibliography}\\end{document}";
+    let body = extract_typeset_body(main);
+    let text = String::from_utf8(body).expect("body should be valid utf8");
+    assert!(text.contains("See [1] and [?]."), "body={text:?}");
+    assert!(text.contains("@S {References}"), "body={text:?}");
+    assert!(text.contains("[1] Alpha source text."), "body={text:?}");
+    assert!(text.contains("!b ref:a 1 18"), "body={text:?}");
+    assert!(text.contains("!c ref:a "), "body={text:?}");
+    assert!(text.contains("!c missing "), "body={text:?}");
+}
+
+#[test]
+fn typeset_minimal_rejects_bibliography_command_stub() {
+    let main = b"\\documentclass{article}\\begin{document}\\bibliography{refs}\\end{document}";
+    let result = compile_typeset(main);
+    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert!(result.main_xdv_bytes.is_empty());
+}
+
+#[test]
+fn typeset_minimal_rejects_bibliographystyle_command_stub() {
+    let main = b"\\documentclass{article}\\begin{document}\\bibliographystyle{plain}\\end{document}";
+    let result = compile_typeset(main);
+    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert!(result.main_xdv_bytes.is_empty());
+}
+
+#[test]
+fn typeset_minimal_rejects_thebibliography_without_bibitem() {
+    let main = b"\\documentclass{article}\\begin{document}\\begin{thebibliography}{9}\\end{thebibliography}\\end{document}";
+    let result = compile_typeset(main);
+    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert!(result.main_xdv_bytes.is_empty());
+}
+
+#[test]
 fn typeset_minimal_rejects_label_with_unsafe_key_bytes() {
     let main = b"\\documentclass{article}\\begin{document}\\section{A}\\label{../bad}\\end{document}";
     let result = compile_typeset(main);
