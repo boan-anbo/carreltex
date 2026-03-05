@@ -184,7 +184,7 @@ export async function buildRequestListFromHintsV0(options = {}) {
       continue;
     }
 
-    if (hintType === 'tex_input' || hintType === 'tex_include') {
+    if (hintType === 'tex_input' || hintType === 'tex_include' || hintType === 'tex_includeonly') {
       const name = ensureDefaultExtensionV0(normalizeTexmfNameV0(value, hintType, caseId), 'tex');
       const request = {
         kind: 'texmf',
