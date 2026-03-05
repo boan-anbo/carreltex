@@ -162,6 +162,18 @@ export async function buildRequestListFromHintsV0(options = {}) {
       continue;
     }
 
+    if (hintType === 'bib_style') {
+      const name = ensureDefaultExtensionV0(normalizeTexmfNameV0(value, hintType, caseId), 'bst');
+      const request = {
+        kind: 'texmf',
+        format: inferTexmfFormatV0(name, 'bst'),
+        name,
+        variant,
+      };
+      requestsByKey.set(requestKeyV0(request), request);
+      continue;
+    }
+
     if (hintType === 'tex_input' || hintType === 'tex_include') {
       const name = ensureDefaultExtensionV0(normalizeTexmfNameV0(value, hintType, caseId), 'tex');
       const request = {

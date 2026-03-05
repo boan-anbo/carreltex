@@ -28,6 +28,7 @@ mkdir -p \
   "$OUT_DIR" \
   "$FIXTURE_SOURCE_DIR/xetex/tex" \
   "$FIXTURE_SOURCE_DIR/xetex/bib" \
+  "$FIXTURE_SOURCE_DIR/xetex/bst" \
   "$FIXTURE_SOURCE_DIR/xetex/png" \
   "$FIXTURE_SOURCE_DIR/xetex/pdf" \
   "$FIXTURE_SOURCE_DIR/xetex/sty" \
@@ -45,10 +46,13 @@ printf 'fixture-bytes-for-demo-png\n' > "$FIXTURE_SOURCE_DIR/xetex/png/demo.png"
 printf 'fixture-bytes-for-probe-figure-png\n' > "$FIXTURE_SOURCE_DIR/xetex/png/probe-figure.png"
 printf 'fixture-bytes-for-figs-diagram-pdf\n' > "$FIXTURE_SOURCE_DIR/xetex/pdf/figs__diagram.pdf"
 printf 'fixture-bytes-for-refs-bib\n' > "$FIXTURE_SOURCE_DIR/xetex/bib/refs.bib"
+printf 'fixture-bytes-for-styleprobe-refs-bib\n' > "$FIXTURE_SOURCE_DIR/xetex/bib/styleprobe_refs.bib"
 printf 'fixture-bytes-for-legacyrefs-bib\n' > "$FIXTURE_SOURCE_DIR/xetex/bib/legacyrefs.bib"
 printf 'fixture-bytes-for-bib-deep-refs-local-bib\n' > "$FIXTURE_SOURCE_DIR/xetex/bib/bib__deep__refs-local.bib"
 printf 'fixture-bytes-for-legacy-deeprefs-bib\n' > "$FIXTURE_SOURCE_DIR/xetex/bib/legacy__deeprefs.bib"
+printf 'fixture-bytes-for-plain-bst\n' > "$FIXTURE_SOURCE_DIR/xetex/bst/plain.bst"
 printf 'fixture-bytes-for-xcolor-sty\n' > "$FIXTURE_SOURCE_DIR/xetex/sty/xcolor.sty"
+printf 'fixture-bytes-for-natbib-sty\n' > "$FIXTURE_SOURCE_DIR/xetex/sty/natbib.sty"
 printf 'fixture-bytes-for-memoir-cls\n' > "$FIXTURE_SOURCE_DIR/xetex/cls/memoir.cls"
 printf 'fixture-bytes-for-found-sans\n' > "$FIXTURE_SOURCE_DIR/fontconfig/public/FoundSans"
 
@@ -186,6 +190,20 @@ const nestedBibRequest = listA.requests.find(
 );
 if (!nestedBibRequest) {
   console.error('FAIL: request list must include nested addbibresource hint request for bib__deep__refs-local.bib');
+  process.exit(1);
+}
+const bibStyleRequest = listA.requests.find(
+  (request) => request.kind === 'texmf' && request.format === 'bst' && request.name === 'plain.bst' && request.variant === 'typeset',
+);
+if (!bibStyleRequest) {
+  console.error('FAIL: request list must include bibliographystyle hint request for plain.bst');
+  process.exit(1);
+}
+const bibStyleResourceRequest = listA.requests.find(
+  (request) => request.kind === 'texmf' && request.format === 'bib' && request.name === 'styleprobe_refs.bib' && request.variant === 'typeset',
+);
+if (!bibStyleResourceRequest) {
+  console.error('FAIL: request list must include bibliography hint request for styleprobe_refs.bib');
   process.exit(1);
 }
 if (listA.requests.some((request) => request.name === 'demo-image.png')) {
@@ -573,9 +591,12 @@ const requiredEntries = [
   ['texmf', 'tex', 'chapters__appendix.tex', 'typeset'],
   ['texmf', 'sty', 'xcolor.sty', 'typeset'],
   ['texmf', 'bib', 'refs.bib', 'typeset'],
+  ['texmf', 'bib', 'styleprobe_refs.bib', 'typeset'],
   ['texmf', 'bib', 'legacyrefs.bib', 'typeset'],
   ['texmf', 'bib', 'bib__deep__refs-local.bib', 'typeset'],
   ['texmf', 'bib', 'legacy__deeprefs.bib', 'typeset'],
+  ['texmf', 'bst', 'plain.bst', 'typeset'],
+  ['texmf', 'sty', 'natbib.sty', 'typeset'],
   ['texmf', 'png', 'demo.png', 'typeset'],
   ['texmf', 'png', 'probe-figure.png', 'typeset'],
   ['texmf', 'pdf', 'figs__diagram.pdf', 'typeset'],
