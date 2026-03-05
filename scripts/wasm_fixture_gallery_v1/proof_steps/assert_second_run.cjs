@@ -350,6 +350,15 @@ if (!Array.isArray(bibArtifactSecond?.entries) || bibArtifactSecond.entries.leng
   console.error('FAIL: expected non-empty bib_v1.entries after rerun');
   process.exit(1);
 }
+const expectedBibOrder = ['demo-key', 'aux-key', 'third-key'];
+if (JSON.stringify(bibArtifactSecond.entries.map((entry) => entry.key)) !== JSON.stringify(expectedBibOrder)) {
+  console.error('FAIL: expected bib_v1 key order to remain stable after rerun');
+  process.exit(1);
+}
+if (JSON.stringify(bibArtifactSecond.entries.map((entry) => entry.ordinal)) !== JSON.stringify([1, 2, 3])) {
+  console.error('FAIL: expected bib_v1 ordinals [1,2,3] after rerun');
+  process.exit(1);
+}
 
 const citeArtifact = bibSummary?.typed_artifacts?.cite;
 if (!citeArtifact || citeArtifact.present !== true) {
@@ -366,6 +375,15 @@ const citeArtifactSecond = JSON.parse(
 );
 if (!Array.isArray(citeArtifactSecond?.entries) || citeArtifactSecond.entries.length <= 0) {
   console.error('FAIL: expected non-empty cite_v1.entries after rerun');
+  process.exit(1);
+}
+const expectedCiteOrder = ['demo-key', 'aux-key', 'third-key', 'demo-key', 'aux-key'];
+if (JSON.stringify(citeArtifactSecond.entries.map((entry) => entry.key)) !== JSON.stringify(expectedCiteOrder)) {
+  console.error('FAIL: expected cite_v1 occurrence order to remain stable after rerun');
+  process.exit(1);
+}
+if (JSON.stringify(citeArtifactSecond.entries.map((entry) => entry.ordinal)) !== JSON.stringify([1, 2, 3, 1, 2])) {
+  console.error('FAIL: expected cite_v1 ordinal mapping [1,2,3,1,2] after rerun');
   process.exit(1);
 }
 

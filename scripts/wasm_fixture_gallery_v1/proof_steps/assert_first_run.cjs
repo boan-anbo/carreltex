@@ -187,6 +187,17 @@ for (const [index, entry] of bibArtifactFirst.entries.entries()) {
     process.exit(1);
   }
 }
+const expectedBibOrder = ['demo-key', 'aux-key', 'third-key'];
+const actualBibOrder = bibArtifactFirst.entries.map((entry) => entry.key);
+if (JSON.stringify(actualBibOrder) !== JSON.stringify(expectedBibOrder)) {
+  console.error(`FAIL: expected bib_v1 key order ${JSON.stringify(expectedBibOrder)} but got ${JSON.stringify(actualBibOrder)}`);
+  process.exit(1);
+}
+const bibOrdinals = bibArtifactFirst.entries.map((entry) => entry.ordinal);
+if (JSON.stringify(bibOrdinals) !== JSON.stringify([1, 2, 3])) {
+  console.error(`FAIL: expected bib_v1 ordinals [1,2,3] but got ${JSON.stringify(bibOrdinals)}`);
+  process.exit(1);
+}
 const citeArtifactFirst = JSON.parse(fs.readFileSync(citePath, 'utf8'));
 if (!Array.isArray(citeArtifactFirst?.entries)) {
   console.error('FAIL: expected cite_v1.entries array in first-run artifact');
@@ -222,11 +233,32 @@ for (const [index, entry] of citeArtifactFirst.entries.entries()) {
     process.exit(1);
   }
 }
-if (
-  !citeArtifactFirst.entries.some((entry) => entry.key === 'demo-key')
-  || citeArtifactFirst.entries.filter((entry) => entry.key === 'demo-key').length < 2
-) {
-  console.error('FAIL: expected cite_v1 to preserve duplicate demo-key cite occurrences');
+const expectedCiteOrder = ['demo-key', 'aux-key', 'third-key', 'demo-key', 'aux-key'];
+const actualCiteOrder = citeArtifactFirst.entries.map((entry) => entry.key);
+if (JSON.stringify(actualCiteOrder) !== JSON.stringify(expectedCiteOrder)) {
+  console.error(`FAIL: expected cite_v1 occurrence order ${JSON.stringify(expectedCiteOrder)} but got ${JSON.stringify(actualCiteOrder)}`);
+  process.exit(1);
+}
+const actualCiteOrdinals = citeArtifactFirst.entries.map((entry) => entry.ordinal);
+if (JSON.stringify(actualCiteOrdinals) !== JSON.stringify([1, 2, 3, 1, 2])) {
+  console.error(`FAIL: expected cite_v1 ordinal mapping [1,2,3,1,2] but got ${JSON.stringify(actualCiteOrdinals)}`);
+  process.exit(1);
+}
+const citeOrderByKey = new Map();
+for (const entry of citeArtifactFirst.entries) {
+  if (!citeOrderByKey.has(entry.key)) {
+    citeOrderByKey.set(entry.key, entry.cite_order);
+  } else if (citeOrderByKey.get(entry.key) !== entry.cite_order) {
+    console.error(`FAIL: cite_v1 cite_order drift for key ${entry.key}`);
+    process.exit(1);
+  }
+}
+if (JSON.stringify([...citeOrderByKey.entries()]) !== JSON.stringify([
+  ['demo-key', 1],
+  ['aux-key', 2],
+  ['third-key', 3],
+])) {
+  console.error(`FAIL: expected cite_v1 cite_order mapping [[demo-key,1],[aux-key,2],[third-key,3]] but got ${JSON.stringify([...citeOrderByKey.entries()])}`);
   process.exit(1);
 }
 assertEntrySourceSpans('typeset_demo_bib_probe_v0', 'bib_v1', bibArtifactFirst.entries);
