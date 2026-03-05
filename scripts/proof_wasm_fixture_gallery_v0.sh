@@ -84,6 +84,7 @@ const outDir = process.argv[2];
 const report = JSON.parse(fs.readFileSync(path.join(outDir, 'report.json'), 'utf8'));
 const statuses = Array.isArray(report.statuses) ? report.statuses : [];
 const resolvedCount = Number(report.resolved_resources_count ?? 0);
+const requiredTypedKeys = ['toc', 'labels', 'bib', 'hyperref'];
 
 if (resolvedCount <= 0) {
   console.error('FAIL: expected at least one resolved resource in fixture gallery summaries');
@@ -100,8 +101,41 @@ if (baselineMissing <= 0) {
   process.exit(1);
 }
 
+for (const status of statuses) {
+  const typedPresence = status.typed_artifacts_presence;
+  if (!typedPresence || typeof typedPresence !== 'object') {
+    console.error(`FAIL: case ${status.case_id} missing typed_artifacts_presence`);
+    process.exit(1);
+  }
+  for (const key of requiredTypedKeys) {
+    if (typeof typedPresence[key] !== 'boolean') {
+      console.error(`FAIL: case ${status.case_id} missing typed_artifacts_presence.${key} boolean`);
+      process.exit(1);
+    }
+  }
+  const summaryPath = path.join(outDir, status.case_id, 'summary.json');
+  const summary = JSON.parse(fs.readFileSync(summaryPath, 'utf8'));
+  const typedArtifacts = summary.typed_artifacts;
+  if (!typedArtifacts || typeof typedArtifacts !== 'object') {
+    console.error(`FAIL: case ${status.case_id} missing typed_artifacts`);
+    process.exit(1);
+  }
+  for (const key of requiredTypedKeys) {
+    const payload = typedArtifacts[key];
+    if (!payload || typeof payload !== 'object') {
+      console.error(`FAIL: case ${status.case_id} missing typed_artifacts.${key}`);
+      process.exit(1);
+    }
+    if (typeof payload.present !== 'boolean' || typeof payload.items !== 'number') {
+      console.error(`FAIL: case ${status.case_id} typed_artifacts.${key} schema mismatch`);
+      process.exit(1);
+    }
+  }
+}
+
 console.log(`PASS: resolved_resources_count ${resolvedCount}`);
 console.log(`PASS: baseline_match MATCH=${baselineMatches} MISSING=${baselineMissing}`);
+console.log(`PASS: typed_artifacts keys ${requiredTypedKeys.join(',')}`);
 NODE
 
 echo "PASS: wasm fixture gallery artifacts $OUT_DIR"
