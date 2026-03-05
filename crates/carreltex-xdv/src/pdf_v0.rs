@@ -23,6 +23,8 @@ const FOOTNOTE_LEADING_PT_V0: f32 = 12.0;
 const FOOTNOTE_BLOCK_GAP_PT_V0: f32 = 12.0;
 const FOOTNOTE_LINE_PREFIX_MARKER_V0: &[u8] = b"!f ";
 const HREF_URL_LINE_PREFIX_MARKER_V0: &[u8] = b"!u ";
+const LABEL_LINE_PREFIX_MARKER_V0: &[u8] = b"!l ";
+const REF_LINE_PREFIX_MARKER_V0: &[u8] = b"!r ";
 const NOINDENT_PREFIX_MARKER_V0: u8 = b'~';
 const LINK_START_MARKER_V0: u8 = b'<';
 const LINK_END_MARKER_V0: u8 = b'>';
@@ -885,6 +887,22 @@ fn has_href_url_line_prefix_v0(glyphs: &[GlyphPlanV0]) -> bool {
             .eq(HREF_URL_LINE_PREFIX_MARKER_V0.iter().copied())
 }
 
+fn has_label_line_prefix_v0(glyphs: &[GlyphPlanV0]) -> bool {
+    glyphs.len() >= LABEL_LINE_PREFIX_MARKER_V0.len()
+        && glyphs[..LABEL_LINE_PREFIX_MARKER_V0.len()]
+            .iter()
+            .map(|glyph| glyph.byte)
+            .eq(LABEL_LINE_PREFIX_MARKER_V0.iter().copied())
+}
+
+fn has_ref_line_prefix_v0(glyphs: &[GlyphPlanV0]) -> bool {
+    glyphs.len() >= REF_LINE_PREFIX_MARKER_V0.len()
+        && glyphs[..REF_LINE_PREFIX_MARKER_V0.len()]
+            .iter()
+            .map(|glyph| glyph.byte)
+            .eq(REF_LINE_PREFIX_MARKER_V0.iter().copied())
+}
+
 fn parse_href_url_line_v0(glyphs: &[GlyphPlanV0]) -> Option<(u32, Vec<u8>)> {
     if glyphs.len() < HREF_URL_LINE_PREFIX_MARKER_V0.len() {
         return None;
@@ -929,6 +947,69 @@ fn parse_href_url_line_v0(glyphs: &[GlyphPlanV0]) -> Option<(u32, Vec<u8>)> {
         return None;
     }
     Some((marker_id, uri))
+}
+
+fn parse_label_line_v0(glyphs: &[GlyphPlanV0]) -> Option<()> {
+    if glyphs.len() < LABEL_LINE_PREFIX_MARKER_V0.len() {
+        return None;
+    }
+    let bytes: Vec<u8> = glyphs.iter().map(|glyph| glyph.byte).collect();
+    if !bytes.starts_with(LABEL_LINE_PREFIX_MARKER_V0) {
+        return None;
+    }
+    let line = String::from_utf8(bytes).ok()?;
+    let mut parts = line.splitn(6, ' ');
+    let prefix = parts.next()?;
+    if prefix != "!l" {
+        return None;
+    }
+    let key = parts.next()?.trim();
+    let anchor_id = parts.next()?.trim().parse::<u32>().ok()?;
+    let kind = parts.next()?.trim();
+    let level = parts.next()?.trim().parse::<u8>().ok()?;
+    let title = parts.next()?.trim();
+    if key.is_empty() || anchor_id == 0 {
+        return None;
+    }
+    if kind != "heading" && kind != "figure" {
+        return None;
+    }
+    if kind == "heading" && !(1..=2).contains(&level) {
+        return None;
+    }
+    if kind == "figure" && level != 0 {
+        return None;
+    }
+    if title.is_empty() {
+        return None;
+    }
+    Some(())
+}
+
+fn parse_ref_line_v0(glyphs: &[GlyphPlanV0]) -> Option<()> {
+    if glyphs.len() < REF_LINE_PREFIX_MARKER_V0.len() {
+        return None;
+    }
+    let bytes: Vec<u8> = glyphs.iter().map(|glyph| glyph.byte).collect();
+    if !bytes.starts_with(REF_LINE_PREFIX_MARKER_V0) {
+        return None;
+    }
+    let line = String::from_utf8(bytes).ok()?;
+    let mut parts = line.splitn(4, ' ');
+    let prefix = parts.next()?;
+    if prefix != "!r" {
+        return None;
+    }
+    let key = parts.next()?.trim();
+    let line_index = parts.next()?.trim().parse::<u32>().ok()?;
+    let resolved_anchor_id = parts.next()?.trim().parse::<u32>().ok()?;
+    if key.is_empty() || line_index == 0 {
+        return None;
+    }
+    if resolved_anchor_id == 0 {
+        return Some(());
+    }
+    Some(())
 }
 
 fn parse_toc_entry_line_v0(glyphs: &[GlyphPlanV0]) -> Option<TocEntryMetadataV0> {
@@ -1105,6 +1186,8 @@ fn split_body_and_metadata_lines_v0(pages: &[PagePlanV0]) -> (Vec<Vec<LinePlanV0
             if has_footnote_line_prefix_v0(&line.glyphs)
                 || has_href_url_line_prefix_v0(&line.glyphs)
                 || has_toc_entry_line_prefix_v0(&line.glyphs)
+                || has_label_line_prefix_v0(&line.glyphs)
+                || has_ref_line_prefix_v0(&line.glyphs)
             {
                 in_metadata = true;
             }
@@ -1160,6 +1243,14 @@ fn parse_metadata_lines_v0(
                 return None;
             }
             toc_entries.push(toc_entry);
+            current_footnote_id = None;
+            continue;
+        }
+        if parse_label_line_v0(&line.glyphs).is_some() {
+            current_footnote_id = None;
+            continue;
+        }
+        if parse_ref_line_v0(&line.glyphs).is_some() {
             current_footnote_id = None;
             continue;
         }

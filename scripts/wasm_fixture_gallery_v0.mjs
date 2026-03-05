@@ -23,12 +23,14 @@ const STATUS_FAIL_V0 = 'FAIL';
 const STATUS_MISMATCH_V0 = 'MISMATCH';
 const EXPECTED_STATUS_VALUES_V0 = new Set([STATUS_OK_V0, STATUS_NI_V0, STATUS_INVALID_V0, STATUS_FAIL_V0]);
 const DEFAULT_ONDEMAND_FIXEDPOINT_MAX_ITERS_V1 = 3;
-const TYPED_ARTIFACT_KEYS_V0 = ['toc', 'labels', 'bib', 'hyperref', 'pkgopt', 'graphics'];
+const TYPED_ARTIFACT_KEYS_V0 = ['toc', 'labels', 'refs', 'bib', 'hyperref', 'pkgopt', 'graphics'];
 const TYPED_ARTIFACTS_VERSION_V0 = 1;
 const MAX_TOC_ENTRIES_V0 = 256;
 const MAX_TOC_TITLE_BYTES_V0 = 256;
 const MAX_LABEL_ENTRIES_V0 = 256;
 const MAX_LABEL_VALUE_BYTES_V0 = 256;
+const MAX_REF_ENTRIES_V0 = 256;
+const MAX_REF_OCCURRENCES_PER_KEY_V0 = 256;
 const MAX_BIB_ENTRIES_V0 = 256;
 const MAX_BIB_VALUE_BYTES_V0 = 256;
 const MAX_PKGOPT_ENTRIES_V0 = 256;
@@ -1872,9 +1874,53 @@ function extractHyperrefLinksFromSourceV0(sourceBytes) {
   return links;
 }
 
-function extractLabelEntriesFromSourceV0(sourceBytes) {
-  const entries = [];
+function isSafeLabelRefKeyValueV1(value) {
+  return typeof value === 'string'
+    && value.length > 0
+    && !value.includes(' ')
+    && !value.includes('..')
+    && !value.startsWith('/')
+    && /^[A-Za-z0-9:_./-]+$/.test(value);
+}
+
+function lineIndexForByteOffsetV1(sourceBytes, offset) {
+  let lineIndex = 1;
+  for (let index = 0; index < offset && index < sourceBytes.length; index += 1) {
+    if (sourceBytes[index] === 0x0a) {
+      lineIndex += 1;
+    }
+  }
+  return lineIndex;
+}
+
+function extractLabelsAndRefsFromSourceV1(sourceBytes) {
+  const labelsByKey = new Map();
+  const refsByKey = new Map();
+  let nextAnchorId = 1;
+  let pendingLabelTarget = null;
+  let inFigure = false;
   let index = 0;
+
+  const setPendingHeading = (level, title) => {
+    pendingLabelTarget = {
+      anchor_id: nextAnchorId,
+      kind: 'heading',
+      level,
+      title: title.length > 0 ? title : null,
+    };
+    nextAnchorId += 1;
+  };
+
+  const setPendingFigure = (title) => {
+    pendingLabelTarget = {
+      anchor_id: nextAnchorId,
+      kind: 'figure',
+      level: null,
+      title: title.length > 0 ? title : null,
+    };
+    nextAnchorId += 1;
+  };
+
   while (index < sourceBytes.length) {
     if (sourceBytes[index] !== 0x5c) {
       index += 1;
@@ -1888,43 +1934,179 @@ function extractLabelEntriesFromSourceV0(sourceBytes) {
       index += 1;
       continue;
     }
+
     const command = Buffer.from(sourceBytes.slice(index + 1, commandIndex)).toString('ascii');
-    if (command !== 'label' && command !== 'ref') {
-      index = commandIndex;
+    if (command === 'begin') {
+      const envGroup = readBracedGroupV0(sourceBytes, commandIndex);
+      if (!envGroup.ok) {
+        index = commandIndex;
+        pendingLabelTarget = null;
+        continue;
+      }
+      const envName = envGroup.value.trim();
+      if (envName === 'figure') {
+        inFigure = true;
+      }
+      pendingLabelTarget = null;
+      index = envGroup.next;
       continue;
     }
-    const keyGroup = readBracedGroupV0(sourceBytes, commandIndex);
-    if (!keyGroup.ok) {
-      index = commandIndex;
+    if (command === 'end') {
+      const envGroup = readBracedGroupV0(sourceBytes, commandIndex);
+      if (!envGroup.ok) {
+        index = commandIndex;
+        pendingLabelTarget = null;
+        continue;
+      }
+      const envName = envGroup.value.trim();
+      if (envName === 'figure') {
+        inFigure = false;
+      }
+      pendingLabelTarget = null;
+      index = envGroup.next;
       continue;
     }
-    if (keyGroup.value.length > 0) {
-      const valueBytes = Buffer.from(keyGroup.value, 'utf8');
-      if (valueBytes.length > MAX_LABEL_VALUE_BYTES_V0) {
-        throw new Error(`labels_v0 value exceeds cap ${MAX_LABEL_VALUE_BYTES_V0}`);
+    if (command === 'section' || command === 'subsection') {
+      const titleGroup = readBracedGroupV0(sourceBytes, commandIndex);
+      if (!titleGroup.ok) {
+        index = commandIndex;
+        pendingLabelTarget = null;
+        continue;
       }
-      entries.push({
-        command,
-        key: keyGroup.value,
-        source_span: buildSourceSpanV0(sourceBytes, index, keyGroup.next, 'labels_v0'),
-      });
-      if (entries.length > MAX_LABEL_ENTRIES_V0) {
-        throw new Error(`labels_v0 entries exceed cap ${MAX_LABEL_ENTRIES_V0}`);
-      }
+      const level = command === 'section' ? 1 : 2;
+      setPendingHeading(level, titleGroup.value.trim());
+      index = titleGroup.next;
+      continue;
     }
-    index = keyGroup.next;
+    if (command === 'caption' && inFigure) {
+      const captionGroup = readBracedGroupV0(sourceBytes, commandIndex);
+      if (!captionGroup.ok) {
+        index = commandIndex;
+        pendingLabelTarget = null;
+        continue;
+      }
+      setPendingFigure(captionGroup.value.trim());
+      index = captionGroup.next;
+      continue;
+    }
+    if (command === 'label') {
+      const keyGroup = readBracedGroupV0(sourceBytes, commandIndex);
+      if (!keyGroup.ok) {
+        index = commandIndex;
+        pendingLabelTarget = null;
+        continue;
+      }
+      const key = keyGroup.value.trim();
+      if (
+        pendingLabelTarget
+        && isSafeLabelRefKeyValueV1(key)
+        && !labelsByKey.has(key)
+      ) {
+        const keyBytes = Buffer.from(key, 'utf8');
+        if (keyBytes.length > MAX_LABEL_VALUE_BYTES_V0) {
+          throw new Error(`labels_v1 key exceeds cap ${MAX_LABEL_VALUE_BYTES_V0}`);
+        }
+        labelsByKey.set(key, {
+          key,
+          anchor_id: pendingLabelTarget.anchor_id,
+          kind: pendingLabelTarget.kind,
+          level: pendingLabelTarget.level,
+          title: pendingLabelTarget.title,
+          source_span: buildSourceSpanV0(sourceBytes, index, keyGroup.next, 'labels_v1'),
+        });
+        if (labelsByKey.size > MAX_LABEL_ENTRIES_V0) {
+          throw new Error(`labels_v1 entries exceed cap ${MAX_LABEL_ENTRIES_V0}`);
+        }
+      }
+      pendingLabelTarget = null;
+      index = keyGroup.next;
+      continue;
+    }
+    if (command === 'ref') {
+      const keyGroup = readBracedGroupV0(sourceBytes, commandIndex);
+      if (!keyGroup.ok) {
+        index = commandIndex;
+        pendingLabelTarget = null;
+        continue;
+      }
+      const key = keyGroup.value.trim();
+      if (isSafeLabelRefKeyValueV1(key)) {
+        let entry = refsByKey.get(key);
+        if (!entry) {
+          entry = {
+            key,
+            occurrences: [],
+            resolved: false,
+            source_span: buildSourceSpanV0(sourceBytes, index, keyGroup.next, 'refs_v1'),
+          };
+          refsByKey.set(key, entry);
+        }
+        entry.occurrences.push({
+          line_index: lineIndexForByteOffsetV1(sourceBytes, index),
+          anchor_id: null,
+        });
+        if (entry.occurrences.length > MAX_REF_OCCURRENCES_PER_KEY_V0) {
+          throw new Error(`refs_v1 occurrences exceed cap ${MAX_REF_OCCURRENCES_PER_KEY_V0} for key ${key}`);
+        }
+      }
+      pendingLabelTarget = null;
+      index = keyGroup.next;
+      continue;
+    }
+
+    pendingLabelTarget = null;
+    index = commandIndex;
   }
-  return entries;
+
+  const labels = [...labelsByKey.values()].sort((left, right) => left.key.localeCompare(right.key));
+  const refs = [...refsByKey.values()].sort((left, right) => left.key.localeCompare(right.key));
+  for (const refEntry of refs) {
+    const labelEntry = labelsByKey.get(refEntry.key);
+    if (!labelEntry) {
+      continue;
+    }
+    refEntry.resolved = true;
+    for (const occurrence of refEntry.occurrences) {
+      occurrence.anchor_id = labelEntry.anchor_id;
+    }
+  }
+  if (refs.length > MAX_REF_ENTRIES_V0) {
+    throw new Error(`refs_v1 entries exceed cap ${MAX_REF_ENTRIES_V0}`);
+  }
+  return {
+    labels,
+    refs,
+  };
 }
 
 async function emitLabelsTypedArtifactV0(caseOutDir, fixtureBytes) {
+  const extracted = extractLabelsAndRefsFromSourceV1(fixtureBytes);
   const payload = {
     version: TYPED_ARTIFACTS_VERSION_V0,
-    schema: 'labels_v0',
-    entries: extractLabelEntriesFromSourceV0(fixtureBytes),
+    schema: 'labels_v1',
+    entries: extracted.labels,
   };
   const bytes = Buffer.from(`${JSON.stringify(payload, null, 2)}\n`, 'utf8');
-  const relpath = 'labels_v0.json';
+  const relpath = 'labels_v1.json';
+  const fullPath = path.join(caseOutDir, relpath);
+  await writeFile(fullPath, bytes);
+  return {
+    present: true,
+    items: payload.entries.length,
+    artifact_relpath: relpath,
+    artifact_sha256: sha256HexV0(bytes),
+  };
+}
+
+async function emitRefsTypedArtifactV0(caseOutDir, fixtureBytes) {
+  const extracted = extractLabelsAndRefsFromSourceV1(fixtureBytes);
+  const payload = {
+    version: TYPED_ARTIFACTS_VERSION_V0,
+    schema: 'refs_v1',
+    entries: extracted.refs,
+  };
+  const bytes = Buffer.from(`${JSON.stringify(payload, null, 2)}\n`, 'utf8');
+  const relpath = 'refs_v1.json';
   const fullPath = path.join(caseOutDir, relpath);
   await writeFile(fullPath, bytes);
   return {
@@ -2072,6 +2254,7 @@ async function emitTypedArtifactsV0(caseSpec, caseOutDir, typedArtifacts, fixtur
   }
   if (caseSpec.id === 'typeset_demo_labels_probe_v0') {
     typedArtifacts.labels = await emitLabelsTypedArtifactV0(caseOutDir, fixtureBytes);
+    typedArtifacts.refs = await emitRefsTypedArtifactV0(caseOutDir, fixtureBytes);
   }
   if (caseSpec.id === 'typeset_demo_bib_probe_v0') {
     typedArtifacts.bib = await emitBibTypedArtifactV0(caseOutDir, fixtureBytes);

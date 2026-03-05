@@ -571,9 +571,9 @@ if (labelsSummary?.typed_artifacts?.labels?.present !== true) {
   console.error('FAIL: expected labels typed artifact present after first run');
   process.exit(1);
 }
-const labelsPath = path.join(outDir, 'typeset_demo_labels_probe_v0', 'labels_v0.json');
+const labelsPath = path.join(outDir, 'typeset_demo_labels_probe_v0', 'labels_v1.json');
 if (!fs.existsSync(labelsPath)) {
-  console.error('FAIL: expected labels_v0.json artifact after first run');
+  console.error('FAIL: expected labels_v1.json artifact after first run');
   process.exit(1);
 }
 const labelsShaFirst = labelsSummary.typed_artifacts.labels.artifact_sha256;
@@ -583,15 +583,40 @@ if (typeof labelsShaFirst !== 'string' || !/^[0-9a-f]{64}$/.test(labelsShaFirst)
 }
 const labelsArtifactFirst = JSON.parse(fs.readFileSync(labelsPath, 'utf8'));
 if (!Array.isArray(labelsArtifactFirst?.entries)) {
-  console.error('FAIL: expected labels_v0.entries array in first-run artifact');
+  console.error('FAIL: expected labels_v1.entries array in first-run artifact');
   process.exit(1);
 }
 if (labelsArtifactFirst.entries.length <= 0) {
-  console.error('FAIL: expected non-empty labels_v0.entries for labels probe');
+  console.error('FAIL: expected non-empty labels_v1.entries for labels probe');
   process.exit(1);
 }
-assertEntrySourceSpans('typeset_demo_labels_probe_v0', 'labels_v0', labelsArtifactFirst.entries);
-fs.writeFileSync(firstRunShaPath('labels_v0'), `${labelsShaFirst}\n`);
+assertEntrySourceSpans('typeset_demo_labels_probe_v0', 'labels_v1', labelsArtifactFirst.entries);
+fs.writeFileSync(firstRunShaPath('labels_v1'), `${labelsShaFirst}\n`);
+if (labelsSummary?.typed_artifacts?.refs?.present !== true) {
+  console.error('FAIL: expected refs typed artifact present after first run');
+  process.exit(1);
+}
+const refsPath = path.join(outDir, 'typeset_demo_labels_probe_v0', 'refs_v1.json');
+if (!fs.existsSync(refsPath)) {
+  console.error('FAIL: expected refs_v1.json artifact after first run');
+  process.exit(1);
+}
+const refsShaFirst = labelsSummary.typed_artifacts.refs.artifact_sha256;
+if (typeof refsShaFirst !== 'string' || !/^[0-9a-f]{64}$/.test(refsShaFirst)) {
+  console.error('FAIL: expected refs artifact sha256 in first summary');
+  process.exit(1);
+}
+const refsArtifactFirst = JSON.parse(fs.readFileSync(refsPath, 'utf8'));
+if (!Array.isArray(refsArtifactFirst?.entries)) {
+  console.error('FAIL: expected refs_v1.entries array in first-run artifact');
+  process.exit(1);
+}
+if (refsArtifactFirst.entries.length <= 0) {
+  console.error('FAIL: expected non-empty refs_v1.entries for labels probe');
+  process.exit(1);
+}
+assertEntrySourceSpans('typeset_demo_labels_probe_v0', 'refs_v1', refsArtifactFirst.entries);
+fs.writeFileSync(firstRunShaPath('refs_v1'), `${refsShaFirst}\n`);
 
 const tocSummary = JSON.parse(
   fs.readFileSync(path.join(outDir, 'typeset_demo_toc_probe_v0', 'summary.json'), 'utf8'),
@@ -1295,8 +1320,9 @@ if (resourceHintsShaSecond !== resourceHintsShaFirst) {
   console.error('FAIL: report.resource_hints_v0 must be stable across reruns');
   process.exit(1);
 }
-const requiredTypedKeys = ['toc', 'labels', 'bib', 'hyperref', 'pkgopt', 'graphics'];
-const labelsShaFirst = fs.readFileSync(path.join(`${outDir}_baseline`, 'labels_v0_first.sha256'), 'utf8').trim();
+const requiredTypedKeys = ['toc', 'labels', 'refs', 'bib', 'hyperref', 'pkgopt', 'graphics'];
+const labelsShaFirst = fs.readFileSync(path.join(`${outDir}_baseline`, 'labels_v1_first.sha256'), 'utf8').trim();
+const refsShaFirst = fs.readFileSync(path.join(`${outDir}_baseline`, 'refs_v1_first.sha256'), 'utf8').trim();
 const tocShaFirst = fs.readFileSync(path.join(`${outDir}_baseline`, 'toc_v1_first.sha256'), 'utf8').trim();
 const bibShaFirst = fs.readFileSync(path.join(`${outDir}_baseline`, 'bib_v0_first.sha256'), 'utf8').trim();
 const hyperrefShaFirst = fs.readFileSync(path.join(`${outDir}_baseline`, 'hyperref_v0_first.sha256'), 'utf8').trim();
@@ -1491,14 +1517,31 @@ if (!labelsArtifact || labelsArtifact.present !== true) {
 }
 const labelsShaSecond = labelsArtifact.artifact_sha256;
 if (labelsShaSecond !== labelsShaFirst) {
-  console.error('FAIL: labels_v0 artifact sha256 must be stable across reruns');
+  console.error('FAIL: labels_v1 artifact sha256 must be stable across reruns');
   process.exit(1);
 }
 const labelsArtifactSecond = JSON.parse(
-  fs.readFileSync(path.join(outDir, 'typeset_demo_labels_probe_v0', 'labels_v0.json'), 'utf8'),
+  fs.readFileSync(path.join(outDir, 'typeset_demo_labels_probe_v0', 'labels_v1.json'), 'utf8'),
 );
 if (!Array.isArray(labelsArtifactSecond?.entries) || labelsArtifactSecond.entries.length <= 0) {
-  console.error('FAIL: expected non-empty labels_v0.entries after rerun');
+  console.error('FAIL: expected non-empty labels_v1.entries after rerun');
+  process.exit(1);
+}
+const refsArtifact = labelsSummary?.typed_artifacts?.refs;
+if (!refsArtifact || refsArtifact.present !== true) {
+  console.error('FAIL: expected refs typed artifact present after second run');
+  process.exit(1);
+}
+const refsShaSecond = refsArtifact.artifact_sha256;
+if (refsShaSecond !== refsShaFirst) {
+  console.error('FAIL: refs_v1 artifact sha256 must be stable across reruns');
+  process.exit(1);
+}
+const refsArtifactSecond = JSON.parse(
+  fs.readFileSync(path.join(outDir, 'typeset_demo_labels_probe_v0', 'refs_v1.json'), 'utf8'),
+);
+if (!Array.isArray(refsArtifactSecond?.entries) || refsArtifactSecond.entries.length <= 0) {
+  console.error('FAIL: expected non-empty refs_v1.entries after rerun');
   process.exit(1);
 }
 
@@ -1681,7 +1724,8 @@ console.log(`PASS: typed_artifacts keys ${requiredTypedKeys.join(',')}`);
 console.log('PASS: typed_artifacts_version gate 1');
 console.log(`PASS: resource_hints_v0 sha stable ${resourceHintsShaSecond}`);
 console.log('PASS: resource_hints_v0 excludes ok_demo_v0');
-console.log(`PASS: labels_v0 sha stable ${labelsShaSecond}`);
+console.log(`PASS: labels_v1 sha stable ${labelsShaSecond}`);
+console.log(`PASS: refs_v1 sha stable ${refsShaSecond}`);
 console.log(`PASS: toc_v1 sha stable ${tocShaSecond}`);
 console.log(`PASS: bib_v0 sha stable ${bibShaSecond}`);
 console.log(`PASS: hyperref_v0 sha stable ${hyperrefShaSecond}`);
