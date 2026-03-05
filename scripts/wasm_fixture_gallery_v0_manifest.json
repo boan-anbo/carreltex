@@ -56,6 +56,12 @@
       "purpose": "Probes graphics include seam planned for future typed artifacts."
     },
     {
+      "id": "typeset_demo_graphicspath_probe_v0",
+      "tags": ["typeset", "graphics", "graphicspath", "probe", "ni"],
+      "expected_status": "NI",
+      "purpose": "Probes graphicspath normalization and includegraphics request mapping."
+    },
+    {
       "id": "typeset_demo_pkgopt_probe_v0",
       "tags": ["typeset", "package-options", "probe", "ni"],
       "expected_status": "NI",
