@@ -10,6 +10,8 @@ BASELINE_DIR_B="$BASELINE_ROOT/run2"
 BASELINE_PACKS_ROOT="${BASELINE_ROOT}/packs"
 BASELINE_AUTO_PACK_DIR="${BASELINE_PACKS_ROOT}/auto_pack"
 REQUEST_LIST="$OUT_DIR/requests.json"
+HINT_REQUEST_LIST_A="$OUT_DIR/request_list_from_hints_a.json"
+HINT_REQUEST_LIST_B="$OUT_DIR/request_list_from_hints_b.json"
 FIXTURE_SOURCE_DIR="$OUT_DIR/fixture_source_v0"
 SOURCE_DATE_EPOCH="${SOURCE_DATE_EPOCH:-1700000000}"
 export SOURCE_DATE_EPOCH
@@ -39,6 +41,70 @@ node "$ROOT_DIR/scripts/texlive_store_gen_v0.mjs" "$REQUEST_LIST" "$STORE_DIR"
 TEXLIVE_RESOLVER_BACKEND_V0=offline_store_v0 \
 TEXLIVE_STORE_DIR_V0="$STORE_DIR" \
 node "$ROOT_DIR/scripts/wasm_fixture_gallery_v0.mjs" "$OUT_DIR"
+
+node "$ROOT_DIR/scripts/texlive_smoke/request_list_from_hints_v0.mjs" \
+  "$OUT_DIR/report.json" \
+  "$HINT_REQUEST_LIST_A"
+node "$ROOT_DIR/scripts/texlive_smoke/request_list_from_hints_v0.mjs" \
+  "$OUT_DIR/report.json" \
+  "$HINT_REQUEST_LIST_B"
+
+node - "$HINT_REQUEST_LIST_A" "$HINT_REQUEST_LIST_B" <<'NODE'
+const fs = require('node:fs');
+const crypto = require('node:crypto');
+
+const requestListAPath = process.argv[2];
+const requestListBPath = process.argv[3];
+const sha256 = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex');
+const isSha256 = (value) => typeof value === 'string' && /^[0-9a-f]{64}$/.test(value);
+const isSafeToken = (value) => typeof value === 'string' && value.length > 0 && !value.includes('/') && !value.includes('\\') && !value.includes('..');
+
+const bytesA = fs.readFileSync(requestListAPath);
+const bytesB = fs.readFileSync(requestListBPath);
+const shaA = sha256(bytesA);
+const shaB = sha256(bytesB);
+if (shaA !== shaB) {
+  console.error('FAIL: request_list_from_hints_v0 output must be deterministic');
+  process.exit(1);
+}
+
+const listA = JSON.parse(bytesA.toString('utf8'));
+const listB = JSON.parse(bytesB.toString('utf8'));
+if (listA.version !== 1 || listB.version !== 1) {
+  console.error('FAIL: request list version must be 1');
+  process.exit(1);
+}
+if (listA.request_count !== listA.requests.length || listB.request_count !== listB.requests.length) {
+  console.error('FAIL: request_count must match requests length');
+  process.exit(1);
+}
+if (listA.typed_artifacts_version !== 1 || listB.typed_artifacts_version !== 1) {
+  console.error('FAIL: request list typed_artifacts_version must be 1');
+  process.exit(1);
+}
+if (!isSha256(listA.source_report_sha256) || !isSha256(listB.source_report_sha256)) {
+  console.error('FAIL: request list source_report_sha256 missing');
+  process.exit(1);
+}
+if (listA.source_report_sha256 !== listB.source_report_sha256) {
+  console.error('FAIL: request list source_report_sha256 mismatch across reruns');
+  process.exit(1);
+}
+
+for (const request of listA.requests) {
+  if (!(request.kind === 'texmf' || request.kind === 'fontconfig')) {
+    console.error(`FAIL: request kind must be texmf or fontconfig, got ${request.kind}`);
+    process.exit(1);
+  }
+  if (!isSafeToken(request.format) || !isSafeToken(request.name) || !isSafeToken(request.variant)) {
+    console.error('FAIL: request tokens must be safe basename-only values');
+    process.exit(1);
+  }
+}
+
+console.log(`PASS: request_list_from_hints_v0 deterministic sha256 ${shaA}`);
+console.log(`PASS: request_list_from_hints_v0 schema request_count ${listA.request_count}`);
+NODE
 
 node - "$OUT_DIR" "$BASELINE_ROOT" <<'NODE'
 const fs = require('node:fs');
