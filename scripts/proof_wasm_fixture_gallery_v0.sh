@@ -76,6 +76,7 @@ printf 'fixture-bytes-for-baropts-sty\n' > "$FIXTURE_SOURCE_DIR/xetex/sty/baropt
 printf 'fixture-bytes-for-natbib-sty\n' > "$FIXTURE_SOURCE_DIR/xetex/sty/natbib.sty"
 printf 'fixture-bytes-for-memoir-cls\n' > "$FIXTURE_SOURCE_DIR/xetex/cls/memoir.cls"
 printf 'fixture-bytes-for-classoptsdemo-cls\n' > "$FIXTURE_SOURCE_DIR/xetex/cls/classoptsdemo.cls"
+printf 'fixture-bytes-for-classoptsmulti-cls\n' > "$FIXTURE_SOURCE_DIR/xetex/cls/classoptsmulti.cls"
 printf 'fixture-bytes-for-memoirplus-cls\n' > "$FIXTURE_SOURCE_DIR/xetex/cls/memoirplus.cls"
 printf 'fixture-bytes-for-found-sans\n' > "$FIXTURE_SOURCE_DIR/fontconfig/public/FoundSans"
 
@@ -220,6 +221,13 @@ const memoirPlusClassRequest = listA.requests.find(
 );
 if (!memoirPlusClassRequest) {
   console.error('FAIL: request list must include class hint request for memoirplus.cls');
+  process.exit(1);
+}
+const classOptionsMultiRequest = listA.requests.find(
+  (request) => request.kind === 'texmf' && request.format === 'cls' && request.name === 'classoptsmulti.cls' && request.variant === 'typeset',
+);
+if (!classOptionsMultiRequest) {
+  console.error('FAIL: request list must include class hint request for classoptsmulti.cls');
   process.exit(1);
 }
 const bibRequest = listA.requests.find(
@@ -654,6 +662,44 @@ if (!passOptionsClassPkgoptArtifact.entries.some((entry) => entry.package === 'm
   process.exit(1);
 }
 
+const classOptionsMultiPkgoptSummary = JSON.parse(
+  fs.readFileSync(path.join(outDir, 'typeset_demo_documentclass_opts_multi_probe_v0', 'summary.json'), 'utf8'),
+);
+if (classOptionsMultiPkgoptSummary?.typed_artifacts?.pkgopt?.present !== true) {
+  console.error('FAIL: expected pkgopt typed artifact present for documentclass opts multi probe after first run');
+  process.exit(1);
+}
+const classOptionsMultiPkgoptArtifact = JSON.parse(
+  fs.readFileSync(path.join(outDir, 'typeset_demo_documentclass_opts_multi_probe_v0', 'pkgopt_v0.json'), 'utf8'),
+);
+if (!Array.isArray(classOptionsMultiPkgoptArtifact?.entries) || classOptionsMultiPkgoptArtifact.entries.length <= 0) {
+  console.error('FAIL: expected non-empty pkgopt_v0.entries for documentclass opts multi probe');
+  process.exit(1);
+}
+assertEntrySourceSpans('typeset_demo_documentclass_opts_multi_probe_v0', 'pkgopt_v0', classOptionsMultiPkgoptArtifact.entries);
+const passOptionsClassMultiEntry = classOptionsMultiPkgoptArtifact.entries.find(
+  (entry) => entry.command === 'PassOptionsToClass' && entry.package === 'classoptsmulti',
+);
+if (!passOptionsClassMultiEntry) {
+  console.error('FAIL: expected PassOptionsToClass pkgopt entry for classoptsmulti in multi probe');
+  process.exit(1);
+}
+if (JSON.stringify(passOptionsClassMultiEntry.options) !== JSON.stringify(['twoside', 'openright', 'draft'])) {
+  console.error('FAIL: expected PassOptionsToClass options deduped+ordered as [twoside,openright,draft]');
+  process.exit(1);
+}
+const documentclassMultiEntry = classOptionsMultiPkgoptArtifact.entries.find(
+  (entry) => entry.command === 'documentclass' && entry.package === 'classoptsmulti',
+);
+if (!documentclassMultiEntry) {
+  console.error('FAIL: expected documentclass pkgopt entry for classoptsmulti in multi probe');
+  process.exit(1);
+}
+if (JSON.stringify(documentclassMultiEntry.options) !== JSON.stringify(['openright', 'draft', 'twoside'])) {
+  console.error('FAIL: expected documentclass options deduped+ordered as [openright,draft,twoside]');
+  process.exit(1);
+}
+
 const graphicsSummary = JSON.parse(
   fs.readFileSync(path.join(outDir, 'typeset_demo_graphics_probe_v0', 'summary.json'), 'utf8'),
 );
@@ -792,6 +838,7 @@ const requiredEntries = [
   ['texmf', 'sty', 'fooopts.sty', 'typeset'],
   ['texmf', 'sty', 'baropts.sty', 'typeset'],
   ['texmf', 'cls', 'classoptsdemo.cls', 'typeset'],
+  ['texmf', 'cls', 'classoptsmulti.cls', 'typeset'],
   ['texmf', 'cls', 'memoir.cls', 'typeset'],
   ['texmf', 'cls', 'memoirplus.cls', 'typeset'],
   ['texmf', 'bib', 'refs.bib', 'typeset'],
@@ -1022,8 +1069,8 @@ if (!(resolvedCount > resolvedCountFirst)) {
   );
   process.exit(1);
 }
-if (resolvedCount < 36) {
-  console.error(`FAIL: expected resolved_resources_count >= 36 after class-option seam expansion, got ${resolvedCount}`);
+if (resolvedCount < 38) {
+  console.error(`FAIL: expected resolved_resources_count >= 38 after class-option normalization expansion, got ${resolvedCount}`);
   process.exit(1);
 }
 const okStatuses = statuses.filter((entry) => entry.status === 'OK');
@@ -1034,6 +1081,11 @@ if (okStatuses.length <= 0) {
 const documentclassInvalidStatus = statuses.find((entry) => entry.case_id === 'typeset_demo_documentclass_invalid_probe_v0');
 if (!documentclassInvalidStatus || documentclassInvalidStatus.status !== 'INVALID') {
   console.error('FAIL: expected typeset_demo_documentclass_invalid_probe_v0 status INVALID');
+  process.exit(1);
+}
+const documentclassEmptyOptsInvalidStatus = statuses.find((entry) => entry.case_id === 'typeset_demo_documentclass_emptyopts_invalid_probe_v0');
+if (!documentclassEmptyOptsInvalidStatus || documentclassEmptyOptsInvalidStatus.status !== 'INVALID') {
+  console.error('FAIL: expected typeset_demo_documentclass_emptyopts_invalid_probe_v0 status INVALID');
   process.exit(1);
 }
 for (const status of okStatuses) {
@@ -1262,7 +1314,7 @@ for (const status of statuses) {
 
 console.log(`PASS: resolved_resources_count ${resolvedCount}`);
 console.log(`PASS: resolved_resources_count increased from ${resolvedCountFirst} to ${resolvedCount}`);
-console.log('PASS: resolved_resources_count meets floor >= 36');
+console.log('PASS: resolved_resources_count meets floor >= 38');
 console.log(`PASS: baseline_match MATCH for all OK cases (${okStatuses.length})`);
 console.log(`PASS: typed_artifacts keys ${requiredTypedKeys.join(',')}`);
 console.log('PASS: typed_artifacts_version gate 1');
