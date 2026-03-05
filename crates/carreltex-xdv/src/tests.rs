@@ -534,6 +534,63 @@ fn pdf_renderer_section_heading_spacing_invariants_v0() {
 }
 
 #[test]
+fn pdf_renderer_heading_list_quote_rhythm_invariants_v0() {
+    let demo_text = b"\nPrelude paragraph.\n\n{Heading}\n\n~ After heading paragraph.\n\n- First list item\n- Second list item\n\n> Quote line one\n> Quote line two\n\nAfter quote paragraph.";
+    let xdv = write_dvi_v2_text_page_v0(demo_text).expect("writer should accept rhythm text");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+
+    let (_, prelude_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "(Prelude paragraph.)").expect("prelude position");
+    let (_, heading_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "(Heading)").expect("heading position");
+    let (_, after_heading_y) = tm_position_for_line_containing_text_v0(&pdf, "(After heading paragraph.)")
+        .expect("after heading position");
+    let (_, list_one_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "(First list item)").expect("list one");
+    let (_, list_two_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "(Second list item)").expect("list two");
+    let (quote_one_x, quote_one_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "(Quote line one)").expect("quote one");
+    let (quote_two_x, quote_two_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "(Quote line two)").expect("quote two");
+    let (_, after_quote_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "(After quote paragraph.)")
+            .expect("after quote");
+
+    let epsilon_pt = 0.02f32;
+    assert!((prelude_y - heading_y - 28.0).abs() <= epsilon_pt);
+    assert!(
+        (heading_y - after_heading_y - 28.0).abs() <= epsilon_pt,
+        "heading->first paragraph gap mismatch: heading_y={heading_y}, after_heading_y={after_heading_y}"
+    );
+    assert!(
+        (after_heading_y - list_one_y - 28.0).abs() <= epsilon_pt,
+        "paragraph->list gap mismatch: after_heading_y={after_heading_y}, list_one_y={list_one_y}"
+    );
+    assert!(
+        (list_one_y - list_two_y - 14.0).abs() <= epsilon_pt,
+        "list line gap mismatch: list_one_y={list_one_y}, list_two_y={list_two_y}"
+    );
+    assert!(
+        (list_two_y - quote_one_y - 28.0).abs() <= epsilon_pt,
+        "list->quote gap mismatch: list_two_y={list_two_y}, quote_one_y={quote_one_y}"
+    );
+    assert!(
+        (quote_one_y - quote_two_y - 14.0).abs() <= epsilon_pt,
+        "quote line gap mismatch: quote_one_y={quote_one_y}, quote_two_y={quote_two_y}"
+    );
+    assert!(
+        (quote_two_y - after_quote_y - 28.0).abs() <= epsilon_pt,
+        "quote->paragraph gap mismatch: quote_two_y={quote_two_y}, after_quote_y={after_quote_y}"
+    );
+    assert!(quote_one_x > 72.0, "quote line should be indented");
+    assert!(
+        (quote_one_x - quote_two_x).abs() <= epsilon_pt,
+        "quote x drift mismatch"
+    );
+}
+
+#[test]
 fn pdf_renderer_applies_hanging_indent_for_list_continuation_v0() {
     let xdv = write_dvi_v2_text_page_v0(b"- item\ncontinuation").expect("writer should accept text");
     let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
@@ -629,6 +686,106 @@ fn pdf_renderer_enumerate_number_column_alignment_invariants_v0() {
         (ten_body_x[0] - 96.0).abs() <= epsilon_pt,
         "ten body x mismatch: {}",
         ten_body_x[0]
+    );
+}
+
+#[test]
+fn pdf_renderer_enumerate_number_column_alignment_across_wraps_v0() {
+    let xdv = write_dvi_v2_text_page_v0(b"9. [NINESTART] item with enough repeated words to force wrapping and keep deterministic body indent for continuation lines before token [WRAPNINE]\n10. [TENSTART] item with enough repeated words to force wrapping and keep deterministic body indent for continuation lines before token [WRAPTEN]")
+        .expect("writer should accept long enumerate text");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+
+    let nine_number_x = tm_xs_for_segment_text_v0(&pdf, "9.");
+    let ten_number_x = tm_xs_for_segment_text_v0(&pdf, "10.");
+    let nine_start_x = tm_xs_for_segment_text_v0(&pdf, "NINESTART");
+    let ten_start_x = tm_xs_for_segment_text_v0(&pdf, "TENSTART");
+    let nine_wrap_x = tm_xs_for_segment_text_v0(&pdf, "WRAPNINE");
+    let ten_wrap_x = tm_xs_for_segment_text_v0(&pdf, "WRAPTEN");
+
+    assert_eq!(nine_number_x.len(), 1, "expected 9. number render");
+    assert_eq!(ten_number_x.len(), 1, "expected 10. number render");
+    assert_eq!(nine_start_x.len(), 1, "expected NINESTART render");
+    assert_eq!(ten_start_x.len(), 1, "expected TENSTART render");
+    assert_eq!(nine_wrap_x.len(), 1, "expected WRAPNINE render");
+    assert_eq!(ten_wrap_x.len(), 1, "expected WRAPTEN render");
+
+    let epsilon_pt = 0.02f32;
+    assert!(
+        nine_number_x[0] > ten_number_x[0],
+        "single-digit number should start further right: nine={:?}, ten={:?}",
+        nine_number_x,
+        ten_number_x
+    );
+    assert!(
+        (nine_start_x[0] - 96.0).abs() <= epsilon_pt,
+        "start body x mismatch for 9.: {}",
+        nine_start_x[0]
+    );
+    assert!(
+        (ten_start_x[0] - 96.0).abs() <= epsilon_pt,
+        "start body x mismatch for 10.: {}",
+        ten_start_x[0]
+    );
+    assert!(
+        (nine_wrap_x[0] - nine_start_x[0]).abs() <= epsilon_pt,
+        "wrap body x mismatch for 9.: start={}, wrap={}",
+        nine_start_x[0],
+        nine_wrap_x[0]
+    );
+    assert!(
+        (ten_wrap_x[0] - ten_start_x[0]).abs() <= epsilon_pt,
+        "wrap body x mismatch for 10.: start={}, wrap={}",
+        ten_start_x[0],
+        ten_wrap_x[0]
+    );
+}
+
+#[test]
+fn pdf_renderer_nested_list_indentation_and_wrap_invariants_v0() {
+    let xdv = write_dvi_v2_text_page_v0(b"- [OUTERSTART] item with enough repeated words to force wrapping in the first list level before token [OUTERWRAPTOKEN]\n  - [NESTEDSTART] item with enough repeated words to force wrapping in the second list level before token [NESTEDWRAPTOKEN]")
+        .expect("writer should accept nested list text");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+
+    let bullet_xs = tm_xs_for_segment_text_v0(&pdf, "-");
+    let outer_start_x = tm_xs_for_segment_text_v0(&pdf, "OUTERSTART");
+    let outer_wrap_x = tm_xs_for_segment_text_v0(&pdf, "OUTERWRAPTOKEN");
+    let nested_start_x = tm_xs_for_segment_text_v0(&pdf, "NESTEDSTART");
+    let nested_wrap_x = tm_xs_for_segment_text_v0(&pdf, "NESTEDWRAPTOKEN");
+
+    assert_eq!(bullet_xs.len(), 2, "expected two bullets: {bullet_xs:?}");
+    assert_eq!(outer_start_x.len(), 1, "expected outer start render");
+    assert_eq!(outer_wrap_x.len(), 1, "expected outer wrap render");
+    assert_eq!(nested_start_x.len(), 1, "expected nested start render");
+    assert_eq!(nested_wrap_x.len(), 1, "expected nested wrap render");
+
+    let epsilon_pt = 0.02f32;
+    assert!((bullet_xs[0] - 72.0).abs() <= epsilon_pt, "outer bullet x mismatch");
+    assert!(
+        bullet_xs[1] > bullet_xs[0],
+        "nested bullet should shift right: {bullet_xs:?}"
+    );
+    assert!(
+        (outer_start_x[0] - 96.0).abs() <= epsilon_pt,
+        "outer body x mismatch: {}",
+        outer_start_x[0]
+    );
+    assert!(
+        (outer_wrap_x[0] - outer_start_x[0]).abs() <= epsilon_pt,
+        "outer continuation x mismatch: outer={}, wrap={}",
+        outer_start_x[0],
+        outer_wrap_x[0]
+    );
+    assert!(
+        nested_start_x[0] > outer_start_x[0],
+        "nested body should shift right: outer={}, nested={}",
+        outer_start_x[0],
+        nested_start_x[0]
+    );
+    assert!(
+        (nested_wrap_x[0] - nested_start_x[0]).abs() <= epsilon_pt,
+        "nested continuation x mismatch: nested={}, wrap={}",
+        nested_start_x[0],
+        nested_wrap_x[0]
     );
 }
 
