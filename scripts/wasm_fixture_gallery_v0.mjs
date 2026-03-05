@@ -21,6 +21,8 @@ const STATUS_INVALID_V0 = 'INVALID';
 const STATUS_FAIL_V0 = 'FAIL';
 const EXPECTED_STATUS_VALUES_V0 = new Set([STATUS_OK_V0, STATUS_NI_V0, STATUS_INVALID_V0, STATUS_FAIL_V0]);
 const TYPED_ARTIFACT_KEYS_V0 = ['toc', 'labels', 'bib', 'hyperref'];
+const MAX_LABEL_ENTRIES_V0 = 256;
+const MAX_LABEL_VALUE_BYTES_V0 = 256;
 
 function sha256HexV0(bytes) {
   return createHash('sha256').update(bytes).digest('hex');
@@ -360,6 +362,68 @@ function extractHyperrefLinksFromSourceV0(sourceBytes) {
   return links;
 }
 
+function extractLabelEntriesFromSourceV0(sourceBytes) {
+  const entries = [];
+  let index = 0;
+  while (index < sourceBytes.length) {
+    if (sourceBytes[index] !== 0x5c) {
+      index += 1;
+      continue;
+    }
+    let commandIndex = index + 1;
+    while (commandIndex < sourceBytes.length && isAsciiLetterByteV0(sourceBytes[commandIndex])) {
+      commandIndex += 1;
+    }
+    if (commandIndex === index + 1) {
+      index += 1;
+      continue;
+    }
+    const command = Buffer.from(sourceBytes.slice(index + 1, commandIndex)).toString('ascii');
+    if (command !== 'label' && command !== 'ref') {
+      index = commandIndex;
+      continue;
+    }
+    const keyGroup = readBracedGroupV0(sourceBytes, commandIndex);
+    if (!keyGroup.ok) {
+      index = commandIndex;
+      continue;
+    }
+    if (keyGroup.value.length > 0) {
+      const valueBytes = Buffer.from(keyGroup.value, 'utf8');
+      if (valueBytes.length > MAX_LABEL_VALUE_BYTES_V0) {
+        throw new Error(`labels_v0 value exceeds cap ${MAX_LABEL_VALUE_BYTES_V0}`);
+      }
+      entries.push({
+        command,
+        key: keyGroup.value,
+      });
+      if (entries.length > MAX_LABEL_ENTRIES_V0) {
+        throw new Error(`labels_v0 entries exceed cap ${MAX_LABEL_ENTRIES_V0}`);
+      }
+    }
+    index = keyGroup.next;
+  }
+  return entries;
+}
+
+async function emitLabelsTypedArtifactV0(caseOutDir, fixtureBytes) {
+  const payload = {
+    version: 1,
+    schema: 'labels_v0',
+    entries: extractLabelEntriesFromSourceV0(fixtureBytes),
+  };
+  const bytes = Buffer.from(`${JSON.stringify(payload, null, 2)}\n`, 'utf8');
+  const relpath = 'labels_v0.json';
+  const fullPath = path.join(caseOutDir, relpath);
+  await writeFile(fullPath, bytes);
+  return {
+    present: true,
+    items: payload.entries.length,
+    artifact_relpath: relpath,
+    artifact_sha256: sha256HexV0(bytes),
+  };
+}
+
 async function emitHyperrefTypedArtifactV0(caseOutDir, fixtureBytes) {
   const payload = {
     version: 1,
@@ -383,7 +447,7 @@ async function emitTypedArtifactsV0(caseSpec, caseOutDir, typedArtifacts, fixtur
     typedArtifacts.toc = await emitPlaceholderTypedArtifactV0(caseOutDir, 'toc_v0', 'toc_v0');
   }
   if (caseSpec.id === 'typeset_demo_labels_probe_v0') {
-    typedArtifacts.labels = await emitPlaceholderTypedArtifactV0(caseOutDir, 'labels_v0', 'labels_v0');
+    typedArtifacts.labels = await emitLabelsTypedArtifactV0(caseOutDir, fixtureBytes);
   }
   if (caseSpec.id === 'typeset_demo_capabilities_v0') {
     typedArtifacts.bib = await emitPlaceholderTypedArtifactV0(caseOutDir, 'bib_v0', 'bib_v0');
