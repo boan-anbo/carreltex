@@ -50,6 +50,18 @@
       "purpose": "Probes amsmath package seam for on-demand package request generation."
     },
     {
+      "id": "typeset_demo_fixedpoint_graphics_probe_v0",
+      "tags": ["typeset", "graphics", "fixedpoint", "probe", "ni"],
+      "expected_status": "NI",
+      "purpose": "Probes includegraphics+graphicspath hints so fixedpoint phase2 can assert NI/INVALID status with non-empty resource hints."
+    },
+    {
+      "id": "typeset_demo_fixedpoint_bibliography_probe_v0",
+      "tags": ["typeset", "bib", "fixedpoint", "probe", "ni"],
+      "expected_status": "NI",
+      "purpose": "Probes bibliography resource/style hints so fixedpoint phase2 can assert NI/INVALID status with non-empty resource hints."
+    },
+    {
       "id": "typeset_demo_bib_probe_v0",
       "tags": ["typeset", "bib", "cite", "probe", "ni"],
       "expected_status": "NI",

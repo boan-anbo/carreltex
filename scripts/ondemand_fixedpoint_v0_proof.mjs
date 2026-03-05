@@ -18,6 +18,8 @@ const PHASE2_PROBE_CASE_IDS_V0 = [
   'typeset_demo_cjk_probe_v0',
   'typeset_demo_math_probe_v0',
   'typeset_demo_hyperref_links_probe_v0',
+  'typeset_demo_fixedpoint_graphics_probe_v0',
+  'typeset_demo_fixedpoint_bibliography_probe_v0',
 ];
 
 function sha256HexV0(bytes) {
@@ -158,6 +160,24 @@ function countStatusesV0(statuses) {
   return counts;
 }
 
+function summarizeHintTypesV0(resourceHintsPayload) {
+  const entries = Array.isArray(resourceHintsPayload?.entries) ? resourceHintsPayload.entries : [];
+  const counts = {};
+  for (const entry of entries) {
+    const hintType = `${entry?.hint_type ?? ''}`;
+    if (!hintType) {
+      continue;
+    }
+    counts[hintType] = (counts[hintType] ?? 0) + 1;
+  }
+  const sorted = Object.entries(counts).sort((a, b) => a[0].localeCompare(b[0]));
+  return Object.fromEntries(sorted);
+}
+
+function canonicalizeProbeCaseChecksV0(probeChecks) {
+  return [...probeChecks].sort((left, right) => `${left.case_id}`.localeCompare(`${right.case_id}`));
+}
+
 async function buildProbeCaseTableV0(galleryOutDir, report) {
   const statuses = Array.isArray(report.statuses) ? report.statuses : [];
   const probeChecks = [];
@@ -181,7 +201,16 @@ async function buildProbeCaseTableV0(galleryOutDir, report) {
     assertV0(hintItems > 0, `phase2 probe resource_hints must be non-empty for ${caseId}`);
     const hintSha = `${resourceHints.artifact_sha256 ?? ''}`;
     assertV0(/^[0-9a-f]{64}$/.test(hintSha), `phase2 probe resource_hints sha missing for ${caseId}`);
+    const hintRelpath = `${resourceHints.artifact_relpath ?? ''}`;
+    assertV0(hintRelpath.length > 0, `phase2 probe resource_hints relpath missing for ${caseId}`);
     const resolvedResources = Array.isArray(summary.resolved_resources) ? summary.resolved_resources : [];
+    const hintPayloadPath = path.join(galleryOutDir, caseId, hintRelpath);
+    const hintPayload = await readJsonFileV0(hintPayloadPath);
+    const hintTypeCounts = summarizeHintTypesV0(hintPayload);
+    assertV0(
+      Object.keys(hintTypeCounts).length > 0,
+      `phase2 probe resource_hints type counts must be non-empty for ${caseId}`,
+    );
 
     probeChecks.push({
       case_id: caseId,
@@ -191,9 +220,32 @@ async function buildProbeCaseTableV0(galleryOutDir, report) {
       resource_hints_items: hintItems,
       resource_hints_sha256: hintSha,
       resolved_resources_count: resolvedResources.length,
+      hint_type_counts: hintTypeCounts,
     });
   }
-  return probeChecks;
+  return canonicalizeProbeCaseChecksV0(probeChecks);
+}
+
+function buildMonotonicityTransitionsV0(iterations) {
+  const transitions = [];
+  for (let i = 1; i < iterations.length; i += 1) {
+    const previous = iterations[i - 1];
+    const current = iterations[i];
+    const resolvedDelta = current.resolved_resources_count - previous.resolved_resources_count;
+    const missingDelta = current.missing - previous.missing;
+    transitions.push({
+      from_iteration: previous.iteration,
+      to_iteration: current.iteration,
+      resolved_delta: resolvedDelta,
+      missing_delta: missingDelta,
+      resolved_non_decreasing: resolvedDelta >= 0,
+      missing_non_increasing: missingDelta <= 0,
+      improvement_or_fixedpoint: resolvedDelta > 0 || missingDelta < 0 || (resolvedDelta === 0 && missingDelta === 0),
+      improvement: resolvedDelta > 0 || missingDelta < 0,
+      fixedpoint_step: resolvedDelta === 0 && missingDelta === 0,
+    });
+  }
+  return transitions;
 }
 
 async function runFixedpointPassV0(outDir, sourceDateEpoch) {
@@ -331,11 +383,26 @@ async function runFixedpointPassV0(outDir, sourceDateEpoch) {
     `phase2 rerun must preserve fixedpoint resolved count (${finalIter.resolved_resources_count} != ${phase2ResolvedResources})`,
   );
 
+  const monotonicityTransitions = buildMonotonicityTransitionsV0(iterations);
+  const monotonicity = {
+    transitions: monotonicityTransitions,
+    saw_improvement: monotonicityTransitions.some((item) => item.improvement),
+    reached_fixedpoint: monotonicityTransitions.some((item) => item.fixedpoint_step),
+  };
+  assertV0(monotonicity.saw_improvement, 'fixedpoint run must contain at least one improvement step');
+  assertV0(monotonicity.reached_fixedpoint, 'fixedpoint run must contain at least one fixedpoint step');
+  for (const transition of monotonicityTransitions) {
+    assertV0(transition.resolved_non_decreasing, 'fixedpoint transition resolved regression');
+    assertV0(transition.missing_non_increasing, 'fixedpoint transition missing regression');
+    assertV0(transition.improvement_or_fixedpoint, 'fixedpoint transition must improve or stabilize');
+  }
+
   return {
     schema: 'ondemand_fixedpoint_summary_v0',
     source_date_epoch: sourceDateEpoch,
     store_path: storeDir,
     iterations,
+    monotonicity,
     fixedpoint_iteration: fixedpointIteration,
     fixedpoint_resolved_resources_count: finalIter.resolved_resources_count,
     fixedpoint_missing_count: finalIter.missing,
@@ -356,10 +423,19 @@ function canonicalSummaryPayloadV0(summary) {
       request_list_sha256: '<request_list_sha256>',
     }))
     : [];
+  const transitions = Array.isArray(summary?.monotonicity?.transitions)
+    ? summary.monotonicity.transitions.map((item) => ({ ...item }))
+    : [];
+  const monotonicity = {
+    transitions,
+    saw_improvement: summary?.monotonicity?.saw_improvement === true,
+    reached_fixedpoint: summary?.monotonicity?.reached_fixedpoint === true,
+  };
   return {
     ...summary,
     store_path: '<store_path>',
     iterations,
+    monotonicity,
   };
 }
 

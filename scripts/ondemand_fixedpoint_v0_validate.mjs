@@ -11,6 +11,8 @@ const REQUIRED_PROBE_CASE_IDS_V0 = new Set([
   'typeset_demo_cjk_probe_v0',
   'typeset_demo_math_probe_v0',
   'typeset_demo_hyperref_links_probe_v0',
+  'typeset_demo_fixedpoint_graphics_probe_v0',
+  'typeset_demo_fixedpoint_bibliography_probe_v0',
 ]);
 
 function sha256HexV0(bytes) {
@@ -73,10 +75,46 @@ function validateProbeChecksV0(probeChecks) {
     assertV0(isFiniteNumberV0(entry.resource_hints_items) && entry.resource_hints_items > 0, `probe hints must be non-empty for ${caseId}`);
     assertV0(isSha256V0(entry.resource_hints_sha256), `probe hints sha missing for ${caseId}`);
     assertV0(Number.isInteger(entry.resolved_resources_count) && entry.resolved_resources_count >= 0, `probe resolved count invalid for ${caseId}`);
+    assertV0(entry.hint_type_counts && typeof entry.hint_type_counts === 'object', `probe hint_type_counts missing for ${caseId}`);
+    const hintTypeEntries = Object.entries(entry.hint_type_counts);
+    assertV0(hintTypeEntries.length > 0, `probe hint_type_counts empty for ${caseId}`);
+    for (const [hintType, count] of hintTypeEntries) {
+      assertV0(typeof hintType === 'string' && hintType.length > 0, `probe hint_type invalid for ${caseId}`);
+      assertV0(Number.isInteger(count) && count > 0, `probe hint_type_counts value invalid for ${caseId}:${hintType}`);
+    }
   }
   for (const caseId of REQUIRED_PROBE_CASE_IDS_V0) {
     assertV0(seen.has(caseId), `missing probe case ${caseId}`);
   }
+}
+
+function validateMonotonicityV0(summary) {
+  const monotonicity = summary.monotonicity;
+  assertV0(monotonicity && typeof monotonicity === 'object', 'summary monotonicity missing');
+  assertV0(monotonicity.saw_improvement === true, 'summary monotonicity.saw_improvement must be true');
+  assertV0(monotonicity.reached_fixedpoint === true, 'summary monotonicity.reached_fixedpoint must be true');
+  const transitions = Array.isArray(monotonicity.transitions) ? monotonicity.transitions : [];
+  assertV0(transitions.length === summary.iterations.length - 1, 'summary monotonicity.transitions length mismatch');
+  let sawImprovement = false;
+  let sawFixedpoint = false;
+  for (const [index, transition] of transitions.entries()) {
+    assertV0(transition && typeof transition === 'object', `transition ${index + 1} invalid`);
+    assertV0(transition.from_iteration === index + 1, `transition ${index + 1} from_iteration mismatch`);
+    assertV0(transition.to_iteration === index + 2, `transition ${index + 1} to_iteration mismatch`);
+    assertV0(Number.isInteger(transition.resolved_delta), `transition ${index + 1} resolved_delta invalid`);
+    assertV0(Number.isInteger(transition.missing_delta), `transition ${index + 1} missing_delta invalid`);
+    assertV0(transition.resolved_non_decreasing === true, `transition ${index + 1} resolved_non_decreasing false`);
+    assertV0(transition.missing_non_increasing === true, `transition ${index + 1} missing_non_increasing false`);
+    assertV0(transition.improvement_or_fixedpoint === true, `transition ${index + 1} improvement_or_fixedpoint false`);
+    if (transition.improvement === true) {
+      sawImprovement = true;
+    }
+    if (transition.fixedpoint_step === true) {
+      sawFixedpoint = true;
+    }
+  }
+  assertV0(sawImprovement, 'monotonicity transitions must include improvement');
+  assertV0(sawFixedpoint, 'monotonicity transitions must include fixedpoint');
 }
 
 function validateIterationsV0(iterations) {
@@ -122,10 +160,23 @@ function canonicalSummaryPayloadV0(summary) {
       request_list_sha256: '<request_list_sha256>',
     }))
     : [];
+  const monotonicity = summary.monotonicity && typeof summary.monotonicity === 'object'
+    ? {
+      ...summary.monotonicity,
+      transitions: Array.isArray(summary.monotonicity.transitions)
+        ? summary.monotonicity.transitions.map((transition) => ({ ...transition }))
+        : [],
+    }
+    : {
+      transitions: [],
+      saw_improvement: false,
+      reached_fixedpoint: false,
+    };
   return {
     ...rest,
     store_path: '<store_path>',
     iterations,
+    monotonicity,
   };
 }
 
@@ -141,6 +192,7 @@ async function validateSummaryV0(summaryPath) {
   assertV0(!hasForbiddenTimestampKeysV0(summary), 'summary contains forbidden timestamp fields');
 
   validateIterationsV0(summary.iterations);
+  validateMonotonicityV0(summary);
   const finalIter = summary.iterations[summary.iterations.length - 1];
   assertV0(summary.fixedpoint_iteration === summary.iterations.length, 'fixedpoint_iteration mismatch');
   assertV0(summary.fixedpoint_resolved_resources_count === finalIter.resolved_resources_count, 'fixedpoint resolved mismatch');
