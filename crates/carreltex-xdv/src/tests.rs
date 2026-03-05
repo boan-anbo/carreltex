@@ -363,6 +363,28 @@ fn tm_position_for_line_containing_text_v0(pdf: &[u8], needle: &str) -> Option<(
     None
 }
 
+fn tf_sizes_for_line_containing_text_v0(pdf: &[u8], needle: &str) -> Vec<f32> {
+    let text = String::from_utf8_lossy(pdf);
+    for line in text.lines() {
+        if !line.contains(needle) {
+            continue;
+        }
+        let fields = line.split_whitespace().collect::<Vec<_>>();
+        let mut sizes = Vec::<f32>::new();
+        let mut index = 0usize;
+        while index + 1 < fields.len() {
+            if fields[index + 1] == "Tf" {
+                if let Ok(size_pt) = fields[index].parse::<f32>() {
+                    sizes.push(size_pt);
+                }
+            }
+            index += 1;
+        }
+        return sizes;
+    }
+    Vec::new()
+}
+
 fn tm_xs_for_segment_text_v0(pdf: &[u8], segment_text: &str) -> Vec<f32> {
     let target_token = format!("({segment_text})");
     let text = String::from_utf8_lossy(pdf);
@@ -412,6 +434,48 @@ fn tm_xs_for_segment_text_v0(pdf: &[u8], segment_text: &str) -> Vec<f32> {
         }
     }
     xs
+}
+
+fn tm_position_for_segment_substring_v0(pdf: &[u8], needle: &str) -> Option<(f32, f32)> {
+    let text = String::from_utf8_lossy(pdf);
+    for line in text.lines() {
+        if !line.contains(needle) || !line.contains(" Tm ") {
+            continue;
+        }
+        let fields = line.split_whitespace().collect::<Vec<_>>();
+        let mut index = 0usize;
+        while index + 6 < fields.len() {
+            let is_tm = fields[index] == "1"
+                && fields[index + 1] == "0"
+                && fields[index + 2] == "0"
+                && fields[index + 3] == "1"
+                && fields[index + 6] == "Tm";
+            if !is_tm {
+                index += 1;
+                continue;
+            }
+            let x_pt = fields[index + 4].parse::<f32>().ok()?;
+            let y_pt = fields[index + 5].parse::<f32>().ok()?;
+            let mut cursor = index + 7;
+            while cursor < fields.len() {
+                if cursor + 6 < fields.len()
+                    && fields[cursor] == "1"
+                    && fields[cursor + 1] == "0"
+                    && fields[cursor + 2] == "0"
+                    && fields[cursor + 3] == "1"
+                    && fields[cursor + 6] == "Tm"
+                {
+                    break;
+                }
+                if fields[cursor].contains(needle) {
+                    return Some((x_pt, y_pt));
+                }
+                cursor += 1;
+            }
+            index += 7;
+        }
+    }
+    None
 }
 
 fn expected_center_x_pt_v0(width_sp: u32) -> f32 {
@@ -736,6 +800,160 @@ fn pdf_renderer_title_and_heading_centering_per_line_width_v0() {
     assert!(
         (heading_alpha_x - 72.0).abs() > 0.5 && (heading_beta_x - 72.0).abs() > 0.5,
         "heading lines should not be left-margin aligned: alpha={heading_alpha_x}, beta={heading_beta_x}"
+    );
+}
+
+#[test]
+fn pdf_renderer_heading_font_hierarchy_invariants_v0() {
+    let demo_text = b"Typography Title\nAlice Bob\n2026-03-05\n\n@S {Section Heading}\n\n@s {Subsection Heading}\n\nBody paragraph text.";
+    let xdv = write_dvi_v2_text_page_v0(demo_text).expect("writer should accept heading font demo");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+
+    let title_sizes = tf_sizes_for_line_containing_text_v0(&pdf, "(Typography Title)");
+    let section_sizes = tf_sizes_for_line_containing_text_v0(&pdf, "(Section Heading)");
+    let subsection_sizes = tf_sizes_for_line_containing_text_v0(&pdf, "(Subsection Heading)");
+    let body_sizes = tf_sizes_for_line_containing_text_v0(&pdf, "(Body paragraph text.)");
+
+    assert!(!title_sizes.is_empty(), "missing title sizes");
+    assert!(!section_sizes.is_empty(), "missing section sizes");
+    assert!(!subsection_sizes.is_empty(), "missing subsection sizes");
+    assert!(!body_sizes.is_empty(), "missing body sizes");
+
+    let title_size = title_sizes[0];
+    let section_size = section_sizes[0];
+    let subsection_size = subsection_sizes[0];
+    let body_size = body_sizes[0];
+
+    assert!((title_size - 18.0).abs() <= 0.02, "title font size mismatch: {title_size}");
+    assert!((section_size - 16.0).abs() <= 0.02, "section font size mismatch: {section_size}");
+    assert!(
+        (subsection_size - 14.0).abs() <= 0.02,
+        "subsection font size mismatch: {subsection_size}"
+    );
+    assert!((body_size - 12.0).abs() <= 0.02, "body font size mismatch: {body_size}");
+    assert!(
+        title_size > section_size && section_size > subsection_size && subsection_size > body_size,
+        "font hierarchy must be strict: title={title_size}, section={section_size}, subsection={subsection_size}, body={body_size}"
+    );
+}
+
+#[test]
+fn pdf_renderer_paragraph_rhythm_and_noindent_invariants_v0() {
+    let demo_text = b"Title\nAuthor\n2026-03-05\n\nFirst paragraph line one.\nSecond line same paragraph.\n\nSecond paragraph line.\n\n@S {Heading}\n\n~ After heading noindent line.\n\nIndented paragraph line.";
+    let xdv = write_dvi_v2_text_page_v0(demo_text).expect("writer should accept paragraph rhythm demo");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+
+    let (first_x, first_y) = tm_position_for_line_containing_text_v0(&pdf, "(First paragraph line one.)")
+        .expect("first paragraph line one");
+    let (same_para_x, same_para_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "(Second line same paragraph.)")
+            .expect("same paragraph line");
+    let (second_para_x, second_para_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "(Second paragraph line.)")
+            .expect("second paragraph line");
+    let (heading_x, heading_y) = tm_position_for_line_containing_text_v0(&pdf, "(Heading)")
+        .expect("heading line");
+    let (after_heading_x, after_heading_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "(After heading noindent line.)")
+            .expect("after heading line");
+    let (indented_x, indented_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "(Indented paragraph line.)")
+            .expect("indented paragraph line");
+
+    let epsilon_pt = 0.02f32;
+    assert!((first_x - 72.0).abs() <= epsilon_pt, "first paragraph x mismatch: {first_x}");
+    assert!(
+        (same_para_x - 72.0).abs() <= epsilon_pt,
+        "same paragraph line should stay non-indented: {same_para_x}"
+    );
+    assert!((second_para_x - 96.0).abs() <= epsilon_pt, "second paragraph indent mismatch: {second_para_x}");
+    assert!(
+        (after_heading_x - 72.0).abs() <= epsilon_pt,
+        "first paragraph after heading should noindent: {after_heading_x}"
+    );
+    assert!(
+        (indented_x - 96.0).abs() <= epsilon_pt,
+        "paragraph after noindent should restore indent: {indented_x}"
+    );
+    assert!(
+        (first_y - same_para_y - 14.0).abs() <= epsilon_pt,
+        "line gap mismatch inside paragraph: first_y={first_y}, same_para_y={same_para_y}"
+    );
+    assert!(
+        (same_para_y - second_para_y - 28.0).abs() <= epsilon_pt,
+        "paragraph break gap mismatch: same_para_y={same_para_y}, second_para_y={second_para_y}"
+    );
+    assert!(
+        (second_para_y - heading_y - 28.0).abs() <= epsilon_pt,
+        "paragraph->heading gap mismatch: second_para_y={second_para_y}, heading_y={heading_y}"
+    );
+    assert!(
+        (heading_y - after_heading_y - 28.0).abs() <= epsilon_pt,
+        "heading->noindent gap mismatch: heading_y={heading_y}, after_heading_y={after_heading_y}"
+    );
+    assert!(
+        (after_heading_y - indented_y - 28.0).abs() <= epsilon_pt,
+        "noindent->indented paragraph gap mismatch: after_heading_y={after_heading_y}, indented_y={indented_y}"
+    );
+    assert!((heading_x - 72.0).abs() > 0.5, "heading should be centered: {heading_x}");
+}
+
+#[test]
+fn pdf_renderer_list_rhythm_and_wrap_indent_invariants_v0() {
+    let demo_text = b"Paragraph before list.\n\n- ITEMONE lead words with deterministic wrapping content to force continuation line token WRAPONE after many repeated words in this same item.\n- ITEMTWO lead words with deterministic wrapping content to force continuation line token WRAPTWO after many repeated words in this same item.\n\nParagraph after list.";
+    let xdv = write_dvi_v2_text_page_v0(demo_text).expect("writer should accept list rhythm demo");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+
+    let (_, before_list_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "(Paragraph before list.)")
+            .expect("before list paragraph");
+    let (item_one_bullet_x, item_one_y) =
+        tm_position_for_segment_substring_v0(&pdf, "(-)")
+            .expect("item one bullet position");
+    let (item_one_body_x, _) =
+        tm_position_for_segment_substring_v0(&pdf, "(ITEMONE")
+            .expect("item one body position");
+    let (item_one_wrap_x, _) =
+        tm_position_for_segment_substring_v0(&pdf, "WRAPONE")
+            .expect("item one wrap position");
+    let (item_two_bullet_x, item_two_y) =
+        tm_position_for_segment_substring_v0(&pdf, "(ITEMTWO")
+            .expect("item two body position");
+    let (item_two_wrap_x, _) =
+        tm_position_for_segment_substring_v0(&pdf, "WRAPTWO")
+            .expect("item two wrap position");
+    let (_, after_list_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "(Paragraph after list.)")
+            .expect("after list paragraph");
+
+    let epsilon_pt = 0.02f32;
+    assert!(
+        (28.0 - epsilon_pt..=56.0 + epsilon_pt).contains(&(before_list_y - item_one_y)),
+        "before->list top gap out of range: before_list_y={before_list_y}, item_one_y={item_one_y}"
+    );
+    assert!(
+        (item_two_y - after_list_y).abs() >= 28.0 - epsilon_pt,
+        "list->after paragraph gap must be at least one paragraph break: item_two_y={item_two_y}, after_list_y={after_list_y}"
+    );
+    assert!(
+        (item_one_bullet_x - 72.0).abs() <= epsilon_pt,
+        "item bullet column x mismatch: {item_one_bullet_x}"
+    );
+    assert!(
+        (item_one_body_x - 96.0).abs() <= epsilon_pt,
+        "item body x mismatch: {item_one_body_x}"
+    );
+    assert!(
+        (item_one_wrap_x - item_one_body_x).abs() <= epsilon_pt,
+        "item one wrap continuation should keep hanging indent: body={item_one_body_x}, wrap={item_one_wrap_x}"
+    );
+    assert!(
+        (item_two_bullet_x - 96.0).abs() <= epsilon_pt,
+        "item two body x mismatch: {item_two_bullet_x}"
+    );
+    assert!(
+        (item_two_wrap_x - item_two_bullet_x).abs() <= epsilon_pt,
+        "item two wrap continuation should keep hanging indent: body={item_two_bullet_x}, wrap={item_two_wrap_x}"
     );
 }
 

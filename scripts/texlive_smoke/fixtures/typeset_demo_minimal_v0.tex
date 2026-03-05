@@ -27,10 +27,14 @@ This final boundary stress line checks punctuation wrap rhythm: start,\emph{midd
 This second paragraph is intentionally plain text and separated by a blank line so paragraph flow,\linebreak
 first-line indentation, and width-sensitive wrapping are visible in the PDF preview with words like WWWW and iiiii.
 
+This third paragraph appears after a blank line to keep paragraph rhythm checks deterministic across heading boundaries in the PDF preview path.
+
 \subsection{Lists}
+This paragraph appears directly below the list heading so heading-to-paragraph spacing and paragraph-to-list spacing remain measurable.
+
 \begin{itemize}
-\item First bullet with \emph{emphasis} and a deliberately long sentence to force wrapping so body alignment remains stable across continuation lines in the preview renderer.
-\item Second bullet with \textbf{bold} plus another long continuation sentence that should wrap without shifting the bullet column.
+\item First bullet with \emph{emphasis} and a deliberately long sentence to force wrapping so body alignment remains stable across continuation lines in the preview renderer while keeping punctuation,wrapper boundaries near deterministic wrap points.
+\item Second bullet with \textbf{bold} plus another long continuation sentence that should wrap without shifting the bullet column and should still preserve deterministic hanging indentation between wrapped lines.
 \begin{itemize}
 \item Nested bullet item with enough words to wrap and verify one-level nested indentation remains stable in continuation lines.
 \item Another nested bullet with \emph{styled words} near punctuation,like this, to stress inline wrappers inside list content.
@@ -49,6 +53,8 @@ first-line indentation, and width-sensitive wrapping are visible in the PDF prev
 \item Ninth numbered item with a long tail to stress single-digit alignment.
 \item Tenth numbered item with a matching long tail to stress double-digit alignment.
 \end{enumerate}
+
+This paragraph follows the lists and should restore the normal paragraph indentation and vertical spacing after list bottom separation.
 
 \subsection{Quote}
 \begin{quote}
