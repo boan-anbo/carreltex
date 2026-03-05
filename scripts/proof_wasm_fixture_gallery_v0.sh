@@ -48,6 +48,26 @@ const outDir = process.argv[2];
 const baselineRoot = process.argv[3];
 
 const firstRunShaPath = (name) => path.join(baselineRoot, `${name}_first.sha256`);
+const assertEntrySourceSpans = (caseId, artifactName, entries) => {
+  const sourceLen = fs.readFileSync(path.join(outDir, caseId, 'main.tex')).length;
+  entries.forEach((entry, entryIndex) => {
+    const span = entry?.source_span;
+    if (!span || typeof span !== 'object') {
+      console.error(`FAIL: ${artifactName}.entries[${entryIndex}] missing source_span`);
+      process.exit(1);
+    }
+    const start = span.start_byte;
+    const end = span.end_byte;
+    if (!Number.isInteger(start) || !Number.isInteger(end)) {
+      console.error(`FAIL: ${artifactName}.entries[${entryIndex}] source_span must use integer offsets`);
+      process.exit(1);
+    }
+    if (start < 0 || end <= start || end > sourceLen) {
+      console.error(`FAIL: ${artifactName}.entries[${entryIndex}] source_span out of bounds for ${caseId}`);
+      process.exit(1);
+    }
+  });
+};
 
 const labelsSummary = JSON.parse(
   fs.readFileSync(path.join(outDir, 'typeset_demo_labels_probe_v0', 'summary.json'), 'utf8'),
@@ -75,6 +95,7 @@ if (labelsArtifactFirst.entries.length <= 0) {
   console.error('FAIL: expected non-empty labels_v0.entries for labels probe');
   process.exit(1);
 }
+assertEntrySourceSpans('typeset_demo_labels_probe_v0', 'labels_v0', labelsArtifactFirst.entries);
 fs.writeFileSync(firstRunShaPath('labels_v0'), `${labelsShaFirst}\n`);
 
 const tocSummary = JSON.parse(
@@ -103,6 +124,7 @@ if (tocArtifactFirst.entries.length <= 0) {
   console.error('FAIL: expected non-empty toc_v0.entries for toc probe');
   process.exit(1);
 }
+assertEntrySourceSpans('typeset_demo_toc_probe_v0', 'toc_v0', tocArtifactFirst.entries);
 fs.writeFileSync(firstRunShaPath('toc_v0'), `${tocShaFirst}\n`);
 
 const bibSummary = JSON.parse(
@@ -131,6 +153,7 @@ if (bibArtifactFirst.entries.length <= 0) {
   console.error('FAIL: expected non-empty bib_v0.entries for bib probe');
   process.exit(1);
 }
+assertEntrySourceSpans('typeset_demo_bib_probe_v0', 'bib_v0', bibArtifactFirst.entries);
 fs.writeFileSync(firstRunShaPath('bib_v0'), `${bibShaFirst}\n`);
 
 const hyperrefSummary = JSON.parse(
@@ -159,6 +182,7 @@ if (hyperrefArtifactFirst.entries.length <= 0) {
   console.error('FAIL: expected hyperref_v0.entries to include at least one link in probe fixture');
   process.exit(1);
 }
+assertEntrySourceSpans('typeset_demo_hyperref_probe_v0', 'hyperref_v0', hyperrefArtifactFirst.entries);
 fs.writeFileSync(firstRunShaPath('hyperref_v0'), `${hyperrefShaFirst}\n`);
 
 const pkgoptSummary = JSON.parse(
@@ -187,6 +211,7 @@ if (pkgoptArtifactFirst.entries.length <= 0) {
   console.error('FAIL: expected non-empty pkgopt_v0.entries for pkgopt probe');
   process.exit(1);
 }
+assertEntrySourceSpans('typeset_demo_pkgopt_probe_v0', 'pkgopt_v0', pkgoptArtifactFirst.entries);
 fs.writeFileSync(firstRunShaPath('pkgopt_v0'), `${pkgoptShaFirst}\n`);
 
 const graphicsSummary = JSON.parse(
@@ -215,6 +240,7 @@ if (graphicsArtifactFirst.entries.length <= 0) {
   console.error('FAIL: expected non-empty graphics_v0.entries for graphics probe');
   process.exit(1);
 }
+assertEntrySourceSpans('typeset_demo_graphics_probe_v0', 'graphics_v0', graphicsArtifactFirst.entries);
 fs.writeFileSync(firstRunShaPath('graphics_v0'), `${graphicsShaFirst}\n`);
 
 const report = JSON.parse(fs.readFileSync(path.join(outDir, 'report.json'), 'utf8'));
