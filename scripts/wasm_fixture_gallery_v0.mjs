@@ -247,6 +247,11 @@ async function loadFixtureCasesV0() {
       fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_package_require_probe_v0.tex',
     },
     {
+      id: 'typeset_demo_pkgopt_require_pass_probe_v0',
+      mode: 'typeset',
+      fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_pkgopt_require_pass_probe_v0.tex',
+    },
+    {
       id: 'typeset_demo_package_require_invalid_probe_v0',
       mode: 'typeset',
       fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_package_require_invalid_probe_v0.tex',
@@ -656,7 +661,7 @@ function addPkgoptEntryV0(entries, entry) {
 
 function extractPkgoptEntriesFromSourceV0(sourceBytes) {
   const entries = [];
-  const packageCommands = new Set(['usepackage', 'RequirePackage']);
+  const packageCommands = new Set(['usepackage', 'RequirePackage', 'PassOptionsToPackage', 'RequirePackageWithOptions']);
   let index = 0;
   while (index < sourceBytes.length) {
     if (sourceBytes[index] !== 0x5c) {
@@ -677,29 +682,58 @@ function extractPkgoptEntriesFromSourceV0(sourceBytes) {
       continue;
     }
 
-    const optGroup = readBracketGroupV0(sourceBytes, commandIndex);
-    if (!optGroup.ok || optGroup.value.length === 0) {
-      index = commandIndex;
-      continue;
+    let options = [];
+    let packages = [];
+    let endOffset = commandIndex;
+
+    if (command === 'PassOptionsToPackage') {
+      const optionGroup = readBracedGroupV0(sourceBytes, commandIndex);
+      if (!optionGroup.ok || optionGroup.value.length === 0) {
+        index = commandIndex;
+        continue;
+      }
+      const packageGroup = readBracedGroupV0(sourceBytes, optionGroup.next);
+      if (!packageGroup.ok || packageGroup.value.length === 0) {
+        index = commandIndex;
+        continue;
+      }
+      options = splitCommaValuesV0(optionGroup.value);
+      packages = splitCommaValuesV0(packageGroup.value);
+      endOffset = packageGroup.next;
+    } else if (command === 'RequirePackageWithOptions') {
+      const packageGroup = readBracedGroupV0(sourceBytes, commandIndex);
+      if (!packageGroup.ok || packageGroup.value.length === 0) {
+        index = commandIndex;
+        continue;
+      }
+      options = ['withoptions'];
+      packages = splitCommaValuesV0(packageGroup.value);
+      endOffset = packageGroup.next;
+    } else {
+      const optGroup = readBracketGroupV0(sourceBytes, commandIndex);
+      if (!optGroup.ok || optGroup.value.length === 0) {
+        index = commandIndex;
+        continue;
+      }
+      const pkgGroup = readBracedGroupV0(sourceBytes, optGroup.next);
+      if (!pkgGroup.ok || pkgGroup.value.length === 0) {
+        index = commandIndex;
+        continue;
+      }
+      options = splitCommaValuesV0(optGroup.value);
+      packages = splitCommaValuesV0(pkgGroup.value);
+      endOffset = pkgGroup.next;
     }
 
-    const pkgGroup = readBracedGroupV0(sourceBytes, optGroup.next);
-    if (!pkgGroup.ok || pkgGroup.value.length === 0) {
-      index = commandIndex;
-      continue;
-    }
-
-    const options = splitCommaValuesV0(optGroup.value);
-    const packages = splitCommaValuesV0(pkgGroup.value);
     for (const pkgName of packages) {
       addPkgoptEntryV0(entries, {
         command,
         package: pkgName,
         options,
-        source_span: buildSourceSpanV0(sourceBytes, index, pkgGroup.next, 'pkgopt_v0'),
+        source_span: buildSourceSpanV0(sourceBytes, index, endOffset, 'pkgopt_v0'),
       });
     }
-    index = pkgGroup.next;
+    index = endOffset;
   }
   return entries;
 }
@@ -864,6 +898,33 @@ function extractResourceHintEntriesFromSourceV0(sourceBytes) {
         next = optionsGroup.next;
       }
       const packageGroup = readBracedGroupV0(sourceBytes, next);
+      if (!packageGroup.ok || packageGroup.value.length === 0) {
+        index = commandIndex;
+        continue;
+      }
+      addHintValues('package_file', splitCommaValuesV0(packageGroup.value), index, packageGroup.next, 'sty', true);
+      index = packageGroup.next;
+      continue;
+    }
+
+    if (command === 'RequirePackageWithOptions') {
+      const packageGroup = readBracedGroupV0(sourceBytes, commandIndex);
+      if (!packageGroup.ok || packageGroup.value.length === 0) {
+        index = commandIndex;
+        continue;
+      }
+      addHintValues('package_file', splitCommaValuesV0(packageGroup.value), index, packageGroup.next, 'sty', true);
+      index = packageGroup.next;
+      continue;
+    }
+
+    if (command === 'PassOptionsToPackage') {
+      const optionGroup = readBracedGroupV0(sourceBytes, commandIndex);
+      if (!optionGroup.ok || optionGroup.value.length === 0) {
+        index = commandIndex;
+        continue;
+      }
+      const packageGroup = readBracedGroupV0(sourceBytes, optionGroup.next);
       if (!packageGroup.ok || packageGroup.value.length === 0) {
         index = commandIndex;
         continue;

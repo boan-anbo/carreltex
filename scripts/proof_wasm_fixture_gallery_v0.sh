@@ -71,6 +71,8 @@ printf 'fixture-bytes-for-legacy-deeprefs-bib\n' > "$FIXTURE_SOURCE_DIR/xetex/bi
 printf 'fixture-bytes-for-plain-bst\n' > "$FIXTURE_SOURCE_DIR/xetex/bst/plain.bst"
 printf 'fixture-bytes-for-xcolor-sty\n' > "$FIXTURE_SOURCE_DIR/xetex/sty/xcolor.sty"
 printf 'fixture-bytes-for-foo-bar-sty\n' > "$FIXTURE_SOURCE_DIR/xetex/sty/foo__bar.sty"
+printf 'fixture-bytes-for-fooopts-sty\n' > "$FIXTURE_SOURCE_DIR/xetex/sty/fooopts.sty"
+printf 'fixture-bytes-for-baropts-sty\n' > "$FIXTURE_SOURCE_DIR/xetex/sty/baropts.sty"
 printf 'fixture-bytes-for-natbib-sty\n' > "$FIXTURE_SOURCE_DIR/xetex/sty/natbib.sty"
 printf 'fixture-bytes-for-memoir-cls\n' > "$FIXTURE_SOURCE_DIR/xetex/cls/memoir.cls"
 printf 'fixture-bytes-for-found-sans\n' > "$FIXTURE_SOURCE_DIR/fontconfig/public/FoundSans"
@@ -181,6 +183,20 @@ const packagePathRequest = listA.requests.find(
 );
 if (!packagePathRequest) {
   console.error('FAIL: request list must include package hint request for foo__bar.sty');
+  process.exit(1);
+}
+const passOptionsPackageRequest = listA.requests.find(
+  (request) => request.kind === 'texmf' && request.name === 'fooopts.sty' && request.variant === 'typeset',
+);
+if (!passOptionsPackageRequest) {
+  console.error('FAIL: request list must include package hint request for fooopts.sty');
+  process.exit(1);
+}
+const requireWithOptionsPackageRequest = listA.requests.find(
+  (request) => request.kind === 'texmf' && request.name === 'baropts.sty' && request.variant === 'typeset',
+);
+if (!requireWithOptionsPackageRequest) {
+  console.error('FAIL: request list must include package hint request for baropts.sty');
   process.exit(1);
 }
 const bibRequest = listA.requests.find(
@@ -710,6 +726,8 @@ const requiredEntries = [
   ['texmf', 'tex', 'appendices__apx_b.tex', 'typeset'],
   ['texmf', 'sty', 'xcolor.sty', 'typeset'],
   ['texmf', 'sty', 'foo__bar.sty', 'typeset'],
+  ['texmf', 'sty', 'fooopts.sty', 'typeset'],
+  ['texmf', 'sty', 'baropts.sty', 'typeset'],
   ['texmf', 'bib', 'refs.bib', 'typeset'],
   ['texmf', 'bib', 'styleprobe_refs.bib', 'typeset'],
   ['texmf', 'bib', 'multiadd_refs.bib', 'typeset'],
@@ -938,8 +956,8 @@ if (!(resolvedCount > resolvedCountFirst)) {
   );
   process.exit(1);
 }
-if (resolvedCount < 32) {
-  console.error(`FAIL: expected resolved_resources_count >= 32 after package-path expansion, got ${resolvedCount}`);
+if (resolvedCount < 34) {
+  console.error(`FAIL: expected resolved_resources_count >= 34 after package-option seam expansion, got ${resolvedCount}`);
   process.exit(1);
 }
 const okStatuses = statuses.filter((entry) => entry.status === 'OK');
@@ -1173,7 +1191,7 @@ for (const status of statuses) {
 
 console.log(`PASS: resolved_resources_count ${resolvedCount}`);
 console.log(`PASS: resolved_resources_count increased from ${resolvedCountFirst} to ${resolvedCount}`);
-console.log('PASS: resolved_resources_count meets floor >= 32');
+console.log('PASS: resolved_resources_count meets floor >= 34');
 console.log(`PASS: baseline_match MATCH for all OK cases (${okStatuses.length})`);
 console.log(`PASS: typed_artifacts keys ${requiredTypedKeys.join(',')}`);
 console.log('PASS: typed_artifacts_version gate 1');
