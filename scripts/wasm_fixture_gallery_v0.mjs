@@ -287,6 +287,16 @@ async function loadFixtureCasesV0() {
       fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_usepackage_opts_multi_probe_v0.tex',
     },
     {
+      id: 'typeset_demo_usepackage_multipackage_probe_v0',
+      mode: 'typeset',
+      fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_usepackage_multipackage_probe_v0.tex',
+    },
+    {
+      id: 'typeset_demo_usepackage_multipackage_invalid_probe_v0',
+      mode: 'typeset',
+      fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_usepackage_multipackage_invalid_probe_v0.tex',
+    },
+    {
       id: 'typeset_demo_usepackage_emptyopts_invalid_probe_v0',
       mode: 'typeset',
       fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_usepackage_emptyopts_invalid_probe_v0.tex',
@@ -1043,7 +1053,7 @@ function extractResourceHintEntriesFromSourceV0(sourceBytes) {
         index = commandIndex;
         continue;
       }
-      addHintValues('package_file', splitCommaValuesV0(packageGroup.value), index, packageGroup.next, 'sty', true);
+      addHintValues('package_file', splitCommaValuesV0(packageGroup.value), index, packageGroup.next, 'sty');
       index = packageGroup.next;
       continue;
     }
@@ -1071,7 +1081,7 @@ function extractResourceHintEntriesFromSourceV0(sourceBytes) {
         index = commandIndex;
         continue;
       }
-      addHintValues('package_file', splitCommaValuesV0(packageGroup.value), index, packageGroup.next, 'sty', true);
+      addHintValues('package_file', splitCommaValuesV0(packageGroup.value), index, packageGroup.next, 'sty');
       index = packageGroup.next;
       continue;
     }
@@ -1087,7 +1097,7 @@ function extractResourceHintEntriesFromSourceV0(sourceBytes) {
         index = commandIndex;
         continue;
       }
-      addHintValues('package_file', splitCommaValuesV0(packageGroup.value), index, packageGroup.next, 'sty', true);
+      addHintValues('package_file', splitCommaValuesV0(packageGroup.value), index, packageGroup.next, 'sty');
       index = packageGroup.next;
       continue;
     }
@@ -1580,6 +1590,7 @@ async function emitTypedArtifactsV0(caseSpec, caseOutDir, typedArtifacts, fixtur
     || caseSpec.id === 'typeset_demo_documentclass_opts_multi_probe_v0'
     || caseSpec.id === 'typeset_demo_passoptionstoclass_probe_v0'
     || caseSpec.id === 'typeset_demo_usepackage_opts_multi_probe_v0'
+    || caseSpec.id === 'typeset_demo_usepackage_multipackage_probe_v0'
   ) {
     typedArtifacts.pkgopt = await emitPkgoptTypedArtifactV0(caseOutDir, fixtureBytes);
   }
