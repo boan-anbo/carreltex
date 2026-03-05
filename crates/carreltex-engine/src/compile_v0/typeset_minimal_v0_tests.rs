@@ -259,6 +259,60 @@ fn typeset_minimal_rightline_rejects_multiline_content() {
 }
 
 #[test]
+fn typeset_minimal_tabular_emits_deterministic_row_markers() {
+    let main = b"\\documentclass{article}\\begin{document}\\begin{tabular}{lcr}Left & Center & Right\\\\L2 & C2 & R2\\\\\\end{tabular}\\end{document}";
+    let body = extract_typeset_body(main);
+    let text = String::from_utf8(body).expect("body should be valid utf8");
+    assert!(
+        text.contains("!t Left||Center||Right\n!t L2||C2||R2"),
+        "body={text:?}"
+    );
+}
+
+#[test]
+fn typeset_minimal_rejects_tabular_unsupported_alignment() {
+    let main = b"\\documentclass{article}\\begin{document}\\begin{tabular}{ll}A & B\\\\\\end{tabular}\\end{document}";
+    let result = compile_typeset(main);
+    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert!(result.main_xdv_bytes.is_empty());
+}
+
+#[test]
+fn typeset_minimal_rejects_tabular_missing_row_terminator() {
+    let main = b"\\documentclass{article}\\begin{document}\\begin{tabular}{lcr}A & B & C\\end{tabular}\\end{document}";
+    let result = compile_typeset(main);
+    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert!(result.main_xdv_bytes.is_empty());
+}
+
+#[test]
+fn typeset_minimal_figure_stub_emits_placeholder_and_caption_markers() {
+    let main = b"\\documentclass{article}\\begin{document}Before.\\begin{figure}\\caption{Demo figure caption with \\emph{emphasis}.}\\end{figure}After.\\end{document}";
+    let body = extract_typeset_body(main);
+    let text = String::from_utf8(body).expect("body should be valid utf8");
+    assert!(
+        text.contains("Before.\n\n!gbox\n!gcap Demo figure caption with [emphasis].\n\nAfter."),
+        "body={text:?}"
+    );
+}
+
+#[test]
+fn typeset_minimal_rejects_figure_with_includegraphics() {
+    let main = b"\\documentclass{article}\\begin{document}\\begin{figure}\\includegraphics{demo.png}\\caption{Nope}\\end{figure}\\end{document}";
+    let result = compile_typeset(main);
+    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert!(result.main_xdv_bytes.is_empty());
+}
+
+#[test]
+fn typeset_minimal_rejects_figure_without_caption() {
+    let main = b"\\documentclass{article}\\begin{document}\\begin{figure}\\end{figure}\\end{document}";
+    let result = compile_typeset(main);
+    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert!(result.main_xdv_bytes.is_empty());
+}
+
+#[test]
 fn typeset_minimal_footnotes_and_href_emit_expected_markers() {
     let main = b"\\documentclass{article}\\begin{document}Body text\\footnote{First note}. Visit \\href{https://example.com}{example link}.\\end{document}";
     let body = extract_typeset_body(main);

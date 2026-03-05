@@ -2013,6 +2013,117 @@ fn pdf_renderer_multipage_footnotes_and_annots_associate_per_page_v0() {
 }
 
 #[test]
+fn pdf_renderer_table_rows_use_stable_column_x_offsets_v0() {
+    let xdv = write_dvi_v2_text_page_v0(
+        b"Before.\n\n!t Alpha||Beta||Gamma\n!t Delta||Epsilon||Zeta\n\nAfter.",
+    )
+    .expect("writer should accept table marker lines");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+    let pdf_text = String::from_utf8_lossy(&pdf);
+    assert!(
+        !pdf_text.contains("!t Alpha||Beta||Gamma"),
+        "table marker should be hidden in pdf output: {pdf_text}"
+    );
+
+    let epsilon_pt = 0.05f32;
+    let alpha_x = *tm_xs_for_segment_text_v0(&pdf, "Alpha")
+        .first()
+        .expect("alpha x");
+    let delta_x = *tm_xs_for_segment_text_v0(&pdf, "Delta")
+        .first()
+        .expect("delta x");
+    let beta_x = *tm_xs_for_segment_text_v0(&pdf, "Beta")
+        .first()
+        .expect("beta x");
+    let epsilon_x = *tm_xs_for_segment_text_v0(&pdf, "Epsilon")
+        .first()
+        .expect("epsilon x");
+    let gamma_x = *tm_xs_for_segment_text_v0(&pdf, "Gamma")
+        .first()
+        .expect("gamma x");
+    let zeta_x = *tm_xs_for_segment_text_v0(&pdf, "Zeta")
+        .first()
+        .expect("zeta x");
+
+    assert!(
+        (alpha_x - delta_x).abs() <= epsilon_pt,
+        "column 1 x drift: {alpha_x} vs {delta_x}"
+    );
+    assert!(
+        (beta_x - epsilon_x).abs() <= 2.0,
+        "column 2 x drift too large: {beta_x} vs {epsilon_x}"
+    );
+    assert!(
+        (gamma_x - zeta_x).abs() <= 3.0,
+        "column 3 x drift too large: {gamma_x} vs {zeta_x}"
+    );
+    assert!(alpha_x < beta_x && beta_x < gamma_x, "column order mismatch");
+}
+
+#[test]
+fn pdf_renderer_rejects_table_width_overflow_v0() {
+    let mut row = Vec::<u8>::new();
+    row.extend_from_slice(b"!t ");
+    row.extend_from_slice("W".repeat(400).as_bytes());
+    row.extend_from_slice(b"||Center||Right");
+    let xdv = write_dvi_v2_text_page_with_layout_and_wrap_v0(&row, 65_536, 786_432, 5_000)
+        .expect("writer should accept table marker line");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv);
+    assert!(pdf.is_none(), "renderer should fail-closed for table overflow");
+}
+
+#[test]
+fn pdf_renderer_figure_block_spacing_invariants_v0() {
+    let xdv = write_dvi_v2_text_page_v0(
+        b"Before paragraph.\n\n!gbox\n!gcap Figure caption text.\n\nAfter paragraph.",
+    )
+    .expect("writer should accept figure marker lines");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+    let pdf_text = String::from_utf8_lossy(&pdf);
+    assert!(
+        !pdf_text.contains("!gbox"),
+        "figure marker should be hidden in pdf output: {pdf_text}"
+    );
+    assert!(
+        pdf_text.contains("([ Figure placeholder ]) Tj"),
+        "placeholder text should render: {pdf_text}"
+    );
+    assert!(
+        pdf_text.contains("(Figure caption text.) Tj"),
+        "caption text should render: {pdf_text}"
+    );
+
+    let epsilon_pt = 0.05f32;
+    let left_margin_pt = 72.0f32;
+    let left_margin_epsilon = 0.5f32;
+    let (before_x, before_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "(Before paragraph.)").expect("before");
+    let (placeholder_x, placeholder_y) = tm_position_for_line_containing_text_v0(
+        &pdf,
+        "([ Figure placeholder ])",
+    )
+    .expect("placeholder");
+    let (caption_x, caption_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "(Figure caption text.)").expect("caption");
+    let (after_x, after_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "(After paragraph.)").expect("after");
+
+    assert!(
+        placeholder_x > left_margin_pt + left_margin_epsilon,
+        "placeholder should be visually offset from body margin"
+    );
+    assert!(
+        caption_x > left_margin_pt + left_margin_epsilon,
+        "caption should be visually offset from body margin"
+    );
+    assert!(before_x >= left_margin_pt - epsilon_pt, "before paragraph should stay in body column");
+    assert!(after_x >= left_margin_pt - epsilon_pt, "after paragraph should stay in body column");
+    assert!(before_y > placeholder_y, "placeholder should render below body");
+    assert!(placeholder_y > caption_y, "caption should render below placeholder");
+    assert!(caption_y > after_y, "after paragraph should render below caption");
+}
+
+#[test]
 fn validator_rejects_wrong_movement_amount() {
     let mut bytes = write_dvi_v2_text_page_v0(b"ABCD").expect("writer should accept ABCD");
     let right_index = bytes
