@@ -408,10 +408,7 @@ function extractTocEntriesFromSourceV0(sourceBytes) {
       entries.push({
         level,
         title: titleGroup.value,
-        source_span: {
-          start_byte: index,
-          end_byte: titleGroup.next,
-        },
+        source_span: buildSourceSpanV0(sourceBytes, index, titleGroup.next, 'toc_v0'),
       });
       if (entries.length > MAX_TOC_ENTRIES_V0) {
         throw new Error(`toc_v0 entries exceed cap ${MAX_TOC_ENTRIES_V0}`);
@@ -440,6 +437,22 @@ function addBibEntryV0(entries, entry) {
   if (entries.length > MAX_BIB_ENTRIES_V0) {
     throw new Error(`bib_v0 entries exceed cap ${MAX_BIB_ENTRIES_V0}`);
   }
+}
+
+function buildSourceSpanV0(sourceBytes, startByte, endByte, artifactName) {
+  if (!Number.isInteger(startByte) || !Number.isInteger(endByte)) {
+    throw new Error(`${artifactName} source_span must use integer byte offsets`);
+  }
+  if (startByte < 0 || endByte < 0 || endByte <= startByte) {
+    throw new Error(`${artifactName} source_span must satisfy 0 <= start < end`);
+  }
+  if (endByte > sourceBytes.length) {
+    throw new Error(`${artifactName} source_span exceeds source byte length`);
+  }
+  return {
+    start_byte: startByte,
+    end_byte: endByte,
+  };
 }
 
 function addPkgoptEntryV0(entries, entry) {
@@ -504,6 +517,7 @@ function extractPkgoptEntriesFromSourceV0(sourceBytes) {
         command,
         package: pkgName,
         options,
+        source_span: buildSourceSpanV0(sourceBytes, index, pkgGroup.next, 'pkgopt_v0'),
       });
     }
     index = pkgGroup.next;
@@ -551,6 +565,7 @@ function extractGraphicsEntriesFromSourceV0(sourceBytes) {
     entries.push({
       command,
       path: pathGroup.value,
+      source_span: buildSourceSpanV0(sourceBytes, index, pathGroup.next, 'graphics_v0'),
     });
     if (entries.length > MAX_GRAPHICS_ENTRIES_V0) {
       throw new Error(`graphics_v0 entries exceed cap ${MAX_GRAPHICS_ENTRIES_V0}`);
@@ -607,7 +622,12 @@ function extractBibEntriesFromSourceV0(sourceBytes) {
         continue;
       }
       for (const value of splitCommaValuesV0(resourceGroup.value)) {
-        addBibEntryV0(entries, { kind: 'resource_hint', command, value });
+        addBibEntryV0(entries, {
+          kind: 'resource_hint',
+          command,
+          value,
+          source_span: buildSourceSpanV0(sourceBytes, index, resourceGroup.next, 'bib_v0'),
+        });
       }
       index = resourceGroup.next;
       continue;
@@ -628,7 +648,12 @@ function extractBibEntriesFromSourceV0(sourceBytes) {
         continue;
       }
       for (const key of splitCommaValuesV0(citeGroup.value)) {
-        addBibEntryV0(entries, { kind: 'cite_key', command, key });
+        addBibEntryV0(entries, {
+          kind: 'cite_key',
+          command,
+          key,
+          source_span: buildSourceSpanV0(sourceBytes, index, citeGroup.next, 'bib_v0'),
+        });
       }
       index = citeGroup.next;
       continue;
@@ -659,7 +684,11 @@ function extractHyperrefLinksFromSourceV0(sourceBytes) {
     if (command === 'url') {
       const urlGroup = readBracedGroupV0(sourceBytes, commandIndex);
       if (urlGroup.ok && urlGroup.value.length > 0) {
-        links.push({ command: 'url', target: urlGroup.value });
+        links.push({
+          command: 'url',
+          target: urlGroup.value,
+          source_span: buildSourceSpanV0(sourceBytes, index, urlGroup.next, 'hyperref_v0'),
+        });
       }
       index = urlGroup.ok ? urlGroup.next : commandIndex;
       continue;
@@ -672,7 +701,11 @@ function extractHyperrefLinksFromSourceV0(sourceBytes) {
       }
       const textGroup = readBracedGroupV0(sourceBytes, urlGroup.next);
       if (textGroup.ok && urlGroup.value.length > 0) {
-        links.push({ command: 'href', target: urlGroup.value });
+        links.push({
+          command: 'href',
+          target: urlGroup.value,
+          source_span: buildSourceSpanV0(sourceBytes, index, textGroup.next, 'hyperref_v0'),
+        });
       }
       index = textGroup.ok ? textGroup.next : urlGroup.next;
       continue;
@@ -716,6 +749,7 @@ function extractLabelEntriesFromSourceV0(sourceBytes) {
       entries.push({
         command,
         key: keyGroup.value,
+        source_span: buildSourceSpanV0(sourceBytes, index, keyGroup.next, 'labels_v0'),
       });
       if (entries.length > MAX_LABEL_ENTRIES_V0) {
         throw new Error(`labels_v0 entries exceed cap ${MAX_LABEL_ENTRIES_V0}`);
