@@ -23,7 +23,7 @@ const STATUS_FAIL_V0 = 'FAIL';
 const STATUS_MISMATCH_V0 = 'MISMATCH';
 const EXPECTED_STATUS_VALUES_V0 = new Set([STATUS_OK_V0, STATUS_NI_V0, STATUS_INVALID_V0, STATUS_FAIL_V0]);
 const DEFAULT_ONDEMAND_FIXEDPOINT_MAX_ITERS_V1 = 3;
-const TYPED_ARTIFACT_KEYS_V0 = ['toc', 'labels', 'refs', 'bib', 'cite', 'bibitems', 'cites', 'hyperref', 'pkgopt', 'graphics', 'input', 'math', 'table'];
+const TYPED_ARTIFACT_KEYS_V0 = ['toc', 'labels', 'refs', 'bib', 'cite', 'bibitems', 'cites', 'hyperref', 'pkgopt', 'packages', 'graphics', 'input', 'math', 'table'];
 const TYPED_ARTIFACTS_VERSION_V0 = 1;
 const MAX_TOC_ENTRIES_V0 = 256;
 const MAX_TOC_TITLE_BYTES_V0 = 256;
@@ -36,6 +36,10 @@ const MAX_BIB_VALUE_BYTES_V0 = 256;
 const MAX_PKGOPT_ENTRIES_V0 = 256;
 const MAX_PKGOPT_VALUE_BYTES_V0 = 256;
 const MAX_PKGOPT_OPTIONS_PER_ENTRY_V0 = 64;
+const MAX_PACKAGES_ENTRIES_V1 = 256;
+const MAX_PACKAGES_NAME_BYTES_V1 = 256;
+const MAX_PACKAGES_OPTIONS_PER_ENTRY_V1 = 64;
+const MAX_PACKAGES_OPTION_BYTES_V1 = 256;
 const MAX_GRAPHICS_ENTRIES_V0 = 256;
 const MAX_GRAPHICS_PATH_BYTES_V0 = 256;
 const MAX_INPUT_ENTRIES_V1 = 512;
@@ -72,6 +76,16 @@ const RESOURCE_HINT_TYPE_ALLOWLIST_V0 = new Set([
   'bib_resource',
   'bib_style',
   'hyperref_url',
+]);
+const PACKAGE_ARTIFACT_CASE_IDS_V1 = new Set([
+  'typeset_demo_hyperref_probe_v0',
+  'typeset_demo_hyperref_links_probe_v0',
+  'typeset_demo_package_require_probe_v0',
+  'typeset_demo_usepackage_opts_multi_probe_v0',
+  'typeset_demo_usepackage_multipackage_probe_v0',
+  'typeset_demo_usepackage_capture_probe_v1',
+  'typeset_demo_usepackage_multi_capture_probe_v1',
+  'typeset_demo_usepackage_opts_normalize_probe_v1',
 ]);
 
 function sha256HexV0(bytes) {
@@ -744,6 +758,21 @@ async function loadFixtureCasesV0() {
       fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_usepackage_multipackage_probe_v0.tex',
     },
     {
+      id: 'typeset_demo_usepackage_capture_probe_v1',
+      mode: 'typeset',
+      fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_usepackage_capture_probe_v1.tex',
+    },
+    {
+      id: 'typeset_demo_usepackage_multi_capture_probe_v1',
+      mode: 'typeset',
+      fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_usepackage_multi_capture_probe_v1.tex',
+    },
+    {
+      id: 'typeset_demo_usepackage_opts_normalize_probe_v1',
+      mode: 'typeset',
+      fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_usepackage_opts_normalize_probe_v1.tex',
+    },
+    {
       id: 'typeset_demo_usepackage_multipackage_invalid_probe_v0',
       mode: 'typeset',
       fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_usepackage_multipackage_invalid_probe_v0.tex',
@@ -1398,6 +1427,29 @@ function splitCommaOptionsStrictV0(rawValue, context) {
   return dedupeValuesPreserveOrderV0(values);
 }
 
+function normalizePackageOptionTokenV1(rawValue, context) {
+  const trimmed = rawValue.trim();
+  if (trimmed.length === 0) {
+    throw new Error(`${context} has empty option entry`);
+  }
+  if (trimmed.includes('{') || trimmed.includes('}') || trimmed.includes('\\')) {
+    throw new Error(`${context} has unsupported option token '${trimmed}'`);
+  }
+  const normalized = trimmed.replace(/\s*=\s*/g, '=');
+  if (!/^[A-Za-z0-9._:-]+(?:=[A-Za-z0-9._:/-]+)?$/.test(normalized)) {
+    throw new Error(`${context} has unsupported option token '${trimmed}'`);
+  }
+  return normalized;
+}
+
+function splitPackageOptionsStrictV1(rawValue, context) {
+  const values = [];
+  for (const chunk of rawValue.split(',')) {
+    values.push(normalizePackageOptionTokenV1(chunk, context));
+  }
+  return dedupeValuesPreserveOrderV0(values);
+}
+
 function ensureDefaultExtensionV0(value, extension) {
   if (value.includes('.')) {
     return value;
@@ -1654,6 +1706,93 @@ function extractPkgoptEntriesFromSourceV0(sourceBytes) {
     index = endOffset;
   }
   return mergePkgoptUsepackageEntriesV0(entries);
+}
+
+function splitPackageNamesStrictV1(rawValue, context) {
+  const values = [];
+  for (const chunk of rawValue.split(',')) {
+    const trimmed = chunk.trim();
+    if (trimmed.length === 0) {
+      throw new Error(`${context} has empty package entry`);
+    }
+    values.push(trimmed);
+  }
+  return dedupeValuesPreserveOrderV0(values);
+}
+
+function addPackagesEntryV1(entries, entry) {
+  const nameBytes = Buffer.from(entry.name, 'utf8');
+  if (nameBytes.length > MAX_PACKAGES_NAME_BYTES_V1) {
+    throw new Error(`packages_v1 package exceeds cap ${MAX_PACKAGES_NAME_BYTES_V1}`);
+  }
+  if (!Array.isArray(entry.options) || entry.options.length > MAX_PACKAGES_OPTIONS_PER_ENTRY_V1) {
+    throw new Error(`packages_v1 options exceed cap ${MAX_PACKAGES_OPTIONS_PER_ENTRY_V1}`);
+  }
+  for (const option of entry.options) {
+    const optionBytes = Buffer.from(option, 'utf8');
+    if (optionBytes.length > MAX_PACKAGES_OPTION_BYTES_V1) {
+      throw new Error(`packages_v1 option exceeds cap ${MAX_PACKAGES_OPTION_BYTES_V1}`);
+    }
+  }
+  entries.push(entry);
+  if (entries.length > MAX_PACKAGES_ENTRIES_V1) {
+    throw new Error(`packages_v1 entries exceed cap ${MAX_PACKAGES_ENTRIES_V1}`);
+  }
+}
+
+function extractPackagesEntriesFromSourceV1(sourceBytes) {
+  const entries = [];
+  let index = 0;
+  while (index < sourceBytes.length) {
+    if (sourceBytes[index] !== 0x5c) {
+      index += 1;
+      continue;
+    }
+    let commandIndex = index + 1;
+    while (commandIndex < sourceBytes.length && isAsciiLetterByteV0(sourceBytes[commandIndex])) {
+      commandIndex += 1;
+    }
+    if (commandIndex === index + 1) {
+      index += 1;
+      continue;
+    }
+    const command = Buffer.from(sourceBytes.slice(index + 1, commandIndex)).toString('ascii');
+    if (command !== 'usepackage' && command !== 'RequirePackage') {
+      index = commandIndex;
+      continue;
+    }
+
+    let options = [];
+    let next = commandIndex;
+    const optionsGroup = readBracketGroupV0(sourceBytes, next);
+    if (optionsGroup.ok) {
+      options = splitPackageOptionsStrictV1(optionsGroup.value, 'packages_v1 usepackage options');
+      next = optionsGroup.next;
+    }
+
+    const packageGroup = readBracedGroupV0(sourceBytes, next);
+    if (!packageGroup.ok || packageGroup.value.length === 0) {
+      throw new Error('packages_v1 usepackage command missing package group');
+    }
+    if (packageGroup.value.includes('{') || packageGroup.value.includes('}')) {
+      throw new Error(`packages_v1 rejects nested braces in package group '${packageGroup.value}'`);
+    }
+    const packageNames = splitPackageNamesStrictV1(packageGroup.value, 'packages_v1 usepackage packages');
+    for (const packageNameRaw of packageNames) {
+      const normalizedPackage = normalizePathHintTokenV0(packageNameRaw, 'package_file');
+      if (!normalizedPackage) {
+        throw new Error(`packages_v1 package name '${packageNameRaw}' normalized empty`);
+      }
+      addPackagesEntryV1(entries, {
+        command,
+        name: ensureDefaultExtensionV0(normalizedPackage, 'sty'),
+        options,
+        source_span: buildSourceSpanV0(sourceBytes, index, packageGroup.next, 'packages_v1'),
+      });
+    }
+    index = packageGroup.next;
+  }
+  return entries;
 }
 
 function extractGraphicsEntriesFromSourceV0(sourceBytes) {
@@ -2051,7 +2190,7 @@ function extractResourceHintEntriesFromSourceV0(sourceBytes, caseId) {
       let next = commandIndex;
       const optionsGroup = readBracketGroupV0(sourceBytes, next);
       if (optionsGroup.ok) {
-        splitCommaOptionsStrictV0(optionsGroup.value, 'resource_hints_v0 usepackage options');
+        splitPackageOptionsStrictV1(optionsGroup.value, 'resource_hints_v0 usepackage options');
         next = optionsGroup.next;
       }
       const packageGroup = readBracedGroupV0(sourceBytes, next);
@@ -3039,6 +3178,24 @@ async function emitPkgoptTypedArtifactV0(caseOutDir, fixtureBytes) {
   };
 }
 
+async function emitPackagesTypedArtifactV1(caseOutDir, fixtureBytes) {
+  const payload = {
+    version: TYPED_ARTIFACTS_VERSION_V0,
+    schema: 'packages_v1',
+    entries: extractPackagesEntriesFromSourceV1(fixtureBytes),
+  };
+  const bytes = Buffer.from(`${JSON.stringify(payload, null, 2)}\n`, 'utf8');
+  const relpath = 'packages_v1.json';
+  const fullPath = path.join(caseOutDir, relpath);
+  await writeFile(fullPath, bytes);
+  return {
+    present: true,
+    items: payload.entries.length,
+    artifact_relpath: relpath,
+    artifact_sha256: sha256HexV0(bytes),
+  };
+}
+
 async function emitGraphicsTypedArtifactV0(caseOutDir, fixtureBytes) {
   const payload = {
     version: TYPED_ARTIFACTS_VERSION_V0,
@@ -3173,6 +3330,9 @@ async function emitTypedArtifactsV0(
     || caseSpec.id === 'typeset_demo_usepackage_multipackage_probe_v0'
   ) {
     typedArtifacts.pkgopt = await emitPkgoptTypedArtifactV0(caseOutDir, fixtureBytes);
+  }
+  if (PACKAGE_ARTIFACT_CASE_IDS_V1.has(caseSpec.id)) {
+    typedArtifacts.packages = await emitPackagesTypedArtifactV1(caseOutDir, fixtureBytes);
   }
   if (caseSpec.id === 'typeset_demo_graphics_probe_v0') {
     typedArtifacts.graphics = await emitGraphicsTypedArtifactV0(caseOutDir, fixtureBytes);
@@ -3425,6 +3585,18 @@ async function collectResolverRequestsFromTypedArtifactsV0(caseSpec, caseOutDir,
       }
       const hintType = entry?.command === 'include' ? 'tex_include' : 'tex_input';
       addTexmfRequest(entry.value, 'tex', hintType);
+    }
+  }
+
+  const packagesRelpath = typedArtifacts?.packages?.artifact_relpath;
+  if (typedArtifacts?.packages?.present === true && typeof packagesRelpath === 'string' && packagesRelpath.length > 0) {
+    const packagesPayload = JSON.parse((await readFile(path.join(caseOutDir, packagesRelpath))).toString('utf8'));
+    const packageEntries = Array.isArray(packagesPayload?.entries) ? packagesPayload.entries : [];
+    for (const entry of packageEntries) {
+      if (typeof entry?.name !== 'string' || entry.name.length === 0) {
+        continue;
+      }
+      addTexmfRequest(entry.name, 'sty', 'package_file');
     }
   }
 

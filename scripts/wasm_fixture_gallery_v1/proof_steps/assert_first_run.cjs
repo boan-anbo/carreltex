@@ -324,6 +324,77 @@ if (pkgoptArtifactFirst.entries.length <= 0) {
 assertEntrySourceSpans('typeset_demo_pkgopt_probe_v0', 'pkgopt_v0', pkgoptArtifactFirst.entries);
 fs.writeFileSync(firstRunShaPath('pkgopt_v0'), `${pkgoptShaFirst}\n`);
 
+const packageCaptureSummary = JSON.parse(
+  fs.readFileSync(path.join(outDir, 'typeset_demo_usepackage_capture_probe_v1', 'summary.json'), 'utf8'),
+);
+if (packageCaptureSummary?.typed_artifacts?.packages?.present !== true) {
+  console.error('FAIL: expected packages typed artifact present for usepackage capture probe after first run');
+  process.exit(1);
+}
+const packageCapturePath = path.join(outDir, 'typeset_demo_usepackage_capture_probe_v1', 'packages_v1.json');
+if (!fs.existsSync(packageCapturePath)) {
+  console.error('FAIL: expected packages_v1.json artifact for usepackage capture probe');
+  process.exit(1);
+}
+const packageCaptureArtifact = JSON.parse(fs.readFileSync(packageCapturePath, 'utf8'));
+if (packageCaptureArtifact?.schema !== 'packages_v1') {
+  console.error('FAIL: expected packages_v1 schema for usepackage capture probe');
+  process.exit(1);
+}
+if (!Array.isArray(packageCaptureArtifact?.entries) || packageCaptureArtifact.entries.length <= 0) {
+  console.error('FAIL: expected non-empty packages_v1.entries for usepackage capture probe');
+  process.exit(1);
+}
+assertEntrySourceSpans('typeset_demo_usepackage_capture_probe_v1', 'packages_v1', packageCaptureArtifact.entries);
+const hyperrefPackageEntry = packageCaptureArtifact.entries.find((entry) => entry.name === 'hyperref.sty');
+if (!hyperrefPackageEntry) {
+  console.error('FAIL: expected packages_v1 to include hyperref.sty entry for usepackage capture probe');
+  process.exit(1);
+}
+if (JSON.stringify(hyperrefPackageEntry.options) !== JSON.stringify(['unicode'])) {
+  console.error('FAIL: expected usepackage capture probe options normalized as [unicode]');
+  process.exit(1);
+}
+const packagesShaFirst = packageCaptureSummary.typed_artifacts.packages.artifact_sha256;
+if (typeof packagesShaFirst !== 'string' || !/^[0-9a-f]{64}$/.test(packagesShaFirst)) {
+  console.error('FAIL: expected packages_v1 artifact sha256 in first summary');
+  process.exit(1);
+}
+fs.writeFileSync(firstRunShaPath('packages_v1'), `${packagesShaFirst}\n`);
+
+const packageMultiCaptureArtifact = JSON.parse(
+  fs.readFileSync(path.join(outDir, 'typeset_demo_usepackage_multi_capture_probe_v1', 'packages_v1.json'), 'utf8'),
+);
+if (!Array.isArray(packageMultiCaptureArtifact?.entries) || packageMultiCaptureArtifact.entries.length < 2) {
+  console.error('FAIL: expected multiple packages_v1 entries for usepackage multi capture probe');
+  process.exit(1);
+}
+const hasGraphicx = packageMultiCaptureArtifact.entries.some((entry) => entry.name === 'graphicx.sty');
+const hasXcolor = packageMultiCaptureArtifact.entries.some((entry) => entry.name === 'xcolor.sty');
+if (!hasGraphicx || !hasXcolor) {
+  console.error('FAIL: expected packages_v1 multi capture entries for graphicx.sty and xcolor.sty');
+  process.exit(1);
+}
+assertEntrySourceSpans('typeset_demo_usepackage_multi_capture_probe_v1', 'packages_v1', packageMultiCaptureArtifact.entries);
+
+const packageNormalizeArtifact = JSON.parse(
+  fs.readFileSync(path.join(outDir, 'typeset_demo_usepackage_opts_normalize_probe_v1', 'packages_v1.json'), 'utf8'),
+);
+if (!Array.isArray(packageNormalizeArtifact?.entries) || packageNormalizeArtifact.entries.length <= 0) {
+  console.error('FAIL: expected non-empty packages_v1 entries for usepackage options normalize probe');
+  process.exit(1);
+}
+const normalizeEntry = packageNormalizeArtifact.entries.find((entry) => entry.name === 'foo.sty');
+if (!normalizeEntry) {
+  console.error('FAIL: expected packages_v1 normalize probe entry for foo.sty');
+  process.exit(1);
+}
+if (JSON.stringify(normalizeEntry.options) !== JSON.stringify(['a', 'b'])) {
+  console.error('FAIL: expected normalized options [a,b] for usepackage options normalize probe');
+  process.exit(1);
+}
+assertEntrySourceSpans('typeset_demo_usepackage_opts_normalize_probe_v1', 'packages_v1', packageNormalizeArtifact.entries);
+
 const documentclassPkgoptSummary = JSON.parse(
   fs.readFileSync(path.join(outDir, 'typeset_demo_documentclass_opts_probe_v0', 'summary.json'), 'utf8'),
 );
@@ -677,7 +748,7 @@ if (!typedArtifactShaMap || typeof typedArtifactShaMap !== 'object') {
   console.error('FAIL: expected report.typed_artifact_sha256 map after first run');
   process.exit(1);
 }
-const typedKeys = ['toc', 'labels', 'bib', 'cite', 'hyperref', 'pkgopt', 'graphics', 'input', 'math', 'table'];
+const typedKeys = ['toc', 'labels', 'bib', 'cite', 'hyperref', 'pkgopt', 'packages', 'graphics', 'input', 'math', 'table'];
 for (const key of typedKeys) {
   const value = typedArtifactShaMap[key];
   if (typeof value !== 'string' || !/^[0-9a-f]{64}$/.test(value)) {
