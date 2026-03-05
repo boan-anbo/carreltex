@@ -68,6 +68,22 @@ This quoted paragraph is intentionally long so width-based wrapping produces con
 This is a second quoted paragraph to confirm paragraph breaks are preserved inside the quote environment and quote indentation remains stable.
 \end{quote}
 
+\subsection{Table}
+The table block below is a deterministic subset of tabular rendering and should keep three fixed columns with stable alignment in the PDF preview.
+
+\begin{tabular}{lcr}
+Label & Value & Notes\\
+Alpha & 12.50 & Stable\\
+Beta & 9.00 & Check\\
+\end{tabular}
+
+\subsection{Figure}
+The figure block below is a deterministic placeholder stub with caption spacing invariants.
+
+\begin{figure}
+\caption{Deterministic placeholder figure caption for layout validation.}
+\end{figure}
+
 \subsection{Centering}
 \begin{center}
 Centered environment line one.\linebreak Centered environment line two.

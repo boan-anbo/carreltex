@@ -19,10 +19,17 @@ const CENTER_ENV_V0: &[u8] = b"center";
 const CENTERLINE_CONTROL_V0: &[u8] = b"centerline";
 const FLUSHRIGHT_ENV_V0: &[u8] = b"flushright";
 const RIGHTLINE_CONTROL_V0: &[u8] = b"rightline";
+const TABULAR_ENV_V0: &[u8] = b"tabular";
+const FIGURE_ENV_V0: &[u8] = b"figure";
+const CAPTION_CONTROL_V0: &[u8] = b"caption";
+const INCLUDEGRAPHICS_CONTROL_V0: &[u8] = b"includegraphics";
 const FOOTNOTE_CONTROL_V0: &[u8] = b"footnote";
 const HREF_CONTROL_V0: &[u8] = b"href";
 const FOOTNOTE_LINE_PREFIX_MARKER_V0: &[u8] = b"!f ";
 const HREF_URL_LINE_PREFIX_MARKER_V0: &[u8] = b"!u ";
+const TABLE_ROW_PREFIX_MARKER_V0: &[u8] = b"!t ";
+const FIGURE_BOX_PREFIX_MARKER_V0: &[u8] = b"!gbox";
+const FIGURE_CAPTION_PREFIX_MARKER_V0: &[u8] = b"!gcap ";
 const LINK_START_MARKER_V0: u8 = b'<';
 const LINK_END_MARKER_V0: u8 = b'>';
 const NOINDENT_PREFIX_MARKER_V0: &[u8] = b"~ ";
@@ -660,6 +667,181 @@ fn consume_heading_command_v0(tokens: &[TokenV0], index: usize, out: &mut Vec<u8
     Some(next)
 }
 
+fn is_hard_line_break_control_v0(name: &[u8]) -> bool {
+    name.is_empty()
+        || name == HARD_LINE_BREAK_CONTROL_V0
+        || name == NEWLINE_ALIAS_CONTROL_V0
+        || name == LINEBREAK_ALIAS_CONTROL_V0
+        || name == CARRELNEWLINE_MARKER_CONTROL_V0
+}
+
+fn parse_char_space_group_trimmed_v0(
+    tokens: &[TokenV0],
+    group_start: usize,
+    group_end: usize,
+) -> Option<Vec<u8>> {
+    let mut out = Vec::<u8>::new();
+    for token in &tokens[group_start..group_end] {
+        match token {
+            TokenV0::Char(byte) => out.push(*byte),
+            TokenV0::Space => out.push(b' '),
+            _ => return None,
+        }
+    }
+    while matches!(out.first(), Some(b' ')) {
+        out.remove(0);
+    }
+    while matches!(out.last(), Some(b' ')) {
+        out.pop();
+    }
+    Some(out)
+}
+
+fn consume_tabular_environment_v0(tokens: &[TokenV0], index: usize, out: &mut Vec<u8>) -> Option<usize> {
+    let (env_name, mut cursor) = consume_env_name_command_v0(tokens, index, BEGIN_CONTROL_V0)?;
+    if env_name.as_slice() != TABULAR_ENV_V0 {
+        return None;
+    }
+
+    let (align_start, align_end, next_after_align) = consume_group_bounds(tokens, cursor)?;
+    let align_spec = parse_char_space_group_trimmed_v0(tokens, align_start, align_end)?;
+    if align_spec.as_slice() != b"lcr" {
+        return None;
+    }
+    cursor = next_after_align;
+
+    let mut rows = Vec::<Vec<Vec<u8>>>::new();
+    loop {
+        cursor = skip_spaces(tokens, cursor);
+        if matches!(
+            tokens.get(cursor),
+            Some(TokenV0::ControlSeq(name)) if name.as_slice() == END_CONTROL_V0
+        ) {
+            let (end_env, next) = consume_env_name_command_v0(tokens, cursor, END_CONTROL_V0)?;
+            if end_env.as_slice() != TABULAR_ENV_V0 || rows.is_empty() {
+                return None;
+            }
+            push_paragraph_break(out);
+            for row in &rows {
+                out.extend_from_slice(TABLE_ROW_PREFIX_MARKER_V0);
+                for (cell_index, cell) in row.iter().enumerate() {
+                    if cell_index > 0 {
+                        out.extend_from_slice(b"||");
+                    }
+                    out.extend_from_slice(cell);
+                }
+                push_newline(out);
+            }
+            push_paragraph_break(out);
+            return Some(next);
+        }
+
+        let mut row = Vec::<Vec<u8>>::new();
+        let mut cell = Vec::<u8>::new();
+        loop {
+            match tokens.get(cursor) {
+                Some(TokenV0::Char(b'&')) => {
+                    trim_trailing_spaces(&mut cell);
+                    if cell.windows(2).any(|window| window == b"||") {
+                        return None;
+                    }
+                    row.push(core::mem::take(&mut cell));
+                    cursor += 1;
+                }
+                Some(TokenV0::ControlSeq(name)) if is_hard_line_break_control_v0(name.as_slice()) => {
+                    trim_trailing_spaces(&mut cell);
+                    if cell.windows(2).any(|window| window == b"||") {
+                        return None;
+                    }
+                    row.push(core::mem::take(&mut cell));
+                    cursor += 1;
+                    break;
+                }
+                Some(TokenV0::ControlSeq(name)) if name.as_slice() == END_CONTROL_V0 => {
+                    return None;
+                }
+                Some(TokenV0::ControlSeq(name)) if name.as_slice() == BEGIN_CONTROL_V0 => {
+                    return None;
+                }
+                Some(_) => {
+                    cursor = consume_fragment_token_v0(tokens, cursor, &mut cell, false, false)?;
+                }
+                None => return None,
+            }
+        }
+        if row.len() != 3 {
+            return None;
+        }
+        rows.push(row);
+    }
+}
+
+fn consume_figure_environment_v0(tokens: &[TokenV0], index: usize, out: &mut Vec<u8>) -> Option<usize> {
+    let (env_name, mut cursor) = consume_env_name_command_v0(tokens, index, BEGIN_CONTROL_V0)?;
+    if env_name.as_slice() != FIGURE_ENV_V0 {
+        return None;
+    }
+
+    let mut caption: Option<Vec<u8>> = None;
+    loop {
+        cursor = skip_spaces(tokens, cursor);
+        match tokens.get(cursor) {
+            Some(TokenV0::ControlSeq(name)) if name.as_slice() == END_CONTROL_V0 => {
+                let (end_env, next) = consume_env_name_command_v0(tokens, cursor, END_CONTROL_V0)?;
+                if end_env.as_slice() != FIGURE_ENV_V0 {
+                    return None;
+                }
+                let mut figure_caption = caption?;
+                trim_trailing_spaces(&mut figure_caption);
+                if figure_caption.is_empty() {
+                    return None;
+                }
+                push_paragraph_break(out);
+                out.extend_from_slice(FIGURE_BOX_PREFIX_MARKER_V0);
+                push_newline(out);
+                out.extend_from_slice(FIGURE_CAPTION_PREFIX_MARKER_V0);
+                out.extend_from_slice(&figure_caption);
+                push_newline(out);
+                push_paragraph_break(out);
+                return Some(next);
+            }
+            Some(TokenV0::ControlSeq(name)) if name.as_slice() == BEGIN_CONTROL_V0 => {
+                return None;
+            }
+            Some(TokenV0::ControlSeq(name)) if name.as_slice() == CAPTION_CONTROL_V0 => {
+                if caption.is_some() {
+                    return None;
+                }
+                let (group_start, group_end, next) = consume_group_bounds(tokens, cursor + 1)?;
+                let mut value = Vec::<u8>::new();
+                consume_fragment_range_v0(tokens, group_start, group_end, &mut value, false, false)?;
+                trim_trailing_spaces(&mut value);
+                if value.is_empty() {
+                    return None;
+                }
+                caption = Some(value);
+                cursor = next;
+            }
+            Some(TokenV0::ControlSeq(name)) if name.as_slice() == INCLUDEGRAPHICS_CONTROL_V0 => {
+                return None;
+            }
+            Some(TokenV0::ControlSeq(name))
+                if name.as_slice() == b"protect" || name.as_slice() == b"relax" =>
+            {
+                cursor += 1;
+            }
+            Some(TokenV0::Char(byte)) if *byte == NEWLINE_MARKER_V0 => {
+                cursor += 1;
+            }
+            Some(TokenV0::Space) => {
+                cursor += 1;
+            }
+            Some(_) => return None,
+            None => return None,
+        }
+    }
+}
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum ListKindV0 {
     Itemize,
@@ -990,6 +1172,12 @@ fn consume_body_environment_v0(tokens: &[TokenV0], index: usize, out: &mut Vec<u
     }
     if env_name.as_slice() == FLUSHRIGHT_ENV_V0 {
         return consume_flushright_environment_v0(tokens, index, out);
+    }
+    if env_name.as_slice() == TABULAR_ENV_V0 {
+        return consume_tabular_environment_v0(tokens, index, out);
+    }
+    if env_name.as_slice() == FIGURE_ENV_V0 {
+        return consume_figure_environment_v0(tokens, index, out);
     }
     None
 }
