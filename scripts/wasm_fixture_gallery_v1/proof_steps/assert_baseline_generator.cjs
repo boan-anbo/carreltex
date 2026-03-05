@@ -47,7 +47,7 @@ if (!indexB.typed_artifact_sha256 || typeof indexB.typed_artifact_sha256 !== 'ob
   console.error('FAIL: baseline index rerun missing typed_artifact_sha256 map');
   process.exit(1);
 }
-const typedKeys = ['toc', 'labels', 'bib', 'hyperref', 'pkgopt', 'graphics', 'math'];
+const typedKeys = ['toc', 'labels', 'bib', 'hyperref', 'pkgopt', 'graphics', 'math', 'table'];
 for (const key of typedKeys) {
   const valueA = indexA.typed_artifact_sha256[key];
   const valueB = indexB.typed_artifact_sha256[key];
