@@ -56,6 +56,8 @@ printf 'fixture-bytes-for-appendices-apx-b-normalized\n' > "$FIXTURE_SOURCE_DIR/
 printf 'fixture-bytes-for-demo-png\n' > "$FIXTURE_SOURCE_DIR/xetex/png/demo.png"
 printf 'fixture-bytes-for-probe-figure-png\n' > "$FIXTURE_SOURCE_DIR/xetex/png/probe-figure.png"
 printf 'fixture-bytes-for-figs-diagram-pdf\n' > "$FIXTURE_SOURCE_DIR/xetex/pdf/figs__diagram.pdf"
+printf 'fixture-bytes-for-figs-demo-graphic-pdf\n' > "$FIXTURE_SOURCE_DIR/xetex/pdf/figs__demo_graphic.pdf"
+printf 'fixture-bytes-for-plots-demo-graphic-pdf\n' > "$FIXTURE_SOURCE_DIR/xetex/pdf/plots__demo_graphic.pdf"
 printf 'fixture-bytes-for-refs-bib\n' > "$FIXTURE_SOURCE_DIR/xetex/bib/refs.bib"
 printf 'fixture-bytes-for-styleprobe-refs-bib\n' > "$FIXTURE_SOURCE_DIR/xetex/bib/styleprobe_refs.bib"
 printf 'fixture-bytes-for-multiadd-refs-bib\n' > "$FIXTURE_SOURCE_DIR/xetex/bib/multiadd_refs.bib"
@@ -225,6 +227,20 @@ const graphicsOptsRequest = listA.requests.find(
 );
 if (!graphicsOptsRequest) {
   console.error('FAIL: request list must include includegraphics ext/dir hint request for figs__diagram.pdf');
+  process.exit(1);
+}
+const graphicspathRequestA = listA.requests.find(
+  (request) => request.kind === 'texmf' && request.format === 'pdf' && request.name === 'figs__demo_graphic.pdf' && request.variant === 'typeset',
+);
+if (!graphicspathRequestA) {
+  console.error('FAIL: request list must include graphicspath hint request for figs__demo_graphic.pdf');
+  process.exit(1);
+}
+const graphicspathRequestB = listA.requests.find(
+  (request) => request.kind === 'texmf' && request.format === 'pdf' && request.name === 'plots__demo_graphic.pdf' && request.variant === 'typeset',
+);
+if (!graphicspathRequestB) {
+  console.error('FAIL: request list must include graphicspath hint request for plots__demo_graphic.pdf');
   process.exit(1);
 }
 const nestedBibRequest = listA.requests.find(
@@ -674,6 +690,8 @@ const requiredEntries = [
   ['texmf', 'png', 'demo.png', 'typeset'],
   ['texmf', 'png', 'probe-figure.png', 'typeset'],
   ['texmf', 'pdf', 'figs__diagram.pdf', 'typeset'],
+  ['texmf', 'pdf', 'figs__demo_graphic.pdf', 'typeset'],
+  ['texmf', 'pdf', 'plots__demo_graphic.pdf', 'typeset'],
   ['fontconfig', 'name', 'FoundSans', 'public'],
 ];
 for (const [kind, format, name, variant] of requiredEntries) {
@@ -885,8 +903,8 @@ if (!(resolvedCount > resolvedCountFirst)) {
   );
   process.exit(1);
 }
-if (resolvedCount < 27) {
-  console.error(`FAIL: expected resolved_resources_count >= 27 after includeonly hint expansion, got ${resolvedCount}`);
+if (resolvedCount < 29) {
+  console.error(`FAIL: expected resolved_resources_count >= 29 after graphicspath hint expansion, got ${resolvedCount}`);
   process.exit(1);
 }
 const okStatuses = statuses.filter((entry) => entry.status === 'OK');
@@ -1120,7 +1138,7 @@ for (const status of statuses) {
 
 console.log(`PASS: resolved_resources_count ${resolvedCount}`);
 console.log(`PASS: resolved_resources_count increased from ${resolvedCountFirst} to ${resolvedCount}`);
-console.log('PASS: resolved_resources_count meets floor >= 27');
+console.log('PASS: resolved_resources_count meets floor >= 29');
 console.log(`PASS: baseline_match MATCH for all OK cases (${okStatuses.length})`);
 console.log(`PASS: typed_artifacts keys ${requiredTypedKeys.join(',')}`);
 console.log('PASS: typed_artifacts_version gate 1');
