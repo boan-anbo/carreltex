@@ -25,6 +25,8 @@ const FOOTNOTE_LINE_PREFIX_MARKER_V0: &[u8] = b"!f ";
 const HREF_URL_LINE_PREFIX_MARKER_V0: &[u8] = b"!u ";
 const LABEL_LINE_PREFIX_MARKER_V0: &[u8] = b"!l ";
 const REF_LINE_PREFIX_MARKER_V0: &[u8] = b"!r ";
+const BIBITEM_LINE_PREFIX_MARKER_V0: &[u8] = b"!b ";
+const CITE_LINE_PREFIX_MARKER_V0: &[u8] = b"!c ";
 const NOINDENT_PREFIX_MARKER_V0: u8 = b'~';
 const LINK_START_MARKER_V0: u8 = b'<';
 const LINK_END_MARKER_V0: u8 = b'>';
@@ -903,6 +905,22 @@ fn has_ref_line_prefix_v0(glyphs: &[GlyphPlanV0]) -> bool {
             .eq(REF_LINE_PREFIX_MARKER_V0.iter().copied())
 }
 
+fn has_bibitem_line_prefix_v0(glyphs: &[GlyphPlanV0]) -> bool {
+    glyphs.len() >= BIBITEM_LINE_PREFIX_MARKER_V0.len()
+        && glyphs[..BIBITEM_LINE_PREFIX_MARKER_V0.len()]
+            .iter()
+            .map(|glyph| glyph.byte)
+            .eq(BIBITEM_LINE_PREFIX_MARKER_V0.iter().copied())
+}
+
+fn has_cite_line_prefix_v0(glyphs: &[GlyphPlanV0]) -> bool {
+    glyphs.len() >= CITE_LINE_PREFIX_MARKER_V0.len()
+        && glyphs[..CITE_LINE_PREFIX_MARKER_V0.len()]
+            .iter()
+            .map(|glyph| glyph.byte)
+            .eq(CITE_LINE_PREFIX_MARKER_V0.iter().copied())
+}
+
 fn parse_href_url_line_v0(glyphs: &[GlyphPlanV0]) -> Option<(u32, Vec<u8>)> {
     if glyphs.len() < HREF_URL_LINE_PREFIX_MARKER_V0.len() {
         return None;
@@ -1007,6 +1025,55 @@ fn parse_ref_line_v0(glyphs: &[GlyphPlanV0]) -> Option<()> {
         return None;
     }
     if resolved_anchor_id == 0 {
+        return Some(());
+    }
+    Some(())
+}
+
+fn parse_bibitem_line_v0(glyphs: &[GlyphPlanV0]) -> Option<()> {
+    if glyphs.len() < BIBITEM_LINE_PREFIX_MARKER_V0.len() {
+        return None;
+    }
+    let bytes: Vec<u8> = glyphs.iter().map(|glyph| glyph.byte).collect();
+    if !bytes.starts_with(BIBITEM_LINE_PREFIX_MARKER_V0) {
+        return None;
+    }
+    let line = String::from_utf8(bytes).ok()?;
+    let mut parts = line.splitn(4, ' ');
+    let prefix = parts.next()?;
+    if prefix != "!b" {
+        return None;
+    }
+    let key = parts.next()?.trim();
+    let ordinal = parts.next()?.trim().parse::<u32>().ok()?;
+    let text = parts.next()?.trim();
+    if key.is_empty() || ordinal == 0 || text.is_empty() {
+        return None;
+    }
+    Some(())
+}
+
+fn parse_cite_line_v0(glyphs: &[GlyphPlanV0]) -> Option<()> {
+    if glyphs.len() < CITE_LINE_PREFIX_MARKER_V0.len() {
+        return None;
+    }
+    let bytes: Vec<u8> = glyphs.iter().map(|glyph| glyph.byte).collect();
+    if !bytes.starts_with(CITE_LINE_PREFIX_MARKER_V0) {
+        return None;
+    }
+    let line = String::from_utf8(bytes).ok()?;
+    let mut parts = line.splitn(4, ' ');
+    let prefix = parts.next()?;
+    if prefix != "!c" {
+        return None;
+    }
+    let key = parts.next()?.trim();
+    let line_index = parts.next()?.trim().parse::<u32>().ok()?;
+    let resolved_ordinal = parts.next()?.trim().parse::<u32>().ok()?;
+    if key.is_empty() || line_index == 0 {
+        return None;
+    }
+    if resolved_ordinal == 0 {
         return Some(());
     }
     Some(())
@@ -1188,6 +1255,8 @@ fn split_body_and_metadata_lines_v0(pages: &[PagePlanV0]) -> (Vec<Vec<LinePlanV0
                 || has_toc_entry_line_prefix_v0(&line.glyphs)
                 || has_label_line_prefix_v0(&line.glyphs)
                 || has_ref_line_prefix_v0(&line.glyphs)
+                || has_bibitem_line_prefix_v0(&line.glyphs)
+                || has_cite_line_prefix_v0(&line.glyphs)
             {
                 in_metadata = true;
             }
@@ -1251,6 +1320,14 @@ fn parse_metadata_lines_v0(
             continue;
         }
         if parse_ref_line_v0(&line.glyphs).is_some() {
+            current_footnote_id = None;
+            continue;
+        }
+        if parse_bibitem_line_v0(&line.glyphs).is_some() {
+            current_footnote_id = None;
+            continue;
+        }
+        if parse_cite_line_v0(&line.glyphs).is_some() {
             current_footnote_id = None;
             continue;
         }
