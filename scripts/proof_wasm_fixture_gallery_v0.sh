@@ -66,6 +66,15 @@ if (typeof labelsShaFirst !== 'string' || !/^[0-9a-f]{64}$/.test(labelsShaFirst)
   console.error('FAIL: expected labels artifact sha256 in first summary');
   process.exit(1);
 }
+const labelsArtifactFirst = JSON.parse(fs.readFileSync(labelsPath, 'utf8'));
+if (!Array.isArray(labelsArtifactFirst?.entries)) {
+  console.error('FAIL: expected labels_v0.entries array in first-run artifact');
+  process.exit(1);
+}
+if (labelsArtifactFirst.entries.length <= 0) {
+  console.error('FAIL: expected non-empty labels_v0.entries for labels probe');
+  process.exit(1);
+}
 fs.writeFileSync(firstRunShaPath('labels_v0'), `${labelsShaFirst}\n`);
 
 const tocSummary = JSON.parse(
@@ -309,6 +318,13 @@ if (!labelsArtifact || labelsArtifact.present !== true) {
 const labelsShaSecond = labelsArtifact.artifact_sha256;
 if (labelsShaSecond !== labelsShaFirst) {
   console.error('FAIL: labels_v0 artifact sha256 must be stable across reruns');
+  process.exit(1);
+}
+const labelsArtifactSecond = JSON.parse(
+  fs.readFileSync(path.join(outDir, 'typeset_demo_labels_probe_v0', 'labels_v0.json'), 'utf8'),
+);
+if (!Array.isArray(labelsArtifactSecond?.entries) || labelsArtifactSecond.entries.length <= 0) {
+  console.error('FAIL: expected non-empty labels_v0.entries after rerun');
   process.exit(1);
 }
 
