@@ -24,10 +24,11 @@ export TZ=UTC
 "$ROOT_DIR/scripts/wasm_smoke_build.sh"
 
 rm -rf "$OUT_DIR" "$STORE_DIR" "$HINT_STORE_DIR_A" "$HINT_STORE_DIR_B" "$FIXTURE_SOURCE_DIR" "$BASELINE_ROOT"
-mkdir -p "$OUT_DIR" "$FIXTURE_SOURCE_DIR/xetex/tex" "$FIXTURE_SOURCE_DIR/xetex/bib" "$FIXTURE_SOURCE_DIR/xetex/png" "$BASELINE_ROOT" "$BASELINE_PACKS_ROOT"
+mkdir -p "$OUT_DIR" "$FIXTURE_SOURCE_DIR/xetex/tex" "$FIXTURE_SOURCE_DIR/xetex/bib" "$FIXTURE_SOURCE_DIR/xetex/png" "$FIXTURE_SOURCE_DIR/fontconfig/public" "$BASELINE_ROOT" "$BASELINE_PACKS_ROOT"
 
 printf 'fixture-bytes-for-typeset-minimal-v0\n' > "$FIXTURE_SOURCE_DIR/xetex/tex/typeset_demo_minimal_v0"
 printf 'fixture-bytes-for-demo-png\n' > "$FIXTURE_SOURCE_DIR/xetex/png/demo.png"
+printf 'fixture-bytes-for-found-sans\n' > "$FIXTURE_SOURCE_DIR/fontconfig/public/FoundSans"
 
 cat > "$REQUEST_LIST" <<'JSON'
 {
@@ -100,6 +101,13 @@ const graphicsRequest = listA.requests.find(
 );
 if (!graphicsRequest) {
   console.error('FAIL: request list must include graphics hint request for demo.png');
+  process.exit(1);
+}
+const fontRequest = listA.requests.find(
+  (request) => request.kind === 'fontconfig' && request.format === 'name' && request.name === 'FoundSans' && request.variant === 'public',
+);
+if (!fontRequest) {
+  console.error('FAIL: request list must include font hint request for fontconfig public/FoundSans');
   process.exit(1);
 }
 if (listA.requests.some((request) => request.name === 'demo-image.png')) {
@@ -474,8 +482,8 @@ if (summaryA.index_sha256 !== summaryB.index_sha256 || summaryA.found_count !== 
   console.error('FAIL: texlive_store_gen_v0 hint summaries must match across reruns');
   process.exit(1);
 }
-if (!(summaryA.found_count === 2 && summaryA.missing_count >= 1)) {
-  console.error(`FAIL: expected hint-driven store found=2 and missing>=1, got found=${summaryA.found_count} missing=${summaryA.missing_count}`);
+if (!(summaryA.found_count === 3 && summaryA.missing_count >= 1)) {
+  console.error(`FAIL: expected hint-driven store found=3 and missing>=1, got found=${summaryA.found_count} missing=${summaryA.missing_count}`);
   process.exit(1);
 }
 console.log(`PASS: texlive_store_gen_v0 from hints deterministic index_sha256 ${indexASha}`);
