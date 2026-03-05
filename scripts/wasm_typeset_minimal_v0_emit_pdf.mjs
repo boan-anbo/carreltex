@@ -51,6 +51,13 @@ function parsePdfAnnotationActionIdV0(body) {
   return Number.isFinite(id) ? id : null;
 }
 
+function parsePdfAnnotationDestPageIdV0(body) {
+  const match = body.match(/\/Dest \[(\d+)\s+0\s+R\s+\/XYZ/);
+  if (!match) return null;
+  const id = Number.parseInt(match[1], 10);
+  return Number.isFinite(id) ? id : null;
+}
+
 function parsePdfActionUriV0(body) {
   const match = body.match(/\/URI \(([^)]*)\)/);
   return match ? match[1] : null;
@@ -322,18 +329,24 @@ async function run() {
   }
 
   const pageOneUris = [];
+  const pageOneDestPageIds = [];
   for (const annotId of pageOneAnnotIds) {
     const annotBody = objectById.get(annotId);
     if (!annotBody || !annotBody.includes('/Subtype /Link')) {
       throw new Error(`page 1 annotation ${annotId} missing /Subtype /Link`);
     }
     const actionId = parsePdfAnnotationActionIdV0(annotBody);
-    if (!actionId) throw new Error(`page 1 annotation ${annotId} missing action`);
-    const actionBody = objectById.get(actionId);
-    if (!actionBody) throw new Error(`page 1 action ${actionId} missing`);
-    const uri = parsePdfActionUriV0(actionBody);
-    if (!uri) throw new Error(`page 1 action ${actionId} missing URI`);
-    pageOneUris.push(uri);
+    if (actionId) {
+      const actionBody = objectById.get(actionId);
+      if (!actionBody) throw new Error(`page 1 action ${actionId} missing`);
+      const uri = parsePdfActionUriV0(actionBody);
+      if (!uri) throw new Error(`page 1 action ${actionId} missing URI`);
+      pageOneUris.push(uri);
+    } else {
+      const destPageId = parsePdfAnnotationDestPageIdV0(annotBody);
+      if (!destPageId) throw new Error(`page 1 annotation ${annotId} missing URI action and /Dest`);
+      pageOneDestPageIds.push(destPageId);
+    }
     const rect = parsePdfAnnotationRectV0(annotBody);
     if (!rect) throw new Error(`page 1 annotation ${annotId} missing rect`);
     if (
@@ -349,18 +362,24 @@ async function run() {
   }
 
   const pageTwoUris = [];
+  const pageTwoDestPageIds = [];
   for (const annotId of pageTwoAnnotIds) {
     const annotBody = objectById.get(annotId);
     if (!annotBody || !annotBody.includes('/Subtype /Link')) {
       throw new Error(`page 2 annotation ${annotId} missing /Subtype /Link`);
     }
     const actionId = parsePdfAnnotationActionIdV0(annotBody);
-    if (!actionId) throw new Error(`page 2 annotation ${annotId} missing action`);
-    const actionBody = objectById.get(actionId);
-    if (!actionBody) throw new Error(`page 2 action ${actionId} missing`);
-    const uri = parsePdfActionUriV0(actionBody);
-    if (!uri) throw new Error(`page 2 action ${actionId} missing URI`);
-    pageTwoUris.push(uri);
+    if (actionId) {
+      const actionBody = objectById.get(actionId);
+      if (!actionBody) throw new Error(`page 2 action ${actionId} missing`);
+      const uri = parsePdfActionUriV0(actionBody);
+      if (!uri) throw new Error(`page 2 action ${actionId} missing URI`);
+      pageTwoUris.push(uri);
+    } else {
+      const destPageId = parsePdfAnnotationDestPageIdV0(annotBody);
+      if (!destPageId) throw new Error(`page 2 annotation ${annotId} missing URI action and /Dest`);
+      pageTwoDestPageIds.push(destPageId);
+    }
     const rect = parsePdfAnnotationRectV0(annotBody);
     if (!rect) throw new Error(`page 2 annotation ${annotId} missing rect`);
     if (
@@ -374,11 +393,20 @@ async function run() {
       throw new Error(`page 2 annotation ${annotId} has invalid rect`);
     }
   }
+  if (pageOneUris.length === 0 || pageTwoUris.length === 0) {
+    throw new Error('expected at least one external URI annotation on page 1 and page 2');
+  }
   if (!pageOneUris.every((uri) => uri === 'https://example.com/page1')) {
     throw new Error(`expected page 1 URIs to be page1 links, got ${JSON.stringify(pageOneUris)}`);
   }
   if (!pageTwoUris.every((uri) => uri === 'https://example.com/page2')) {
     throw new Error(`expected page 2 URIs to be page2 links, got ${JSON.stringify(pageTwoUris)}`);
+  }
+  if (pageOneDestPageIds.some((id) => id < pageIds[0] || id > pageIds[pageIds.length - 1])) {
+    throw new Error(`page 1 internal link destination out of bounds: ${JSON.stringify(pageOneDestPageIds)}`);
+  }
+  if (pageTwoDestPageIds.some((id) => id < pageIds[0] || id > pageIds[pageIds.length - 1])) {
+    throw new Error(`page 2 internal link destination out of bounds: ${JSON.stringify(pageTwoDestPageIds)}`);
   }
 
   const streamOneId = parsePageContentStreamIdV0(pageOneBody);

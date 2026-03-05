@@ -684,6 +684,16 @@ fn parse_pdf_annotation_action_id_v0(body: &str) -> Option<u32> {
     fields[0].parse::<u32>().ok()
 }
 
+fn parse_pdf_annotation_dest_page_id_v0(body: &str) -> Option<u32> {
+    let marker = "/Dest [";
+    let start = body.find(marker)? + marker.len();
+    let fields = body[start..].split_whitespace().collect::<Vec<_>>();
+    if fields.len() < 3 || fields[1] != "0" || fields[2] != "R" {
+        return None;
+    }
+    fields[0].parse::<u32>().ok()
+}
+
 fn parse_pdf_action_uri_v0(body: &str) -> Option<String> {
     let marker = "/URI (";
     let start = body.find(marker)? + marker.len();
@@ -2172,6 +2182,56 @@ fn pdf_renderer_emits_link_annotation_with_in_bounds_rect_v0() {
     assert!(rect[3] > rect[1], "rect height must be positive: {rect:?}");
     assert!((0.0..=612.0).contains(&rect[0]) && (0.0..=612.0).contains(&rect[2]));
     assert!((0.0..=792.0).contains(&rect[1]) && (0.0..=792.0).contains(&rect[3]));
+}
+
+#[test]
+fn pdf_renderer_emits_internal_ref_and_external_href_annotations_v0() {
+    let xdv = write_dvi_v2_text_page_v0(
+        b"Prelude.\n\n@S {Intro}\n\nSee <1> and <{Example}>.\n\n!l sec:intro 1 heading 1 Intro\n!r sec:intro 5 1\n!ra 1 1\n!u 2 https://example.com",
+    )
+    .expect("writer should accept cross-ref marker lines");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+
+    let page_one = parse_pdf_object_body_v0(&pdf, 3).expect("page object");
+    let annots = parse_pdf_ref_ids_v0(&page_one, "/Annots");
+    assert_eq!(annots.len(), 2, "expected one ref annot and one href annot");
+
+    let first_annot = parse_pdf_object_body_v0(&pdf, annots[0]).expect("first annotation");
+    let second_annot = parse_pdf_object_body_v0(&pdf, annots[1]).expect("second annotation");
+    assert!(
+        first_annot.contains("/Dest ["),
+        "first annotation should use internal destination: {first_annot}"
+    );
+    assert!(
+        !first_annot.contains("/A "),
+        "internal destination annotation must not use URI action: {first_annot}"
+    );
+    assert_eq!(
+        parse_pdf_annotation_dest_page_id_v0(&first_annot),
+        Some(3),
+        "internal ref should target first page"
+    );
+
+    let action_id = parse_pdf_annotation_action_id_v0(&second_annot).expect("href action id");
+    let action_body = parse_pdf_object_body_v0(&pdf, action_id).expect("href action body");
+    assert_eq!(
+        parse_pdf_action_uri_v0(&action_body).as_deref(),
+        Some("https://example.com"),
+        "href annotation should keep URI target"
+    );
+}
+
+#[test]
+fn pdf_renderer_rejects_ref_annotation_target_with_missing_anchor_v0() {
+    let xdv = write_dvi_v2_text_page_v0(
+        b"See <1> only.\n\n!r sec:intro 1 1\n!ra 1 1",
+    )
+    .expect("writer should accept marker lines");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv);
+    assert!(
+        pdf.is_none(),
+        "renderer should fail-closed when ref target anchor is missing"
+    );
 }
 
 #[test]

@@ -25,6 +25,7 @@ const FOOTNOTE_LINE_PREFIX_MARKER_V0: &[u8] = b"!f ";
 const HREF_URL_LINE_PREFIX_MARKER_V0: &[u8] = b"!u ";
 const LABEL_LINE_PREFIX_MARKER_V0: &[u8] = b"!l ";
 const REF_LINE_PREFIX_MARKER_V0: &[u8] = b"!r ";
+const REF_ANCHOR_LINK_LINE_PREFIX_MARKER_V0: &[u8] = b"!ra ";
 const BIBITEM_LINE_PREFIX_MARKER_V0: &[u8] = b"!b ";
 const CITE_LINE_PREFIX_MARKER_V0: &[u8] = b"!c ";
 const NOINDENT_PREFIX_MARKER_V0: u8 = b'~';
@@ -150,8 +151,14 @@ struct PdfRenderSegmentV0 {
 
 #[derive(Clone)]
 struct PdfLinkAnnotationV0 {
-    uri: Vec<u8>,
+    target: PdfLinkTargetV0,
     rect: [f32; 4],
+}
+
+#[derive(Clone)]
+enum PdfLinkTargetV0 {
+    Uri(Vec<u8>),
+    Anchor(u32),
 }
 
 #[derive(Clone)]
@@ -165,6 +172,18 @@ struct TocEntryMetadataV0 {
     level: u8,
     anchor_id: u32,
     title_glyphs: Vec<GlyphPlanV0>,
+}
+
+#[derive(Clone)]
+struct RefAnchorLinkMetadataV0 {
+    link_id: u32,
+    anchor_id: u32,
+}
+
+#[derive(Clone, Copy)]
+struct AnchorDestinationV0 {
+    page_index: usize,
+    y_pt: f32,
 }
 
 fn parse_styled_segments_v0(glyphs: &[GlyphPlanV0]) -> Option<Vec<PdfStyledSegmentV0>> {
@@ -963,6 +982,14 @@ fn has_ref_line_prefix_v0(glyphs: &[GlyphPlanV0]) -> bool {
             .eq(REF_LINE_PREFIX_MARKER_V0.iter().copied())
 }
 
+fn has_ref_anchor_link_line_prefix_v0(glyphs: &[GlyphPlanV0]) -> bool {
+    glyphs.len() >= REF_ANCHOR_LINK_LINE_PREFIX_MARKER_V0.len()
+        && glyphs[..REF_ANCHOR_LINK_LINE_PREFIX_MARKER_V0.len()]
+            .iter()
+            .map(|glyph| glyph.byte)
+            .eq(REF_ANCHOR_LINK_LINE_PREFIX_MARKER_V0.iter().copied())
+}
+
 fn has_bibitem_line_prefix_v0(glyphs: &[GlyphPlanV0]) -> bool {
     glyphs.len() >= BIBITEM_LINE_PREFIX_MARKER_V0.len()
         && glyphs[..BIBITEM_LINE_PREFIX_MARKER_V0.len()]
@@ -1088,6 +1115,28 @@ fn parse_ref_line_v0(glyphs: &[GlyphPlanV0]) -> Option<()> {
     Some(())
 }
 
+fn parse_ref_anchor_link_line_v0(glyphs: &[GlyphPlanV0]) -> Option<RefAnchorLinkMetadataV0> {
+    if glyphs.len() < REF_ANCHOR_LINK_LINE_PREFIX_MARKER_V0.len() {
+        return None;
+    }
+    let bytes: Vec<u8> = glyphs.iter().map(|glyph| glyph.byte).collect();
+    if !bytes.starts_with(REF_ANCHOR_LINK_LINE_PREFIX_MARKER_V0) {
+        return None;
+    }
+    let line = String::from_utf8(bytes).ok()?;
+    let mut parts = line.splitn(3, ' ');
+    let prefix = parts.next()?;
+    if prefix != "!ra" {
+        return None;
+    }
+    let link_id = parts.next()?.trim().parse::<u32>().ok()?;
+    let anchor_id = parts.next()?.trim().parse::<u32>().ok()?;
+    if link_id == 0 || anchor_id == 0 {
+        return None;
+    }
+    Some(RefAnchorLinkMetadataV0 { link_id, anchor_id })
+}
+
 fn parse_bibitem_line_v0(glyphs: &[GlyphPlanV0]) -> Option<()> {
     if glyphs.len() < BIBITEM_LINE_PREFIX_MARKER_V0.len() {
         return None;
@@ -1198,9 +1247,9 @@ fn collect_link_annotations_for_line_v0(
     line_x_pt: f32,
     line_y_pt: f32,
     font_size_pt: f32,
-    href_url_by_id: &BTreeMap<u32, Vec<u8>>,
+    link_targets_by_id: &BTreeMap<u32, PdfLinkTargetV0>,
     next_link_id: &mut u32,
-    active_link_uri: &mut Option<Vec<u8>>,
+    active_link_target: &mut Option<PdfLinkTargetV0>,
     link_active_at_line_end: bool,
 ) -> Option<Vec<PdfLinkAnnotationV0>> {
     let mut annotations = Vec::<PdfLinkAnnotationV0>::new();
@@ -1214,15 +1263,15 @@ fn collect_link_annotations_for_line_v0(
         if segment.is_link {
             if run_start_x.is_none() {
                 run_start_x = Some(start_x);
-                if active_link_uri.is_none() {
-                    let uri = href_url_by_id.get(next_link_id)?.clone();
+                if active_link_target.is_none() {
+                    let target = link_targets_by_id.get(next_link_id)?.clone();
                     *next_link_id = next_link_id.checked_add(1)?;
-                    *active_link_uri = Some(uri);
+                    *active_link_target = Some(target);
                 }
             }
             run_end_x = end_x;
         } else if let Some(run_x) = run_start_x.take() {
-            let uri = active_link_uri.clone()?;
+            let target = active_link_target.clone()?;
             if run_end_x <= run_x {
                 return None;
             }
@@ -1235,15 +1284,18 @@ fn collect_link_annotations_for_line_v0(
             if rect[2] <= rect[0] || rect[3] <= rect[1] {
                 return None;
             }
-            annotations.push(PdfLinkAnnotationV0 { uri, rect });
-            *active_link_uri = None;
+            annotations.push(PdfLinkAnnotationV0 { target, rect });
+            *active_link_target = None;
         }
         cursor_x = end_x;
     }
 
     if let Some(run_x) = run_start_x.take() {
-        let uri = active_link_uri.clone()?;
+        let target = active_link_target.clone()?;
         if run_end_x <= run_x {
+            if link_active_at_line_end {
+                return Some(annotations);
+            }
             return None;
         }
         let rect = [
@@ -1255,12 +1307,12 @@ fn collect_link_annotations_for_line_v0(
         if rect[2] <= rect[0] || rect[3] <= rect[1] {
             return None;
         }
-        annotations.push(PdfLinkAnnotationV0 { uri, rect });
+        annotations.push(PdfLinkAnnotationV0 { target, rect });
         if !link_active_at_line_end {
-            *active_link_uri = None;
+            *active_link_target = None;
         }
     } else if !link_active_at_line_end {
-        *active_link_uri = None;
+        *active_link_target = None;
     }
 
     Some(annotations)
@@ -1313,6 +1365,7 @@ fn split_body_and_metadata_lines_v0(pages: &[PagePlanV0]) -> (Vec<Vec<LinePlanV0
                 || has_toc_entry_line_prefix_v0(&line.glyphs)
                 || has_label_line_prefix_v0(&line.glyphs)
                 || has_ref_line_prefix_v0(&line.glyphs)
+                || has_ref_anchor_link_line_prefix_v0(&line.glyphs)
                 || has_bibitem_line_prefix_v0(&line.glyphs)
                 || has_cite_line_prefix_v0(&line.glyphs)
             {
@@ -1339,11 +1392,11 @@ fn parse_metadata_lines_v0(
     metadata_lines: &[LinePlanV0],
 ) -> Option<(
     BTreeMap<u32, Vec<Vec<GlyphPlanV0>>>,
-    BTreeMap<u32, Vec<u8>>,
+    BTreeMap<u32, PdfLinkTargetV0>,
     Vec<TocEntryMetadataV0>,
 )> {
     let mut footnote_defs_by_id = BTreeMap::<u32, Vec<Vec<GlyphPlanV0>>>::new();
-    let mut href_url_by_id = BTreeMap::<u32, Vec<u8>>::new();
+    let mut link_targets_by_id = BTreeMap::<u32, PdfLinkTargetV0>::new();
     let mut toc_entries = Vec::<TocEntryMetadataV0>::new();
     let mut current_footnote_id = None::<u32>;
     for line in metadata_lines {
@@ -1356,7 +1409,20 @@ fn parse_metadata_lines_v0(
             continue;
         }
         if let Some((href_id, href_url)) = parse_href_url_line_v0(&line.glyphs) {
-            if href_url_by_id.insert(href_id, href_url).is_some() {
+            if link_targets_by_id
+                .insert(href_id, PdfLinkTargetV0::Uri(href_url))
+                .is_some()
+            {
+                return None;
+            }
+            current_footnote_id = None;
+            continue;
+        }
+        if let Some(ref_link) = parse_ref_anchor_link_line_v0(&line.glyphs) {
+            if link_targets_by_id
+                .insert(ref_link.link_id, PdfLinkTargetV0::Anchor(ref_link.anchor_id))
+                .is_some()
+            {
                 return None;
             }
             current_footnote_id = None;
@@ -1399,15 +1465,18 @@ fn parse_metadata_lines_v0(
         footnote_defs_by_id.get_mut(&footnote_id)?.push(line.glyphs.clone());
     }
     toc_entries.sort_by_key(|entry| entry.anchor_id);
-    Some((footnote_defs_by_id, href_url_by_id, toc_entries))
+    Some((footnote_defs_by_id, link_targets_by_id, toc_entries))
 }
 
 fn build_page_content_stream_v0(
     lines: &[LinePlanV0],
     footnote_defs_by_id: &BTreeMap<u32, Vec<Vec<GlyphPlanV0>>>,
-    href_url_by_id: &BTreeMap<u32, Vec<u8>>,
+    link_targets_by_id: &BTreeMap<u32, PdfLinkTargetV0>,
     toc_entries: &[TocEntryMetadataV0],
     next_link_id: &mut u32,
+    page_index: usize,
+    next_anchor_id: &mut u32,
+    anchor_destinations: &mut BTreeMap<u32, AnchorDestinationV0>,
     allow_title_block: bool,
 ) -> Option<PageRenderV0> {
     let mut out = Vec::new();
@@ -1444,7 +1513,7 @@ fn build_page_content_stream_v0(
     let mut style_stack = Vec::<PdfTextStyleV0>::new();
     let mut current_style = PdfTextStyleV0::Regular;
     let mut link_active = false;
-    let mut active_link_uri = None::<Vec<u8>>;
+    let mut active_link_target = None::<PdfLinkTargetV0>;
     let mut line_index = 0usize;
     while line_index < lines.len() {
         let line = &lines[line_index];
@@ -1468,6 +1537,20 @@ fn build_page_content_stream_v0(
             continue;
         }
         if line_index >= title_block_len && has_figure_box_prefix_v0(&line.glyphs) {
+            let figure_anchor_id = *next_anchor_id;
+            *next_anchor_id = next_anchor_id.checked_add(1)?;
+            if anchor_destinations
+                .insert(
+                    figure_anchor_id,
+                    AnchorDestinationV0 {
+                        page_index,
+                        y_pt: y,
+                    },
+                )
+                .is_some()
+            {
+                return None;
+            }
             let mut cursor = line_index + 1;
             let mut image_path: Option<Vec<u8>> = None;
             if let Some(image_line) = lines.get(cursor) {
@@ -1639,6 +1722,22 @@ fn build_page_content_stream_v0(
             } else {
                 MARGIN_PT_V0
             };
+            if heading_kind.is_some() {
+                let heading_anchor_id = *next_anchor_id;
+                *next_anchor_id = next_anchor_id.checked_add(1)?;
+                if anchor_destinations
+                    .insert(
+                        heading_anchor_id,
+                        AnchorDestinationV0 {
+                            page_index,
+                            y_pt: y,
+                        },
+                    )
+                    .is_some()
+                {
+                    return None;
+                }
+            }
             if let Some(prefix) = list_prefix {
                 let display_prefix_glyphs = &render_glyphs_base
                     [prefix.display_start..prefix.display_start + prefix.display_len];
@@ -1659,9 +1758,9 @@ fn build_page_content_stream_v0(
                 line_x,
                 y,
                 font_size_pt,
-                href_url_by_id,
+                link_targets_by_id,
                 next_link_id,
-                &mut active_link_uri,
+                &mut active_link_target,
                 link_active,
             )?;
             annotations.append(&mut line_annotations);
@@ -1695,7 +1794,7 @@ fn build_page_content_stream_v0(
     if !style_stack.is_empty() || link_active {
         return None;
     }
-    if active_link_uri.is_some() {
+    if active_link_target.is_some() {
         return None;
     }
 
@@ -1744,25 +1843,39 @@ fn build_page_content_stream_v0(
 
 fn build_pdf_for_pages_v0(pages: &[PagePlanV0]) -> Vec<u8> {
     let (body_pages, metadata_lines) = split_body_and_metadata_lines_v0(pages);
-    let Some((footnote_defs_by_id, href_url_by_id, toc_entries)) = parse_metadata_lines_v0(&metadata_lines) else {
+    let Some((footnote_defs_by_id, link_targets_by_id, toc_entries)) =
+        parse_metadata_lines_v0(&metadata_lines)
+    else {
         return Vec::new();
     };
 
     let mut next_link_id = 1u32;
+    let mut next_anchor_id = 1u32;
+    let mut anchor_destinations = BTreeMap::<u32, AnchorDestinationV0>::new();
     let mut page_renders = Vec::<PageRenderV0>::with_capacity(body_pages.len());
     for (page_index, body_lines) in body_pages.iter().enumerate() {
         let Some(rendered) = build_page_content_stream_v0(
             body_lines,
             &footnote_defs_by_id,
-            &href_url_by_id,
+            &link_targets_by_id,
             &toc_entries,
             &mut next_link_id,
+            page_index,
+            &mut next_anchor_id,
+            &mut anchor_destinations,
             page_index == 0,
         ) else { return Vec::new(); };
         page_renders.push(rendered);
     }
-    if usize::try_from(next_link_id.saturating_sub(1)).ok() != Some(href_url_by_id.len()) {
+    if usize::try_from(next_link_id.saturating_sub(1)).ok() != Some(link_targets_by_id.len()) {
         return Vec::new();
+    }
+    for target in link_targets_by_id.values() {
+        if let PdfLinkTargetV0::Anchor(anchor_id) = target {
+            if !anchor_destinations.contains_key(anchor_id) {
+                return Vec::new();
+            }
+        }
     }
 
     // Object numbering:
@@ -1778,11 +1891,16 @@ fn build_pdf_for_pages_v0(pages: &[PagePlanV0]) -> Vec<u8> {
         .iter()
         .map(|page| u32::try_from(page.annotations.len()).unwrap_or(0))
         .sum::<u32>();
+    let total_uri_annotations = page_renders
+        .iter()
+        .flat_map(|page| page.annotations.iter())
+        .filter(|annotation| matches!(annotation.target, PdfLinkTargetV0::Uri(_)))
+        .count() as u32;
     let first_page_id = 3u32;
     let first_stream_id = first_page_id + page_count;
     let first_annotation_id = first_stream_id + page_count;
     let first_action_id = first_annotation_id + total_annotations;
-    let font_regular_id = first_action_id + total_annotations;
+    let font_regular_id = first_action_id + total_uri_annotations;
     let font_italic_id = font_regular_id + 1;
     let font_bold_id = font_regular_id + 2;
     let pages_id = 2u32;
@@ -1856,25 +1974,53 @@ fn build_pdf_for_pages_v0(pages: &[PagePlanV0]) -> Vec<u8> {
     }
 
     let mut annotation_counter = 0u32;
+    let mut action_counter = 0u32;
     for page in &page_renders {
         for annotation in &page.annotations {
             let annotation_id = first_annotation_id + annotation_counter;
-            let action_id = first_action_id + annotation_counter;
-            let annot_body = format!(
-                "<< /Type /Annot /Subtype /Link /Rect [{:.2} {:.2} {:.2} {:.2}] /Border [0 0 0] /A {action_id} 0 R >>",
-                annotation.rect[0],
-                annotation.rect[1],
-                annotation.rect[2],
-                annotation.rect[3],
-            );
-            offsets.push(write_pdf_obj(&mut out, annotation_id, annot_body.as_bytes()));
-            let mut action_body = Vec::<u8>::new();
-            action_body.extend_from_slice(b"<< /S /URI /URI (");
-            action_body.extend_from_slice(&escape_pdf_string_bytes(&annotation.uri));
-            action_body.extend_from_slice(b") >>");
-            offsets.push(write_pdf_obj(&mut out, action_id, &action_body));
+            match &annotation.target {
+                PdfLinkTargetV0::Uri(uri) => {
+                    let action_id = first_action_id + action_counter;
+                    action_counter += 1;
+                    let annot_body = format!(
+                        "<< /Type /Annot /Subtype /Link /Rect [{:.2} {:.2} {:.2} {:.2}] /Border [0 0 0] /A {action_id} 0 R >>",
+                        annotation.rect[0],
+                        annotation.rect[1],
+                        annotation.rect[2],
+                        annotation.rect[3],
+                    );
+                    offsets.push(write_pdf_obj(&mut out, annotation_id, annot_body.as_bytes()));
+                    let mut action_body = Vec::<u8>::new();
+                    action_body.extend_from_slice(b"<< /S /URI /URI (");
+                    action_body.extend_from_slice(&escape_pdf_string_bytes(uri));
+                    action_body.extend_from_slice(b") >>");
+                    offsets.push(write_pdf_obj(&mut out, action_id, &action_body));
+                }
+                PdfLinkTargetV0::Anchor(anchor_id) => {
+                    let Some(destination) = anchor_destinations.get(anchor_id).copied() else {
+                        return Vec::new();
+                    };
+                    let destination_page_id = first_page_id + u32::try_from(destination.page_index).unwrap_or(0);
+                    if destination_page_id >= first_stream_id {
+                        return Vec::new();
+                    }
+                    let annot_body = format!(
+                        "<< /Type /Annot /Subtype /Link /Rect [{:.2} {:.2} {:.2} {:.2}] /Border [0 0 0] /Dest [{destination_page_id} 0 R /XYZ {:.2} {:.2} null] >>",
+                        annotation.rect[0],
+                        annotation.rect[1],
+                        annotation.rect[2],
+                        annotation.rect[3],
+                        MARGIN_PT_V0,
+                        destination.y_pt,
+                    );
+                    offsets.push(write_pdf_obj(&mut out, annotation_id, annot_body.as_bytes()));
+                }
+            }
             annotation_counter += 1;
         }
+    }
+    if action_counter != total_uri_annotations {
+        return Vec::new();
     }
 
     // Fonts
