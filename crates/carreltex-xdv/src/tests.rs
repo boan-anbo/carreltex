@@ -500,6 +500,112 @@ fn parse_first_link_rect_v0(pdf: &[u8]) -> Option<[f32; 4]> {
     None
 }
 
+fn count_pdf_page_objects_v0(pdf: &[u8]) -> usize {
+    String::from_utf8_lossy(pdf)
+        .matches("/Type /Page /Parent")
+        .count()
+}
+
+fn parse_pdf_object_body_v0(pdf: &[u8], id: u32) -> Option<String> {
+    let text = String::from_utf8_lossy(pdf);
+    let start_token = format!("{id} 0 obj\n");
+    let start = text.find(&start_token)? + start_token.len();
+    let end = text[start..].find("\nendobj\n")? + start;
+    Some(text[start..end].to_string())
+}
+
+fn parse_pdf_ref_ids_v0(body: &str, key: &str) -> Vec<u32> {
+    let marker = format!("{key} [");
+    let Some(start) = body.find(&marker) else {
+        return Vec::new();
+    };
+    let values_start = start + marker.len();
+    let Some(values_end_rel) = body[values_start..].find(']') else {
+        return Vec::new();
+    };
+    body[values_start..values_start + values_end_rel]
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .chunks(3)
+        .filter_map(|chunk| match chunk {
+            [id, "0", "R"] => id.parse::<u32>().ok(),
+            _ => None,
+        })
+        .collect()
+}
+
+fn parse_pdf_annotation_action_id_v0(body: &str) -> Option<u32> {
+    let marker = "/A ";
+    let start = body.find(marker)? + marker.len();
+    let fields = body[start..].split_whitespace().collect::<Vec<_>>();
+    if fields.len() < 3 || fields[1] != "0" || fields[2] != "R" {
+        return None;
+    }
+    fields[0].parse::<u32>().ok()
+}
+
+fn parse_pdf_action_uri_v0(body: &str) -> Option<String> {
+    let marker = "/URI (";
+    let start = body.find(marker)? + marker.len();
+    let end = body[start..].find(')')? + start;
+    Some(body[start..end].to_string())
+}
+
+fn parse_pdf_annotation_rect_v0(body: &str) -> Option<[f32; 4]> {
+    let marker = "/Rect [";
+    let start = body.find(marker)? + marker.len();
+    let end = body[start..].find(']')? + start;
+    let values = body[start..end]
+        .split_whitespace()
+        .filter_map(|value| value.parse::<f32>().ok())
+        .collect::<Vec<_>>();
+    if values.len() != 4 {
+        return None;
+    }
+    Some([values[0], values[1], values[2], values[3]])
+}
+
+fn tm_position_for_line_containing_text_in_body_v0(body: &str, needle: &str) -> Option<(f32, f32)> {
+    for line in body.lines() {
+        if !line.contains(needle) || !line.contains(" Tm ") {
+            continue;
+        }
+        let fields = line.split_whitespace().collect::<Vec<_>>();
+        let mut index = 0usize;
+        while index + 6 < fields.len() {
+            let is_tm = fields[index] == "1"
+                && fields[index + 1] == "0"
+                && fields[index + 2] == "0"
+                && fields[index + 3] == "1"
+                && fields[index + 6] == "Tm";
+            if !is_tm {
+                index += 1;
+                continue;
+            }
+            let x_pt = fields[index + 4].parse::<f32>().ok()?;
+            let y_pt = fields[index + 5].parse::<f32>().ok()?;
+            let mut cursor = index + 7;
+            while cursor < fields.len() {
+                if cursor + 6 < fields.len()
+                    && fields[cursor] == "1"
+                    && fields[cursor + 1] == "0"
+                    && fields[cursor + 2] == "0"
+                    && fields[cursor + 3] == "1"
+                    && fields[cursor + 6] == "Tm"
+                {
+                    break;
+                }
+                if fields[cursor].contains(needle) {
+                    return Some((x_pt, y_pt));
+                }
+                cursor += 1;
+            }
+            index += 7;
+        }
+    }
+    None
+}
+
 fn expected_center_x_pt_v0(width_sp: u32) -> f32 {
     let width_pt = (width_sp as f32) / 65_536.0;
     ((612.0 - width_pt) * 0.5).clamp(72.0, 612.0 - 72.0)
@@ -1748,7 +1854,13 @@ fn pdf_renderer_link_style_segments_are_emitted_v0() {
 #[test]
 fn pdf_renderer_rejects_footnote_block_overflow_v0() {
     let mut text = Vec::<u8>::new();
-    text.extend_from_slice(b"Body line with marker^1.\n\n");
+    text.extend_from_slice(b"Body line with markers ");
+    for index in 0..80u8 {
+        text.extend_from_slice(b"^");
+        text.extend_from_slice((index + 1).to_string().as_bytes());
+        text.push(b' ');
+    }
+    text.extend_from_slice(b"\n\n");
     for index in 0..80u8 {
         text.extend_from_slice(b"!f ");
         text.extend_from_slice((index + 1).to_string().as_bytes());
@@ -1817,6 +1929,86 @@ fn pdf_renderer_footnote_marker_uses_smaller_raised_typography_v0() {
     assert!(
         pdf_text.contains("4 Ts /F1 8 Tf (^1) Tj"),
         "footnote marker should use positive text rise for superscript effect: {pdf_text}"
+    );
+}
+
+#[test]
+fn pdf_renderer_rejects_unknown_footnote_marker_id_v0() {
+    let xdv = write_dvi_v2_text_page_v0(b"Body marker^2 line.\n\n!f 1 1 Known footnote.")
+        .expect("writer should accept marker lines");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv);
+    assert!(
+        pdf.is_none(),
+        "renderer should fail-closed on unknown footnote marker id"
+    );
+}
+
+#[test]
+fn pdf_renderer_multipage_footnotes_and_annots_associate_per_page_v0() {
+    let xdv = write_dvi_v2_text_page_v0(
+        b"Page1 line with <{First link}> and marker^1.\x0cPage2 line with <{Second link}> and marker^2.\n\n!f 1 First page footnote text.\n!f 2 Second page footnote text.\n!u 1 https://example.com/page1\n!u 2 https://example.com/page2",
+    )
+    .expect("writer should accept multipage marker data");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+    assert_eq!(count_pdf_page_objects_v0(&pdf), 2, "expected two page objects");
+
+    let page_one = parse_pdf_object_body_v0(&pdf, 3).expect("page 1 object");
+    let page_two = parse_pdf_object_body_v0(&pdf, 4).expect("page 2 object");
+    let page_one_annots = parse_pdf_ref_ids_v0(&page_one, "/Annots");
+    let page_two_annots = parse_pdf_ref_ids_v0(&page_two, "/Annots");
+    assert_eq!(page_one_annots.len(), 1, "page 1 should have one annotation");
+    assert_eq!(page_two_annots.len(), 1, "page 2 should have one annotation");
+    assert_ne!(
+        page_one_annots[0], page_two_annots[0],
+        "each page should reference its own annotation object"
+    );
+
+    let annotation_one = parse_pdf_object_body_v0(&pdf, page_one_annots[0]).expect("annotation one");
+    let annotation_two = parse_pdf_object_body_v0(&pdf, page_two_annots[0]).expect("annotation two");
+    let action_one = parse_pdf_annotation_action_id_v0(&annotation_one).expect("annotation one action");
+    let action_two = parse_pdf_annotation_action_id_v0(&annotation_two).expect("annotation two action");
+    let action_one_body = parse_pdf_object_body_v0(&pdf, action_one).expect("action one body");
+    let action_two_body = parse_pdf_object_body_v0(&pdf, action_two).expect("action two body");
+    assert_eq!(
+        parse_pdf_action_uri_v0(&action_one_body).as_deref(),
+        Some("https://example.com/page1"),
+        "page 1 annotation should target page 1 href"
+    );
+    assert_eq!(
+        parse_pdf_action_uri_v0(&action_two_body).as_deref(),
+        Some("https://example.com/page2"),
+        "page 2 annotation should target page 2 href"
+    );
+
+    for rect in [
+        parse_pdf_annotation_rect_v0(&annotation_one).expect("annotation one rect"),
+        parse_pdf_annotation_rect_v0(&annotation_two).expect("annotation two rect"),
+    ] {
+        assert!(rect[2] > rect[0], "annotation width must be positive: {rect:?}");
+        assert!(rect[3] > rect[1], "annotation height must be positive: {rect:?}");
+        assert!(
+            rect[0] >= 0.0 && rect[1] >= 0.0 && rect[2] <= 612.0 && rect[3] <= 792.0,
+            "annotation rect must stay within page bounds: {rect:?}"
+        );
+    }
+
+    let stream_one = parse_pdf_object_body_v0(&pdf, 5).expect("stream one body");
+    let stream_two = parse_pdf_object_body_v0(&pdf, 6).expect("stream two body");
+    let page_one_footnote_y =
+        tm_position_for_line_containing_text_in_body_v0(&stream_one, "(1")
+            .expect("page one footnote line")
+            .1;
+    let page_two_footnote_y =
+        tm_position_for_line_containing_text_in_body_v0(&stream_two, "(2")
+            .expect("page two footnote line")
+            .1;
+    assert!(
+        (72.0..=140.0).contains(&page_one_footnote_y),
+        "page 1 footnote should render near bottom: y={page_one_footnote_y}"
+    );
+    assert!(
+        (72.0..=140.0).contains(&page_two_footnote_y),
+        "page 2 footnote should render near bottom: y={page_two_footnote_y}"
     );
 }
 
