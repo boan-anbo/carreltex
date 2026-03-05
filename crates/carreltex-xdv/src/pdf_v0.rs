@@ -8,12 +8,16 @@ const PAGE_HEIGHT_PT_V0: f32 = 792.0;
 const MARGIN_PT_V0: f32 = 72.0;
 const FONT_SIZE_PT_V0: f32 = 12.0;
 const TITLE_FONT_SIZE_PT_V0: f32 = 18.0;
+const SECTION_HEADING_FONT_SIZE_PT_V0: f32 = 16.0;
+const SUBSECTION_HEADING_FONT_SIZE_PT_V0: f32 = 14.0;
 const INDENT_PT_V0: f32 = FONT_SIZE_PT_V0 * 2.0;
 const LIST_BODY_INDENT_PT_V0: f32 = INDENT_PT_V0;
 const ENUM_NUMBER_COLUMN_RIGHT_PT_V0: f32 = MARGIN_PT_V0 + (FONT_SIZE_PT_V0 * 1.5);
 const LEADING_PT_V0: f32 = 14.0;
 const TITLE_EXTRA_GAP_PT_V0: f32 = LEADING_PT_V0;
 const NOINDENT_PREFIX_MARKER_V0: u8 = b'~';
+const SECTION_HEADING_PREFIX_MARKER_V0: &[u8] = b"@S ";
+const SUBSECTION_HEADING_PREFIX_MARKER_V0: &[u8] = b"@s ";
 const ITALIC_START_MARKER_V0: u8 = b'[';
 const ITALIC_END_MARKER_V0: u8 = b']';
 const BOLD_START_MARKER_V0: u8 = b'{';
@@ -24,6 +28,12 @@ enum PdfTextStyleV0 {
     Regular,
     Italic,
     Bold,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum HeadingKindV0 {
+    Section,
+    Subsection,
 }
 
 fn style_font_alias_v0(style: PdfTextStyleV0) -> &'static [u8] {
@@ -241,6 +251,33 @@ fn has_noindent_prefix_v0(glyphs: &[GlyphPlanV0]) -> bool {
     glyphs.len() >= 2 && glyphs[0].byte == NOINDENT_PREFIX_MARKER_V0 && glyphs[1].byte == b' '
 }
 
+fn heading_prefix_len_v0(kind: HeadingKindV0) -> usize {
+    match kind {
+        HeadingKindV0::Section => SECTION_HEADING_PREFIX_MARKER_V0.len(),
+        HeadingKindV0::Subsection => SUBSECTION_HEADING_PREFIX_MARKER_V0.len(),
+    }
+}
+
+fn detect_heading_prefix_v0(glyphs: &[GlyphPlanV0]) -> Option<HeadingKindV0> {
+    if glyphs.len() >= SECTION_HEADING_PREFIX_MARKER_V0.len()
+        && glyphs[..SECTION_HEADING_PREFIX_MARKER_V0.len()]
+            .iter()
+            .map(|glyph| glyph.byte)
+            .eq(SECTION_HEADING_PREFIX_MARKER_V0.iter().copied())
+    {
+        return Some(HeadingKindV0::Section);
+    }
+    if glyphs.len() >= SUBSECTION_HEADING_PREFIX_MARKER_V0.len()
+        && glyphs[..SUBSECTION_HEADING_PREFIX_MARKER_V0.len()]
+            .iter()
+            .map(|glyph| glyph.byte)
+            .eq(SUBSECTION_HEADING_PREFIX_MARKER_V0.iter().copied())
+    {
+        return Some(HeadingKindV0::Subsection);
+    }
+    None
+}
+
 fn glyphs_advance_pt_v0(glyphs: &[GlyphPlanV0]) -> f32 {
     glyphs
         .iter()
@@ -323,6 +360,16 @@ fn build_page_content_stream_v0(lines: &[LinePlanV0]) -> Option<Vec<u8>> {
             && !center_prefixed
             && !right_prefixed
             && has_noindent_prefix_v0(&line.glyphs);
+        let heading_kind = if line_index >= title_block_len
+            && quote_prefix_advance_pt.is_none()
+            && !center_prefixed
+            && !right_prefixed
+            && !noindent_prefixed
+        {
+            detect_heading_prefix_v0(&line.glyphs)
+        } else {
+            None
+        };
         let render_glyphs_base: &[GlyphPlanV0] = if quote_prefix_advance_pt.is_some() {
             &line.glyphs[2..]
         } else if center_prefixed {
@@ -331,6 +378,8 @@ fn build_page_content_stream_v0(lines: &[LinePlanV0]) -> Option<Vec<u8>> {
             &line.glyphs[2..]
         } else if noindent_prefixed {
             &line.glyphs[2..]
+        } else if let Some(kind) = heading_kind {
+            &line.glyphs[heading_prefix_len_v0(kind)..]
         } else {
             &line.glyphs
         };
@@ -339,6 +388,7 @@ fn build_page_content_stream_v0(lines: &[LinePlanV0]) -> Option<Vec<u8>> {
             && !center_prefixed
             && !right_prefixed
             && !noindent_prefixed
+            && heading_kind.is_none()
         {
             detect_list_prefix_v0(render_glyphs_base)
         } else {
@@ -357,6 +407,10 @@ fn build_page_content_stream_v0(lines: &[LinePlanV0]) -> Option<Vec<u8>> {
         let in_title_block = title_block_len > 0 && line_index < title_block_len;
         let font_size_pt = if in_title_block && line_index == 0 {
             TITLE_FONT_SIZE_PT_V0
+        } else if matches!(heading_kind, Some(HeadingKindV0::Section)) {
+            SECTION_HEADING_FONT_SIZE_PT_V0
+        } else if matches!(heading_kind, Some(HeadingKindV0::Subsection)) {
+            SUBSECTION_HEADING_FONT_SIZE_PT_V0
         } else {
             FONT_SIZE_PT_V0
         };
@@ -378,7 +432,7 @@ fn build_page_content_stream_v0(lines: &[LinePlanV0]) -> Option<Vec<u8>> {
             let line_width_pt: f32 = segments.iter().map(|segment| segment.advance_pt).sum();
             let line_x = if in_title_block {
                 centered_line_x_v0(line_width_pt)
-            } else if heading_centered {
+            } else if heading_kind.is_some() || heading_centered {
                 active_quote_indent_pt = 0.0;
                 active_hang_indent_pt = 0.0;
                 centered_line_x_v0(line_width_pt)
