@@ -11,6 +11,7 @@ const TITLE_FONT_SIZE_PT_V0: f32 = 18.0;
 const INDENT_PT_V0: f32 = FONT_SIZE_PT_V0 * 2.0;
 const LEADING_PT_V0: f32 = 14.0;
 const TITLE_EXTRA_GAP_PT_V0: f32 = LEADING_PT_V0;
+const NOINDENT_PREFIX_MARKER_V0: u8 = b'~';
 const ITALIC_START_MARKER_V0: u8 = b'[';
 const ITALIC_END_MARKER_V0: u8 = b']';
 const BOLD_START_MARKER_V0: u8 = b'{';
@@ -205,6 +206,10 @@ fn has_right_prefix_v0(glyphs: &[GlyphPlanV0]) -> bool {
     glyphs.len() >= 2 && glyphs[0].byte == b'|' && glyphs[1].byte == b' '
 }
 
+fn has_noindent_prefix_v0(glyphs: &[GlyphPlanV0]) -> bool {
+    glyphs.len() >= 2 && glyphs[0].byte == NOINDENT_PREFIX_MARKER_V0 && glyphs[1].byte == b' '
+}
+
 fn build_page_content_stream_v0(lines: &[LinePlanV0]) -> Option<Vec<u8>> {
     let mut out = Vec::new();
     out.extend_from_slice(b"BT\n");
@@ -232,11 +237,18 @@ fn build_page_content_stream_v0(lines: &[LinePlanV0]) -> Option<Vec<u8>> {
             && quote_prefix_advance_pt.is_none()
             && !center_prefixed
             && has_right_prefix_v0(&line.glyphs);
+        let noindent_prefixed = line_index >= title_block_len
+            && quote_prefix_advance_pt.is_none()
+            && !center_prefixed
+            && !right_prefixed
+            && has_noindent_prefix_v0(&line.glyphs);
         let render_glyphs: &[GlyphPlanV0] = if quote_prefix_advance_pt.is_some() {
             &line.glyphs[2..]
         } else if center_prefixed {
             &line.glyphs[2..]
         } else if right_prefixed {
+            &line.glyphs[2..]
+        } else if noindent_prefixed {
             &line.glyphs[2..]
         } else {
             &line.glyphs
@@ -273,6 +285,10 @@ fn build_page_content_stream_v0(lines: &[LinePlanV0]) -> Option<Vec<u8>> {
                 MARGIN_PT_V0 + active_quote_indent_pt
             } else if let Some(prefix_advance_pt) = list_prefix_advance_pt {
                 active_hang_indent_pt = prefix_advance_pt;
+                active_quote_indent_pt = 0.0;
+                MARGIN_PT_V0
+            } else if noindent_prefixed {
+                active_hang_indent_pt = 0.0;
                 active_quote_indent_pt = 0.0;
                 MARGIN_PT_V0
             } else if active_quote_indent_pt > 0.0 {

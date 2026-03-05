@@ -19,6 +19,7 @@ const CENTER_ENV_V0: &[u8] = b"center";
 const CENTERLINE_CONTROL_V0: &[u8] = b"centerline";
 const FLUSHRIGHT_ENV_V0: &[u8] = b"flushright";
 const RIGHTLINE_CONTROL_V0: &[u8] = b"rightline";
+const NOINDENT_PREFIX_MARKER_V0: &[u8] = b"~ ";
 const ITALIC_START_MARKER_V0: u8 = b'[';
 const ITALIC_END_MARKER_V0: u8 = b']';
 const BOLD_START_MARKER_V0: u8 = b'{';
@@ -1011,6 +1012,7 @@ pub(crate) fn extract_typeset_minimal_text_body_v0(tokens: &[TokenV0]) -> Option
     }
 
     let mut body = Vec::<u8>::new();
+    let mut pending_noindent_after_heading = false;
     loop {
         match tokens.get(index) {
             Some(TokenV0::Space) => {
@@ -1019,6 +1021,7 @@ pub(crate) fn extract_typeset_minimal_text_body_v0(tokens: &[TokenV0]) -> Option
             }
             Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"maketitle" => {
                 emit_maketitle_block_v0(&mut body, &meta);
+                pending_noindent_after_heading = false;
                 index += 1;
             }
             Some(TokenV0::ControlSeq(name)) if name.as_slice() == END_CONTROL_V0 => {
@@ -1026,6 +1029,7 @@ pub(crate) fn extract_typeset_minimal_text_body_v0(tokens: &[TokenV0]) -> Option
                 break;
             }
             Some(TokenV0::ControlSeq(name)) if name.as_slice() == BEGIN_CONTROL_V0 => {
+                pending_noindent_after_heading = false;
                 index = consume_body_environment_v0(tokens, index, &mut body)?;
             }
             Some(TokenV0::ControlSeq(name)) if name.as_slice() == CARRELPAR_MARKER_CONTROL_V0 => {
@@ -1033,15 +1037,28 @@ pub(crate) fn extract_typeset_minimal_text_body_v0(tokens: &[TokenV0]) -> Option
                 index += 1;
             }
             Some(TokenV0::ControlSeq(name)) if name.as_slice() == CENTERLINE_CONTROL_V0 => {
+                pending_noindent_after_heading = false;
                 index = consume_centerline_command_v0(tokens, index, &mut body)?;
             }
             Some(TokenV0::ControlSeq(name)) if name.as_slice() == RIGHTLINE_CONTROL_V0 => {
+                pending_noindent_after_heading = false;
                 index = consume_rightline_command_v0(tokens, index, &mut body)?;
             }
             Some(TokenV0::ControlSeq(name)) if is_heading_control_v0(name.as_slice()) => {
                 index = consume_heading_command_v0(tokens, index, &mut body)?;
+                pending_noindent_after_heading = true;
             }
             Some(_) => {
+                if pending_noindent_after_heading
+                    && (body.is_empty()
+                        || matches!(
+                            body.last().copied(),
+                            Some(NEWLINE_MARKER_V0 | PAGE_BREAK_MARKER_V0)
+                        ))
+                {
+                    body.extend_from_slice(NOINDENT_PREFIX_MARKER_V0);
+                    pending_noindent_after_heading = false;
+                }
                 index = consume_fragment_token_v0(tokens, index, &mut body, false, true)?;
             }
             None => return None,

@@ -96,7 +96,7 @@ fn typeset_minimal_headings_emit_bold_with_paragraph_breaks() {
     let body = extract_typeset_body(main);
     let text = String::from_utf8(body).expect("body should be valid utf8");
     assert!(
-        text.contains("Before.\n\n{Intro}\n\n{A [B]}\n\nAfter."),
+        text.contains("Before.\n\n{Intro}\n\n{A [B]}\n\n~ After."),
         "body={text:?}"
     );
 }
@@ -107,7 +107,18 @@ fn typeset_minimal_heading_at_start_has_no_leading_blank_lines() {
         b"\\documentclass{article}\\begin{document}\\paragraph{Lead in}Body text.\\end{document}";
     let body = extract_typeset_body(main);
     let text = String::from_utf8(body).expect("body should be valid utf8");
-    assert!(text.starts_with("{Lead in}\n\nBody text."), "body={text:?}");
+    assert!(text.starts_with("{Lead in}\n\n~ Body text."), "body={text:?}");
+}
+
+#[test]
+fn typeset_minimal_first_paragraph_after_heading_uses_noindent_marker() {
+    let main = b"\\documentclass{article}\n\\begin{document}\n\\section{Intro}First paragraph.\\par Second paragraph.\n\\end{document}\n";
+    let body = extract_typeset_body(main);
+    let text = String::from_utf8(body).expect("body should be valid utf8");
+    assert!(
+        text.contains("{Intro}\n\n~ First paragraph.\n\nSecond paragraph."),
+        "body={text:?}"
+    );
 }
 
 #[test]
