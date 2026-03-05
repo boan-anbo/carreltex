@@ -20,7 +20,9 @@ fn compile_typeset_with_files(
         .add_file(b"main.tex", main)
         .expect("main.tex should mount");
     for (path, bytes) in extra_files {
-        mount.add_file(path, bytes).expect("extra file should mount");
+        mount
+            .add_file(path, bytes)
+            .expect("extra file should mount");
     }
     compile_main_typeset_minimal_v0(&mut mount)
 }
@@ -116,7 +118,10 @@ fn typeset_minimal_toc_after_maketitle_emits_placeholder_and_entries() {
     let main = b"\\documentclass{article}\\title{T}\\author{A}\\date{D}\\begin{document}\\maketitle\\tableofcontents\\section{Intro}\\subsection{Detail}\\end{document}";
     let body = extract_typeset_body(main);
     let text = String::from_utf8(body).expect("body should be valid utf8");
-    assert!(text.contains("\n\n!toc\n\n@S {Intro}\n\n@s {Detail}"), "body={text:?}");
+    assert!(
+        text.contains("\n\n!toc\n\n@S {Intro}\n\n@s {Detail}"),
+        "body={text:?}"
+    );
     assert!(text.contains("!toc 1 1 Intro"), "body={text:?}");
     assert!(text.contains("!toc 2 2 Detail"), "body={text:?}");
 }
@@ -211,13 +216,26 @@ fn typeset_minimal_toc_metadata_coexists_with_footnotes_and_links() {
     let main = b"\\documentclass{article}\\title{T}\\author{A}\\date{D}\\begin{document}\\maketitle\\tableofcontents\\section{Intro}Body\\footnote{Note one} and \\href{https://example.com}{Link}.\\end{document}";
     let body = extract_typeset_body(main);
     let text = String::from_utf8(body).expect("body should be valid utf8");
-    assert!(text.contains("!toc 1 1 Intro"), "body={text:?}");
+    assert!(text.contains("!toc 1 1 <Intro>"), "body={text:?}");
     assert!(text.contains("!f 1 Note one"), "body={text:?}");
     assert!(text.contains("!u 1 https://example.com"), "body={text:?}");
-    let toc_pos = text.find("!toc 1 1 Intro").expect("toc marker");
+    let toc_pos = text.find("!toc 1 1 <Intro>").expect("toc marker");
     let footnote_pos = text.find("!f 1 Note one").expect("footnote marker");
     let href_pos = text.find("!u 1 https://example.com").expect("href marker");
-    assert!(footnote_pos < href_pos && href_pos < toc_pos, "body={text:?}");
+    assert!(
+        footnote_pos < href_pos && href_pos < toc_pos,
+        "body={text:?}"
+    );
+}
+
+#[test]
+fn typeset_minimal_toc_entries_are_link_wrapped_when_hyperref_is_enabled() {
+    let main = b"\\documentclass{article}\\title{T}\\author{A}\\date{D}\\begin{document}\\maketitle\\tableofcontents\\section{Intro}\\subsection{Detail}\\href{https://example.com}{Link}.\\end{document}";
+    let body = extract_typeset_body(main);
+    let text = String::from_utf8(body).expect("body should be valid utf8");
+    assert!(text.contains("!toc 1 1 <Intro>"), "body={text:?}");
+    assert!(text.contains("!toc 2 2 <Detail>"), "body={text:?}");
+    assert!(text.contains("!u 1 https://example.com"), "body={text:?}");
 }
 
 #[test]
@@ -252,8 +270,12 @@ fn typeset_minimal_toc_placeholder_precedes_rendered_headings() {
     let body = extract_typeset_body(main);
     let text = String::from_utf8(body).expect("body should be valid utf8");
     let toc_placeholder = text.find("!toc").expect("toc placeholder should exist");
-    let first_heading = text.find("@S {First}").expect("section heading should exist");
-    let second_heading = text.find("@s {Second}").expect("subsection heading should exist");
+    let first_heading = text
+        .find("@S {First}")
+        .expect("section heading should exist");
+    let second_heading = text
+        .find("@s {Second}")
+        .expect("subsection heading should exist");
     assert!(
         toc_placeholder < first_heading && first_heading < second_heading,
         "toc placeholder and headings should preserve deterministic order: body={text:?}"
@@ -290,7 +312,10 @@ fn typeset_minimal_labels_and_refs_emit_metadata_and_resolve_inline_values() {
     let text = String::from_utf8(body).expect("body should be valid utf8");
     assert!(text.contains("See 1 and ??."), "body={text:?}");
     assert!(text.contains("Figure 2."), "body={text:?}");
-    assert!(text.contains("!l sec:intro 1 heading 1 Intro"), "body={text:?}");
+    assert!(
+        text.contains("!l sec:intro 1 heading 1 Intro"),
+        "body={text:?}"
+    );
     assert!(text.contains("!l fig:cap 2 figure 0 -"), "body={text:?}");
     assert!(text.contains("!r sec:intro "), "body={text:?}");
     assert!(text.contains("!r sec:missing "), "body={text:?}");
@@ -333,7 +358,10 @@ fn typeset_minimal_bibliography_and_cites_emit_block_and_metadata() {
     let main = b"\\documentclass{article}\\begin{document}See \\cite{ref:b} and \\cite{ref:a} then again \\cite{ref:b}.\\begin{thebibliography}{9}\\bibitem{ref:a}Alpha source text.\\bibitem{ref:b}Beta source text.\\end{thebibliography}\\end{document}";
     let body = extract_typeset_body(main);
     let text = String::from_utf8(body).expect("body should be valid utf8");
-    assert!(text.contains("See [1] and [2] then again [1]."), "body={text:?}");
+    assert!(
+        text.contains("See [1] and [2] then again [1]."),
+        "body={text:?}"
+    );
     assert!(text.contains("@S {References}"), "body={text:?}");
     assert!(text.contains("[1] Beta source text."), "body={text:?}");
     assert!(text.contains("[2] Alpha source text."), "body={text:?}");
@@ -365,7 +393,12 @@ fn typeset_minimal_resolves_cites_via_bibliography_resource_file() {
     let lines = layout.pages[0]
         .lines
         .iter()
-        .map(|line| line.glyphs.iter().map(|glyph| glyph.byte).collect::<Vec<u8>>())
+        .map(|line| {
+            line.glyphs
+                .iter()
+                .map(|glyph| glyph.byte)
+                .collect::<Vec<u8>>()
+        })
         .collect::<Vec<Vec<u8>>>();
     let text = lines
         .iter()
@@ -395,7 +428,8 @@ fn typeset_minimal_rejects_thebibliography_without_bibitem() {
 
 #[test]
 fn typeset_minimal_rejects_label_with_unsafe_key_bytes() {
-    let main = b"\\documentclass{article}\\begin{document}\\section{A}\\label{../bad}\\end{document}";
+    let main =
+        b"\\documentclass{article}\\begin{document}\\section{A}\\label{../bad}\\end{document}";
     let result = compile_typeset(main);
     assert_eq!(result.status, CompileStatus::NotImplemented);
     assert!(result.main_xdv_bytes.is_empty());
@@ -407,7 +441,10 @@ fn typeset_minimal_heading_at_start_has_no_leading_blank_lines() {
         b"\\documentclass{article}\\begin{document}\\paragraph{Lead in}Body text.\\end{document}";
     let body = extract_typeset_body(main);
     let text = String::from_utf8(body).expect("body should be valid utf8");
-    assert!(text.starts_with("@s {Lead in}\n\n~ Body text."), "body={text:?}");
+    assert!(
+        text.starts_with("@s {Lead in}\n\n~ Body text."),
+        "body={text:?}"
+    );
 }
 
 #[test]
@@ -519,7 +556,9 @@ fn typeset_minimal_center_environment_prefixes_each_line() {
     let body = extract_typeset_body(main);
     let text = String::from_utf8(body).expect("body should be valid utf8");
     assert!(
-        text.contains("Before.\n\n^ Centered one\n^ Centered two\n\n^ Centered paragraph\n\nAfter."),
+        text.contains(
+            "Before.\n\n^ Centered one\n^ Centered two\n\n^ Centered paragraph\n\nAfter."
+        ),
         "body={text:?}"
     );
 }
@@ -529,13 +568,15 @@ fn typeset_minimal_centerline_emits_single_centered_line() {
     let main = b"\\documentclass{article}\\begin{document}Before.\\centerline{A \\emph{B}}After.\\end{document}";
     let body = extract_typeset_body(main);
     let text = String::from_utf8(body).expect("body should be valid utf8");
-    assert!(text.contains("Before.\n\n^ A [B]\n\nAfter."), "body={text:?}");
+    assert!(
+        text.contains("Before.\n\n^ A [B]\n\nAfter."),
+        "body={text:?}"
+    );
 }
 
 #[test]
 fn typeset_minimal_centerline_rejects_multiline_content() {
-    let main =
-        b"\\documentclass{article}\\begin{document}\\centerline{A\\\\B}\\end{document}";
+    let main = b"\\documentclass{article}\\begin{document}\\centerline{A\\\\B}\\end{document}";
     let result = compile_typeset(main);
     assert_eq!(result.status, CompileStatus::NotImplemented);
     assert!(result.main_xdv_bytes.is_empty());
@@ -557,7 +598,10 @@ fn typeset_minimal_rightline_emits_single_right_aligned_line() {
     let main = b"\\documentclass{article}\\begin{document}Before.\\rightline{A \\textbf{B}}After.\\end{document}";
     let body = extract_typeset_body(main);
     let text = String::from_utf8(body).expect("body should be valid utf8");
-    assert!(text.contains("Before.\n\n| A {B}\n\nAfter."), "body={text:?}");
+    assert!(
+        text.contains("Before.\n\n| A {B}\n\nAfter."),
+        "body={text:?}"
+    );
 }
 
 #[test]
@@ -622,10 +666,7 @@ fn typeset_minimal_figure_stub_accepts_includegraphics_without_extension_by_norm
     let main = b"\\documentclass{article}\\begin{document}\\begin{figure}\\includegraphics{figs/demo}\\caption{No ext}\\end{figure}\\end{document}";
     let body = extract_typeset_body(main);
     let text = String::from_utf8(body).expect("body should be valid utf8");
-    assert!(
-        text.contains("!gimg 1 figs/demo.png"),
-        "body={text:?}"
-    );
+    assert!(text.contains("!gimg 1 figs/demo.png"), "body={text:?}");
 }
 
 #[test]
@@ -646,7 +687,8 @@ fn typeset_minimal_rejects_figure_includegraphics_unsafe_path() {
 
 #[test]
 fn typeset_minimal_rejects_figure_without_caption() {
-    let main = b"\\documentclass{article}\\begin{document}\\begin{figure}\\end{figure}\\end{document}";
+    let main =
+        b"\\documentclass{article}\\begin{document}\\begin{figure}\\end{figure}\\end{document}";
     let result = compile_typeset(main);
     assert_eq!(result.status, CompileStatus::NotImplemented);
     assert!(result.main_xdv_bytes.is_empty());
@@ -686,7 +728,8 @@ fn typeset_minimal_rejects_href_with_unsupported_url_tokens() {
 
 #[test]
 fn typeset_minimal_rejects_malformed_href_missing_text_group() {
-    let main = b"\\documentclass{article}\\begin{document}\\href{https://example.com}\\end{document}";
+    let main =
+        b"\\documentclass{article}\\begin{document}\\href{https://example.com}\\end{document}";
     let result = compile_typeset(main);
     assert_eq!(result.status, CompileStatus::NotImplemented);
     assert!(result.main_xdv_bytes.is_empty());
@@ -719,7 +762,12 @@ fn typeset_minimal_long_paragraph_wraps_to_multiple_lines() {
     let layout =
         parse_dvi_v2_text_page_to_layout_v0(&result.main_xdv_bytes, 917_504).expect("layout parse");
     assert!(
-        layout.pages.first().map(|page| page.lines.len()).unwrap_or(0) >= 2,
+        layout
+            .pages
+            .first()
+            .map(|page| page.lines.len())
+            .unwrap_or(0)
+            >= 2,
         "expected wrapped output with multiple lines"
     );
 }
@@ -733,8 +781,7 @@ fn typeset_minimal_single_newline_collapses_to_space() {
 
 #[test]
 fn typeset_minimal_punctuation_does_not_cross_paragraph_break() {
-    let main =
-        b"\\documentclass{article}\n\\begin{document}\nHello,\n\nworld.\n\\end{document}\n";
+    let main = b"\\documentclass{article}\n\\begin{document}\nHello,\n\nworld.\n\\end{document}\n";
     let body = extract_typeset_body(main);
     let text = String::from_utf8(body).expect("body should be valid utf8");
     assert!(text.contains("Hello,\n\nworld."), "body={text:?}");
@@ -755,7 +802,10 @@ fn typeset_minimal_punctuation_removes_spaces_before_markers_and_punctuation() {
     let main = b"\\documentclass{article}\\begin{document}lead\\emph{core} , trail and lead\\textbf{core} ! done.\\end{document}";
     let body = extract_typeset_body(main);
     let text = String::from_utf8(body).expect("body should be valid utf8");
-    assert!(text.contains("lead[core], trail and lead{core}! done."), "body={text:?}");
+    assert!(
+        text.contains("lead[core], trail and lead{core}! done."),
+        "body={text:?}"
+    );
     assert!(!text.contains("[core] ,"), "body={text:?}");
     assert!(!text.contains("{core} !"), "body={text:?}");
 }
@@ -831,7 +881,10 @@ fn typeset_minimal_nested_wrapper_boundary_spacing_is_stable() {
     let main = b"\\documentclass{article}\\begin{document}word\\emph{\\textbf{ mid }}word and word\\textbf{\\emph{ core }} ,trail\\end{document}";
     let body = extract_typeset_body(main);
     let text = String::from_utf8(body).expect("body should be valid utf8");
-    assert!(text.contains("word[{mid}]word and word{[core]},trail"), "body={text:?}");
+    assert!(
+        text.contains("word[{mid}]word and word{[core]},trail"),
+        "body={text:?}"
+    );
     assert!(!text.contains("word [{mid}]word"), "body={text:?}");
     assert!(!text.contains("} ,trail"), "body={text:?}");
 }
@@ -849,16 +902,25 @@ fn typeset_minimal_brackets_and_braces_do_not_strip_across_hard_newline() {
 fn typeset_minimal_double_backslash_emits_hard_newline() {
     let main = b"\\documentclass{article}\\begin{document}Hello\\\\world.\\end{document}";
     let lines = layout_lines_bytes(main);
-    assert!(lines.len() >= 2, "expected at least two lines, got {:?}", lines);
+    assert!(
+        lines.len() >= 2,
+        "expected at least two lines, got {:?}",
+        lines
+    );
     assert_eq!(lines[0], b"Hello");
     assert_eq!(lines[1], b"world.");
 }
 
 #[test]
 fn typeset_minimal_newline_alias_emits_hard_newline() {
-    let main = b"\\documentclass{article}\n\\begin{document}\nHello\\newline world.\n\\end{document}\n";
+    let main =
+        b"\\documentclass{article}\n\\begin{document}\nHello\\newline world.\n\\end{document}\n";
     let lines = layout_lines_bytes(main);
-    assert!(lines.len() >= 2, "expected at least two lines, got {:?}", lines);
+    assert!(
+        lines.len() >= 2,
+        "expected at least two lines, got {:?}",
+        lines
+    );
     assert_eq!(lines[0], b"Hello");
     assert_eq!(lines[1], b"world.");
 }
@@ -867,7 +929,11 @@ fn typeset_minimal_newline_alias_emits_hard_newline() {
 fn typeset_minimal_linebreak_alias_emits_hard_newline() {
     let main = b"\\documentclass{article}\\begin{document}Hello\\linebreak world.\\end{document}";
     let lines = layout_lines_bytes(main);
-    assert!(lines.len() >= 2, "expected at least two lines, got {:?}", lines);
+    assert!(
+        lines.len() >= 2,
+        "expected at least two lines, got {:?}",
+        lines
+    );
     assert_eq!(lines[0], b"Hello");
     assert_eq!(lines[1], b"world.");
 }
@@ -904,8 +970,7 @@ fn typeset_minimal_inline_math_emits_placeholder_text() {
 
 #[test]
 fn typeset_minimal_display_math_emits_centered_placeholder_block() {
-    let main =
-        b"\\documentclass{article}\\begin{document}Before.\\[x+y\\]After.\\end{document}";
+    let main = b"\\documentclass{article}\\begin{document}Before.\\[x+y\\]After.\\end{document}";
     let body = extract_typeset_body(main);
     let text = String::from_utf8(body).expect("body should be valid utf8");
     assert!(
