@@ -24,10 +24,26 @@ export TZ=UTC
 "$ROOT_DIR/scripts/wasm_smoke_build.sh"
 
 rm -rf "$OUT_DIR" "$STORE_DIR" "$HINT_STORE_DIR_A" "$HINT_STORE_DIR_B" "$FIXTURE_SOURCE_DIR" "$BASELINE_ROOT"
-mkdir -p "$OUT_DIR" "$FIXTURE_SOURCE_DIR/xetex/tex" "$FIXTURE_SOURCE_DIR/xetex/bib" "$FIXTURE_SOURCE_DIR/xetex/png" "$FIXTURE_SOURCE_DIR/fontconfig/public" "$BASELINE_ROOT" "$BASELINE_PACKS_ROOT"
+mkdir -p \
+  "$OUT_DIR" \
+  "$FIXTURE_SOURCE_DIR/xetex/tex" \
+  "$FIXTURE_SOURCE_DIR/xetex/bib" \
+  "$FIXTURE_SOURCE_DIR/xetex/png" \
+  "$FIXTURE_SOURCE_DIR/xetex/sty" \
+  "$FIXTURE_SOURCE_DIR/xetex/cls" \
+  "$FIXTURE_SOURCE_DIR/fontconfig/public" \
+  "$BASELINE_ROOT" \
+  "$BASELINE_PACKS_ROOT"
 
 printf 'fixture-bytes-for-typeset-minimal-v0\n' > "$FIXTURE_SOURCE_DIR/xetex/tex/typeset_demo_minimal_v0"
+printf 'fixture-bytes-for-chapter-intro\n' > "$FIXTURE_SOURCE_DIR/xetex/tex/chapter_intro.tex"
+printf 'fixture-bytes-for-chapter-appendix\n' > "$FIXTURE_SOURCE_DIR/xetex/tex/chapter_appendix.tex"
 printf 'fixture-bytes-for-demo-png\n' > "$FIXTURE_SOURCE_DIR/xetex/png/demo.png"
+printf 'fixture-bytes-for-probe-figure-png\n' > "$FIXTURE_SOURCE_DIR/xetex/png/probe-figure.png"
+printf 'fixture-bytes-for-refs-bib\n' > "$FIXTURE_SOURCE_DIR/xetex/bib/refs.bib"
+printf 'fixture-bytes-for-legacyrefs-bib\n' > "$FIXTURE_SOURCE_DIR/xetex/bib/legacyrefs.bib"
+printf 'fixture-bytes-for-xcolor-sty\n' > "$FIXTURE_SOURCE_DIR/xetex/sty/xcolor.sty"
+printf 'fixture-bytes-for-memoir-cls\n' > "$FIXTURE_SOURCE_DIR/xetex/cls/memoir.cls"
 printf 'fixture-bytes-for-found-sans\n' > "$FIXTURE_SOURCE_DIR/fontconfig/public/FoundSans"
 
 cat > "$REQUEST_LIST" <<'JSON'
@@ -108,6 +124,34 @@ const fontRequest = listA.requests.find(
 );
 if (!fontRequest) {
   console.error('FAIL: request list must include font hint request for fontconfig public/FoundSans');
+  process.exit(1);
+}
+const inputRequest = listA.requests.find(
+  (request) => request.kind === 'texmf' && request.format === 'tex' && request.name === 'chapter_intro.tex' && request.variant === 'typeset',
+);
+if (!inputRequest) {
+  console.error('FAIL: request list must include input hint request for chapter_intro.tex');
+  process.exit(1);
+}
+const includeRequest = listA.requests.find(
+  (request) => request.kind === 'texmf' && request.format === 'tex' && request.name === 'chapter_appendix.tex' && request.variant === 'typeset',
+);
+if (!includeRequest) {
+  console.error('FAIL: request list must include include hint request for chapter_appendix.tex');
+  process.exit(1);
+}
+const packageRequest = listA.requests.find(
+  (request) => request.kind === 'texmf' && request.name === 'xcolor.sty' && request.variant === 'typeset',
+);
+if (!packageRequest) {
+  console.error('FAIL: request list must include package hint request for xcolor.sty');
+  process.exit(1);
+}
+const bibRequest = listA.requests.find(
+  (request) => request.kind === 'texmf' && request.format === 'bib' && request.name === 'refs.bib' && request.variant === 'typeset',
+);
+if (!bibRequest) {
+  console.error('FAIL: request list must include bib hint request for refs.bib');
   process.exit(1);
 }
 if (listA.requests.some((request) => request.name === 'demo-image.png')) {
@@ -482,8 +526,28 @@ if (summaryA.index_sha256 !== summaryB.index_sha256 || summaryA.found_count !== 
   console.error('FAIL: texlive_store_gen_v0 hint summaries must match across reruns');
   process.exit(1);
 }
-if (!(summaryA.found_count === 3 && summaryA.missing_count >= 1)) {
-  console.error(`FAIL: expected hint-driven store found=3 and missing>=1, got found=${summaryA.found_count} missing=${summaryA.missing_count}`);
+const indexA = JSON.parse(fs.readFileSync(indexAPath, 'utf8'));
+const entries = Array.isArray(indexA?.entries) ? indexA.entries : [];
+const hasEntry = (kind, format, name, variant) => entries.some(
+  (entry) => entry.kind === kind && entry.format === format && entry.name === name && entry.variant === variant,
+);
+const requiredEntries = [
+  ['texmf', 'tex', 'typeset_demo_minimal_v0', 'typeset'],
+  ['texmf', 'tex', 'chapter_intro.tex', 'typeset'],
+  ['texmf', 'tex', 'chapter_appendix.tex', 'typeset'],
+  ['texmf', 'sty', 'xcolor.sty', 'typeset'],
+  ['texmf', 'bib', 'refs.bib', 'typeset'],
+  ['texmf', 'png', 'demo.png', 'typeset'],
+  ['fontconfig', 'name', 'FoundSans', 'public'],
+];
+for (const [kind, format, name, variant] of requiredEntries) {
+  if (!hasEntry(kind, format, name, variant)) {
+    console.error(`FAIL: expected hint-driven store entry ${kind}/${format}/${variant}/${name}`);
+    process.exit(1);
+  }
+}
+if (!(summaryA.found_count >= requiredEntries.length && summaryA.missing_count >= 1)) {
+  console.error(`FAIL: expected hint-driven store found>=${requiredEntries.length} and missing>=1, got found=${summaryA.found_count} missing=${summaryA.missing_count}`);
   process.exit(1);
 }
 console.log(`PASS: texlive_store_gen_v0 from hints deterministic index_sha256 ${indexASha}`);
@@ -696,12 +760,9 @@ for (const status of okStatuses) {
     process.exit(1);
   }
 }
-const okCaseIds = new Set(okStatuses.map((entry) => entry.case_id));
-for (const entry of resourceHints.entries) {
-  if (okCaseIds.has(entry.case_id)) {
-    console.error(`FAIL: expected no resource_hints_v0 entries for OK case ${entry.case_id}`);
-    process.exit(1);
-  }
+if (resourceHints.entries.some((entry) => entry.case_id === 'ok_demo_v0')) {
+  console.error('FAIL: expected no resource_hints_v0 entries for ok_demo_v0');
+  process.exit(1);
 }
 
 for (const status of statuses) {
@@ -923,7 +984,7 @@ console.log(`PASS: baseline_match MATCH for all OK cases (${okStatuses.length})`
 console.log(`PASS: typed_artifacts keys ${requiredTypedKeys.join(',')}`);
 console.log('PASS: typed_artifacts_version gate 1');
 console.log(`PASS: resource_hints_v0 sha stable ${resourceHintsShaSecond}`);
-console.log('PASS: resource_hints_v0 empty for OK cases');
+console.log('PASS: resource_hints_v0 excludes ok_demo_v0');
 console.log(`PASS: labels_v0 sha stable ${labelsShaSecond}`);
 console.log(`PASS: toc_v0 sha stable ${tocShaSecond}`);
 console.log(`PASS: bib_v0 sha stable ${bibShaSecond}`);
