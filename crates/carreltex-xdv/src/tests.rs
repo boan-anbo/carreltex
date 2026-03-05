@@ -223,6 +223,57 @@ fn pdf_renderer_keeps_multi_space_line_unwrapped_under_width_limit_v0() {
     assert!(pdf.windows(b"(A     B) Tj".len()).any(|w| w == b"(A     B) Tj"));
 }
 
+fn max_tm_gap_pt_for_line_containing_v0(pdf: &[u8], needle: &str) -> Option<f32> {
+    let text = String::from_utf8_lossy(pdf);
+    for line in text.lines() {
+        if !line.contains(needle) {
+            continue;
+        }
+        let mut xs = Vec::<f32>::new();
+        let fields = line.split_whitespace().collect::<Vec<_>>();
+        let mut index = 0usize;
+        while index + 6 < fields.len() {
+            if fields[index] == "1"
+                && fields[index + 1] == "0"
+                && fields[index + 2] == "0"
+                && fields[index + 3] == "1"
+                && fields[index + 6] == "Tm"
+            {
+                let x_pt = fields[index + 4].parse::<f32>().ok()?;
+                xs.push(x_pt);
+                index += 7;
+                continue;
+            }
+            index += 1;
+        }
+        if xs.len() < 2 {
+            return Some(0.0);
+        }
+        let mut max_gap = 0.0f32;
+        for pair in xs.windows(2) {
+            let gap = pair[1] - pair[0];
+            if gap > max_gap {
+                max_gap = gap;
+            }
+        }
+        return Some(max_gap);
+    }
+    None
+}
+
+#[test]
+fn pdf_renderer_caps_segment_tm_gap_for_styled_line_v0() {
+    let xdv = write_dvi_v2_text_page_v0(b"Styled [emphasis] and {bold} run.")
+        .expect("writer should accept styled text");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+    let max_tm_gap = max_tm_gap_pt_for_line_containing_v0(&pdf, "Styled")
+        .expect("pdf should include styled line");
+    assert!(
+        max_tm_gap <= 24.0,
+        "styled line tm gap should be capped, got {max_tm_gap}"
+    );
+}
+
 #[test]
 fn pdf_renderer_applies_hanging_indent_for_list_continuation_v0() {
     let xdv = write_dvi_v2_text_page_v0(b"- item\ncontinuation").expect("writer should accept text");
