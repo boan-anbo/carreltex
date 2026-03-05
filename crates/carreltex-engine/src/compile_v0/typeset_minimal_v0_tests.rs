@@ -264,10 +264,14 @@ fn typeset_minimal_footnotes_and_href_emit_expected_markers() {
     let body = extract_typeset_body(main);
     let text = String::from_utf8(body).expect("body should be valid utf8");
     assert!(
-        text.contains("Body text^1. Visit {example link}."),
+        text.contains("Body text^1. Visit <{example link}>."),
         "body={text:?}"
     );
     assert!(text.contains("!f 1 First note"), "body={text:?}");
+    assert!(
+        text.contains("!u 1 https://example.com"),
+        "href url metadata line missing: body={text:?}"
+    );
 }
 
 #[test]

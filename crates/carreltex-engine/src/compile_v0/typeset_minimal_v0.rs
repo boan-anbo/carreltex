@@ -22,6 +22,9 @@ const RIGHTLINE_CONTROL_V0: &[u8] = b"rightline";
 const FOOTNOTE_CONTROL_V0: &[u8] = b"footnote";
 const HREF_CONTROL_V0: &[u8] = b"href";
 const FOOTNOTE_LINE_PREFIX_MARKER_V0: &[u8] = b"!f ";
+const HREF_URL_LINE_PREFIX_MARKER_V0: &[u8] = b"!u ";
+const LINK_START_MARKER_V0: u8 = b'<';
+const LINK_END_MARKER_V0: u8 = b'>';
 const NOINDENT_PREFIX_MARKER_V0: &[u8] = b"~ ";
 const SECTION_HEADING_PREFIX_MARKER_V0: &[u8] = b"@S ";
 const SUBSECTION_HEADING_PREFIX_MARKER_V0: &[u8] = b"@s ";
@@ -347,7 +350,12 @@ fn is_supported_literal_char_v0(byte: u8) -> bool {
     }
     !matches!(
         byte,
-        ITALIC_START_MARKER_V0 | ITALIC_END_MARKER_V0 | BOLD_START_MARKER_V0 | BOLD_END_MARKER_V0
+        ITALIC_START_MARKER_V0
+            | ITALIC_END_MARKER_V0
+            | BOLD_START_MARKER_V0
+            | BOLD_END_MARKER_V0
+            | LINK_START_MARKER_V0
+            | LINK_END_MARKER_V0
     )
 }
 
@@ -1082,7 +1090,12 @@ fn consume_footnote_command_v0(
     Some(next)
 }
 
-fn consume_href_command_v0(tokens: &[TokenV0], index: usize, out: &mut Vec<u8>) -> Option<usize> {
+fn consume_href_command_v0(
+    tokens: &[TokenV0],
+    index: usize,
+    out: &mut Vec<u8>,
+    href_urls: &mut Vec<Vec<u8>>,
+) -> Option<usize> {
     if !matches!(
         tokens.get(index),
         Some(TokenV0::ControlSeq(name)) if name.as_slice() == HREF_CONTROL_V0
@@ -1110,9 +1123,12 @@ fn consume_href_command_v0(tokens: &[TokenV0], index: usize, out: &mut Vec<u8>) 
         return None;
     }
 
+    href_urls.push(href_url);
+    out.push(LINK_START_MARKER_V0);
     out.push(BOLD_START_MARKER_V0);
     out.extend_from_slice(&href_text);
     out.push(BOLD_END_MARKER_V0);
+    out.push(LINK_END_MARKER_V0);
     Some(next)
 }
 
@@ -1175,6 +1191,7 @@ pub(crate) fn extract_typeset_minimal_text_body_v0(tokens: &[TokenV0]) -> Option
 
     let mut body = Vec::<u8>::new();
     let mut footnotes = Vec::<Vec<u8>>::new();
+    let mut href_urls = Vec::<Vec<u8>>::new();
     let mut pending_noindent_after_heading = false;
     loop {
         match tokens.get(index) {
@@ -1213,7 +1230,7 @@ pub(crate) fn extract_typeset_minimal_text_body_v0(tokens: &[TokenV0]) -> Option
             }
             Some(TokenV0::ControlSeq(name)) if name.as_slice() == HREF_CONTROL_V0 => {
                 maybe_emit_pending_noindent_prefix_v0(&mut body, &mut pending_noindent_after_heading);
-                index = consume_href_command_v0(tokens, index, &mut body)?;
+                index = consume_href_command_v0(tokens, index, &mut body, &mut href_urls)?;
             }
             Some(TokenV0::ControlSeq(name)) if is_heading_control_v0(name.as_slice()) => {
                 index = consume_heading_command_v0(tokens, index, &mut body)?;
@@ -1250,6 +1267,16 @@ pub(crate) fn extract_typeset_minimal_text_body_v0(tokens: &[TokenV0]) -> Option
     body = normalize_tex_dashes_v0(&body);
     body = normalize_tex_ellipsis_v0(&body);
     body = normalize_bracket_spacing_v0(&body);
+    if !href_urls.is_empty() {
+        push_paragraph_break(&mut body);
+        for (href_index, href_url) in href_urls.iter().enumerate() {
+            body.extend_from_slice(HREF_URL_LINE_PREFIX_MARKER_V0);
+            body.extend_from_slice((href_index + 1).to_string().as_bytes());
+            body.push(b' ');
+            body.extend_from_slice(href_url);
+            push_newline(&mut body);
+        }
+    }
     trim_trailing_spaces(&mut body);
     while matches!(body.last().copied(), Some(NEWLINE_MARKER_V0)) {
         body.pop();
