@@ -209,6 +209,16 @@ async function loadFixtureCasesV0() {
       fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_math_probe_v0.tex',
     },
     {
+      id: 'typeset_demo_fixedpoint_graphics_probe_v0',
+      mode: 'typeset',
+      fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_fixedpoint_graphics_probe_v0.tex',
+    },
+    {
+      id: 'typeset_demo_fixedpoint_bibliography_probe_v0',
+      mode: 'typeset',
+      fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_fixedpoint_bibliography_probe_v0.tex',
+    },
+    {
       id: 'typeset_demo_bib_probe_v0',
       mode: 'typeset',
       fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_bib_probe_v0.tex',
