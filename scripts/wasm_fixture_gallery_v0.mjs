@@ -202,6 +202,11 @@ async function loadFixtureCasesV0() {
       fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_graphics_probe_v0.tex',
     },
     {
+      id: 'typeset_demo_graphicspath_probe_v0',
+      mode: 'typeset',
+      fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_graphicspath_probe_v0.tex',
+    },
+    {
       id: 'typeset_demo_pkgopt_probe_v0',
       mode: 'typeset',
       fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_pkgopt_probe_v0.tex',
@@ -550,6 +555,42 @@ function parseOptionAssignmentsV0(rawValue) {
   return assignments;
 }
 
+function parseGraphicspathValuesV0(rawValue) {
+  const values = [];
+  let index = 0;
+  while (index < rawValue.length) {
+    while (index < rawValue.length && /\s/.test(rawValue[index])) {
+      index += 1;
+    }
+    if (index >= rawValue.length) {
+      break;
+    }
+    if (rawValue[index] !== '{') {
+      throw new Error(`resource_hints_v0 graphicspath has malformed entry '${rawValue}'`);
+    }
+    index += 1;
+    const start = index;
+    while (index < rawValue.length && rawValue[index] !== '}') {
+      if (rawValue[index] === '{') {
+        throw new Error(`resource_hints_v0 graphicspath rejects nested braces '${rawValue}'`);
+      }
+      index += 1;
+    }
+    if (index >= rawValue.length || rawValue[index] !== '}') {
+      throw new Error(`resource_hints_v0 graphicspath has unterminated entry '${rawValue}'`);
+    }
+    const value = rawValue.slice(start, index).trim();
+    if (value.length > 0) {
+      values.push(value);
+    }
+    index += 1;
+  }
+  if (values.length === 0) {
+    throw new Error(`resource_hints_v0 graphicspath requires at least one path '${rawValue}'`);
+  }
+  return values;
+}
+
 function addBibEntryV0(entries, entry) {
   const value = entry.kind === 'cite_key' ? entry.key : entry.value;
   const valueBytes = Buffer.from(value, 'utf8');
@@ -717,6 +758,7 @@ function addResourceHintEntryV0(entries, sourceBytes, hintType, value, startByte
 function extractResourceHintEntriesFromSourceV0(sourceBytes) {
   const entries = [];
   const seen = new Set();
+  let graphicspathPrefixes = [];
   let index = 0;
 
   const addHintValues = (hintType, values, startByte, endByte, defaultExtension = null) => {
@@ -819,12 +861,38 @@ function extractResourceHintEntriesFromSourceV0(sourceBytes) {
       const dirNormalized = normalizePathHintTokenV0(dirRaw, 'graphics_path');
       const candidates = [];
       for (const value of splitCommaValuesV0(graphicsGroup.value)) {
-        const withDir = dirNormalized ? `${dirNormalized}/${value}` : value;
-        const withExt = extNormalized.length > 0 ? ensureDefaultExtensionV0(withDir, extNormalized) : withDir;
-        candidates.push(withExt);
+        const useGraphicspathPrefixes = !dirNormalized
+          && graphicspathPrefixes.length > 0
+          && !value.includes('/')
+          && !value.includes('\\');
+        if (useGraphicspathPrefixes) {
+          for (const prefix of graphicspathPrefixes) {
+            const withDir = `${prefix}/${value}`;
+            const withExt = extNormalized.length > 0 ? ensureDefaultExtensionV0(withDir, extNormalized) : withDir;
+            candidates.push(withExt);
+          }
+        } else {
+          const withDir = dirNormalized ? `${dirNormalized}/${value}` : value;
+          const withExt = extNormalized.length > 0 ? ensureDefaultExtensionV0(withDir, extNormalized) : withDir;
+          candidates.push(withExt);
+        }
       }
       addHintValues('graphics_path', candidates, index, graphicsGroup.next);
       index = graphicsGroup.next;
+      continue;
+    }
+
+    if (command === 'graphicspath') {
+      const pathGroup = readBracedGroupV0(sourceBytes, commandIndex);
+      if (!pathGroup.ok || pathGroup.value.length === 0) {
+        index = commandIndex;
+        continue;
+      }
+      const prefixes = parseGraphicspathValuesV0(pathGroup.value)
+        .map((rawValue) => normalizePathHintTokenV0(rawValue, 'graphics_path'))
+        .filter((value) => value && value.length > 0);
+      graphicspathPrefixes = prefixes;
+      index = pathGroup.next;
       continue;
     }
 
