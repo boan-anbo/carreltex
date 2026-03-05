@@ -19,6 +19,7 @@ const STATUS_OK_V0 = 'OK';
 const STATUS_NI_V0 = 'NI';
 const STATUS_INVALID_V0 = 'INVALID';
 const STATUS_FAIL_V0 = 'FAIL';
+const EXPECTED_STATUS_VALUES_V0 = new Set([STATUS_OK_V0, STATUS_NI_V0, STATUS_INVALID_V0, STATUS_FAIL_V0]);
 
 function sha256HexV0(bytes) {
   return createHash('sha256').update(bytes).digest('hex');
@@ -87,6 +88,57 @@ function mapCaseStatusV0(reportStatus, compileCode) {
   return STATUS_FAIL_V0;
 }
 
+function expectedVsActualV0(expectedStatus, actualStatus) {
+  return expectedStatus === actualStatus ? 'MATCH' : 'MISMATCH';
+}
+
+async function loadGalleryManifestV0() {
+  const manifestPath = path.join(rootDir, 'scripts', 'wasm_fixture_gallery_v0_manifest.json');
+  const bytes = await readFile(manifestPath);
+  let parsed;
+  try {
+    parsed = JSON.parse(bytes.toString('utf8'));
+  } catch {
+    throw new Error(`invalid gallery manifest json: ${manifestPath}`);
+  }
+  const casesRaw = Array.isArray(parsed?.cases) ? parsed.cases : [];
+  if (casesRaw.length === 0) {
+    throw new Error(`gallery manifest has no cases: ${manifestPath}`);
+  }
+
+  const byId = new Map();
+  for (const raw of casesRaw) {
+    const id = raw?.id;
+    const tagsRaw = Array.isArray(raw?.tags) ? raw.tags : [];
+    const expectedStatus = raw?.expected_status;
+    const purpose = raw?.purpose;
+    if (typeof id !== 'string' || id.length === 0) {
+      throw new Error(`gallery manifest case has invalid id: ${manifestPath}`);
+    }
+    if (byId.has(id)) {
+      throw new Error(`gallery manifest has duplicate case id '${id}': ${manifestPath}`);
+    }
+    if (!EXPECTED_STATUS_VALUES_V0.has(expectedStatus)) {
+      throw new Error(`gallery manifest case '${id}' has invalid expected_status '${expectedStatus}'`);
+    }
+    if (typeof purpose !== 'string' || purpose.trim() === '') {
+      throw new Error(`gallery manifest case '${id}' has invalid purpose`);
+    }
+    const tags = tagsRaw
+      .filter((tag) => typeof tag === 'string' && tag.trim() !== '')
+      .map((tag) => tag.trim());
+    byId.set(id, {
+      tags,
+      expected_status: expectedStatus,
+      purpose: purpose.trim(),
+    });
+  }
+  return {
+    path: manifestPath,
+    byId,
+  };
+}
+
 async function loadFixtureCasesV0() {
   const texliveFixtures = [
     {
@@ -116,7 +168,32 @@ async function loadFixtureCasesV0() {
       };
     });
 
-  return [...texliveFixtures, ...okFixtures];
+  const discovered = [...texliveFixtures, ...okFixtures];
+  const manifest = await loadGalleryManifestV0();
+
+  const merged = discovered.map((caseSpec) => {
+    const metadata = manifest.byId.get(caseSpec.id);
+    if (!metadata) {
+      throw new Error(`gallery manifest missing discovered case '${caseSpec.id}'`);
+    }
+    return {
+      ...caseSpec,
+      tags: metadata.tags,
+      expected_status: metadata.expected_status,
+      purpose: metadata.purpose,
+    };
+  });
+
+  for (const manifestId of manifest.byId.keys()) {
+    if (!merged.find((item) => item.id === manifestId)) {
+      throw new Error(`gallery manifest contains unknown case '${manifestId}'`);
+    }
+  }
+
+  return {
+    cases: merged,
+    manifestPath: manifest.path,
+  };
 }
 
 function entrypointSetOkV0(ctx, mem, entrypoint) {
@@ -137,9 +214,36 @@ function buildConfigHashV0(cases, sourceDateEpoch, resolverId) {
       id: item.id,
       mode: item.mode,
       fixture: item.fixtureRelPath,
+      tags: item.tags,
+      expected_status: item.expected_status,
     })),
   };
   return sha256HexV0(Buffer.from(JSON.stringify(config)));
+}
+
+async function computeBaselineMatchV0(caseId, artifactSha256, baselineDir) {
+  if (!baselineDir) {
+    return null;
+  }
+  const caseDir = path.join(baselineDir, caseId);
+  const xdvPath = path.join(caseDir, 'main.xdv.sha256');
+  const pdfPath = path.join(caseDir, 'main.pdf.sha256');
+  const [xdvExpectedBytes, pdfExpectedBytes] = await Promise.all([
+    readFile(xdvPath).catch(() => null),
+    readFile(pdfPath).catch(() => null),
+  ]);
+  if (!xdvExpectedBytes || !pdfExpectedBytes) {
+    return 'MISSING';
+  }
+  const xdvExpected = xdvExpectedBytes.toString('utf8').trim();
+  const pdfExpected = pdfExpectedBytes.toString('utf8').trim();
+  if (!/^[0-9a-f]{64}$/.test(xdvExpected) || !/^[0-9a-f]{64}$/.test(pdfExpected)) {
+    return 'MISMATCH';
+  }
+  if (xdvExpected === artifactSha256.main_xdv && pdfExpected === artifactSha256.main_pdf) {
+    return 'MATCH';
+  }
+  return 'MISMATCH';
 }
 
 async function runCaseV0(
@@ -152,6 +256,7 @@ async function runCaseV0(
   engineRev,
   configHash,
   resolver,
+  baselineDir,
 ) {
   const caseOutDir = path.join(outDir, caseSpec.id);
   await mkdir(caseOutDir, { recursive: true });
@@ -275,6 +380,10 @@ async function runCaseV0(
   const summary = {
     case_id: caseSpec.id,
     mode: caseSpec.mode,
+    tags: caseSpec.tags,
+    expected_status: caseSpec.expected_status,
+    expected_vs_actual: expectedVsActualV0(caseSpec.expected_status, caseStatus),
+    purpose: caseSpec.purpose,
     fixture: caseSpec.fixtureRelPath,
     engine_rev: engineRev,
     config_hash: configHash,
@@ -295,6 +404,7 @@ async function runCaseV0(
     resolver_id: resolver.resolverId,
     resolved_resources: resolvedResources,
   };
+  summary.baseline_match = await computeBaselineMatchV0(caseSpec.id, summary.artifact_sha256, baselineDir);
   if (errorMessage) {
     summary.error = errorMessage;
   }
@@ -310,6 +420,9 @@ async function runCaseV0(
 async function run() {
   const outDir = path.resolve(process.argv[2] ?? path.join(rootDir, 'target', 'wasm_fixture_gallery_v0'));
   const storeDir = path.resolve(process.env.TEXLIVE_STORE_DIR_V0 ?? path.join(rootDir, 'target', 'texlive_store_v0'));
+  const baselineDir = process.env.TEXLIVE_BASELINE_DIR
+    ? path.resolve(process.env.TEXLIVE_BASELINE_DIR)
+    : '';
   const sourceDateEpochRaw = process.env.SOURCE_DATE_EPOCH ?? `${DEFAULT_SOURCE_DATE_EPOCH_V0}`;
   const sourceDateEpoch = Number.parseInt(sourceDateEpochRaw, 10);
   if (!Number.isInteger(sourceDateEpoch) || sourceDateEpoch <= 0) {
@@ -324,7 +437,7 @@ async function run() {
     cwd: rootDir,
     encoding: 'utf8',
   }).trim();
-  const cases = await loadFixtureCasesV0();
+  const { cases, manifestPath } = await loadFixtureCasesV0();
   const resolver = await createOnDemandResolverV0({
     backend: process.env.TEXLIVE_RESOLVER_BACKEND_V0,
     endpoint: process.env.TEXLIVE_ENDPOINT,
@@ -352,6 +465,7 @@ async function run() {
         engineRev,
         configHash,
         resolver,
+        baselineDir,
       ),
     );
   }
@@ -361,6 +475,8 @@ async function run() {
     source_date_epoch: sourceDateEpoch,
     resolver_id: resolver.resolverId,
     store_dir: storeDir,
+    baseline_dir: baselineDir || null,
+    manifest_path: manifestPath,
     config_hash: configHash,
     case_count: summaries.length,
     resolved_resources_count: summaries.reduce(
@@ -369,6 +485,10 @@ async function run() {
     ),
     statuses: summaries.map((summary) => ({
       case_id: summary.case_id,
+      tags: summary.tags,
+      expected_status: summary.expected_status,
+      expected_vs_actual: summary.expected_vs_actual,
+      baseline_match: summary.baseline_match,
       status: summary.status,
       artifact_sha256: summary.artifact_sha256,
     })),
