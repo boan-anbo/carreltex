@@ -2374,7 +2374,7 @@ fn pdf_renderer_rejects_table_width_overflow_v0() {
 #[test]
 fn pdf_renderer_figure_block_spacing_invariants_v0() {
     let xdv = write_dvi_v2_text_page_v0(
-        b"Before paragraph.\n\n!gbox\n!gcap Figure caption text.\n\nAfter paragraph.",
+        b"Before paragraph.\n\n!gbox\n!gimg 7 figures/demo.png\n!gcap Figure caption text.\n\nAfter paragraph.",
     )
     .expect("writer should accept figure marker lines");
     let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
@@ -2384,8 +2384,8 @@ fn pdf_renderer_figure_block_spacing_invariants_v0() {
         "figure marker should be hidden in pdf output: {pdf_text}"
     );
     assert!(
-        pdf_text.contains("([ Figure placeholder ]) Tj"),
-        "placeholder text should render: {pdf_text}"
+        pdf_text.contains("([ Figure placeholder: figures/demo.png ]) Tj"),
+        "graphics placeholder text should render with normalized path label: {pdf_text}"
     );
     assert!(
         pdf_text.contains("(Figure caption text.) Tj"),
@@ -2399,7 +2399,7 @@ fn pdf_renderer_figure_block_spacing_invariants_v0() {
         tm_position_for_line_containing_text_v0(&pdf, "(Before paragraph.)").expect("before");
     let (placeholder_x, placeholder_y) = tm_position_for_line_containing_text_v0(
         &pdf,
-        "([ Figure placeholder ])",
+        "([ Figure placeholder: figures/demo.png ])",
     )
     .expect("placeholder");
     let (caption_x, caption_y) =
@@ -2420,6 +2420,17 @@ fn pdf_renderer_figure_block_spacing_invariants_v0() {
     assert!(before_y > placeholder_y, "placeholder should render below body");
     assert!(placeholder_y > caption_y, "caption should render below placeholder");
     assert!(caption_y > after_y, "after paragraph should render below caption");
+}
+
+#[test]
+fn pdf_renderer_rejects_malformed_figure_image_metadata_line_v0() {
+    let xdv = write_dvi_v2_text_page_v0(b"!gbox\n!gimg demo.png\n!gcap Caption")
+        .expect("writer should accept figure marker lines");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv);
+    assert!(
+        pdf.is_none(),
+        "renderer should fail-closed on malformed !gimg metadata"
+    );
 }
 
 #[test]

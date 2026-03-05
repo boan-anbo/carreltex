@@ -70,7 +70,7 @@ const tocShaFirst = fs.readFileSync(path.join(`${outDir}_baseline`, 'toc_v1_firs
 const bibShaFirst = fs.readFileSync(path.join(`${outDir}_baseline`, 'bib_v0_first.sha256'), 'utf8').trim();
 const hyperrefShaFirst = fs.readFileSync(path.join(`${outDir}_baseline`, 'hyperref_v0_first.sha256'), 'utf8').trim();
 const pkgoptShaFirst = fs.readFileSync(path.join(`${outDir}_baseline`, 'pkgopt_v0_first.sha256'), 'utf8').trim();
-const graphicsShaFirst = fs.readFileSync(path.join(`${outDir}_baseline`, 'graphics_v0_first.sha256'), 'utf8').trim();
+const graphicsShaFirst = fs.readFileSync(path.join(`${outDir}_baseline`, 'graphics_v1_first.sha256'), 'utf8').trim();
 const mathShaFirst = fs.readFileSync(path.join(`${outDir}_baseline`, 'math_v1_first.sha256'), 'utf8').trim();
 
 if (resolvedCount <= 0) {
@@ -401,14 +401,14 @@ if (!graphicsArtifact || graphicsArtifact.present !== true) {
 }
 const graphicsShaSecond = graphicsArtifact.artifact_sha256;
 if (graphicsShaSecond !== graphicsShaFirst) {
-  console.error('FAIL: graphics_v0 artifact sha256 must be stable across reruns');
+  console.error('FAIL: graphics_v1 artifact sha256 must be stable across reruns');
   process.exit(1);
 }
 const graphicsArtifactSecond = JSON.parse(
-  fs.readFileSync(path.join(outDir, 'typeset_demo_graphics_probe_v0', 'graphics_v0.json'), 'utf8'),
+  fs.readFileSync(path.join(outDir, 'typeset_demo_graphics_probe_v0', 'graphics_v1.json'), 'utf8'),
 );
 if (!Array.isArray(graphicsArtifactSecond?.entries) || graphicsArtifactSecond.entries.length <= 0) {
-  console.error('FAIL: expected non-empty graphics_v0.entries after rerun');
+  console.error('FAIL: expected non-empty graphics_v1.entries after rerun');
   process.exit(1);
 }
 
@@ -495,7 +495,7 @@ console.log(`PASS: toc_v1 sha stable ${tocShaSecond}`);
 console.log(`PASS: bib_v0 sha stable ${bibShaSecond}`);
 console.log(`PASS: hyperref_v0 sha stable ${hyperrefShaSecond}`);
 console.log(`PASS: pkgopt_v0 sha stable ${pkgoptShaSecond}`);
-console.log(`PASS: graphics_v0 sha stable ${graphicsShaSecond}`);
+console.log(`PASS: graphics_v1 sha stable ${graphicsShaSecond}`);
 console.log(`PASS: math_v1 sha stable ${mathShaSecond}`);
 console.log('PASS: report typed_artifact_sha256 map present and stable');
 console.log('PASS: report top-level case_artifact_sha256 present');
