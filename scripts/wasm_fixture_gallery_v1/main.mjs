@@ -23,7 +23,7 @@ const STATUS_FAIL_V0 = 'FAIL';
 const STATUS_MISMATCH_V0 = 'MISMATCH';
 const EXPECTED_STATUS_VALUES_V0 = new Set([STATUS_OK_V0, STATUS_NI_V0, STATUS_INVALID_V0, STATUS_FAIL_V0]);
 const DEFAULT_ONDEMAND_FIXEDPOINT_MAX_ITERS_V1 = 3;
-const TYPED_ARTIFACT_KEYS_V0 = ['toc', 'labels', 'refs', 'bib', 'bibitems', 'cites', 'hyperref', 'pkgopt', 'graphics', 'math'];
+const TYPED_ARTIFACT_KEYS_V0 = ['toc', 'labels', 'refs', 'bib', 'bibitems', 'cites', 'hyperref', 'pkgopt', 'graphics', 'math', 'table'];
 const TYPED_ARTIFACTS_VERSION_V0 = 1;
 const MAX_TOC_ENTRIES_V0 = 256;
 const MAX_TOC_TITLE_BYTES_V0 = 256;
@@ -40,6 +40,9 @@ const MAX_GRAPHICS_ENTRIES_V0 = 256;
 const MAX_GRAPHICS_PATH_BYTES_V0 = 256;
 const MAX_MATH_ENTRIES_V0 = 256;
 const MAX_MATH_PAYLOAD_BYTES_V0 = 1024;
+const MAX_TABLE_ENTRIES_V0 = 64;
+const MAX_TABLE_ROWS_PER_ENTRY_V0 = 64;
+const MAX_TABLE_COLS_PER_ENTRY_V0 = 16;
 const MAX_RESOURCE_HINT_ENTRIES_V0 = 512;
 const MAX_RESOURCE_HINT_VALUE_BYTES_V0 = 256;
 const RESOURCE_HINTS_V0_VERSION = 1;
@@ -1159,6 +1162,148 @@ function extractMathEntriesFromSourceV1(sourceBytes) {
     }
 
     index += 1;
+  }
+  return entries;
+}
+
+function indexOfSubarrayV0(bytes, needle, startIndex) {
+  if (needle.length === 0) {
+    return startIndex;
+  }
+  outer: for (let index = startIndex; index + needle.length <= bytes.length; index += 1) {
+    for (let offset = 0; offset < needle.length; offset += 1) {
+      if (bytes[index + offset] !== needle[offset]) {
+        continue outer;
+      }
+    }
+    return index;
+  }
+  return -1;
+}
+
+function tableGlyphWidthPtV0(byte) {
+  const base = 7.2;
+  if (
+    byte === 0x20 // space
+    || byte === 0x2e // .
+    || byte === 0x2c // ,
+    || byte === 0x3b // ;
+    || byte === 0x3a // :
+    || byte === 0x21 // !
+    || byte === 0x3f // ?
+    || byte === 0x27 // '
+    || byte === 0x22 // "
+    || byte === 0x69 // i
+    || byte === 0x6c // l
+    || byte === 0x49 // I
+    || byte === 0x7c // |
+  ) {
+    return base * 0.5;
+  }
+  if (
+    byte === 0x6d // m
+    || byte === 0x77 // w
+    || byte === 0x4d // M
+    || byte === 0x57 // W
+  ) {
+    return base * 1.5;
+  }
+  return base;
+}
+
+function tableTextWidthPtV0(text) {
+  const bytes = Buffer.from(text, 'utf8');
+  let widthPt = 0;
+  for (const byte of bytes) {
+    widthPt += tableGlyphWidthPtV0(byte);
+  }
+  return Number(widthPt.toFixed(2));
+}
+
+function normalizeTableCellTextV0(rawCell) {
+  return rawCell.replace(/\s+/g, ' ').trim();
+}
+
+function parseTabularRowsV1(bodyText, expectedColumnCount) {
+  const normalizedBody = bodyText.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  const rawRows = normalizedBody
+    .split('\\\\')
+    .map((row) => row.trim())
+    .filter((row) => row.length > 0);
+  if (rawRows.length === 0 || rawRows.length > MAX_TABLE_ROWS_PER_ENTRY_V0) {
+    throw new Error(`table_v1 invalid row count ${rawRows.length}`);
+  }
+  const rows = [];
+  for (const rawRow of rawRows) {
+    const cells = rawRow.split('&').map(normalizeTableCellTextV0);
+    if (cells.length !== expectedColumnCount) {
+      throw new Error(`table_v1 row column count mismatch: expected ${expectedColumnCount}, got ${cells.length}`);
+    }
+    if (cells.some((cell) => cell.length === 0)) {
+      throw new Error('table_v1 row contains empty cell');
+    }
+    rows.push(cells);
+  }
+  return rows;
+}
+
+function extractTableEntriesFromSourceV1(sourceBytes) {
+  const beginMarker = Buffer.from('\\begin{tabular}{', 'utf8');
+  const endMarker = Buffer.from('\\end{tabular}', 'utf8');
+  const entries = [];
+  let index = 0;
+
+  while (index < sourceBytes.length) {
+    const beginIndex = indexOfSubarrayV0(sourceBytes, beginMarker, index);
+    if (beginIndex < 0) {
+      break;
+    }
+    const alignStart = beginIndex + beginMarker.length;
+    let alignEnd = alignStart;
+    while (alignEnd < sourceBytes.length && sourceBytes[alignEnd] !== 0x7d) {
+      alignEnd += 1;
+    }
+    if (alignEnd >= sourceBytes.length) {
+      throw new Error('table_v1 tabular align spec missing closing }');
+    }
+    const alignSpec = Buffer.from(sourceBytes.slice(alignStart, alignEnd))
+      .toString('utf8')
+      .replace(/\s+/g, '');
+    if (
+      alignSpec.length === 0
+      || alignSpec.length > MAX_TABLE_COLS_PER_ENTRY_V0
+      || !/^[lcr]+$/.test(alignSpec)
+    ) {
+      throw new Error(`table_v1 unsupported align spec '${alignSpec}'`);
+    }
+    const bodyStart = alignEnd + 1;
+    const endIndex = indexOfSubarrayV0(sourceBytes, endMarker, bodyStart);
+    if (endIndex < 0) {
+      throw new Error('table_v1 tabular missing end marker');
+    }
+    const bodyText = Buffer.from(sourceBytes.slice(bodyStart, endIndex)).toString('utf8');
+    const rows = parseTabularRowsV1(bodyText, alignSpec.length);
+
+    const columnWidthsPt = Array.from({ length: alignSpec.length }, () => 0);
+    for (const row of rows) {
+      for (let col = 0; col < alignSpec.length; col += 1) {
+        columnWidthsPt[col] = Math.max(columnWidthsPt[col], tableTextWidthPtV0(row[col]));
+      }
+    }
+
+    entries.push({
+      anchor_id: `tbl${entries.length + 1}`,
+      align_spec: alignSpec,
+      column_count: alignSpec.length,
+      row_count: rows.length,
+      column_widths_pt: columnWidthsPt,
+      rows,
+      source_span: buildSourceSpanV0(sourceBytes, beginIndex, endIndex + endMarker.length, 'table_v1'),
+    });
+    if (entries.length > MAX_TABLE_ENTRIES_V0) {
+      throw new Error(`table_v1 entries exceed cap ${MAX_TABLE_ENTRIES_V0}`);
+    }
+    index = endIndex + endMarker.length;
   }
   return entries;
 }
@@ -2629,6 +2774,24 @@ async function emitMathTypedArtifactV0(caseOutDir, fixtureBytes) {
   };
 }
 
+async function emitTableTypedArtifactV0(caseOutDir, fixtureBytes) {
+  const payload = {
+    version: TYPED_ARTIFACTS_VERSION_V0,
+    schema: 'table_v1',
+    entries: extractTableEntriesFromSourceV1(fixtureBytes),
+  };
+  const bytes = Buffer.from(`${JSON.stringify(payload, null, 2)}\n`, 'utf8');
+  const relpath = 'table_v1.json';
+  const fullPath = path.join(caseOutDir, relpath);
+  await writeFile(fullPath, bytes);
+  return {
+    present: true,
+    items: payload.entries.length,
+    artifact_relpath: relpath,
+    artifact_sha256: sha256HexV0(bytes),
+  };
+}
+
 async function emitResourceHintsArtifactV0(caseOutDir, fixtureBytes, mode) {
   const caseId = path.basename(caseOutDir);
   const entries = mode === 'typeset' ? extractResourceHintEntriesFromSourceV0(fixtureBytes, caseId) : [];
@@ -2685,6 +2848,7 @@ async function emitTypedArtifactsV0(caseSpec, caseOutDir, typedArtifacts, fixtur
     typedArtifacts.bibitems = await emitBibitemsTypedArtifactV0(caseOutDir, fixtureBytes);
     typedArtifacts.cites = await emitCitesTypedArtifactV0(caseOutDir, fixtureBytes);
     typedArtifacts.math = await emitMathTypedArtifactV0(caseOutDir, fixtureBytes);
+    typedArtifacts.table = await emitTableTypedArtifactV0(caseOutDir, fixtureBytes);
   }
   if (caseSpec.id === 'typeset_demo_hyperref_probe_v0') {
     typedArtifacts.hyperref = await emitHyperrefTypedArtifactV0(caseOutDir, fixtureBytes);

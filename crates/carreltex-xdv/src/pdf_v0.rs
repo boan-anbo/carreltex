@@ -42,6 +42,9 @@ const TOC_PLACEHOLDER_MARKER_V0: &[u8] = b"!toc";
 const TOC_ENTRY_LINE_PREFIX_MARKER_V0: &[u8] = b"!toc ";
 const TABLE_COLUMN_COUNT_V0: usize = 3;
 const TABLE_CELL_PADDING_PT_V0: f32 = 6.0;
+const TABLE_BORDER_LINE_WIDTH_PT_V0: f32 = 0.5;
+const TABLE_BORDER_TOP_OFFSET_PT_V0: f32 = 4.0;
+const TABLE_BORDER_BOTTOM_OFFSET_PT_V0: f32 = 4.0;
 const FIGURE_PLACEHOLDER_LINE_V0: &[u8] = b"[ Figure placeholder ]";
 const FIGURE_CAPTION_FONT_SIZE_PT_V0: f32 = 11.0;
 const TOC_TITLE_TEXT_V0: &[u8] = b"Contents";
@@ -663,6 +666,16 @@ fn emit_table_block_v0(
         return None;
     }
 
+    let mut col_left_edges_pt = [0.0f32; TABLE_COLUMN_COUNT_V0];
+    let mut col_cursor_x_pt = MARGIN_PT_V0;
+    for col_index in 0..TABLE_COLUMN_COUNT_V0 {
+        col_left_edges_pt[col_index] = col_cursor_x_pt;
+        col_cursor_x_pt += col_max_width_pt[col_index] + (TABLE_CELL_PADDING_PT_V0 * 2.0);
+    }
+    let table_left_x_pt = MARGIN_PT_V0;
+    let table_right_x_pt = table_left_x_pt + table_width_pt;
+    let table_top_y_pt = *y + TABLE_BORDER_TOP_OFFSET_PT_V0;
+
     for row in &parsed_rows {
         if *y < min_body_y_pt {
             return None;
@@ -692,6 +705,56 @@ fn emit_table_block_v0(
         out.extend_from_slice(b"\n");
         *y -= LEADING_PT_V0;
     }
+
+    let table_bottom_y_pt = *y + TABLE_BORDER_BOTTOM_OFFSET_PT_V0;
+    if table_bottom_y_pt < min_body_y_pt {
+        return None;
+    }
+    if table_bottom_y_pt >= table_top_y_pt {
+        return None;
+    }
+
+    out.extend_from_slice(b"ET\n");
+    out.extend_from_slice(b"0 G\n");
+    out.extend_from_slice(format!("{TABLE_BORDER_LINE_WIDTH_PT_V0} w\n").as_bytes());
+    out.extend_from_slice(
+        format!(
+            "{:.2} {:.2} {:.2} {:.2} re S\n",
+            table_left_x_pt,
+            table_bottom_y_pt,
+            table_width_pt,
+            table_top_y_pt - table_bottom_y_pt,
+        )
+        .as_bytes(),
+    );
+    for separator_index in 1..parsed_rows.len() {
+        let y_pt = table_top_y_pt - (separator_index as f32 * LEADING_PT_V0);
+        out.extend_from_slice(
+            format!(
+                "{:.2} {:.2} m {:.2} {:.2} l S\n",
+                table_left_x_pt,
+                y_pt,
+                table_right_x_pt,
+                y_pt,
+            )
+            .as_bytes(),
+        );
+    }
+    for col_index in 1..TABLE_COLUMN_COUNT_V0 {
+        let x_pt = col_left_edges_pt[col_index];
+        out.extend_from_slice(
+            format!(
+                "{:.2} {:.2} m {:.2} {:.2} l S\n",
+                x_pt,
+                table_top_y_pt,
+                x_pt,
+                table_bottom_y_pt,
+            )
+            .as_bytes(),
+        );
+    }
+    out.extend_from_slice(b"BT\n");
+    out.extend_from_slice(b"0 g\n");
     Some(())
 }
 

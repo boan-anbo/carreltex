@@ -2420,6 +2420,119 @@ fn pdf_renderer_table_rows_use_stable_column_x_offsets_v0() {
 }
 
 #[test]
+fn pdf_renderer_table_cells_stay_within_column_bounds_v1() {
+    let xdv = write_dvi_v2_text_page_v0(
+        b"Before.\n\n!t A||WideMiddle||9.9\n!t LongLeft||B||123.45\n\nAfter.",
+    )
+    .expect("writer should accept table marker lines");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+
+    let left_margin_pt = 72.0f32;
+    let cell_padding_pt = 6.0f32;
+    let epsilon_pt = 0.05f32;
+    let col1_width_pt = segment_width_pt_v0(b"LongLeft");
+    let col2_width_pt = segment_width_pt_v0(b"WideMiddle");
+    let col3_width_pt = segment_width_pt_v0(b"123.45");
+    let col1_content_left_pt = left_margin_pt + cell_padding_pt;
+    let col2_content_left_pt = left_margin_pt + col1_width_pt + (cell_padding_pt * 3.0);
+    let col3_content_left_pt = col2_content_left_pt + col2_width_pt + (cell_padding_pt * 2.0);
+
+    let a_x = *tm_xs_for_segment_text_v0(&pdf, "A").first().expect("A x");
+    let longleft_x = *tm_xs_for_segment_text_v0(&pdf, "LongLeft")
+        .first()
+        .expect("LongLeft x");
+    let wide_x = *tm_xs_for_segment_text_v0(&pdf, "WideMiddle")
+        .first()
+        .expect("WideMiddle x");
+    let b_x = *tm_xs_for_segment_text_v0(&pdf, "B").first().expect("B x");
+    let nine_x = *tm_xs_for_segment_text_v0(&pdf, "9.9").first().expect("9.9 x");
+    let one_two_three_x = *tm_xs_for_segment_text_v0(&pdf, "123.45")
+        .first()
+        .expect("123.45 x");
+
+    assert!(
+        (a_x - col1_content_left_pt).abs() <= epsilon_pt,
+        "column 1 left-aligned start mismatch: {a_x} vs {col1_content_left_pt}"
+    );
+    assert!(
+        (longleft_x - col1_content_left_pt).abs() <= epsilon_pt,
+        "column 1 left-aligned start mismatch: {longleft_x} vs {col1_content_left_pt}"
+    );
+    let expected_wide_x = col2_content_left_pt
+        + ((col2_width_pt - segment_width_pt_v0(b"WideMiddle")) * 0.5);
+    let expected_b_x = col2_content_left_pt + ((col2_width_pt - segment_width_pt_v0(b"B")) * 0.5);
+    assert!(
+        (wide_x - expected_wide_x).abs() <= epsilon_pt,
+        "column 2 centered start mismatch: {wide_x} vs {expected_wide_x}"
+    );
+    assert!(
+        (b_x - expected_b_x).abs() <= epsilon_pt,
+        "column 2 centered start mismatch: {b_x} vs {expected_b_x}"
+    );
+    let expected_nine_x = col3_content_left_pt + (col3_width_pt - segment_width_pt_v0(b"9.9"));
+    let expected_one_two_three_x =
+        col3_content_left_pt + (col3_width_pt - segment_width_pt_v0(b"123.45"));
+    assert!(
+        (nine_x - expected_nine_x).abs() <= epsilon_pt,
+        "column 3 right-aligned start mismatch: {nine_x} vs {expected_nine_x}"
+    );
+    assert!(
+        (one_two_three_x - expected_one_two_three_x).abs() <= epsilon_pt,
+        "column 3 right-aligned start mismatch: {one_two_three_x} vs {expected_one_two_three_x}"
+    );
+
+    let a_right_x = a_x + segment_width_pt_v0(b"A");
+    let longleft_right_x = longleft_x + segment_width_pt_v0(b"LongLeft");
+    let wide_right_x = wide_x + segment_width_pt_v0(b"WideMiddle");
+    let b_right_x = b_x + segment_width_pt_v0(b"B");
+    let nine_right_x = nine_x + segment_width_pt_v0(b"9.9");
+    let one_two_three_right_x = one_two_three_x + segment_width_pt_v0(b"123.45");
+    assert!(
+        a_x >= col1_content_left_pt - epsilon_pt && a_right_x <= col1_content_left_pt + col1_width_pt + epsilon_pt,
+        "row 1 col 1 text should remain within column bounds"
+    );
+    assert!(
+        longleft_x >= col1_content_left_pt - epsilon_pt
+            && longleft_right_x <= col1_content_left_pt + col1_width_pt + epsilon_pt,
+        "row 2 col 1 text should remain within column bounds"
+    );
+    assert!(
+        wide_x >= col2_content_left_pt - epsilon_pt && wide_right_x <= col2_content_left_pt + col2_width_pt + epsilon_pt,
+        "row 1 col 2 text should remain within column bounds"
+    );
+    assert!(
+        b_x >= col2_content_left_pt - epsilon_pt && b_right_x <= col2_content_left_pt + col2_width_pt + epsilon_pt,
+        "row 2 col 2 text should remain within column bounds"
+    );
+    assert!(
+        nine_x >= col3_content_left_pt - epsilon_pt && nine_right_x <= col3_content_left_pt + col3_width_pt + epsilon_pt,
+        "row 1 col 3 text should remain within column bounds"
+    );
+    assert!(
+        one_two_three_x >= col3_content_left_pt - epsilon_pt
+            && one_two_three_right_x <= col3_content_left_pt + col3_width_pt + epsilon_pt,
+        "row 2 col 3 text should remain within column bounds"
+    );
+}
+
+#[test]
+fn pdf_renderer_table_grid_lines_render_deterministically_v1() {
+    let xdv = write_dvi_v2_text_page_v0(b"Before.\n\n!t A||B||C\n!t D||E||F\n\nAfter.")
+        .expect("writer should accept table marker lines");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+    let pdf_text = String::from_utf8_lossy(&pdf);
+    assert!(
+        pdf_text.contains(" re S"),
+        "expected table outer border rectangle path command"
+    );
+    let separator_line_count = pdf_text.matches(" l S").count();
+    assert!(
+        separator_line_count >= 3,
+        "expected deterministic row/column separator lines, got {separator_line_count}"
+    );
+}
+
+#[test]
 fn pdf_renderer_rejects_table_width_overflow_v0() {
     let mut row = Vec::<u8>::new();
     row.extend_from_slice(b"!t ");
