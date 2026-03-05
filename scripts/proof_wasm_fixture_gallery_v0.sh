@@ -14,6 +14,8 @@ BASELINE_AUTO_PACK_DIR="${BASELINE_PACKS_ROOT}/auto_pack"
 REQUEST_LIST="$OUT_DIR/requests.json"
 HINT_REQUEST_LIST_A="$OUT_DIR/request_list_from_hints_a.json"
 HINT_REQUEST_LIST_B="$OUT_DIR/request_list_from_hints_b.json"
+COMBINED_REQUEST_LIST_A="$OUT_DIR/requests_combined_from_hints_a.json"
+COMBINED_REQUEST_LIST_B="$OUT_DIR/requests_combined_from_hints_b.json"
 FIXTURE_SOURCE_DIR="${OUT_DIR}_fixture_source_v0"
 SOURCE_DATE_EPOCH="${SOURCE_DATE_EPOCH:-1700000000}"
 export SOURCE_DATE_EPOCH
@@ -25,8 +27,7 @@ rm -rf "$OUT_DIR" "$STORE_DIR" "$HINT_STORE_DIR_A" "$HINT_STORE_DIR_B" "$FIXTURE
 mkdir -p "$OUT_DIR" "$FIXTURE_SOURCE_DIR/xetex/tex" "$FIXTURE_SOURCE_DIR/xetex/bib" "$FIXTURE_SOURCE_DIR/xetex/png" "$BASELINE_ROOT" "$BASELINE_PACKS_ROOT"
 
 printf 'fixture-bytes-for-typeset-minimal-v0\n' > "$FIXTURE_SOURCE_DIR/xetex/tex/typeset_demo_minimal_v0"
-printf '%s\n' '% placeholder bib fixture for hints proof' > "$FIXTURE_SOURCE_DIR/xetex/bib/refs.bib"
-printf 'fixture-bytes-for-demo-image-png\n' > "$FIXTURE_SOURCE_DIR/xetex/png/demo-image.png"
+printf 'fixture-bytes-for-demo-png\n' > "$FIXTURE_SOURCE_DIR/xetex/png/demo.png"
 
 cat > "$REQUEST_LIST" <<'JSON'
 {
@@ -94,6 +95,17 @@ if (listA.source_report_sha256 !== listB.source_report_sha256) {
   console.error('FAIL: request list source_report_sha256 mismatch across reruns');
   process.exit(1);
 }
+const graphicsRequest = listA.requests.find(
+  (request) => request.kind === 'texmf' && request.format === 'png' && request.name === 'demo.png' && request.variant === 'typeset',
+);
+if (!graphicsRequest) {
+  console.error('FAIL: request list must include graphics hint request for demo.png');
+  process.exit(1);
+}
+if (listA.requests.some((request) => request.name === 'demo-image.png')) {
+  console.error('FAIL: request list contains stale graphics hint demo-image.png');
+  process.exit(1);
+}
 
 for (const request of listA.requests) {
   if (!(request.kind === 'texmf' || request.kind === 'fontconfig')) {
@@ -108,6 +120,64 @@ for (const request of listA.requests) {
 
 console.log(`PASS: request_list_from_hints_v0 deterministic sha256 ${shaA}`);
 console.log(`PASS: request_list_from_hints_v0 schema request_count ${listA.request_count}`);
+NODE
+
+node - "$HINT_REQUEST_LIST_A" "$COMBINED_REQUEST_LIST_A" <<'NODE'
+const fs = require('node:fs');
+const hintsPath = process.argv[2];
+const outputPath = process.argv[3];
+const hints = JSON.parse(fs.readFileSync(hintsPath, 'utf8'));
+const baseRequest = {
+  kind: 'texmf',
+  format: 'tex',
+  name: 'typeset_demo_minimal_v0',
+  variant: 'typeset',
+};
+const requests = [baseRequest, ...(Array.isArray(hints.requests) ? hints.requests : [])];
+const deduped = [];
+const seen = new Set();
+for (const request of requests) {
+  const key = `${request.kind}\u0000${request.format}\u0000${request.name}\u0000${request.variant}`;
+  if (seen.has(key)) {
+    continue;
+  }
+  seen.add(key);
+  deduped.push(request);
+}
+const output = {
+  version: 1,
+  requests: deduped,
+};
+fs.writeFileSync(outputPath, `${JSON.stringify(output, null, 2)}\n`);
+NODE
+
+node - "$HINT_REQUEST_LIST_B" "$COMBINED_REQUEST_LIST_B" <<'NODE'
+const fs = require('node:fs');
+const hintsPath = process.argv[2];
+const outputPath = process.argv[3];
+const hints = JSON.parse(fs.readFileSync(hintsPath, 'utf8'));
+const baseRequest = {
+  kind: 'texmf',
+  format: 'tex',
+  name: 'typeset_demo_minimal_v0',
+  variant: 'typeset',
+};
+const requests = [baseRequest, ...(Array.isArray(hints.requests) ? hints.requests : [])];
+const deduped = [];
+const seen = new Set();
+for (const request of requests) {
+  const key = `${request.kind}\u0000${request.format}\u0000${request.name}\u0000${request.variant}`;
+  if (seen.has(key)) {
+    continue;
+  }
+  seen.add(key);
+  deduped.push(request);
+}
+const output = {
+  version: 1,
+  requests: deduped,
+};
+fs.writeFileSync(outputPath, `${JSON.stringify(output, null, 2)}\n`);
 NODE
 
 node - "$OUT_DIR" "$BASELINE_ROOT" <<'NODE'
@@ -374,10 +444,10 @@ NODE
 
 TEXLIVE_RESOLVER_BACKEND_V0=fixture_dir_v0 \
 TEXLIVE_STORE_SOURCE_DIR_V0="$FIXTURE_SOURCE_DIR" \
-node "$ROOT_DIR/scripts/texlive_store_gen_v0.mjs" "$HINT_REQUEST_LIST_A" "$HINT_STORE_DIR_A"
+node "$ROOT_DIR/scripts/texlive_store_gen_v0.mjs" "$COMBINED_REQUEST_LIST_A" "$HINT_STORE_DIR_A"
 TEXLIVE_RESOLVER_BACKEND_V0=fixture_dir_v0 \
 TEXLIVE_STORE_SOURCE_DIR_V0="$FIXTURE_SOURCE_DIR" \
-node "$ROOT_DIR/scripts/texlive_store_gen_v0.mjs" "$HINT_REQUEST_LIST_B" "$HINT_STORE_DIR_B"
+node "$ROOT_DIR/scripts/texlive_store_gen_v0.mjs" "$COMBINED_REQUEST_LIST_B" "$HINT_STORE_DIR_B"
 
 node - "$HINT_STORE_DIR_A" "$HINT_STORE_DIR_B" <<'NODE'
 const fs = require('node:fs');
@@ -402,6 +472,10 @@ const summaryA = JSON.parse(fs.readFileSync(summaryAPath, 'utf8'));
 const summaryB = JSON.parse(fs.readFileSync(summaryBPath, 'utf8'));
 if (summaryA.index_sha256 !== summaryB.index_sha256 || summaryA.found_count !== summaryB.found_count) {
   console.error('FAIL: texlive_store_gen_v0 hint summaries must match across reruns');
+  process.exit(1);
+}
+if (!(summaryA.found_count === 2 && summaryA.missing_count >= 1)) {
+  console.error(`FAIL: expected hint-driven store found=2 and missing>=1, got found=${summaryA.found_count} missing=${summaryA.missing_count}`);
   process.exit(1);
 }
 console.log(`PASS: texlive_store_gen_v0 from hints deterministic index_sha256 ${indexASha}`);
