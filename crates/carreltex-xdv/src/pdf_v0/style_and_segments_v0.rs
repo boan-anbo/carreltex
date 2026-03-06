@@ -344,6 +344,7 @@ fn centered_line_x_v0(line_width_pt: f32) -> f32 {
 enum ListPrefixKindV0 {
     Itemize,
     Enumerate,
+    Bibliography,
 }
 
 #[derive(Clone, Copy)]
@@ -353,5 +354,6 @@ struct ListPrefixV0 {
     display_start: usize,
     display_len: usize,
     leading_advance_pt: f32,
+    display_advance_pt: f32,
+    body_indent_pt: f32,
 }
-
