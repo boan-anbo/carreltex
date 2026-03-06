@@ -1731,6 +1731,66 @@ fn pdf_renderer_nested_mixed_width_enumerate_wrap_alignment_invariants_v20() {
 }
 
 #[test]
+fn pdf_renderer_figure_caption_and_adjacent_table_transition_rhythm_v21() {
+    let xdv = write_dvi_v2_text_page_v0(b"\nParagraph before blocks.\n\n!gbox\n!gcap Figure 1: CAPSTART [dense], {styled} caption text with punctuation, continuity check.\n\n!ts ll\n!t ROWONEA||ROWONEB\n!t ROWTWOA||ROWTWOB\n\nParagraph after blocks.")
+        .expect("writer should accept figure-table transition text");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+
+    let (_, caption_y) =
+        tm_position_for_segment_substring_v0(&pdf, "CAPSTART").expect("caption start");
+    let (_, row_one_y) = tm_position_for_segment_substring_v0(&pdf, "ROWONEA").expect("row one");
+    let (_, row_two_y) = tm_position_for_segment_substring_v0(&pdf, "ROWTWOA").expect("row two");
+    let (_, after_blocks_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "(Paragraph after blocks.)")
+            .expect("paragraph after blocks");
+
+    let epsilon_pt = 0.2f32;
+    assert!(
+        (caption_y - row_one_y - 37.0).abs() <= epsilon_pt,
+        "figure-caption->table transition gap should stay tightened: caption_y={caption_y}, row_one_y={row_one_y}"
+    );
+    assert!(
+        (row_one_y - row_two_y - 13.0).abs() <= epsilon_pt,
+        "table row leading should remain stable after caption transition: row_one_y={row_one_y}, row_two_y={row_two_y}"
+    );
+    assert!(
+        (row_two_y - after_blocks_y - 24.0).abs() <= epsilon_pt,
+        "table->paragraph transition should stay tightened: row_two_y={row_two_y}, after_blocks_y={after_blocks_y}"
+    );
+    let max_caption_tm_gap = max_tm_gap_pt_for_line_containing_v0(&pdf, "CAPSTART")
+        .expect("caption line should render and expose tm gaps");
+    assert!(
+        max_caption_tm_gap <= 18.0,
+        "caption styled seam spacing should remain bounded: max_caption_tm_gap={max_caption_tm_gap}"
+    );
+}
+
+#[test]
+fn pdf_renderer_table_to_figure_caption_separation_rhythm_v21() {
+    let xdv = write_dvi_v2_text_page_v0(b"\n!ts ll\n!t TROWONEA||TROWONEB\n!t TROWTWOA||TROWTWOB\n\n!gbox\n!gcap Figure 1: FIGCAPSTART compact caption text.\n\nParagraph after figure.")
+        .expect("writer should accept table-figure transition text");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+
+    let (_, row_two_y) =
+        tm_position_for_segment_substring_v0(&pdf, "TROWTWOA").expect("table row two");
+    let (_, caption_y) =
+        tm_position_for_segment_substring_v0(&pdf, "FIGCAPSTART").expect("figure caption");
+    let (_, after_figure_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "(Paragraph after figure.)")
+            .expect("paragraph after figure");
+
+    let epsilon_pt = 0.2f32;
+    assert!(
+        (row_two_y - caption_y - 156.0).abs() <= epsilon_pt,
+        "table->figure transition should keep stable block/caption separation: row_two_y={row_two_y}, caption_y={caption_y}"
+    );
+    assert!(
+        (caption_y - after_figure_y - 24.0).abs() <= epsilon_pt,
+        "figure-caption->paragraph transition should stay tightened: caption_y={caption_y}, after_figure_y={after_figure_y}"
+    );
+}
+
+#[test]
 fn pdf_renderer_bibliography_entries_use_hanging_indent_and_stable_rhythm_v14() {
     let xdv = write_dvi_v2_text_page_v0(
         b"@S {References}\n\n[1] ALPHASTART alpha alpha alpha alpha alpha alpha alpha alpha alpha alpha ALPHAWRAP\n[12] BETASTART beta beta beta beta beta beta beta beta beta beta beta beta beta beta beta beta BETAWRAP",
