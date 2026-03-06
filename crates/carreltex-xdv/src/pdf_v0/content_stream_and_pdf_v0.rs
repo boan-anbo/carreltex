@@ -231,6 +231,20 @@ fn line_contains_inline_math_placeholder_token_v15(segments: &[PdfRenderSegmentV
     .any(|token| token == b"MATH")
 }
 
+fn footnote_marker_prefix_advance_pt_v18(glyphs: &[GlyphPlanV0]) -> Option<f32> {
+    let mut cursor = 0usize;
+    let mut saw_digit = false;
+    while cursor < glyphs.len() && glyphs[cursor].byte.is_ascii_digit() {
+        saw_digit = true;
+        cursor += 1;
+    }
+    if !saw_digit || cursor >= glyphs.len() || glyphs[cursor].byte != b' ' {
+        return None;
+    }
+    let prefix_len_bytes = cursor + 1;
+    Some((prefix_len_bytes as f32) * (FOOTNOTE_FONT_SIZE_PT_V0 * 0.6))
+}
+
 #[derive(Clone)]
 struct PageContinuationStateV0 {
     previous_rendered_line_was_empty: bool,
@@ -276,10 +290,14 @@ fn build_page_content_stream_v0(
         };
         footnote_line_count = footnote_line_count.checked_add(footnote_lines.len())?;
     }
+    let footnote_entry_count = page_footnote_ids.len();
+    let footnote_continuation_count = footnote_line_count.saturating_sub(footnote_entry_count);
     let footnote_reserved_height_pt = if footnote_line_count == 0 {
         0.0
     } else {
-        FOOTNOTE_BLOCK_GAP_PT_V0 + (footnote_line_count as f32 * FOOTNOTE_LEADING_PT_V0)
+        FOOTNOTE_BLOCK_GAP_PT_V18
+            + (footnote_entry_count as f32 * FOOTNOTE_ENTRY_LEADING_PT_V18)
+            + (footnote_continuation_count as f32 * FOOTNOTE_CONTINUATION_LEADING_PT_V18)
     };
     if footnote_reserved_height_pt >= (PAGE_HEIGHT_PT_V0 - (2.0 * MARGIN_PT_V0)) {
         return None;
@@ -917,23 +935,50 @@ fn build_page_content_stream_v0(
     }
 
     if footnote_line_count > 0 {
-        let mut footnote_y = MARGIN_PT_V0 + footnote_reserved_height_pt - FOOTNOTE_LEADING_PT_V0;
+        let mut footnote_y =
+            MARGIN_PT_V0 + footnote_reserved_height_pt - FOOTNOTE_ENTRY_LEADING_PT_V18;
         for footnote_id in &page_footnote_ids {
-            for footnote_line in footnote_defs_by_id.get(footnote_id)? {
+            let footnote_lines = footnote_defs_by_id.get(footnote_id)?;
+            let continuation_indent_pt = footnote_lines
+                .first()
+                .and_then(|line| footnote_marker_prefix_advance_pt_v18(line))
+                .unwrap_or(FOOTNOTE_CONTINUATION_INDENT_PT_V18);
+            for (line_index, footnote_line) in footnote_lines.iter().enumerate() {
                 if footnote_y < MARGIN_PT_V0 {
                     return None;
                 }
                 let Some(segments) = parse_styled_segments_v0(footnote_line) else {
                     return None;
                 };
+                let line_x_pt = if line_index == 0 {
+                    MARGIN_PT_V0
+                } else {
+                    MARGIN_PT_V0 + continuation_indent_pt
+                };
                 if !segments.is_empty() {
                     let render_segments = split_superscript_segments_v0(&segments);
+                    let mut footnote_active_link_target = None::<PdfLinkTargetV0>;
+                    let mut line_annotations = collect_link_annotations_for_line_v0(
+                        &render_segments,
+                        line_x_pt,
+                        footnote_y,
+                        FOOTNOTE_FONT_SIZE_PT_V0,
+                        AnnotationRectProfileV0::FootnoteV18,
+                        link_targets_by_id,
+                        next_link_id,
+                        &mut footnote_active_link_target,
+                        false,
+                    )?;
+                    if footnote_active_link_target.is_some() {
+                        return None;
+                    }
+                    annotations.append(&mut line_annotations);
                     let has_superscript = render_segments.iter().any(|segment| segment.superscript);
                     if has_superscript {
                         emit_render_segments_with_superscript_v0(
                             &mut out,
                             &render_segments,
-                            MARGIN_PT_V0,
+                            line_x_pt,
                             footnote_y,
                             FOOTNOTE_FONT_SIZE_PT_V0,
                         );
@@ -941,14 +986,18 @@ fn build_page_content_stream_v0(
                         emit_styled_segments_v0(
                             &mut out,
                             &segments,
-                            MARGIN_PT_V0,
+                            line_x_pt,
                             footnote_y,
                             FOOTNOTE_FONT_SIZE_PT_V0,
                         );
                     }
                     out.extend_from_slice(b"\n");
                 }
-                footnote_y -= FOOTNOTE_LEADING_PT_V0;
+                footnote_y -= if line_index + 1 < footnote_lines.len() {
+                    FOOTNOTE_CONTINUATION_LEADING_PT_V18
+                } else {
+                    FOOTNOTE_ENTRY_LEADING_PT_V18
+                };
             }
         }
     }
