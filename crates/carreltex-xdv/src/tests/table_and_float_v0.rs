@@ -99,7 +99,7 @@ fn pdf_renderer_table_cells_stay_within_column_bounds_v1() {
     let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
 
     let left_margin_pt = 72.0f32;
-    let cell_padding_pt = 7.0f32;
+    let cell_padding_pt = 6.0f32;
     let epsilon_pt = 0.05f32;
     let col1_width_pt = segment_width_pt_v0(b"LongLeft");
     let col2_width_pt = segment_width_pt_v0(b"WideMiddle");
@@ -263,7 +263,7 @@ fn pdf_renderer_table_grid_lines_render_deterministically_v1() {
 }
 
 #[test]
-fn pdf_renderer_table_row_height_is_stable_v2() {
+fn pdf_renderer_table_row_height_is_stable_v10() {
     let xdv = write_dvi_v2_text_page_v0(b"Before.\n\n!ts lcr\n!t A||B||C\n!t D||E||F\n\nAfter.")
         .expect("writer should accept table marker lines");
     let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
@@ -271,36 +271,78 @@ fn pdf_renderer_table_row_height_is_stable_v2() {
     let (_, row2_y) = tm_position_for_line_containing_text_v0(&pdf, "(D)").expect("row 2 y");
     let delta = row1_y - row2_y;
     assert!(
-        (delta - 14.0).abs() <= 0.2,
-        "table row height should remain stable at TABLE_ROW_LEADING_PT_V0: {delta}"
+        (delta - 13.0).abs() <= 0.2,
+        "table row height should remain stable at TABLE_ROW_LEADING_PT_V10: {delta}"
     );
 }
 
 #[test]
-fn pdf_renderer_table_block_spacing_transitions_are_stable_v1() {
+fn pdf_renderer_dense_table_caption_and_transition_spacing_are_stable_v10() {
     let xdv = write_dvi_v2_text_page_v0(
-        b"~ Before paragraph.\n\n!ts lcr\n!t Alpha||Beta||Gamma\n!t Delta||Epsilon||Zeta\n\nAfter paragraph.",
+        b"~ Table 1: Dense sample caption.\n\n!ts lcr\n!t Alpha||Beta||Gamma\n!t Delta||Epsilon||Zeta\n\nAfter paragraph.",
     )
     .expect("writer should accept table marker lines");
     let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
-    let (_, before_y) =
-        tm_position_for_line_containing_text_v0(&pdf, "(Before paragraph.)").expect("before");
+    let (_, caption_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "(Table 1: Dense sample caption.)")
+            .expect("caption");
     let (_, row1_y) = tm_position_for_line_containing_text_v0(&pdf, "(Alpha)").expect("row 1");
     let (_, row2_y) = tm_position_for_line_containing_text_v0(&pdf, "(Delta)").expect("row 2");
     let (_, after_y) =
         tm_position_for_line_containing_text_v0(&pdf, "(After paragraph.)").expect("after");
     let epsilon_pt = 0.2f32;
     assert!(
-        (before_y - row1_y - 28.0).abs() <= epsilon_pt,
-        "paragraph->table transition should keep stable rhythm: before_y={before_y}, row1_y={row1_y}"
+        (caption_y - row1_y - 24.0).abs() <= epsilon_pt,
+        "caption->table transition should keep tightened dense-table rhythm: caption_y={caption_y}, row1_y={row1_y}"
     );
     assert!(
-        (row1_y - row2_y - 14.0).abs() <= epsilon_pt,
-        "table row density should stay consistent after v5 polish: row1_y={row1_y}, row2_y={row2_y}"
+        (row1_y - row2_y - 13.0).abs() <= epsilon_pt,
+        "dense table row spacing should stay stable after v10 polish: row1_y={row1_y}, row2_y={row2_y}"
     );
     assert!(
-        (row2_y - after_y - 28.0).abs() <= epsilon_pt,
-        "table->paragraph transition should keep stable rhythm: row2_y={row2_y}, after_y={after_y}"
+        (row2_y - after_y - 24.0).abs() <= epsilon_pt,
+        "table->paragraph transition should keep tightened dense-table rhythm: row2_y={row2_y}, after_y={after_y}"
+    );
+}
+
+#[test]
+fn pdf_renderer_dense_table_mixed_width_alignment_invariants_v10() {
+    let xdv = write_dvi_v2_text_page_v0(
+        b"Before.\n\n!ts lcr\n!t Label||Average||9.9\n!t Longer label||M||12345.67\n!t X||Midpoint||456.0\n\nAfter.",
+    )
+    .expect("writer should accept table marker lines");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+
+    let avg_x = *tm_xs_for_segment_text_v0(&pdf, "Average")
+        .first()
+        .expect("Average x");
+    let m_x = *tm_xs_for_segment_text_v0(&pdf, "M").first().expect("M x");
+    let midpoint_x = *tm_xs_for_segment_text_v0(&pdf, "Midpoint")
+        .first()
+        .expect("Midpoint x");
+    let avg_center = avg_x + (segment_width_pt_v0(b"Average") * 0.5);
+    let m_center = m_x + (segment_width_pt_v0(b"M") * 0.5);
+    let midpoint_center = midpoint_x + (segment_width_pt_v0(b"Midpoint") * 0.5);
+    assert!(
+        (avg_center - m_center).abs() <= 0.2 && (avg_center - midpoint_center).abs() <= 0.2,
+        "center column should retain stable center across mixed-width rows: avg={avg_center}, m={m_center}, midpoint={midpoint_center}"
+    );
+
+    let nine_x = *tm_xs_for_segment_text_v0(&pdf, "9.9")
+        .first()
+        .expect("9.9 x");
+    let long_num_x = *tm_xs_for_segment_text_v0(&pdf, "12345.67")
+        .first()
+        .expect("12345.67 x");
+    let mid_num_x = *tm_xs_for_segment_text_v0(&pdf, "456.0")
+        .first()
+        .expect("456.0 x");
+    let nine_right = nine_x + segment_width_pt_v0(b"9.9");
+    let long_num_right = long_num_x + segment_width_pt_v0(b"12345.67");
+    let mid_num_right = mid_num_x + segment_width_pt_v0(b"456.0");
+    assert!(
+        (nine_right - long_num_right).abs() <= 0.1 && (nine_right - mid_num_right).abs() <= 0.1,
+        "right-aligned numeric column should retain stable right edge: nine={nine_right}, long={long_num_right}, mid={mid_num_right}"
     );
 }
 
