@@ -740,6 +740,168 @@ fn pdf_renderer_emits_internal_ref_and_external_href_annotations_v0() {
 }
 
 #[test]
+fn pdf_renderer_front_matter_centered_link_hitboxes_track_text_tightly_v24() {
+    let xdv = write_dvi_v2_text_page_v0(
+        b"Front Matter linked <{TITLELINK}> line\nAuthor <{AUTHLINK}> Name\n2026-03-05\n\nBody.\n\n!u 1 https://example.com/title\n!u 2 https://example.com/author",
+    )
+    .expect("writer should accept centered front-matter links");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+
+    let page_one = parse_pdf_object_body_v0(&pdf, 3).expect("page object");
+    let annots = parse_pdf_ref_ids_v0(&page_one, "/Annots");
+    assert_eq!(annots.len(), 2, "expected two front-matter link annotations");
+
+    let mut title_rect = None::<[f32; 4]>;
+    let mut author_rect = None::<[f32; 4]>;
+    for annot_id in annots {
+        let annotation = parse_pdf_object_body_v0(&pdf, annot_id).expect("annotation");
+        let rect = parse_pdf_annotation_rect_v0(&annotation).expect("annotation rect");
+        let action_id = parse_pdf_annotation_action_id_v0(&annotation).expect("action id");
+        let action = parse_pdf_object_body_v0(&pdf, action_id).expect("action body");
+        match parse_pdf_action_uri_v0(&action).as_deref() {
+            Some("https://example.com/title") => title_rect = Some(rect),
+            Some("https://example.com/author") => author_rect = Some(rect),
+            other => panic!("unexpected URI target for front-matter link annotation: {other:?}"),
+        }
+    }
+    let title_rect = title_rect.expect("title link rect");
+    let author_rect = author_rect.expect("author link rect");
+
+    let title_x = tm_x_for_segment_substring_v0(&pdf, "(Front Matter linked ", "(TITLELINK)")
+        .expect("title link x");
+    let author_x =
+        tm_x_for_segment_substring_v0(&pdf, "(Author ", "(AUTHLINK)").expect("author link x");
+    let title_width = title_rect[2] - title_rect[0];
+    let author_width = author_rect[2] - author_rect[0];
+    let expected_title_width = segment_width_pt_v0(b"TITLELINK");
+    let expected_author_width = segment_width_pt_v0(b"AUTHLINK");
+    let title_height = title_rect[3] - title_rect[1];
+    let author_height = author_rect[3] - author_rect[1];
+
+    assert!(
+        (title_rect[0] - title_x).abs() <= 0.3,
+        "title link hitbox x should align to centered rendered text: rect={title_rect:?}, x={title_x}"
+    );
+    assert!(
+        (author_rect[0] - author_x).abs() <= 0.3,
+        "author link hitbox x should align to centered rendered text: rect={author_rect:?}, x={author_x}"
+    );
+    assert!(
+        (title_width - expected_title_width).abs() <= 1.2,
+        "title link hitbox width should track rendered text width: width={title_width}, expected={expected_title_width}"
+    );
+    assert!(
+        (author_width - expected_author_width).abs() <= 1.2,
+        "author link hitbox width should track rendered text width: width={author_width}, expected={expected_author_width}"
+    );
+    assert!(
+        (8.5..=15.0).contains(&title_height),
+        "title front-matter link hitbox height should stay compact: height={title_height}, rect={title_rect:?}"
+    );
+    assert!(
+        (8.0..=13.5).contains(&author_height),
+        "author front-matter link hitbox height should stay compact: height={author_height}, rect={author_rect:?}"
+    );
+}
+
+#[test]
+fn pdf_renderer_centered_heading_adjacent_wrapped_link_hitboxes_stay_tight_v24() {
+    let xdv = write_dvi_v2_text_page_with_layout_and_wrap_v0(
+        b"Title\nAuthor\n2026-03-05\n\n@S {Heading Context}\n\n^ Lead <{WRAPLINK ALPHA BETA GAMMA DELTA EPSILON ZETA ETA THETA IOTA}> tail text.\n\n!u 1 https://e.co/w",
+        65_536,
+        786_432,
+        28,
+    )
+    .expect("writer should accept heading-adjacent centered wrapped link line");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+
+    let page_one = parse_pdf_object_body_v0(&pdf, 3).expect("page object");
+    let annots = parse_pdf_ref_ids_v0(&page_one, "/Annots");
+    let mut wrapped_link_rects = Vec::<[f32; 4]>::new();
+    for annot_id in annots {
+        let annotation = parse_pdf_object_body_v0(&pdf, annot_id).expect("annotation");
+        let action_id = parse_pdf_annotation_action_id_v0(&annotation).expect("action id");
+        let action = parse_pdf_object_body_v0(&pdf, action_id).expect("action body");
+        if parse_pdf_action_uri_v0(&action).as_deref() != Some("https://e.co/w") {
+            continue;
+        }
+        wrapped_link_rects.push(parse_pdf_annotation_rect_v0(&annotation).expect("annotation rect"));
+    }
+    assert!(
+        wrapped_link_rects.len() >= 2,
+        "wrapped centered link should emit one annotation rect per wrapped line"
+    );
+
+    let (first_link_x, _) =
+        tm_position_for_segment_substring_v0(&pdf, "WRAPLINK").expect("first wrapped-link segment position");
+    assert!(
+        (wrapped_link_rects[0][0] - first_link_x).abs() <= 0.35,
+        "first wrapped-link rect x should align with rendered centered text: rect={:?}, x={first_link_x}",
+        wrapped_link_rects[0]
+    );
+    for rect in wrapped_link_rects {
+        let width = rect[2] - rect[0];
+        let height = rect[3] - rect[1];
+        assert!(width > 0.0, "wrapped centered-link annotation width must be positive: rect={rect:?}");
+        assert!(height > 0.0, "wrapped centered-link annotation height must be positive: rect={rect:?}");
+        assert!(
+            (7.5..=12.5).contains(&height),
+            "wrapped centered-link annotation height should stay tight and deterministic: height={height}, rect={rect:?}"
+        );
+        assert!(
+            rect[0] >= 72.0 && rect[2] <= 540.0,
+            "wrapped centered-link annotation should stay inside content column: rect={rect:?}"
+        );
+    }
+}
+
+#[test]
+fn pdf_renderer_centered_linked_style_seams_keep_spacing_and_hitbox_alignment_v24() {
+    let xdv = write_dvi_v2_text_page_v0(
+        b"Title\nAuthor\n2026-03-05\n\n^ Prefix, <[{SEAMLINK}]> suffix.\n\n!u 1 https://example.com/seam",
+    )
+    .expect("writer should accept centered styled-link seam line");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+
+    let rendered_line = rendered_text_for_line_containing_needle_v0(&pdf, "SEAMLINK")
+        .expect("centered seam line should decode");
+    assert_eq!(
+        rendered_line, "Prefix, SEAMLINK suffix.",
+        "centered linked-style seam spacing should remain punctuation-stable"
+    );
+
+    let page_one = parse_pdf_object_body_v0(&pdf, 3).expect("page object");
+    let annots = parse_pdf_ref_ids_v0(&page_one, "/Annots");
+    assert_eq!(annots.len(), 1, "expected exactly one centered seam link annotation");
+    let annotation = parse_pdf_object_body_v0(&pdf, annots[0]).expect("annotation");
+    let action_id = parse_pdf_annotation_action_id_v0(&annotation).expect("action id");
+    let action = parse_pdf_object_body_v0(&pdf, action_id).expect("action body");
+    assert_eq!(
+        parse_pdf_action_uri_v0(&action).as_deref(),
+        Some("https://example.com/seam"),
+        "centered seam link annotation should preserve URI target"
+    );
+    let rect = parse_pdf_annotation_rect_v0(&annotation).expect("annotation rect");
+    let (seam_link_x, _) =
+        tm_position_for_segment_substring_v0(&pdf, "SEAMLINK").expect("seam-link text position");
+    let width = rect[2] - rect[0];
+    let expected_width = segment_width_pt_v0(b"SEAMLINK");
+    let height = rect[3] - rect[1];
+    assert!(
+        (rect[0] - seam_link_x).abs() <= 0.3,
+        "centered seam link hitbox x should align with rendered text: rect={rect:?}, x={seam_link_x}"
+    );
+    assert!(
+        (width - expected_width).abs() <= 1.2,
+        "centered seam link hitbox width should track rendered text width: width={width}, expected={expected_width}"
+    );
+    assert!(
+        (7.5..=12.5).contains(&height),
+        "centered seam link hitbox height should stay tightly bounded: height={height}, rect={rect:?}"
+    );
+}
+
+#[test]
 fn pdf_renderer_emits_figref_annotation_targeting_figure_anchor_v0() {
     let xdv = write_dvi_v2_text_page_v0(
         b"Prelude.\n\n@S {Intro}\n\n!gbox\n!gcap Figure 1: Demo caption.\n\nSee <1>.\n\n!l fig:demo 2 figure 1 -\n!r fig:demo 9 2\n!ra 1 2",
