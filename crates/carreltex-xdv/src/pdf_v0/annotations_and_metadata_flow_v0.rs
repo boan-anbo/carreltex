@@ -1,3 +1,60 @@
+fn annotation_trimmed_run_bounds_v9(run_start_x: f32, run_end_x: f32, run_bytes: &[u8]) -> Option<(f32, f32)> {
+    if run_end_x <= run_start_x {
+        return None;
+    }
+    let mut left_trim_pt = 0.0f32;
+    for byte in run_bytes {
+        if *byte != b' ' {
+            break;
+        }
+        let width_sp = glyph_width_sp_v0(*byte, 65_536)?;
+        left_trim_pt += (width_sp as f32) / 65_536.0;
+    }
+    let mut right_trim_pt = 0.0f32;
+    for byte in run_bytes.iter().rev() {
+        if *byte != b' ' {
+            break;
+        }
+        let width_sp = glyph_width_sp_v0(*byte, 65_536)?;
+        right_trim_pt += (width_sp as f32) / 65_536.0;
+    }
+    let mut x0 = run_start_x + left_trim_pt;
+    let mut x1 = run_end_x - right_trim_pt;
+    if x1 <= x0 {
+        x0 = run_start_x;
+        x1 = run_end_x;
+    }
+    if x1 <= x0 {
+        return None;
+    }
+    Some((x0, x1))
+}
+
+fn annotation_rect_for_run_v9(
+    run_start_x: f32,
+    run_end_x: f32,
+    run_bytes: &[u8],
+    line_y_pt: f32,
+    font_size_pt: f32,
+) -> Option<[f32; 4]> {
+    let (x0, x1) = annotation_trimmed_run_bounds_v9(run_start_x, run_end_x, run_bytes)?;
+    let descent_pt = font_size_pt * ANNOTATION_RECT_DESCENT_RATIO_V9;
+    let mut ascent_pt = font_size_pt * ANNOTATION_RECT_ASCENT_RATIO_V9;
+    if ascent_pt + descent_pt < ANNOTATION_RECT_MIN_HEIGHT_PT_V9 {
+        ascent_pt = ANNOTATION_RECT_MIN_HEIGHT_PT_V9 - descent_pt;
+    }
+    let rect = [
+        x0.clamp(0.0, PAGE_WIDTH_PT_V0),
+        (line_y_pt - descent_pt).clamp(0.0, PAGE_HEIGHT_PT_V0),
+        x1.clamp(0.0, PAGE_WIDTH_PT_V0),
+        (line_y_pt + ascent_pt).clamp(0.0, PAGE_HEIGHT_PT_V0),
+    ];
+    if rect[2] <= rect[0] || rect[3] <= rect[1] {
+        return None;
+    }
+    Some(rect)
+}
+
 fn collect_link_annotations_for_line_v0(
     segments: &[PdfRenderSegmentV0],
     line_x_pt: f32,
@@ -12,6 +69,7 @@ fn collect_link_annotations_for_line_v0(
     let mut cursor_x = line_x_pt;
     let mut run_start_x = None::<f32>;
     let mut run_end_x = line_x_pt;
+    let mut run_bytes = Vec::<u8>::new();
 
     for segment in segments {
         let start_x = cursor_x;
@@ -19,6 +77,7 @@ fn collect_link_annotations_for_line_v0(
         if segment.is_link {
             if run_start_x.is_none() {
                 run_start_x = Some(start_x);
+                run_bytes.clear();
                 if active_link_target.is_none() {
                     let target = link_targets_by_id.get(next_link_id)?.clone();
                     *next_link_id = next_link_id.checked_add(1)?;
@@ -26,22 +85,13 @@ fn collect_link_annotations_for_line_v0(
                 }
             }
             run_end_x = end_x;
+            run_bytes.extend_from_slice(&segment.bytes);
         } else if let Some(run_x) = run_start_x.take() {
             let target = active_link_target.clone()?;
-            if run_end_x <= run_x {
-                return None;
-            }
-            let rect = [
-                run_x.clamp(0.0, PAGE_WIDTH_PT_V0),
-                (line_y_pt - font_size_pt * 0.30).clamp(0.0, PAGE_HEIGHT_PT_V0),
-                run_end_x.clamp(0.0, PAGE_WIDTH_PT_V0),
-                (line_y_pt + font_size_pt * 0.85).clamp(0.0, PAGE_HEIGHT_PT_V0),
-            ];
-            if rect[2] <= rect[0] || rect[3] <= rect[1] {
-                return None;
-            }
+            let rect = annotation_rect_for_run_v9(run_x, run_end_x, &run_bytes, line_y_pt, font_size_pt)?;
             annotations.push(PdfLinkAnnotationV0 { target, rect });
             *active_link_target = None;
+            run_bytes.clear();
         }
         cursor_x = end_x;
     }
@@ -54,19 +104,12 @@ fn collect_link_annotations_for_line_v0(
             }
             return None;
         }
-        let rect = [
-            run_x.clamp(0.0, PAGE_WIDTH_PT_V0),
-            (line_y_pt - font_size_pt * 0.30).clamp(0.0, PAGE_HEIGHT_PT_V0),
-            run_end_x.clamp(0.0, PAGE_WIDTH_PT_V0),
-            (line_y_pt + font_size_pt * 0.85).clamp(0.0, PAGE_HEIGHT_PT_V0),
-        ];
-        if rect[2] <= rect[0] || rect[3] <= rect[1] {
-            return None;
-        }
+        let rect = annotation_rect_for_run_v9(run_x, run_end_x, &run_bytes, line_y_pt, font_size_pt)?;
         annotations.push(PdfLinkAnnotationV0 { target, rect });
         if !link_active_at_line_end {
             *active_link_target = None;
         }
+        run_bytes.clear();
     } else if !link_active_at_line_end {
         *active_link_target = None;
     }
@@ -85,6 +128,7 @@ fn collect_toc_link_annotations_for_line_v0(
     let mut cursor_x = line_x_pt;
     let mut run_start_x = None::<f32>;
     let mut run_end_x = line_x_pt;
+    let mut run_bytes = Vec::<u8>::new();
 
     for segment in segments {
         let start_x = cursor_x;
@@ -92,42 +136,23 @@ fn collect_toc_link_annotations_for_line_v0(
         if segment.is_link {
             if run_start_x.is_none() {
                 run_start_x = Some(start_x);
+                run_bytes.clear();
             }
             run_end_x = end_x;
+            run_bytes.extend_from_slice(&segment.bytes);
         } else if let Some(run_x) = run_start_x.take() {
-            if run_end_x <= run_x {
-                return None;
-            }
-            let rect = [
-                run_x.clamp(0.0, PAGE_WIDTH_PT_V0),
-                (line_y_pt - font_size_pt * 0.30).clamp(0.0, PAGE_HEIGHT_PT_V0),
-                run_end_x.clamp(0.0, PAGE_WIDTH_PT_V0),
-                (line_y_pt + font_size_pt * 0.85).clamp(0.0, PAGE_HEIGHT_PT_V0),
-            ];
-            if rect[2] <= rect[0] || rect[3] <= rect[1] {
-                return None;
-            }
+            let rect = annotation_rect_for_run_v9(run_x, run_end_x, &run_bytes, line_y_pt, font_size_pt)?;
             annotations.push(PdfLinkAnnotationV0 {
                 target: target.clone(),
                 rect,
             });
+            run_bytes.clear();
         }
         cursor_x = end_x;
     }
 
     if let Some(run_x) = run_start_x {
-        if run_end_x <= run_x {
-            return None;
-        }
-        let rect = [
-            run_x.clamp(0.0, PAGE_WIDTH_PT_V0),
-            (line_y_pt - font_size_pt * 0.30).clamp(0.0, PAGE_HEIGHT_PT_V0),
-            run_end_x.clamp(0.0, PAGE_WIDTH_PT_V0),
-            (line_y_pt + font_size_pt * 0.85).clamp(0.0, PAGE_HEIGHT_PT_V0),
-        ];
-        if rect[2] <= rect[0] || rect[3] <= rect[1] {
-            return None;
-        }
+        let rect = annotation_rect_for_run_v9(run_x, run_end_x, &run_bytes, line_y_pt, font_size_pt)?;
         annotations.push(PdfLinkAnnotationV0 { target, rect });
     }
 
@@ -401,4 +426,3 @@ fn parse_metadata_lines_v0(
         equation_ordinals_by_anchor_id,
     ))
 }
-
