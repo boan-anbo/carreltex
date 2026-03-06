@@ -64,7 +64,7 @@ fn wrapped_aligned_style_scale_percent_v28(segment: &PdfRenderSegmentV0) -> u8 {
 }
 
 fn wrapped_indented_style_scale_percent_v29(segment: &PdfRenderSegmentV0) -> u8 {
-    if segment.superscript {
+    if segment.superscript || segment.is_link {
         return 100;
     }
     if !segment.bytes.iter().any(|byte| byte.is_ascii_alphabetic()) {
@@ -159,7 +159,7 @@ fn trailing_space_bounded_seam_trim_pt_v30(
     ) {
         return 0.0;
     }
-    if segment.superscript || matches!(segment.style, PdfTextStyleV0::Regular) {
+    if segment.superscript || segment.is_link || matches!(segment.style, PdfTextStyleV0::Regular) {
         return 0.0;
     }
     let Some(next_segment) = next_segment else {
