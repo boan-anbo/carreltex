@@ -54,6 +54,9 @@ pub(crate) fn extract_typeset_minimal_text_body_with_external_bib_v0(
             {
                 index = consume_pass_options_declaration_noop_v0(tokens, index)?;
             }
+            Some(TokenV0::ControlSeq(name)) if name.as_slice() == INCLUDEONLY_CONTROL_V0 => {
+                index = consume_includeonly_declaration_noop_v0(tokens, index)?;
+            }
             Some(TokenV0::ControlSeq(name))
                 if name.as_slice() == ADDBIBRESOURCE_CONTROL_V0
                     || name.as_slice() == BIBLIOGRAPHY_CONTROL_V0 =>
@@ -195,6 +198,34 @@ pub(crate) fn extract_typeset_minimal_text_body_with_external_bib_v0(
                 );
                 pending_label_target = None;
                 index = consume_footnote_command_v0(tokens, index, &mut body, &mut footnotes)?;
+            }
+            Some(TokenV0::ControlSeq(name)) if name.as_slice() == INCLUDEGRAPHICS_CONTROL_V0 => {
+                saw_body_content_after_maketitle = true;
+                maybe_emit_pending_noindent_prefix_v0(
+                    &mut body,
+                    &mut pending_noindent_after_heading,
+                );
+                let anchor_id = next_anchor_id;
+                next_anchor_id = next_anchor_id.checked_add(1)?;
+                let figure_ordinal = next_figure_ordinal;
+                next_figure_ordinal = next_figure_ordinal.checked_add(1)?;
+                let (image, next) =
+                    consume_includegraphics_command_v0(tokens, index, &graphicspath_prefixes)?;
+                emit_inline_includegraphics_placeholder_v0(
+                    &mut body,
+                    &image,
+                    anchor_id,
+                    figure_ordinal,
+                );
+                index = next;
+                pending_label_target = Some(PendingLabelTargetV0 {
+                    anchor_id,
+                    kind: LabelKindV0::Figure,
+                    level: None,
+                    figure_ordinal: Some(figure_ordinal),
+                    equation_ordinal: None,
+                    title: None,
+                });
             }
             Some(TokenV0::ControlSeq(name)) if name.as_slice() == HREF_CONTROL_V0 => {
                 saw_body_content_after_maketitle = true;
@@ -366,9 +397,6 @@ pub(crate) fn extract_typeset_minimal_text_body_with_external_bib_v0(
         &ref_link_anchor_ids,
         &pageref_page_link_anchor_ids,
     )?;
-    if saw_thebibliography_env && bibliography_render_requested {
-        return None;
-    }
     let mut bibliography_entries_by_key = BTreeMap::<Vec<u8>, BibItemMetaV0>::new();
     for (key, text) in external_bib_entries {
         if text.is_empty() {
@@ -407,11 +435,15 @@ pub(crate) fn extract_typeset_minimal_text_body_with_external_bib_v0(
     if !cite_occurrences.is_empty() && resolved_bibliography_entries.is_empty() {
         return None;
     }
+    if (saw_thebibliography_env || !cite_occurrences.is_empty())
+        && resolved_bibliography_entries.is_empty()
+    {
+        return None;
+    }
     if saw_thebibliography_env || bibliography_render_requested {
-        if resolved_bibliography_entries.is_empty() {
-            return None;
+        if !resolved_bibliography_entries.is_empty() {
+            emit_bibliography_block_v0(&mut body, &resolved_bibliography_entries);
         }
-        emit_bibliography_block_v0(&mut body, &resolved_bibliography_entries);
     }
 
     if !footnotes.is_empty() {

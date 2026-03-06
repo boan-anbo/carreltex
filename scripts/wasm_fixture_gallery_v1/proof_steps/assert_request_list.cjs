@@ -304,6 +304,20 @@ if (!graphicsTypePathRequest) {
   console.error('FAIL: request list must include includegraphics type/path hint request for assets__hires__chart.pdf');
   process.exit(1);
 }
+const fixedpointGraphicsRequestA = listA.requests.find(
+  (request) => request.kind === 'texmf' && request.format === 'png' && request.name === 'phase2__figs__phase2-fixedpoint-figure.png' && request.variant === 'typeset',
+);
+if (!fixedpointGraphicsRequestA) {
+  console.error('FAIL: request list must include fixedpoint graphicspath request for phase2__figs__phase2-fixedpoint-figure.png');
+  process.exit(1);
+}
+const fixedpointGraphicsRequestB = listA.requests.find(
+  (request) => request.kind === 'texmf' && request.format === 'png' && request.name === 'phase2__plots__phase2-fixedpoint-figure.png' && request.variant === 'typeset',
+);
+if (!fixedpointGraphicsRequestB) {
+  console.error('FAIL: request list must include fixedpoint graphicspath request for phase2__plots__phase2-fixedpoint-figure.png');
+  process.exit(1);
+}
 if (listA.requests.some((request) => request.name === 'bad__danger_graphic.png' || request.name === 'abs__danger_graphic.png')) {
   console.error('FAIL: request list must fail-closed for unsafe graphicspath entries');
   process.exit(1);
@@ -339,6 +353,20 @@ const bibStyleResourceRequest = listA.requests.find(
 );
 if (!bibStyleResourceRequest) {
   console.error('FAIL: request list must include bibliography hint request for styleprobe_refs.bib');
+  process.exit(1);
+}
+const fixedpointBibRequestA = listA.requests.find(
+  (request) => request.kind === 'texmf' && request.format === 'bib' && request.name === 'phase2_fixedpoint_refs.bib' && request.variant === 'typeset',
+);
+if (!fixedpointBibRequestA) {
+  console.error('FAIL: request list must include fixedpoint bibliography hint request for phase2_fixedpoint_refs.bib');
+  process.exit(1);
+}
+const fixedpointBibRequestB = listA.requests.find(
+  (request) => request.kind === 'texmf' && request.format === 'bib' && request.name === 'phase2_fixedpoint_more.bib' && request.variant === 'typeset',
+);
+if (!fixedpointBibRequestB) {
+  console.error('FAIL: request list must include fixedpoint bibliography hint request for phase2_fixedpoint_more.bib');
   process.exit(1);
 }
 const multiAddBibRequest = listA.requests.find(

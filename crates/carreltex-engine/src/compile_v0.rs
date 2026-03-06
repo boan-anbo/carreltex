@@ -398,17 +398,17 @@ pub fn compile_main_typeset_v0(mount: &mut Mount) -> CompileResultV0 {
         );
     }
     let normalized_typeset_tokens = normalize_typeset_minimal_tokens_v0(&macro_expanded_tokens);
-    let ok_text_bytes = build_typeset_external_bib_entries_v0(mount, &normalized_typeset_tokens)
-        .and_then(|external_bib_entries| {
-            if external_bib_entries.is_empty() {
-                extract_typeset_minimal_text_body_v0(&normalized_typeset_tokens)
-            } else {
-                extract_typeset_minimal_text_body_with_external_bib_v0(
-                    &normalized_typeset_tokens,
-                    &external_bib_entries,
-                )
-            }
-        });
+    let external_bib_entries =
+        build_typeset_external_bib_entries_v0(mount, &normalized_typeset_tokens)
+            .unwrap_or_default();
+    let ok_text_bytes = if external_bib_entries.is_empty() {
+        extract_typeset_minimal_text_body_v0(&normalized_typeset_tokens)
+    } else {
+        extract_typeset_minimal_text_body_with_external_bib_v0(
+            &normalized_typeset_tokens,
+            &external_bib_entries,
+        )
+    };
     if let Some(ok_text_bytes) = ok_text_bytes {
         if ok_text_bytes.len() <= MAX_OK_TEXT_BYTES_V0 {
             let glyph_advance_sp = TYPESET_MINIMAL_GLYPH_ADVANCE_SP_V0;

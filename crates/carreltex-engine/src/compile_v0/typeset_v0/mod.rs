@@ -35,6 +35,7 @@ const PRINTBIBLIOGRAPHY_CONTROL_V0: &[u8] = b"printbibliography";
 const CAPTION_CONTROL_V0: &[u8] = b"caption";
 const GRAPHICSPATH_CONTROL_V0: &[u8] = b"graphicspath";
 const INCLUDEGRAPHICS_CONTROL_V0: &[u8] = b"includegraphics";
+const INCLUDEONLY_CONTROL_V0: &[u8] = b"includeonly";
 const BIBITEM_CONTROL_V0: &[u8] = b"bibitem";
 const BIBLIOGRAPHY_CONTROL_V0: &[u8] = b"bibliography";
 const BIBLIOGRAPHYSTYLE_CONTROL_V0: &[u8] = b"bibliographystyle";
