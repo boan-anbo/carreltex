@@ -373,6 +373,15 @@ fn pdf_renderer_toc_block_renders_between_surrounding_paragraphs_v0() {
         toc_detail_y > after_y,
         "toc block should appear above following paragraph"
     );
+    let epsilon_pt = 0.05f32;
+    assert!(
+        (28.0 - epsilon_pt..=42.0 + epsilon_pt).contains(&(before_y - toc_title_y)),
+        "paragraph->toc title gap should stay within stable rhythm bounds: before_y={before_y}, toc_title_y={toc_title_y}"
+    );
+    assert!(
+        (toc_detail_y - after_y - 28.0).abs() <= epsilon_pt,
+        "toc block trailing gap should match paragraph rhythm: toc_detail_y={toc_detail_y}, after_y={after_y}"
+    );
     assert!(
         toc_title_x >= 72.0,
         "toc title should remain in printable area"
@@ -451,4 +460,3 @@ fn pdf_renderer_rejects_duplicate_toc_anchor_ids_v0() {
         "renderer should fail-closed on duplicate toc anchors"
     );
 }
-

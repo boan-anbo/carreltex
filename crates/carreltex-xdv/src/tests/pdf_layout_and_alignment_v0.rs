@@ -892,11 +892,11 @@ fn pdf_renderer_heading_font_hierarchy_invariants_v0() {
         "title font size mismatch: {title_size}"
     );
     assert!(
-        (section_size - 16.0).abs() <= 0.02,
+        (section_size - 15.5).abs() <= 0.02,
         "section font size mismatch: {section_size}"
     );
     assert!(
-        (subsection_size - 14.0).abs() <= 0.02,
+        (subsection_size - 13.0).abs() <= 0.02,
         "subsection font size mismatch: {subsection_size}"
     );
     assert!(
@@ -1139,7 +1139,7 @@ fn pdf_renderer_heading_list_quote_rhythm_invariants_v0() {
     let (_, after_heading_y) =
         tm_position_for_line_containing_text_v0(&pdf, "(After heading paragraph.)")
             .expect("after heading position");
-    let (_, list_one_y) =
+    let (list_one_x, list_one_y) =
         tm_position_for_line_containing_text_v0(&pdf, "(First list item)").expect("list one");
     let (_, list_two_y) =
         tm_position_for_line_containing_text_v0(&pdf, "(Second list item)").expect("list two");
@@ -1178,6 +1178,10 @@ fn pdf_renderer_heading_list_quote_rhythm_invariants_v0() {
         "quote->paragraph gap mismatch: quote_two_y={quote_two_y}, after_quote_y={after_quote_y}"
     );
     assert!(quote_one_x > 72.0, "quote line should be indented");
+    assert!(
+        quote_one_x >= list_one_x + 4.0,
+        "quote indent should be visibly deeper than list body indent: list_one_x={list_one_x}, quote_one_x={quote_one_x}"
+    );
     assert!(
         (quote_one_x - quote_two_x).abs() <= epsilon_pt,
         "quote x drift mismatch"
@@ -1295,6 +1299,21 @@ fn pdf_renderer_enumerate_number_column_alignment_invariants_v0() {
         "ten body x mismatch: {}",
         ten_body_x[0]
     );
+    let min_gap_pt = 7.5f32;
+    let nine_number_right = nine_number_x[0] + segment_width_pt_v0(b"9.");
+    let ten_number_right = ten_number_x[0] + segment_width_pt_v0(b"10.");
+    assert!(
+        nine_body_x[0] - nine_number_right >= min_gap_pt,
+        "enumerate gap for 9. should remain readable: body_x={}, number_right={}",
+        nine_body_x[0],
+        nine_number_right
+    );
+    assert!(
+        ten_body_x[0] - ten_number_right >= min_gap_pt,
+        "enumerate gap for 10. should remain readable: body_x={}, number_right={}",
+        ten_body_x[0],
+        ten_number_right
+    );
 }
 
 #[test]
@@ -1345,6 +1364,21 @@ fn pdf_renderer_enumerate_number_column_alignment_across_wraps_v0() {
         "wrap body x mismatch for 10.: start={}, wrap={}",
         ten_start_x[0],
         ten_wrap_x[0]
+    );
+    let min_gap_pt = 7.5f32;
+    let nine_number_right = nine_number_x[0] + segment_width_pt_v0(b"9.");
+    let ten_number_right = ten_number_x[0] + segment_width_pt_v0(b"10.");
+    assert!(
+        nine_start_x[0] - nine_number_right >= min_gap_pt,
+        "wrapped enumerate gap for 9. should remain readable: body_x={}, number_right={}",
+        nine_start_x[0],
+        nine_number_right
+    );
+    assert!(
+        ten_start_x[0] - ten_number_right >= min_gap_pt,
+        "wrapped enumerate gap for 10. should remain readable: body_x={}, number_right={}",
+        ten_start_x[0],
+        ten_number_right
     );
 }
 
@@ -1430,7 +1464,10 @@ fn pdf_renderer_applies_quote_indent_and_hides_prefix_v0() {
         xs.len() >= 2,
         "expected at least two rendered lines, got {xs:?}"
     );
-    assert!(xs[0] > 72.0, "quote line should be indented: {xs:?}");
+    assert!(
+        (xs[0] - 102.0).abs() <= 0.02,
+        "quote line indent should be stable and deeper than body indent: {xs:?}"
+    );
     assert!(
         (xs[0] - xs[1]).abs() <= 0.02,
         "quote continuation should keep indent: {xs:?}"
@@ -1459,6 +1496,10 @@ fn pdf_renderer_quote_indent_and_paragraph_break_invariants_v0() {
         tm_position_for_line_containing_text_v0(&pdf, "(second continuation)").expect("line 4");
 
     let epsilon_pt = 0.02f32;
+    assert!(
+        (x1 - 102.0).abs() <= epsilon_pt,
+        "quote indent baseline mismatch: {x1}"
+    );
     assert!(
         (x1 - x2).abs() <= epsilon_pt,
         "quote line x drift: {x1} vs {x2}"
