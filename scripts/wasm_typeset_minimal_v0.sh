@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-OUT_DIR="${1:-$ROOT_DIR/out}"
+OUT_DIR="${1:-$ROOT_DIR/target/wasm_typeset_minimal_v0}"
 
 "$ROOT_DIR/scripts/wasm_smoke_build.sh"
 node "$ROOT_DIR/scripts/wasm_typeset_minimal_v0_emit_pdf.mjs" "$OUT_DIR"

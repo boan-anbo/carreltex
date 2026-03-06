@@ -1,4 +1,4 @@
 export {
   loadGalleryManifestV0,
   loadFixtureCasesV0,
-} from './main.mjs';
+} from './case_registry_v0.mjs';
