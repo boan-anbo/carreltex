@@ -10,6 +10,7 @@ use super::{
     write_dvi_v2_text_page_with_layout_v0, write_dvi_v2_text_page_with_layout_wrap_and_paging_v0,
     LinePlanV0, DVI_DOWN3, DVI_EOP, DVI_FNT_DEF1, DVI_PRE, DVI_RIGHT3, DVI_TRAILER_BYTE,
 };
+use std::collections::BTreeSet;
 
 #[test]
 fn writer_output_validates() {
@@ -676,6 +677,47 @@ fn parse_pdf_ref_ids_v0(body: &str, key: &str) -> Vec<u32> {
             _ => None,
         })
         .collect()
+}
+
+fn parse_pdf_single_ref_id_v0(body: &str, key: &str) -> Option<u32> {
+    let marker = format!("{key} ");
+    let start = body.find(&marker)? + marker.len();
+    let fields = body[start..].split_whitespace().collect::<Vec<_>>();
+    if fields.len() < 3 || fields[1] != "0" || fields[2] != "R" {
+        return None;
+    }
+    fields[0].parse::<u32>().ok()
+}
+
+fn parse_pdf_outline_count_v0(body: &str) -> Option<i32> {
+    let marker = "/Count ";
+    let start = body.find(marker)? + marker.len();
+    let token = body[start..].split_whitespace().next()?;
+    token.parse::<i32>().ok()
+}
+
+fn collect_outline_item_ids_depth_first_v0(pdf: &[u8], outline_root_id: u32) -> Option<Vec<u32>> {
+    let root_body = parse_pdf_object_body_v0(pdf, outline_root_id)?;
+    let Some(root_first_id) = parse_pdf_single_ref_id_v0(&root_body, "/First") else {
+        return Some(Vec::new());
+    };
+    let mut out = Vec::<u32>::new();
+    let mut seen = BTreeSet::<u32>::new();
+    let mut stack = vec![root_first_id];
+    while let Some(item_id) = stack.pop() {
+        if !seen.insert(item_id) {
+            return None;
+        }
+        out.push(item_id);
+        let body = parse_pdf_object_body_v0(pdf, item_id)?;
+        if let Some(next_id) = parse_pdf_single_ref_id_v0(&body, "/Next") {
+            stack.push(next_id);
+        }
+        if let Some(first_child_id) = parse_pdf_single_ref_id_v0(&body, "/First") {
+            stack.push(first_child_id);
+        }
+    }
+    Some(out)
 }
 
 fn parse_pdf_annotation_action_id_v0(body: &str) -> Option<u32> {
@@ -3308,6 +3350,117 @@ fn pdf_renderer_renders_toc_page_numbers_with_mixed_values_v2() {
 }
 
 #[test]
+fn pdf_renderer_emits_outline_root_for_toc_entries_v0() {
+    let xdv = write_dvi_v2_text_page_v0(
+        b"Prelude.\n\n!toc\n\n@S {Intro section}\n\n@s {Detail section}\n\n!toc 1 1 Intro section\n!toc 2 2 Detail section",
+    )
+    .expect("writer should accept toc marker lines");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+    let catalog = parse_pdf_object_body_v0(&pdf, 1).expect("catalog object");
+    let outline_root_id =
+        parse_pdf_single_ref_id_v0(&catalog, "/Outlines").expect("catalog outlines ref");
+    let outline_root = parse_pdf_object_body_v0(&pdf, outline_root_id).expect("outline root");
+    assert!(
+        outline_root.contains("/Type /Outlines"),
+        "outline root type missing: {outline_root}"
+    );
+    let count = parse_pdf_outline_count_v0(&outline_root).expect("outline count");
+    assert_eq!(count, 2, "outline root count should equal toc entry count");
+    assert!(
+        parse_pdf_single_ref_id_v0(&outline_root, "/First").is_some()
+            && parse_pdf_single_ref_id_v0(&outline_root, "/Last").is_some(),
+        "outline root should expose first/last refs: {outline_root}"
+    );
+}
+
+#[test]
+fn pdf_renderer_outline_count_matches_toc_entries_v0() {
+    let xdv = write_dvi_v2_text_page_v0(
+        b"Prelude.\n\n!toc\n\n@S {Alpha}\n\n@s {Beta}\n\x0c@S {Gamma}\n\n!toc 1 1 Alpha\n!toc 2 2 Beta\n!toc 1 3 Gamma",
+    )
+    .expect("writer should accept toc marker lines");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+    let catalog = parse_pdf_object_body_v0(&pdf, 1).expect("catalog object");
+    let outline_root_id =
+        parse_pdf_single_ref_id_v0(&catalog, "/Outlines").expect("catalog outlines ref");
+    let outline_root = parse_pdf_object_body_v0(&pdf, outline_root_id).expect("outline root");
+    assert_eq!(
+        parse_pdf_outline_count_v0(&outline_root),
+        Some(3),
+        "outline root count should match toc entries"
+    );
+    let outline_item_ids = collect_outline_item_ids_depth_first_v0(&pdf, outline_root_id)
+        .expect("outline item traversal");
+    assert_eq!(
+        outline_item_ids.len(),
+        3,
+        "outline items should match toc entry count"
+    );
+}
+
+#[test]
+fn pdf_renderer_outline_destinations_resolve_to_anchor_destinations_v0() {
+    let xdv = write_dvi_v2_text_page_v0(
+        b"Prelude.\n\n!toc\n\n@S {Intro section}\x0c@s {Detail section}\n\n!toc 1 1 <Intro section>\n!toc 2 2 <Detail section>",
+    )
+    .expect("writer should accept toc metadata and heading lines");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+
+    let pages_obj = parse_pdf_object_body_v0(&pdf, 2).expect("pages object");
+    let page_ids = parse_pdf_ref_ids_v0(&pages_obj, "/Kids");
+    assert!(!page_ids.is_empty(), "expected page ids");
+    let mut known_anchor_destinations = BTreeSet::<(u32, i32, i32)>::new();
+    for page_id in page_ids {
+        let page_obj = parse_pdf_object_body_v0(&pdf, page_id).expect("page object");
+        let annots = parse_pdf_ref_ids_v0(&page_obj, "/Annots");
+        for annot_id in annots {
+            let annotation = parse_pdf_object_body_v0(&pdf, annot_id).expect("annotation");
+            if annotation.contains("/XYZ") {
+                let (dest_page, x_pt, y_pt) =
+                    parse_pdf_annotation_dest_xyz_v0(&annotation).expect("xyz annotation dest");
+                known_anchor_destinations.insert((
+                    dest_page,
+                    (x_pt * 100.0).round() as i32,
+                    (y_pt * 100.0).round() as i32,
+                ));
+            }
+        }
+    }
+    assert!(
+        !known_anchor_destinations.is_empty(),
+        "expected at least one known anchor destination from annotations"
+    );
+
+    let catalog = parse_pdf_object_body_v0(&pdf, 1).expect("catalog object");
+    let outline_root_id =
+        parse_pdf_single_ref_id_v0(&catalog, "/Outlines").expect("catalog outlines ref");
+    let outline_item_ids = collect_outline_item_ids_depth_first_v0(&pdf, outline_root_id)
+        .expect("outline item traversal");
+    assert!(
+        !outline_item_ids.is_empty(),
+        "expected outline items for toc metadata"
+    );
+    for item_id in outline_item_ids {
+        let item_body = parse_pdf_object_body_v0(&pdf, item_id).expect("outline item body");
+        assert!(
+            item_body.contains("/Dest [") && item_body.contains("/XYZ"),
+            "outline items must target /XYZ anchor destinations: {item_body}"
+        );
+        let (dest_page, x_pt, y_pt) =
+            parse_pdf_annotation_dest_xyz_v0(&item_body).expect("outline xyz dest");
+        let key = (
+            dest_page,
+            (x_pt * 100.0).round() as i32,
+            (y_pt * 100.0).round() as i32,
+        );
+        assert!(
+            known_anchor_destinations.contains(&key),
+            "outline destination should resolve to known anchor destination: {item_body}"
+        );
+    }
+}
+
+#[test]
 fn pdf_renderer_rejects_toc_link_annotation_with_missing_anchor_destination_v0() {
     let xdv = write_dvi_v2_text_page_v0(b"Prelude.\n\n!toc\n\n!toc 1 9 <Missing anchor>")
         .expect("writer bytes");
@@ -3326,6 +3479,19 @@ fn pdf_renderer_rejects_toc_entries_with_unsupported_level_v0() {
     assert!(
         pdf.is_none(),
         "renderer should fail-closed for unsupported toc level"
+    );
+}
+
+#[test]
+fn pdf_renderer_rejects_outline_with_unnestable_toc_levels_v0() {
+    let xdv = write_dvi_v2_text_page_v0(
+        b"Prelude.\n\n!toc\n\n@s {Orphan subsection}\n\n!toc 2 1 Orphan subsection",
+    )
+    .expect("writer should accept toc marker lines");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv);
+    assert!(
+        pdf.is_none(),
+        "renderer should fail-closed when toc level-2 appears without a level-1 parent"
     );
 }
 

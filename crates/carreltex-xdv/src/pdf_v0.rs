@@ -221,6 +221,18 @@ struct AnchorDestinationV0 {
     y_pt: f32,
 }
 
+#[derive(Clone)]
+struct OutlineItemPlanV0 {
+    anchor_id: u32,
+    title_bytes: Vec<u8>,
+    parent_index: Option<usize>,
+    first_child_index: Option<usize>,
+    last_child_index: Option<usize>,
+    prev_sibling_index: Option<usize>,
+    next_sibling_index: Option<usize>,
+    child_count: u32,
+}
+
 fn parse_styled_segments_v0(glyphs: &[GlyphPlanV0]) -> Option<Vec<PdfStyledSegmentV0>> {
     let mut style_stack = Vec::<PdfTextStyleV0>::new();
     let mut current_style = PdfTextStyleV0::Regular;
@@ -2683,6 +2695,14 @@ fn build_pdf_for_pages_v0(pages: &[PagePlanV0]) -> Vec<u8> {
             PdfLinkTargetV0::Uri(_) => {}
         }
     }
+    let Some(outline_items) = build_outline_items_plan_v0(&toc_entries) else {
+        return Vec::new();
+    };
+    for item in &outline_items {
+        if !anchor_destinations.contains_key(&item.anchor_id) {
+            return Vec::new();
+        }
+    }
 
     // Object numbering:
     // 1: Catalog
@@ -2691,6 +2711,7 @@ fn build_pdf_for_pages_v0(pages: &[PagePlanV0]) -> Vec<u8> {
     // (3+page_count)..(3+2*page_count-1): Content stream objects
     // next: annotation objects (if any)
     // next: annotation action objects (if any)
+    // next: outline root + outline item objects
     // last: Font objects (regular/italic/bold)
     let page_count = page_renders.len() as u32;
     let total_annotations = page_renders
@@ -2706,7 +2727,13 @@ fn build_pdf_for_pages_v0(pages: &[PagePlanV0]) -> Vec<u8> {
     let first_stream_id = first_page_id + page_count;
     let first_annotation_id = first_stream_id + page_count;
     let first_action_id = first_annotation_id + total_annotations;
-    let font_regular_id = first_action_id + total_uri_annotations;
+    let outline_root_id = first_action_id + total_uri_annotations;
+    let outline_item_count = match u32::try_from(outline_items.len()) {
+        Ok(value) => value,
+        Err(_) => return Vec::new(),
+    };
+    let first_outline_item_id = outline_root_id + 1;
+    let font_regular_id = first_outline_item_id + outline_item_count;
     let font_italic_id = font_regular_id + 1;
     let font_bold_id = font_regular_id + 2;
     let pages_id = 2u32;
@@ -2721,7 +2748,8 @@ fn build_pdf_for_pages_v0(pages: &[PagePlanV0]) -> Vec<u8> {
     offsets.push(write_pdf_obj(
         &mut out,
         1,
-        format!("<< /Type /Catalog /Pages {pages_id} 0 R >>").as_bytes(),
+        format!("<< /Type /Catalog /Pages {pages_id} 0 R /Outlines {outline_root_id} 0 R >>")
+            .as_bytes(),
     ));
 
     // 2: Pages (Kids filled in after we know ids, but ids are deterministic)
@@ -2860,6 +2888,120 @@ fn build_pdf_for_pages_v0(pages: &[PagePlanV0]) -> Vec<u8> {
         return Vec::new();
     }
 
+    let outline_root_body = if outline_items.is_empty() {
+        b"<< /Type /Outlines /Count 0 >>".to_vec()
+    } else {
+        let Some(root_first_index) = outline_items
+            .iter()
+            .enumerate()
+            .find_map(|(index, item)| {
+                (item.parent_index.is_none() && item.prev_sibling_index.is_none()).then_some(index)
+            })
+        else {
+            return Vec::new();
+        };
+        let Some(root_last_index) = outline_items
+            .iter()
+            .enumerate()
+            .find_map(|(index, item)| {
+                (item.parent_index.is_none() && item.next_sibling_index.is_none()).then_some(index)
+            })
+        else {
+            return Vec::new();
+        };
+        let root_first_id = match u32::try_from(root_first_index) {
+            Ok(value) => first_outline_item_id + value,
+            Err(_) => return Vec::new(),
+        };
+        let root_last_id = match u32::try_from(root_last_index) {
+            Ok(value) => first_outline_item_id + value,
+            Err(_) => return Vec::new(),
+        };
+        format!(
+            "<< /Type /Outlines /First {root_first_id} 0 R /Last {root_last_id} 0 R /Count {outline_item_count} >>"
+        )
+        .into_bytes()
+    };
+    offsets.push(write_pdf_obj(&mut out, outline_root_id, &outline_root_body));
+
+    for (index, item) in outline_items.iter().enumerate() {
+        let item_id = match u32::try_from(index) {
+            Ok(value) => first_outline_item_id + value,
+            Err(_) => return Vec::new(),
+        };
+        let parent_id = if let Some(parent_index) = item.parent_index {
+            match u32::try_from(parent_index) {
+                Ok(value) => first_outline_item_id + value,
+                Err(_) => return Vec::new(),
+            }
+        } else {
+            outline_root_id
+        };
+        let Some(destination) = anchor_destinations.get(&item.anchor_id).copied() else {
+            return Vec::new();
+        };
+        let destination_page_id = match u32::try_from(destination.page_index) {
+            Ok(value) => first_page_id + value,
+            Err(_) => return Vec::new(),
+        };
+        if destination_page_id >= first_stream_id {
+            return Vec::new();
+        }
+
+        let mut body = Vec::<u8>::new();
+        body.extend_from_slice(b"<< /Title (");
+        body.extend_from_slice(&escape_pdf_string_bytes(&item.title_bytes));
+        body.extend_from_slice(b") /Parent ");
+        body.extend_from_slice(parent_id.to_string().as_bytes());
+        body.extend_from_slice(b" 0 R");
+        if let Some(prev_index) = item.prev_sibling_index {
+            let prev_id = match u32::try_from(prev_index) {
+                Ok(value) => first_outline_item_id + value,
+                Err(_) => return Vec::new(),
+            };
+            body.extend_from_slice(b" /Prev ");
+            body.extend_from_slice(prev_id.to_string().as_bytes());
+            body.extend_from_slice(b" 0 R");
+        }
+        if let Some(next_index) = item.next_sibling_index {
+            let next_id = match u32::try_from(next_index) {
+                Ok(value) => first_outline_item_id + value,
+                Err(_) => return Vec::new(),
+            };
+            body.extend_from_slice(b" /Next ");
+            body.extend_from_slice(next_id.to_string().as_bytes());
+            body.extend_from_slice(b" 0 R");
+        }
+        if let (Some(first_child_index), Some(last_child_index)) =
+            (item.first_child_index, item.last_child_index)
+        {
+            let first_child_id = match u32::try_from(first_child_index) {
+                Ok(value) => first_outline_item_id + value,
+                Err(_) => return Vec::new(),
+            };
+            let last_child_id = match u32::try_from(last_child_index) {
+                Ok(value) => first_outline_item_id + value,
+                Err(_) => return Vec::new(),
+            };
+            body.extend_from_slice(b" /First ");
+            body.extend_from_slice(first_child_id.to_string().as_bytes());
+            body.extend_from_slice(b" 0 R /Last ");
+            body.extend_from_slice(last_child_id.to_string().as_bytes());
+            body.extend_from_slice(b" 0 R /Count ");
+            body.extend_from_slice(item.child_count.to_string().as_bytes());
+        } else if item.first_child_index.is_some() || item.last_child_index.is_some() {
+            return Vec::new();
+        }
+        body.extend_from_slice(
+            format!(
+                " /Dest [{destination_page_id} 0 R /XYZ {:.2} {:.2} null] >>",
+                MARGIN_PT_V0, destination.y_pt
+            )
+            .as_bytes(),
+        );
+        offsets.push(write_pdf_obj(&mut out, item_id, &body));
+    }
+
     // Fonts
     offsets.push(write_pdf_obj(
         &mut out,
@@ -2906,6 +3048,108 @@ fn build_page_numbers_by_anchor_id_v0(
         }
     }
     Some(out)
+}
+
+fn toc_entry_title_bytes_for_outline_v0(entry: &TocEntryMetadataV0) -> Option<Vec<u8>> {
+    let segments = parse_styled_segments_v0(&entry.title_glyphs)?;
+    let mut title_bytes = Vec::<u8>::new();
+    for segment in segments {
+        for glyph in segment.glyphs {
+            if glyph.byte == NEWLINE_MARKER_V0 || glyph.byte == PAGE_BREAK_MARKER_V0 {
+                return None;
+            }
+            if !(0x20..=0x7e).contains(&glyph.byte) {
+                return None;
+            }
+            title_bytes.push(glyph.byte);
+        }
+    }
+    while matches!(title_bytes.first(), Some(b' ')) {
+        title_bytes.remove(0);
+    }
+    while matches!(title_bytes.last(), Some(b' ')) {
+        title_bytes.pop();
+    }
+    if title_bytes.is_empty() {
+        return None;
+    }
+    Some(title_bytes)
+}
+
+fn assign_outline_siblings_v0(indices: &[usize], items: &mut [OutlineItemPlanV0]) -> Option<()> {
+    for (position, index) in indices.iter().copied().enumerate() {
+        let prev = if position > 0 {
+            Some(indices[position - 1])
+        } else {
+            None
+        };
+        let next = if position + 1 < indices.len() {
+            Some(indices[position + 1])
+        } else {
+            None
+        };
+        let item = items.get_mut(index)?;
+        item.prev_sibling_index = prev;
+        item.next_sibling_index = next;
+    }
+    Some(())
+}
+
+fn build_outline_items_plan_v0(toc_entries: &[TocEntryMetadataV0]) -> Option<Vec<OutlineItemPlanV0>> {
+    if toc_entries.is_empty() {
+        return Some(Vec::new());
+    }
+    let mut items = Vec::<OutlineItemPlanV0>::with_capacity(toc_entries.len());
+    let mut root_indices = Vec::<usize>::new();
+    let mut current_level1_index = None::<usize>;
+
+    for entry in toc_entries {
+        if !(1..=2).contains(&entry.level) {
+            return None;
+        }
+        let title_bytes = toc_entry_title_bytes_for_outline_v0(entry)?;
+        let item_index = items.len();
+        items.push(OutlineItemPlanV0 {
+            anchor_id: entry.anchor_id,
+            title_bytes,
+            parent_index: None,
+            first_child_index: None,
+            last_child_index: None,
+            prev_sibling_index: None,
+            next_sibling_index: None,
+            child_count: 0,
+        });
+        if entry.level == 1 {
+            root_indices.push(item_index);
+            current_level1_index = Some(item_index);
+        } else {
+            let parent_index = current_level1_index?;
+            items[item_index].parent_index = Some(parent_index);
+        }
+    }
+
+    if root_indices.is_empty() {
+        return None;
+    }
+
+    assign_outline_siblings_v0(&root_indices, &mut items)?;
+    for parent_index in root_indices {
+        let child_indices = items
+            .iter()
+            .enumerate()
+            .filter_map(|(index, item)| (item.parent_index == Some(parent_index)).then_some(index))
+            .collect::<Vec<_>>();
+        if child_indices.is_empty() {
+            continue;
+        }
+        assign_outline_siblings_v0(&child_indices, &mut items)?;
+        let parent = items.get_mut(parent_index)?;
+        parent.first_child_index = child_indices.first().copied();
+        parent.last_child_index = child_indices.last().copied();
+        parent.child_count = u32::try_from(child_indices.len()).ok()?;
+    }
+
+    Some(items)
 }
 
 /// Render a deterministic, single-font PDF preview for a v0 DVI-v2 text page.
