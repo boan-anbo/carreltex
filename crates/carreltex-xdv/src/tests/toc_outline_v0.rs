@@ -506,6 +506,44 @@ fn pdf_renderer_front_matter_toc_heading_rhythm_is_stable_v11() {
 }
 
 #[test]
+fn pdf_renderer_tall_front_matter_toc_transition_rhythm_polish_v23() {
+    let xdv = write_dvi_v2_text_page_v0(
+        b"Front Matter Main Title\nFront Matter Subtitle\nAuthor One\nAuthor Two\n2026-03-05\n\n!toc\n\n@S {Intro heading}\n\n~ Intro body paragraph.\n\n!toc 1 1 Intro toc entry",
+    )
+    .expect("writer should accept tall front-matter toc bytes");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+
+    let (_, date_y) = tm_position_for_line_containing_text_v0(&pdf, "(2026-03-05)")
+        .expect("date position");
+    let (_, toc_title_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "(Contents)").expect("toc title");
+    let (_, toc_entry_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "(Intro toc entry)").expect("toc entry");
+    let (_, heading_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "(Intro heading)").expect("heading");
+    let (_, body_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "(Intro body paragraph.)").expect("body");
+    let epsilon_pt = 0.05f32;
+
+    assert!(
+        (date_y - toc_title_y - 33.0).abs() <= epsilon_pt,
+        "tall front-matter date->toc-title rhythm should stay tightened: date_y={date_y}, toc_title_y={toc_title_y}"
+    );
+    assert!(
+        (toc_title_y - toc_entry_y - 12.0).abs() <= epsilon_pt,
+        "toc title->entry rhythm should remain stable: toc_title_y={toc_title_y}, toc_entry_y={toc_entry_y}"
+    );
+    assert!(
+        (toc_entry_y - heading_y - 23.0).abs() <= epsilon_pt,
+        "toc->first-heading transition should stay tightened and deterministic: toc_entry_y={toc_entry_y}, heading_y={heading_y}"
+    );
+    assert!(
+        (heading_y - body_y - 24.0).abs() <= epsilon_pt,
+        "heading->first-body rhythm should remain stable: heading_y={heading_y}, body_y={body_y}"
+    );
+}
+
+#[test]
 fn pdf_renderer_front_matter_toc_body_bibliography_flow_rhythm_is_stable_v17() {
     let xdv = write_dvi_v2_text_page_v0(
         b"Front Matter Title\nAuthor Name\n2026-03-05\n\n!toc\n\n@S {Intro heading}\n\n~ Intro body paragraph.\n\n@S {References}\n\n[1] ALPHASTART alpha source text.\n\n!toc 1 1 Intro toc entry",
