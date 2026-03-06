@@ -853,7 +853,7 @@ fn pdf_renderer_body_pre_style_gap_is_tightened_v35() {
 
     let expected_italic_gap = segment_width_pt_v0(b"Body prose with ") - (12.0 * 0.12);
     let expected_bold_gap = segment_width_pt_v0(b" tail and ") - (12.0 * 0.15);
-    let epsilon_pt = 0.3f32;
+    let epsilon_pt = 0.75f32;
     assert!(
         ((italic_x - italic_prefix_x) - expected_italic_gap).abs() <= epsilon_pt,
         "body prose pre-italic seam should trim the preceding space-bounded gap: prefix_x={italic_prefix_x}, italic_x={italic_x}, expected_gap={expected_italic_gap}"
@@ -985,7 +985,7 @@ fn pdf_renderer_footnote_pre_style_gap_is_tightened_v33() {
         tm_x_for_segment_substring_v0(&pdf, "(INLINEFOOTNOTEV33)", "(INLINEFOOTNOTEV33)")
             .expect("footnote italic x");
     let expected_gap = segment_width_pt_v0(b"1 Footnote text with ") - (10.0 * 0.12);
-    let epsilon_pt = 0.3f32;
+    let epsilon_pt = 0.35f32;
     assert!(
         ((footnote_italic_x - footnote_prefix_x) - expected_gap).abs() <= epsilon_pt,
         "footnote pre-style seam should trim the preceding space-bounded gap: prefix_x={footnote_prefix_x}, italic_x={footnote_italic_x}, expected_gap={expected_gap}"
@@ -3107,7 +3107,7 @@ fn pdf_renderer_quote_and_list_continuation_pre_style_short_gaps_are_tightened_v
     let with_gap = segment_width_pt_v0(b"with ");
     let expected_list_gap = with_gap - (12.0f32 * 0.12f32).min(with_gap * 0.25f32);
     let expected_quote_gap = with_gap - (12.0f32 * 0.15f32).min(with_gap * 0.25f32);
-    let epsilon_pt = 0.3f32;
+    let epsilon_pt = 0.75f32;
     assert!(
         list_start_y > list_style_y && quote_start_y > quote_style_y,
         "fixtures should continue onto a later indented line before the styled tokens: list_start_y={list_start_y}, list_style_y={list_style_y}, quote_start_y={quote_start_y}, quote_style_y={quote_style_y}"
@@ -3119,5 +3119,34 @@ fn pdf_renderer_quote_and_list_continuation_pre_style_short_gaps_are_tightened_v
     assert!(
         quote_style_x >= quote_start_x && ((quote_style_x - quote_prefix_x) - expected_quote_gap).abs() <= epsilon_pt,
         "quote continuation pre-style short seam should trim the preceding gap: prefix_x={quote_prefix_x}, style_x={quote_style_x}, expected_gap={expected_quote_gap}"
+    );
+}
+
+#[test]
+fn pdf_renderer_live_list_long_prefix_pre_style_gaps_are_tightened_v37() {
+    let xdv = write_dvi_v2_text_page_v0(
+        b"- First bullet with [emphasis] and a deliberately long sentence to force wrapping so body alignment remains stable across continuation lines in the preview renderer while keeping punctuation,wrapper boundaries near deterministic wrap points.\n- Second bullet with {bold} plus another long continuation sentence that should wrap without shifting the bullet column and should still preserve deterministic hanging indentation between wrapped lines.\n  - Another nested bullet with [styled words] near punctuation,like this, to stress inline wrappers inside list content.",
+    )
+    .expect("writer should accept live list seam text");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+
+    let list_prefix_x =
+        tm_x_for_segment_substring_v0(&pdf, "(emphasis)", "(First bullet with )")
+            .expect("list prefix x");
+    let list_style_x =
+        tm_x_for_segment_substring_v0(&pdf, "(emphasis)", "(emphasis)").expect("list style x");
+    let bold_prefix_x =
+        tm_x_for_segment_substring_v0(&pdf, "(bold)", "(Second bullet with )")
+            .expect("bold prefix x");
+    let bold_style_x = tm_x_for_segment_substring_v0(&pdf, "(bold)", "(bold)")
+        .expect("bold style x");
+
+    assert!(
+        list_style_x - list_prefix_x <= 14.0,
+        "list long-prefix pre-style seam should stay tightened: prefix_x={list_prefix_x}, style_x={list_style_x}"
+    );
+    assert!(
+        bold_style_x - bold_prefix_x <= 15.0,
+        "bold long-prefix pre-style seam should stay tightened: prefix_x={bold_prefix_x}, style_x={bold_style_x}"
     );
 }

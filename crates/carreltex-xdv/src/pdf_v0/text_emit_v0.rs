@@ -194,7 +194,14 @@ fn trailing_space_bounded_seam_trim_pt_v30(
             PdfTextStyleV0::Bold => font_size_pt * 0.15,
             PdfTextStyleV0::Regular => 0.0,
         };
-        return requested_trim_pt.min(segment.advance_pt * 0.25);
+        let long_indented_prefix_bias_pt = if matches!(profile, SegmentEmitProfileV0::WrappedIndentedV29)
+            && segment.advance_pt >= 80.0
+        {
+            (segment.advance_pt * 0.08).min(font_size_pt * 1.8)
+        } else {
+            0.0
+        };
+        return (requested_trim_pt + long_indented_prefix_bias_pt).min(segment.advance_pt * 0.4);
     }
     if matches!(profile, SegmentEmitProfileV0::BodyProseV13) {
         return 0.0;
