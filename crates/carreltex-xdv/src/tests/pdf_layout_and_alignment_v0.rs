@@ -3150,3 +3150,24 @@ fn pdf_renderer_live_list_long_prefix_pre_style_gaps_are_tightened_v37() {
         "bold long-prefix pre-style seam should stay tightened: prefix_x={bold_prefix_x}, style_x={bold_style_x}"
     );
 }
+
+#[test]
+fn pdf_renderer_live_nested_list_very_long_prefix_gap_is_tightened_v38() {
+    let xdv = write_dvi_v2_text_page_v0(
+        b"  - Another nested bullet with [styled words] near punctuation,like this, to stress inline wrappers inside list content.",
+    )
+    .expect("writer should accept live nested seam text");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+
+    let nested_prefix_x =
+        tm_x_for_segment_substring_v0(&pdf, "(styled words)", "(Another nested bullet with )")
+            .expect("nested prefix x");
+    let nested_style_x =
+        tm_x_for_segment_substring_v0(&pdf, "(styled words)", "(styled words)")
+            .expect("nested style x");
+
+    assert!(
+        nested_style_x - nested_prefix_x <= 150.0,
+        "nested long-prefix pre-style seam should stay tightened: prefix_x={nested_prefix_x}, style_x={nested_style_x}"
+    );
+}
