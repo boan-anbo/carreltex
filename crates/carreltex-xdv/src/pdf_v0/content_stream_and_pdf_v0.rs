@@ -2,6 +2,7 @@
 enum BodyFlowKindV0 {
     FrontMatter,
     Paragraph,
+    DisplayMath,
     List,
     Quote,
     Table,
@@ -88,6 +89,9 @@ fn classify_next_flow_kind_v0(
         let center_prefixed = has_center_prefix_v0(&line.glyphs);
         let right_prefixed = has_right_prefix_v0(&line.glyphs);
         let noindent_prefixed = has_noindent_prefix_v0(&line.glyphs);
+        if center_prefixed && is_display_math_placeholder_line_v0(&line.glyphs) {
+            return Some(BodyFlowKindV0::DisplayMath);
+        }
         if center_prefixed || right_prefixed {
             return Some(BodyFlowKindV0::Other);
         }
@@ -119,6 +123,9 @@ fn classify_next_flow_kind_v0(
 }
 
 fn should_tighten_transition_gap_v7(previous: BodyFlowKindV0, next: BodyFlowKindV0) -> bool {
+    if previous == BodyFlowKindV0::DisplayMath || next == BodyFlowKindV0::DisplayMath {
+        return true;
+    }
     matches!(
         (previous, next),
         (BodyFlowKindV0::Paragraph, BodyFlowKindV0::List)
@@ -137,12 +144,18 @@ fn should_tighten_transition_gap_v7(previous: BodyFlowKindV0, next: BodyFlowKind
 fn transition_blank_advance_pt_v7(previous: BodyFlowKindV0) -> f32 {
     let previous_leading_pt = match previous {
         BodyFlowKindV0::FrontMatter => LEADING_PT_V0,
+        BodyFlowKindV0::DisplayMath => LEADING_PT_V0,
         BodyFlowKindV0::List => LIST_ENTRY_LEADING_PT_V7,
         BodyFlowKindV0::Quote => QUOTE_ENTRY_LEADING_PT_V7,
         BodyFlowKindV0::Table => TABLE_ROW_LEADING_PT_V10,
         BodyFlowKindV0::Paragraph | BodyFlowKindV0::Other => LEADING_PT_V0,
     };
-    (BLOCK_TRANSITION_GAP_PT_V7 - previous_leading_pt).max(0.0)
+    let block_transition_gap_pt = if previous == BodyFlowKindV0::DisplayMath {
+        DISPLAY_MATH_TRANSITION_GAP_PT_V16
+    } else {
+        BLOCK_TRANSITION_GAP_PT_V7
+    };
+    (block_transition_gap_pt - previous_leading_pt).max(0.0)
 }
 
 fn line_starts_bibliography_entry_v14(
@@ -611,6 +624,8 @@ fn build_page_content_stream_v0(
             current_flow_kind = if in_title_block && has_front_matter_title_block_v11(title_block_len)
             {
                 BodyFlowKindV0::FrontMatter
+            } else if display_math_line {
+                BodyFlowKindV0::DisplayMath
             } else if bibliography_line {
                 BodyFlowKindV0::Other
             } else if quote_line {
@@ -651,7 +666,11 @@ fn build_page_content_stream_v0(
                 active_quote_indent_pt = 0.0;
                 active_hang_indent_pt = 0.0;
                 active_hang_prefix_kind = None;
-                active_inline_alignment = Some(InlineBlockAlignmentV0::Center);
+                active_inline_alignment = if display_math_line {
+                    None
+                } else {
+                    Some(InlineBlockAlignmentV0::Center)
+                };
                 centered_line_x_v0(line_width_pt)
             } else if right_prefixed || right_continuation {
                 active_quote_indent_pt = 0.0;
