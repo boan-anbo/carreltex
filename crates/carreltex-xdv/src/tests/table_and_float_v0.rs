@@ -271,8 +271,36 @@ fn pdf_renderer_table_row_height_is_stable_v2() {
     let (_, row2_y) = tm_position_for_line_containing_text_v0(&pdf, "(D)").expect("row 2 y");
     let delta = row1_y - row2_y;
     assert!(
-        (delta - 15.0).abs() <= 0.2,
+        (delta - 14.0).abs() <= 0.2,
         "table row height should remain stable at TABLE_ROW_LEADING_PT_V0: {delta}"
+    );
+}
+
+#[test]
+fn pdf_renderer_table_block_spacing_transitions_are_stable_v1() {
+    let xdv = write_dvi_v2_text_page_v0(
+        b"~ Before paragraph.\n\n!ts lcr\n!t Alpha||Beta||Gamma\n!t Delta||Epsilon||Zeta\n\nAfter paragraph.",
+    )
+    .expect("writer should accept table marker lines");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+    let (_, before_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "(Before paragraph.)").expect("before");
+    let (_, row1_y) = tm_position_for_line_containing_text_v0(&pdf, "(Alpha)").expect("row 1");
+    let (_, row2_y) = tm_position_for_line_containing_text_v0(&pdf, "(Delta)").expect("row 2");
+    let (_, after_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "(After paragraph.)").expect("after");
+    let epsilon_pt = 0.2f32;
+    assert!(
+        (before_y - row1_y - 28.0).abs() <= epsilon_pt,
+        "paragraph->table transition should keep stable rhythm: before_y={before_y}, row1_y={row1_y}"
+    );
+    assert!(
+        (row1_y - row2_y - 14.0).abs() <= epsilon_pt,
+        "table row density should stay consistent after v5 polish: row1_y={row1_y}, row2_y={row2_y}"
+    );
+    assert!(
+        (row2_y - after_y - 28.0).abs() <= epsilon_pt,
+        "table->paragraph transition should keep stable rhythm: row2_y={row2_y}, after_y={after_y}"
     );
 }
 

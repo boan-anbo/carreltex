@@ -266,7 +266,7 @@ fn emit_toc_block_v0(
         TOC_TITLE_FONT_SIZE_PT_V0,
     );
     out.extend_from_slice(b"\n");
-    *y -= LEADING_PT_V0;
+    *y -= TOC_TITLE_TO_FIRST_ENTRY_GAP_PT_V5;
 
     for entry in toc_entries {
         if *y < min_body_y_pt {
@@ -311,9 +311,10 @@ fn emit_toc_block_v0(
         if page_no_width_pt <= 0.0 || page_no_width_pt > TOC_PAGE_NO_COLUMN_WIDTH_PT_V2 {
             return None;
         }
-        let page_no_right_pt = PAGE_WIDTH_PT_V0 - MARGIN_PT_V0;
-        let page_no_column_left_pt = page_no_right_pt - TOC_PAGE_NO_COLUMN_WIDTH_PT_V2;
-        let page_no_x_pt = page_no_right_pt - page_no_width_pt;
+        let page_no_column_right_pt =
+            PAGE_WIDTH_PT_V0 - MARGIN_PT_V0 - TOC_PAGE_NO_COLUMN_RIGHT_INSET_PT_V5;
+        let page_no_column_left_pt = page_no_column_right_pt - TOC_PAGE_NO_COLUMN_WIDTH_PT_V2;
+        let page_no_x_pt = page_no_column_right_pt - page_no_width_pt;
         if page_no_x_pt < page_no_column_left_pt
             || page_no_x_pt <= x_pt + title_width_pt + TOC_PAGE_NO_COLUMN_GAP_PT_V2
         {
@@ -345,7 +346,7 @@ fn emit_toc_block_v0(
             FONT_SIZE_PT_V0,
         );
         out.extend_from_slice(b"\n");
-        *y -= LEADING_PT_V0;
+        *y -= TOC_ENTRY_LEADING_PT_V5;
     }
     Some(())
 }
