@@ -99,7 +99,7 @@ fn pdf_renderer_table_cells_stay_within_column_bounds_v1() {
     let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
 
     let left_margin_pt = 72.0f32;
-    let cell_padding_pt = 6.0f32;
+    let cell_padding_pt = 7.0f32;
     let epsilon_pt = 0.05f32;
     let col1_width_pt = segment_width_pt_v0(b"LongLeft");
     let col2_width_pt = segment_width_pt_v0(b"WideMiddle");
@@ -271,8 +271,8 @@ fn pdf_renderer_table_row_height_is_stable_v2() {
     let (_, row2_y) = tm_position_for_line_containing_text_v0(&pdf, "(D)").expect("row 2 y");
     let delta = row1_y - row2_y;
     assert!(
-        (delta - 14.0).abs() <= 0.2,
-        "table row height should remain stable at LEADING_PT_V0: {delta}"
+        (delta - 15.0).abs() <= 0.2,
+        "table row height should remain stable at TABLE_ROW_LEADING_PT_V0: {delta}"
     );
 }
 
@@ -397,6 +397,14 @@ fn pdf_renderer_figure_block_spacing_invariants_v0() {
         caption_y > after_y,
         "after paragraph should render below caption"
     );
+    assert!(
+        (placeholder_y - caption_y - 122.0).abs() <= epsilon_pt,
+        "placeholder->caption gap should be stable and readable: placeholder_y={placeholder_y}, caption_y={caption_y}"
+    );
+    assert!(
+        (caption_y - after_y - 14.0).abs() <= epsilon_pt,
+        "caption->paragraph transition gap should remain stable after figure blocks: caption_y={caption_y}, after_y={after_y}"
+    );
 }
 
 #[test]
@@ -471,4 +479,3 @@ fn pdf_renderer_rejects_malformed_figure_box_placement_marker_v0() {
         "renderer should fail-closed on malformed !gbox placement hint"
     );
 }
-
