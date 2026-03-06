@@ -167,12 +167,32 @@ fn wrap_logical_line_v0(line: &[u8], max_line_glyphs: usize) -> Option<Vec<Vec<u
 const WRAP_BALANCE_REMAINDER_CHARS_MAX_V12: usize = 12;
 const WRAP_BALANCE_MIN_FILL_NUM_V12: u32 = 11;
 const WRAP_BALANCE_MIN_FILL_DEN_V12: u32 = 20;
+const INLINE_MATH_PLACEHOLDER_TOKEN_V15: &[u8] = b"MATH";
 
 fn is_wrap_unfriendly_leading_byte_v12(byte: u8) -> bool {
     matches!(
         byte,
         b'.' | b',' | b';' | b':' | b'!' | b'?' | b')' | b']' | b'}'
     )
+}
+
+fn is_token_delimiter_byte_v15(byte: u8) -> bool {
+    byte == b' '
+        || matches!(
+            byte,
+            b'.'
+                | b','
+                | b';'
+                | b':'
+                | b'!'
+                | b'?'
+                | b'('
+                | b')'
+                | b'['
+                | b']'
+                | b'{'
+                | b'}'
+        )
 }
 
 fn next_visible_byte_after_v12(line: &[u8], start: usize) -> Option<u8> {
@@ -194,6 +214,73 @@ fn remaining_visible_count_v12(line: &[u8], start: usize) -> usize {
         .copied()
         .filter(|byte| *byte != b' ' && !is_style_marker_byte_v0(*byte))
         .count()
+}
+
+fn next_visible_token_is_inline_math_v15(line: &[u8], start: usize) -> bool {
+    let mut cursor = start;
+    while cursor < line.len() {
+        let byte = line[cursor];
+        if is_style_marker_byte_v0(byte) || is_token_delimiter_byte_v15(byte) {
+            cursor += 1;
+            continue;
+        }
+        break;
+    }
+    if cursor >= line.len() {
+        return false;
+    }
+    let mut token = Vec::<u8>::new();
+    while cursor < line.len() {
+        let byte = line[cursor];
+        if is_token_delimiter_byte_v15(byte) {
+            break;
+        }
+        if !is_style_marker_byte_v0(byte) {
+            token.push(byte);
+            if token.len() > INLINE_MATH_PLACEHOLDER_TOKEN_V15.len() {
+                return false;
+            }
+        }
+        cursor += 1;
+    }
+    token == INLINE_MATH_PLACEHOLDER_TOKEN_V15
+}
+
+fn previous_visible_token_is_inline_math_v15(line: &[u8], end_exclusive: usize) -> bool {
+    if end_exclusive == 0 {
+        return false;
+    }
+    let mut cursor = end_exclusive;
+    while cursor > 0 {
+        let byte = line[cursor - 1];
+        if is_style_marker_byte_v0(byte) || is_token_delimiter_byte_v15(byte) {
+            cursor -= 1;
+            continue;
+        }
+        break;
+    }
+    if cursor == 0 {
+        return false;
+    }
+    let token_end = cursor;
+    while cursor > 0 {
+        let byte = line[cursor - 1];
+        if is_token_delimiter_byte_v15(byte) {
+            break;
+        }
+        cursor -= 1;
+    }
+    let mut token = Vec::<u8>::new();
+    for byte in line[cursor..token_end].iter().copied() {
+        if is_style_marker_byte_v0(byte) {
+            continue;
+        }
+        token.push(byte);
+        if token.len() > INLINE_MATH_PLACEHOLDER_TOKEN_V15.len() {
+            return false;
+        }
+    }
+    token == INLINE_MATH_PLACEHOLDER_TOKEN_V15
 }
 
 fn wrap_logical_line_by_width_v0(
@@ -250,12 +337,18 @@ fn wrap_logical_line_by_width_v0(
                     next_visible_byte_after_v12(line, next_line_start)
                         .map(is_wrap_unfriendly_leading_byte_v12)
                         .unwrap_or(false);
+                let inline_math_leading_remainder =
+                    next_visible_token_is_inline_math_v15(line, next_line_start);
+                let inline_math_trailing_token =
+                    previous_visible_token_is_inline_math_v15(line, candidate_space_index);
                 let min_fill_sp = max_line_width_sp
                     .checked_mul(WRAP_BALANCE_MIN_FILL_NUM_V12)?
                     .checked_div(WRAP_BALANCE_MIN_FILL_DEN_V12)?;
-                if candidate_width_sp >= min_fill_sp
-                    && (short_remainder || punctuation_leading_remainder)
-                {
+                let should_backtrack_for_inline_math =
+                    inline_math_leading_remainder || inline_math_trailing_token;
+                let should_backtrack_for_short_or_punctuation = candidate_width_sp >= min_fill_sp
+                    && (short_remainder || punctuation_leading_remainder);
+                if should_backtrack_for_short_or_punctuation || should_backtrack_for_inline_math {
                     chosen_space_candidate -= 1;
                     continue;
                 }

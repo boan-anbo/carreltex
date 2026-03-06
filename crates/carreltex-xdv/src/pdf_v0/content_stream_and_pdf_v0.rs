@@ -171,6 +171,21 @@ fn line_starts_bibliography_entry_v14(
     )
 }
 
+fn line_contains_inline_math_placeholder_token_v15(segments: &[PdfRenderSegmentV0]) -> bool {
+    let mut text = Vec::<u8>::new();
+    for segment in segments {
+        text.extend_from_slice(&segment.bytes);
+    }
+    text.split(|byte| {
+        byte.is_ascii_whitespace()
+            || matches!(
+                *byte,
+                b'.' | b',' | b';' | b':' | b'!' | b'?' | b'(' | b')' | b'[' | b']' | b'{' | b'}'
+            )
+    })
+    .any(|token| token == b"MATH")
+}
+
 #[derive(Clone)]
 struct PageContinuationStateV0 {
     previous_rendered_line_was_empty: bool,
@@ -767,7 +782,11 @@ fn build_page_content_stream_v0(
             annotations.append(&mut line_annotations);
             let has_superscript = render_segments.iter().any(|segment| segment.superscript);
             let emit_profile = if current_flow_kind == BodyFlowKindV0::Paragraph {
-                SegmentEmitProfileV0::BodyProseV13
+                if line_contains_inline_math_placeholder_token_v15(&render_segments) {
+                    SegmentEmitProfileV0::BodyProseInlineMathV15
+                } else {
+                    SegmentEmitProfileV0::BodyProseV13
+                }
             } else {
                 SegmentEmitProfileV0::Default
             };
