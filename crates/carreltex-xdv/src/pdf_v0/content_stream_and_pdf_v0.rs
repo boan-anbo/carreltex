@@ -136,6 +136,8 @@ fn should_tighten_transition_gap_v7(previous: BodyFlowKindV0, next: BodyFlowKind
     }
     matches!(
         (previous, next),
+        (BodyFlowKindV0::List, BodyFlowKindV0::List)
+            |
         (BodyFlowKindV0::Paragraph, BodyFlowKindV0::List)
             | (BodyFlowKindV0::List, BodyFlowKindV0::Paragraph)
             | (BodyFlowKindV0::Paragraph, BodyFlowKindV0::Quote)
@@ -800,7 +802,10 @@ fn build_page_content_stream_v0(
                     return None;
                 };
                 let prefix_x = match prefix.kind {
-                    ListPrefixKindV0::Itemize => MARGIN_PT_V0 + prefix.leading_advance_pt,
+                    ListPrefixKindV0::Itemize => {
+                        ENUM_NUMBER_COLUMN_RIGHT_PT_V0 + prefix.leading_advance_pt
+                            - prefix.display_advance_pt
+                    }
                     ListPrefixKindV0::Enumerate => {
                         ENUM_NUMBER_COLUMN_RIGHT_PT_V0 + prefix.leading_advance_pt
                             - prefix.display_advance_pt

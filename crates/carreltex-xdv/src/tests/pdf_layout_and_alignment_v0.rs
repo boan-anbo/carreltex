@@ -1199,7 +1199,7 @@ fn pdf_renderer_list_rhythm_and_wrap_indent_invariants_v0() {
         tm_position_for_segment_substring_v0(&pdf, "(ITEMONE").expect("item one body position");
     let (item_one_wrap_x, _) =
         tm_position_for_segment_substring_v0(&pdf, "WRAPONE").expect("item one wrap position");
-    let (item_two_bullet_x, item_two_y) =
+    let (item_two_body_x, item_two_y) =
         tm_position_for_segment_substring_v0(&pdf, "(ITEMTWO").expect("item two body position");
     let (item_two_wrap_x, _) =
         tm_position_for_segment_substring_v0(&pdf, "WRAPTWO").expect("item two wrap position");
@@ -1217,24 +1217,25 @@ fn pdf_renderer_list_rhythm_and_wrap_indent_invariants_v0() {
         "list->after paragraph gap must be at least one paragraph break: item_two_y={item_two_y}, after_list_y={after_list_y}"
     );
     assert!(
-        (item_one_bullet_x - 72.0).abs() <= epsilon_pt,
-        "item bullet column x mismatch: {item_one_bullet_x}"
-    );
-    assert!(
         (item_one_body_x - 96.0).abs() <= epsilon_pt,
         "item body x mismatch: {item_one_body_x}"
+    );
+    let item_one_marker_gap_pt = item_one_body_x - (item_one_bullet_x + segment_width_pt_v0(b"-"));
+    assert!(
+        (item_one_marker_gap_pt - 8.0).abs() <= 0.25,
+        "item marker/body gap mismatch: marker_gap={item_one_marker_gap_pt}"
     );
     assert!(
         (item_one_wrap_x - item_one_body_x).abs() <= epsilon_pt,
         "item one wrap continuation should keep hanging indent: body={item_one_body_x}, wrap={item_one_wrap_x}"
     );
     assert!(
-        (item_two_bullet_x - 96.0).abs() <= epsilon_pt,
-        "item two body x mismatch: {item_two_bullet_x}"
+        (item_two_body_x - 96.0).abs() <= epsilon_pt,
+        "item two body x mismatch: {item_two_body_x}"
     );
     assert!(
-        (item_two_wrap_x - item_two_bullet_x).abs() <= epsilon_pt,
-        "item two wrap continuation should keep hanging indent: body={item_two_bullet_x}, wrap={item_two_wrap_x}"
+        (item_two_wrap_x - item_two_body_x).abs() <= epsilon_pt,
+        "item two wrap continuation should keep hanging indent: body={item_two_body_x}, wrap={item_two_wrap_x}"
     );
 }
 
@@ -1423,26 +1424,22 @@ fn pdf_renderer_applies_hanging_indent_for_list_continuation_v0() {
         write_dvi_v2_text_page_v0(b"- item\ncontinuation").expect("writer should accept text");
     let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
 
-    let pdf_text = String::from_utf8_lossy(&pdf);
-    let mut xs = Vec::<f32>::new();
-    for line in pdf_text.lines() {
-        if !line.contains(" Tm ") {
-            continue;
-        }
-        let fields = line.split_whitespace().collect::<Vec<_>>();
-        if fields.len() < 7 || fields[6] != "Tm" {
-            continue;
-        }
-        if let Ok(x_pt) = fields[4].parse::<f32>() {
-            xs.push(x_pt);
-        }
-    }
+    let (item_x, item_y) = tm_position_for_segment_substring_v0(&pdf, "item").expect("item");
+    let (continuation_x, continuation_y) =
+        tm_position_for_segment_substring_v0(&pdf, "continuation").expect("continuation");
+    let epsilon_pt = 0.02f32;
     assert!(
-        xs.len() >= 2,
-        "expected at least two text lines, got {xs:?}"
+        (item_x - 96.0).abs() <= epsilon_pt,
+        "item line body x mismatch: {item_x}"
     );
-    assert!((xs[0] - 72.0).abs() <= 0.02, "first list line x={}", xs[0]);
-    assert!(xs[1] > xs[0], "continuation should hang-indent: {xs:?}");
+    assert!(
+        (continuation_x - item_x).abs() <= epsilon_pt,
+        "continuation should keep hanging indent: item_x={item_x}, continuation_x={continuation_x}"
+    );
+    assert!(
+        (item_y - continuation_y - 13.0).abs() <= epsilon_pt,
+        "list continuation line rhythm mismatch: item_y={item_y}, continuation_y={continuation_y}"
+    );
 }
 
 #[test]
@@ -1477,9 +1474,6 @@ fn pdf_renderer_itemize_bullet_and_body_x_offsets_invariants_v0() {
     );
 
     let epsilon_pt = 0.02f32;
-    for x in &bullet_xs {
-        assert!((*x - 72.0).abs() <= epsilon_pt, "bullet x mismatch: {x}");
-    }
     for x in [
         alpha_xs[0],
         beta_xs[0],
@@ -1487,6 +1481,14 @@ fn pdf_renderer_itemize_bullet_and_body_x_offsets_invariants_v0() {
         continuation_two_xs[0],
     ] {
         assert!((x - 96.0).abs() <= epsilon_pt, "item body x mismatch: {x}");
+    }
+    let target_gap_pt = 8.0f32;
+    for (bullet_x, body_x) in bullet_xs.iter().zip([alpha_xs[0], beta_xs[0]]) {
+        let marker_gap = body_x - (*bullet_x + segment_width_pt_v0(b"-"));
+        assert!(
+            (marker_gap - target_gap_pt).abs() <= 0.25,
+            "itemize marker/body gap should stay tight and stable: marker_gap={marker_gap}, body_x={body_x}, bullet_x={bullet_x}"
+        );
     }
 }
 
@@ -1612,6 +1614,123 @@ fn pdf_renderer_enumerate_number_column_alignment_across_wraps_v0() {
 }
 
 #[test]
+fn pdf_renderer_mixed_list_block_transition_and_marker_spacing_invariants_v20() {
+    let xdv = write_dvi_v2_text_page_v0(b"\nParagraph before lists.\n\n- BULLETSTART alpha alpha alpha alpha alpha alpha alpha alpha alpha alpha alpha alpha alpha alpha alpha alpha BULLETWRAP\n\n10. ENUMSTART beta beta beta beta beta beta beta beta beta beta beta beta beta beta beta beta ENUMWRAP\n\nParagraph after lists.")
+        .expect("writer should accept mixed list transition text");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+
+    let (_, before_lists_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "(Paragraph before lists.)")
+            .expect("before list paragraph");
+    let (bullet_start_x, bullet_start_y) =
+        tm_position_for_segment_substring_v0(&pdf, "BULLETSTART").expect("bullet start");
+    let (bullet_wrap_x, bullet_wrap_y) =
+        tm_position_for_segment_substring_v0(&pdf, "BULLETWRAP").expect("bullet wrap");
+    let (enum_start_x, enum_start_y) =
+        tm_position_for_segment_substring_v0(&pdf, "ENUMSTART").expect("enum start");
+    let (enum_wrap_x, enum_wrap_y) =
+        tm_position_for_segment_substring_v0(&pdf, "ENUMWRAP").expect("enum wrap");
+    let (_, after_lists_y) = tm_position_for_line_containing_text_v0(&pdf, "(Paragraph after lists.)")
+        .expect("after list paragraph");
+
+    let bullet_xs = tm_xs_for_segment_text_v0(&pdf, "-");
+    let enum_number_xs = tm_xs_for_segment_text_v0(&pdf, "10.");
+    assert_eq!(bullet_xs.len(), 1, "expected one bullet marker: {bullet_xs:?}");
+    assert_eq!(
+        enum_number_xs.len(),
+        1,
+        "expected one enumerate marker: {enum_number_xs:?}"
+    );
+
+    let epsilon_pt = 0.2f32;
+    assert!(
+        (before_lists_y - bullet_start_y - 24.0).abs() <= epsilon_pt,
+        "paragraph->list transition should remain tightened: before_lists_y={before_lists_y}, bullet_start_y={bullet_start_y}"
+    );
+    assert!(
+        (bullet_wrap_y - enum_start_y - 24.0).abs() <= epsilon_pt,
+        "list->list block transition should remain even: bullet_wrap_y={bullet_wrap_y}, enum_start_y={enum_start_y}"
+    );
+    assert!(
+        (enum_wrap_y - after_lists_y - 24.0).abs() <= epsilon_pt,
+        "list->paragraph transition should remain tightened: enum_wrap_y={enum_wrap_y}, after_lists_y={after_lists_y}"
+    );
+    assert!(
+        (bullet_start_y - bullet_wrap_y - 13.0).abs() <= epsilon_pt,
+        "itemize wrapped-line rhythm mismatch: bullet_start_y={bullet_start_y}, bullet_wrap_y={bullet_wrap_y}"
+    );
+    assert!(
+        (enum_start_y - enum_wrap_y - 13.0).abs() <= epsilon_pt,
+        "enumerate wrapped-line rhythm mismatch: enum_start_y={enum_start_y}, enum_wrap_y={enum_wrap_y}"
+    );
+
+    assert!(
+        (bullet_start_x - enum_start_x).abs() <= 0.02,
+        "mixed list body columns should stay aligned: bullet_start_x={bullet_start_x}, enum_start_x={enum_start_x}"
+    );
+    assert!(
+        (bullet_wrap_x - bullet_start_x).abs() <= 0.02
+            && (enum_wrap_x - enum_start_x).abs() <= 0.02,
+        "wrapped list continuation x should stay aligned: bullet_start_x={bullet_start_x}, bullet_wrap_x={bullet_wrap_x}, enum_start_x={enum_start_x}, enum_wrap_x={enum_wrap_x}"
+    );
+    let bullet_gap = bullet_start_x - (bullet_xs[0] + segment_width_pt_v0(b"-"));
+    let enum_gap = enum_start_x - (enum_number_xs[0] + segment_width_pt_v0(b"10."));
+    assert!(
+        (bullet_gap - enum_gap).abs() <= 0.25,
+        "mixed itemize/enumerate marker/body gap drift: bullet_gap={bullet_gap}, enum_gap={enum_gap}"
+    );
+}
+
+#[test]
+fn pdf_renderer_nested_mixed_width_enumerate_wrap_alignment_invariants_v20() {
+    let xdv = write_dvi_v2_text_page_v0(b"- Outer item.\n  9. NINESTART gamma gamma gamma gamma gamma gamma gamma gamma gamma gamma gamma gamma gamma gamma gamma gamma NINEWRAP\n  10. TENSTART delta delta delta delta delta delta delta delta delta delta delta delta delta delta delta delta TENWRAP")
+        .expect("writer should accept nested mixed-width enumerate text");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+
+    let nine_number_x = tm_xs_for_segment_text_v0(&pdf, "9.");
+    let ten_number_x = tm_xs_for_segment_text_v0(&pdf, "10.");
+    let (nine_start_x, nine_start_y) =
+        tm_position_for_segment_substring_v0(&pdf, "NINESTART").expect("nine start");
+    let (nine_wrap_x, nine_wrap_y) =
+        tm_position_for_segment_substring_v0(&pdf, "NINEWRAP").expect("nine wrap");
+    let (ten_start_x, ten_start_y) =
+        tm_position_for_segment_substring_v0(&pdf, "TENSTART").expect("ten start");
+    let (ten_wrap_x, ten_wrap_y) =
+        tm_position_for_segment_substring_v0(&pdf, "TENWRAP").expect("ten wrap");
+
+    assert_eq!(nine_number_x.len(), 1, "expected one 9. marker");
+    assert_eq!(ten_number_x.len(), 1, "expected one 10. marker");
+
+    let epsilon_pt = 0.2f32;
+    assert!(
+        (nine_start_x - ten_start_x).abs() <= 0.02,
+        "nested enumerate body column should stay aligned across mixed-width markers: nine_start_x={nine_start_x}, ten_start_x={ten_start_x}"
+    );
+    assert!(
+        (nine_start_x - nine_wrap_x).abs() <= 0.02 && (ten_start_x - ten_wrap_x).abs() <= 0.02,
+        "nested wrapped continuation x should remain stable: nine_start_x={nine_start_x}, nine_wrap_x={nine_wrap_x}, ten_start_x={ten_start_x}, ten_wrap_x={ten_wrap_x}"
+    );
+    let nine_gap = nine_start_x - (nine_number_x[0] + segment_width_pt_v0(b"9."));
+    let ten_gap = ten_start_x - (ten_number_x[0] + segment_width_pt_v0(b"10."));
+    assert!(
+        (nine_gap - ten_gap).abs() <= 0.25,
+        "nested enumerate marker/body gap drift across mixed-width markers: nine_gap={nine_gap}, ten_gap={ten_gap}"
+    );
+    assert!(
+        (nine_start_y - nine_wrap_y - 13.0).abs() <= epsilon_pt,
+        "nested 9. wrapped-line rhythm mismatch: nine_start_y={nine_start_y}, nine_wrap_y={nine_wrap_y}"
+    );
+    assert!(
+        (ten_start_y - ten_wrap_y - 13.0).abs() <= epsilon_pt,
+        "nested 10. wrapped-line rhythm mismatch: ten_start_y={ten_start_y}, ten_wrap_y={ten_wrap_y}"
+    );
+    assert!(
+        (nine_wrap_y - ten_start_y - 13.0).abs() <= epsilon_pt,
+        "nested enumerate entry-to-entry rhythm mismatch: nine_wrap_y={nine_wrap_y}, ten_start_y={ten_start_y}"
+    );
+}
+
+#[test]
 fn pdf_renderer_bibliography_entries_use_hanging_indent_and_stable_rhythm_v14() {
     let xdv = write_dvi_v2_text_page_v0(
         b"@S {References}\n\n[1] ALPHASTART alpha alpha alpha alpha alpha alpha alpha alpha alpha alpha ALPHAWRAP\n[12] BETASTART beta beta beta beta beta beta beta beta beta beta beta beta beta beta beta beta BETAWRAP",
@@ -1729,10 +1848,6 @@ fn pdf_renderer_nested_list_indentation_and_wrap_invariants_v0() {
 
     let epsilon_pt = 0.02f32;
     assert!(
-        (bullet_xs[0] - 72.0).abs() <= epsilon_pt,
-        "outer bullet x mismatch"
-    );
-    assert!(
         bullet_xs[1] > bullet_xs[0],
         "nested bullet should shift right: {bullet_xs:?}"
     );
@@ -1746,6 +1861,16 @@ fn pdf_renderer_nested_list_indentation_and_wrap_invariants_v0() {
         "outer continuation x mismatch: outer={}, wrap={}",
         outer_start_x[0],
         outer_wrap_x[0]
+    );
+    let outer_marker_gap = outer_start_x[0] - (bullet_xs[0] + segment_width_pt_v0(b"-"));
+    let nested_marker_gap = nested_start_x[0] - (bullet_xs[1] + segment_width_pt_v0(b"-"));
+    assert!(
+        (outer_marker_gap - 8.0).abs() <= 0.25,
+        "outer marker/body gap mismatch: {outer_marker_gap}"
+    );
+    assert!(
+        (nested_marker_gap - 8.0).abs() <= 0.25,
+        "nested marker/body gap mismatch: {nested_marker_gap}"
     );
     assert!(
         nested_start_x[0] > outer_start_x[0],
