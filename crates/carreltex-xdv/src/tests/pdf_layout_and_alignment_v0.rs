@@ -4148,6 +4148,25 @@ fn pdf_renderer_wrapped_centered_short_plain_low_tier_gap_is_tightened_v76() {
 }
 
 #[test]
+fn pdf_renderer_wrapped_centered_short_plain_low_tier_gap_is_tightened_v99() {
+    let xdv = write_dvi_v2_text_page_with_layout_and_wrap_v0(
+        b"\n^ CENTER core words trail words words WRAPCENTERSHORTPLAIN tail.",
+        65_536,
+        786_432,
+        30,
+    )
+    .expect("writer should accept wrapped centered short plain text");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+
+    let actual_gap = max_tm_gap_pt_for_line_containing_v0(&pdf, "core words")
+        .expect("centered short plain tighter low-tier tm gap");
+    assert!(
+        actual_gap <= 104.5,
+        "wrapped centered short plain seam should stay slightly tighter after v99: actual_gap={actual_gap}"
+    );
+}
+
+#[test]
 fn pdf_renderer_wrapped_right_short_plain_low_tier_gap_is_tightened_v77() {
     let xdv = write_dvi_v2_text_page_with_layout_and_wrap_v0(
         b"\n| RIGHT core words trail words words WRAPRIGHTSHORTPLAIN tail.",
