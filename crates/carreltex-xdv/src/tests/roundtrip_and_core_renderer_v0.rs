@@ -502,6 +502,24 @@ fn pdf_renderer_emits_internal_ref_and_external_href_annotations_v0() {
         Some(3),
         "internal ref should target first page"
     );
+    let ref_rect = parse_pdf_annotation_rect_v0(&first_annot).expect("internal ref rect");
+    let ref_x =
+        tm_x_for_segment_substring_v0(&pdf, "(See ", "(1)").expect("internal ref text x");
+    let ref_width = ref_rect[2] - ref_rect[0];
+    let expected_ref_width = segment_width_pt_v0(b"1");
+    assert!(
+        (ref_rect[0] - ref_x).abs() <= 0.2,
+        "internal ref hitbox x should align with rendered ref text: rect={ref_rect:?}, ref_x={ref_x}"
+    );
+    assert!(
+        (ref_width - expected_ref_width).abs() <= 1.0,
+        "internal ref hitbox width should track rendered text width: rect_width={ref_width}, expected={expected_ref_width}"
+    );
+    let ref_height = ref_rect[3] - ref_rect[1];
+    assert!(
+        (8.0..=13.0).contains(&ref_height),
+        "internal ref hitbox height should stay in stable bounds: height={ref_height}"
+    );
 
     let action_id = parse_pdf_annotation_action_id_v0(&second_annot).expect("href action id");
     let action_body = parse_pdf_object_body_v0(&pdf, action_id).expect("href action body");
@@ -509,6 +527,24 @@ fn pdf_renderer_emits_internal_ref_and_external_href_annotations_v0() {
         parse_pdf_action_uri_v0(&action_body).as_deref(),
         Some("https://example.com"),
         "href annotation should keep URI target"
+    );
+    let href_rect = parse_pdf_annotation_rect_v0(&second_annot).expect("href rect");
+    let href_x =
+        tm_x_for_segment_substring_v0(&pdf, "(See ", "(Example)").expect("href text x");
+    let href_width = href_rect[2] - href_rect[0];
+    let expected_href_width = segment_width_pt_v0(b"Example");
+    assert!(
+        (href_rect[0] - href_x).abs() <= 0.2,
+        "href hitbox x should align with rendered link text: rect={href_rect:?}, href_x={href_x}"
+    );
+    assert!(
+        (href_width - expected_href_width).abs() <= 1.0,
+        "href hitbox width should track rendered link text width: rect_width={href_width}, expected={expected_href_width}"
+    );
+    let href_height = href_rect[3] - href_rect[1];
+    assert!(
+        (8.0..=13.0).contains(&href_height),
+        "href hitbox height should stay in stable bounds: height={href_height}"
     );
 }
 
@@ -541,6 +577,18 @@ fn pdf_renderer_emits_figref_annotation_targeting_figure_anchor_v0() {
         Some(3),
         "figure ref destination should target page containing figure anchor"
     );
+    let rect = parse_pdf_annotation_rect_v0(&annotation).expect("figure ref rect");
+    let ref_x = tm_x_for_segment_substring_v0(&pdf, "(See ", "(1)").expect("figure ref text x");
+    let width = rect[2] - rect[0];
+    let expected_width = segment_width_pt_v0(b"1");
+    assert!(
+        (rect[0] - ref_x).abs() <= 0.2,
+        "figure ref hitbox x should align to rendered ordinal: rect={rect:?}, ref_x={ref_x}"
+    );
+    assert!(
+        (width - expected_width).abs() <= 1.0,
+        "figure ref hitbox width should track rendered ordinal width: width={width}, expected={expected_width}"
+    );
 }
 
 #[test]
@@ -572,6 +620,18 @@ fn pdf_renderer_emits_eqref_annotation_targeting_equation_anchor_v1() {
         parse_pdf_annotation_dest_page_id_v0(&annotation),
         Some(3),
         "equation ref destination should target page containing equation anchor"
+    );
+    let rect = parse_pdf_annotation_rect_v0(&annotation).expect("equation ref rect");
+    let ref_x = tm_x_for_segment_substring_v0(&pdf, "(See ", "(1)").expect("equation ref text x");
+    let width = rect[2] - rect[0];
+    let expected_width = segment_width_pt_v0(b"1");
+    assert!(
+        (rect[0] - ref_x).abs() <= 0.2,
+        "equation ref hitbox x should align to rendered ordinal: rect={rect:?}, ref_x={ref_x}"
+    );
+    assert!(
+        (width - expected_width).abs() <= 1.0,
+        "equation ref hitbox width should track rendered ordinal width: width={width}, expected={expected_width}"
     );
 }
 
@@ -607,6 +667,18 @@ fn pdf_renderer_resolves_pageref_marker_and_emits_page_destination_link_v2() {
     assert!(
         !annotation.contains("/XYZ"),
         "pageref page destination must not use incidental /XYZ coordinates: {annotation}"
+    );
+    let rect = parse_pdf_annotation_rect_v0(&annotation).expect("pageref rect");
+    let ref_x = tm_x_for_segment_substring_v0(&pdf, "(See ", "(1)").expect("pageref text x");
+    let width = rect[2] - rect[0];
+    let expected_width = segment_width_pt_v0(b"1");
+    assert!(
+        (rect[0] - ref_x).abs() <= 0.2,
+        "pageref hitbox x should align to rendered page number: rect={rect:?}, ref_x={ref_x}"
+    );
+    assert!(
+        (width - expected_width).abs() <= 1.0,
+        "pageref hitbox width should track rendered page number width: width={width}, expected={expected_width}"
     );
 }
 
