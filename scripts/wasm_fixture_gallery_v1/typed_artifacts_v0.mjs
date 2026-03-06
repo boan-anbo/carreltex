@@ -1963,7 +1963,7 @@ function extractInputIncludeDirectivesFromSourceV1(sourceBytes, sourcePath) {
       continue;
     }
     const command = Buffer.from(sourceBytes.slice(index + 1, commandIndex)).toString('ascii');
-    if (command !== 'input' && command !== 'include') {
+    if (command !== 'input' && command !== 'include' && command !== 'includeonly') {
       index = commandIndex;
       continue;
     }
@@ -1984,7 +1984,11 @@ function extractInputIncludeDirectivesFromSourceV1(sourceBytes, sourcePath) {
       }
       entries.push({
         command,
-        hint_type: command === 'input' ? 'tex_input' : 'tex_include',
+        hint_type: command === 'input'
+          ? 'tex_input'
+          : command === 'include'
+            ? 'tex_include'
+            : 'tex_includeonly',
         source_path: sourcePath,
         value: mountPath,
         resolver_name: resolverName,
@@ -2046,7 +2050,7 @@ async function collectInputIncludeGraphV1(sourceBytes, resolver, caseSpec) {
         });
       }
 
-      if (!resolved || parsedPaths.has(directive.value)) {
+      if (!resolved || parsedPaths.has(directive.value) || directive.command === 'includeonly') {
         continue;
       }
       if (current.depth + 1 > MAX_INPUT_INCLUDE_DEPTH_V1) {

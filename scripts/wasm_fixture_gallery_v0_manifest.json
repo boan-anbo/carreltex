@@ -81,33 +81,33 @@
     },
     {
       "id": "typeset_demo_fixedpoint_graphics_probe_v0",
-      "tags": ["typeset", "graphics", "fixedpoint", "probe", "ni"],
-      "expected_status": "NI",
-      "purpose": "Probes includegraphics+graphicspath hints so fixedpoint phase2 can assert NI/INVALID status with non-empty resource hints."
+      "tags": ["typeset", "graphics", "fixedpoint", "probe", "ok"],
+      "expected_status": "OK",
+      "purpose": "Exercises includegraphics+graphicspath fixedpoint behavior with deterministic resource closure hints."
     },
     {
       "id": "typeset_demo_fixedpoint_bibliography_probe_v0",
-      "tags": ["typeset", "bib", "fixedpoint", "probe", "ni"],
-      "expected_status": "NI",
-      "purpose": "Probes bibliography resource/style hints so fixedpoint phase2 can assert NI/INVALID status with non-empty resource hints."
+      "tags": ["typeset", "bib", "fixedpoint", "probe", "ok"],
+      "expected_status": "OK",
+      "purpose": "Exercises bibliography fixedpoint/resource hint closure while preserving deterministic fail-closed semantics."
     },
     {
       "id": "typeset_demo_bib_probe_v0",
-      "tags": ["typeset", "bib", "cite", "probe", "ni"],
-      "expected_status": "NI",
-      "purpose": "Probes bibliography and cite seam planned for future typed artifacts."
+      "tags": ["typeset", "bib", "cite", "probe", "ok"],
+      "expected_status": "OK",
+      "purpose": "Exercises bibliography and cite extraction with deterministic typed artifacts and fixedpoint closure hints."
     },
     {
       "id": "typeset_demo_bibstyle_probe_v0",
-      "tags": ["typeset", "bib", "style", "probe", "ni"],
-      "expected_status": "NI",
-      "purpose": "Probes bibliography style/resource hint extraction for deterministic bst+bib requests."
+      "tags": ["typeset", "bib", "style", "probe", "ok"],
+      "expected_status": "OK",
+      "purpose": "Exercises bibliography style/resource hint extraction for deterministic bst+bib fixedpoint requests."
     },
     {
       "id": "typeset_demo_bib_resources_probe_v0",
-      "tags": ["typeset", "bib", "resources", "probe", "ni"],
-      "expected_status": "NI",
-      "purpose": "Probes addbibresource+bibliography list extraction into deterministic bib requests."
+      "tags": ["typeset", "bib", "resources", "probe", "ok"],
+      "expected_status": "OK",
+      "purpose": "Exercises addbibresource+bibliography list extraction into deterministic delivered bib requests."
     },
     {
       "id": "typeset_demo_graphics_probe_v0",
@@ -153,9 +153,9 @@
     },
     {
       "id": "typeset_demo_graphics_multipath_probe_v0",
-      "tags": ["typeset", "graphics", "includegraphics", "options", "graphicspath", "multi-path", "probe", "ni"],
-      "expected_status": "NI",
-      "purpose": "Probes includegraphics option parsing beyond width/height and emits per-prefix candidate graphics hints."
+      "tags": ["typeset", "graphics", "includegraphics", "options", "graphicspath", "multi-path", "probe", "ok"],
+      "expected_status": "OK",
+      "purpose": "Exercises includegraphics option parsing beyond width/height with deterministic multipath closure hints."
     },
     {
       "id": "typeset_demo_graphics_opts_invalid_probe_v0",
@@ -243,23 +243,23 @@
     },
     {
       "id": "typeset_demo_ondemand_input_probe_v0",
-      "tags": ["typeset", "ondemand", "input", "probe", "ni"],
-      "expected_status": "NI",
+      "tags": ["typeset", "ondemand", "input", "probe", "ok"],
+      "expected_status": "OK",
       "ondemand_opt_in": true,
-      "purpose": "Probes opt-in on-demand closure by requiring a nested input resource that starts missing in baseline store."
+      "purpose": "Exercises opt-in on-demand closure by requiring a nested input resource that starts missing in baseline store."
     },
     {
       "id": "typeset_demo_ondemand_include_probe_v0",
-      "tags": ["typeset", "ondemand", "include", "probe", "ni"],
-      "expected_status": "NI",
+      "tags": ["typeset", "ondemand", "include", "probe", "ok"],
+      "expected_status": "OK",
       "ondemand_opt_in": true,
-      "purpose": "Probes opt-in on-demand closure by requiring a nested include resource that starts missing in baseline store."
+      "purpose": "Exercises opt-in on-demand closure by requiring a nested include resource that starts missing in baseline store."
     },
     {
       "id": "typeset_demo_includeonly_probe_v0",
-      "tags": ["typeset", "includeonly", "probe", "ni"],
-      "expected_status": "NI",
-      "purpose": "Probes includeonly list extraction and deterministic .tex request mapping."
+      "tags": ["typeset", "includeonly", "probe", "ok"],
+      "expected_status": "OK",
+      "purpose": "Exercises includeonly list extraction and deterministic delivered .tex request mapping."
     },
     {
       "id": "typeset_demo_package_require_probe_v0",
@@ -359,9 +359,9 @@
     },
     {
       "id": "typeset_demo_resource_hints_probe_v0",
-      "tags": ["typeset", "graphics", "bib", "resource-hints", "probe", "ni"],
-      "expected_status": "NI",
-      "purpose": "Probes includegraphics and bibliography resource-hint seams in one deterministic NI fixture."
+      "tags": ["typeset", "graphics", "bib", "resource-hints", "probe", "ok"],
+      "expected_status": "OK",
+      "purpose": "Exercises includegraphics and bibliography resource-hint seams in one deterministic delivered fixedpoint fixture."
     },
     {
       "id": "typeset_demo_nested_path_probe_v0",
@@ -371,9 +371,9 @@
     },
     {
       "id": "typeset_demo_graphics_opts_probe_v0",
-      "tags": ["typeset", "graphics", "options", "ext-dir", "probe", "ni"],
-      "expected_status": "NI",
-      "purpose": "Probes includegraphics ext/dir option hint normalization for deterministic resource requests."
+      "tags": ["typeset", "graphics", "options", "ext-dir", "probe", "ok"],
+      "expected_status": "OK",
+      "purpose": "Exercises includegraphics ext/dir option normalization for deterministic delivered resource requests."
     },
     {
       "id": "ok_demo_capabilities_v0",

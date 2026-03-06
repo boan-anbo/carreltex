@@ -179,8 +179,15 @@ async function collectResolverRequestsFromTypedArtifactsV0(caseSpec, caseOutDir,
       if (typeof entry?.value !== 'string' || entry.value.length === 0) {
         continue;
       }
-      const hintType = entry?.command === 'include' ? 'tex_include' : 'tex_input';
-      addTexmfRequest(entry.value, 'tex', hintType);
+      const resolverName = typeof entry?.resolver_name === 'string' && entry.resolver_name.length > 0
+        ? entry.resolver_name
+        : entry.value;
+      const hintType = entry?.command === 'include'
+        ? 'tex_include'
+        : entry?.command === 'includeonly'
+          ? 'tex_includeonly'
+          : 'tex_input';
+      addTexmfRequest(resolverName, 'tex', hintType);
     }
   }
 
