@@ -225,7 +225,6 @@ fn emit_figure_block_v0(
         FIGURE_CAPTION_FONT_SIZE_PT_V0,
     );
     out.extend_from_slice(b"\n");
-    *y -= LEADING_PT_V0;
     Some(())
 }
 
@@ -348,7 +347,5 @@ fn emit_toc_block_v0(
         out.extend_from_slice(b"\n");
         *y -= LEADING_PT_V0;
     }
-    *y -= LEADING_PT_V0;
     Some(())
 }
-
