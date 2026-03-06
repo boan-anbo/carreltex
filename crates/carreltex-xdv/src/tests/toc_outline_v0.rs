@@ -506,6 +506,56 @@ fn pdf_renderer_front_matter_toc_heading_rhythm_is_stable_v11() {
 }
 
 #[test]
+fn pdf_renderer_front_matter_toc_body_bibliography_flow_rhythm_is_stable_v17() {
+    let xdv = write_dvi_v2_text_page_v0(
+        b"Front Matter Title\nAuthor Name\n2026-03-05\n\n!toc\n\n@S {Intro heading}\n\n~ Intro body paragraph.\n\n@S {References}\n\n[1] ALPHASTART alpha source text.\n\n!toc 1 1 Intro toc entry",
+    )
+    .expect("writer should accept front-matter toc+bibliography bytes");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+
+    let (_, date_y) = tm_position_for_line_containing_text_v0(&pdf, "(2026-03-05)")
+        .expect("date position");
+    let (_, toc_title_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "(Contents)").expect("toc title");
+    let (_, toc_entry_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "(Intro toc entry)").expect("toc entry");
+    let (_, heading_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "(Intro heading)").expect("intro heading");
+    let (_, body_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "(Intro body paragraph.)").expect("body");
+    let (_, references_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "(References)").expect("references");
+    let (_, alpha_start_y) =
+        tm_position_for_segment_substring_v0(&pdf, "ALPHASTART").expect("first bibliography body");
+    let epsilon_pt = 0.05f32;
+
+    assert!(
+        (date_y - toc_title_y - 38.0).abs() <= epsilon_pt,
+        "front-matter date->toc-title rhythm should stay stable: date_y={date_y}, toc_title_y={toc_title_y}"
+    );
+    assert!(
+        (toc_title_y - toc_entry_y - 12.0).abs() <= epsilon_pt,
+        "toc title->entry rhythm should stay stable: toc_title_y={toc_title_y}, toc_entry_y={toc_entry_y}"
+    );
+    assert!(
+        (toc_entry_y - heading_y - 23.0).abs() <= epsilon_pt,
+        "toc->first heading transition should stay tightened: toc_entry_y={toc_entry_y}, heading_y={heading_y}"
+    );
+    assert!(
+        (heading_y - body_y - 28.0).abs() <= epsilon_pt,
+        "heading->body transition should remain stable: heading_y={heading_y}, body_y={body_y}"
+    );
+    assert!(
+        (body_y - references_y - 24.0).abs() <= epsilon_pt,
+        "body->bibliography opening should stay tightened and stable: body_y={body_y}, references_y={references_y}"
+    );
+    assert!(
+        (references_y - alpha_start_y - 12.0).abs() <= epsilon_pt,
+        "bibliography heading->first entry gap should remain stable: references_y={references_y}, alpha_start_y={alpha_start_y}"
+    );
+}
+
+#[test]
 fn pdf_renderer_rejects_toc_entry_with_non_numeric_anchor_id_v0() {
     let xdv =
         write_dvi_v2_text_page_v0(b"!toc\n\n!toc 1 abc Intro").expect("writer should accept bytes");

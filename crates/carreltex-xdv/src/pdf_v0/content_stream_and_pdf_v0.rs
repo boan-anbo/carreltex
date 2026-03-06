@@ -3,6 +3,7 @@ enum BodyFlowKindV0 {
     FrontMatter,
     Paragraph,
     DisplayMath,
+    BibliographyHeading,
     List,
     Quote,
     Table,
@@ -101,6 +102,9 @@ fn classify_next_flow_kind_v0(
             None
         };
         if heading_kind.is_some() {
+            if line_is_bibliography_heading_v17(&line.glyphs) {
+                return Some(BodyFlowKindV0::BibliographyHeading);
+            }
             return Some(BodyFlowKindV0::Other);
         }
         let render_glyphs = if noindent_prefixed {
@@ -123,7 +127,11 @@ fn classify_next_flow_kind_v0(
 }
 
 fn should_tighten_transition_gap_v7(previous: BodyFlowKindV0, next: BodyFlowKindV0) -> bool {
-    if previous == BodyFlowKindV0::DisplayMath || next == BodyFlowKindV0::DisplayMath {
+    if previous == BodyFlowKindV0::DisplayMath
+        || next == BodyFlowKindV0::DisplayMath
+        || previous == BodyFlowKindV0::BibliographyHeading
+        || next == BodyFlowKindV0::BibliographyHeading
+    {
         return true;
     }
     matches!(
@@ -141,21 +149,45 @@ fn should_tighten_transition_gap_v7(previous: BodyFlowKindV0, next: BodyFlowKind
     )
 }
 
-fn transition_blank_advance_pt_v7(previous: BodyFlowKindV0) -> f32 {
+fn transition_blank_advance_pt_v7(previous: BodyFlowKindV0, next: BodyFlowKindV0) -> f32 {
     let previous_leading_pt = match previous {
         BodyFlowKindV0::FrontMatter => LEADING_PT_V0,
         BodyFlowKindV0::DisplayMath => LEADING_PT_V0,
+        BodyFlowKindV0::BibliographyHeading => LEADING_PT_V0,
         BodyFlowKindV0::List => LIST_ENTRY_LEADING_PT_V7,
         BodyFlowKindV0::Quote => QUOTE_ENTRY_LEADING_PT_V7,
         BodyFlowKindV0::Table => TABLE_ROW_LEADING_PT_V10,
         BodyFlowKindV0::Paragraph | BodyFlowKindV0::Other => LEADING_PT_V0,
     };
-    let block_transition_gap_pt = if previous == BodyFlowKindV0::DisplayMath {
+    let block_transition_gap_pt = if previous == BodyFlowKindV0::DisplayMath
+        || next == BodyFlowKindV0::DisplayMath
+    {
         DISPLAY_MATH_TRANSITION_GAP_PT_V16
+    } else if previous == BodyFlowKindV0::BibliographyHeading
+        || next == BodyFlowKindV0::BibliographyHeading
+    {
+        BIBLIOGRAPHY_OPENING_TRANSITION_GAP_PT_V17
     } else {
         BLOCK_TRANSITION_GAP_PT_V7
     };
     (block_transition_gap_pt - previous_leading_pt).max(0.0)
+}
+
+fn line_is_bibliography_heading_v17(glyphs: &[GlyphPlanV0]) -> bool {
+    let Some(kind) = detect_heading_prefix_v0(glyphs) else {
+        return false;
+    };
+    if kind != HeadingKindV0::Section {
+        return false;
+    }
+    let heading_glyphs = &glyphs[heading_prefix_len_v0(kind)..];
+    let Some(segments) = parse_styled_segments_v0(heading_glyphs) else {
+        return false;
+    };
+    segments
+        .iter()
+        .flat_map(|segment| segment.glyphs.iter().map(|glyph| glyph.byte))
+        .eq(BIBLIOGRAPHY_HEADING_TEXT_V0.iter().copied())
 }
 
 fn line_starts_bibliography_entry_v14(
@@ -603,7 +635,7 @@ fn build_page_content_stream_v0(
                             (PARAGRAPH_BLOCK_GAP_PT_V12 - previous_line_advance_pt).max(0.0);
                     }
                 } else if should_tighten_transition_gap_v7(previous_kind, next_kind) {
-                    line_advance_pt = transition_blank_advance_pt_v7(previous_kind);
+                    line_advance_pt = transition_blank_advance_pt_v7(previous_kind, next_kind);
                 }
             }
         }
@@ -621,9 +653,12 @@ fn build_page_content_stream_v0(
                     .iter()
                     .flat_map(|segment| segment.bytes.iter().copied())
                     .eq(BIBLIOGRAPHY_HEADING_TEXT_V0.iter().copied());
-            current_flow_kind = if in_title_block && has_front_matter_title_block_v11(title_block_len)
+            current_flow_kind = if in_title_block
+                && has_front_matter_title_block_v11(title_block_len)
             {
                 BodyFlowKindV0::FrontMatter
+            } else if bibliography_heading_line {
+                BodyFlowKindV0::BibliographyHeading
             } else if display_math_line {
                 BodyFlowKindV0::DisplayMath
             } else if bibliography_line {
