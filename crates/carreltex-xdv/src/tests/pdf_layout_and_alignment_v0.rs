@@ -2866,7 +2866,6 @@ fn pdf_renderer_wrapped_quote_and_list_styled_seams_use_v29_profile() {
         quote_line.contains("95 Tz") && quote_line.contains("(QUOTEBOLDV29) Tj 100 Tz"),
         "wrapped quote styled segment should use v29 seam compensation"
     );
-
     let (_, list_start_y) =
         tm_position_for_segment_substring_v0(&pdf, "LISTSTART").expect("wrapped list start");
     let (_, list_wrap_y) =
