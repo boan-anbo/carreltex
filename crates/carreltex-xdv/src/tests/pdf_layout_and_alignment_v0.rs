@@ -4072,6 +4072,25 @@ fn pdf_renderer_wrapped_right_short_bold_low_tier_gap_is_tightened_v74() {
 }
 
 #[test]
+fn pdf_renderer_wrapped_right_short_bold_low_tier_gap_is_tightened_v98() {
+    let xdv = write_dvi_v2_text_page_with_layout_and_wrap_v0(
+        b"\n| RIGHT {core words} trail words words WRAPRIGHTSHORTB tail.",
+        65_536,
+        786_432,
+        30,
+    )
+    .expect("writer should accept wrapped right short bold text");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+
+    let actual_gap = max_tm_gap_pt_for_line_containing_v0(&pdf, "core words")
+        .expect("right short bold tighter low-tier tm gap");
+    assert!(
+        actual_gap <= 105.0,
+        "wrapped right short bold seam should stay slightly tighter after v98: actual_gap={actual_gap}"
+    );
+}
+
+#[test]
 fn pdf_renderer_wrapped_centered_short_bold_low_tier_gap_is_tightened_v75() {
     let xdv = write_dvi_v2_text_page_with_layout_and_wrap_v0(
         b"\n^ CENTER {core words} trail words words WRAPCENTERSHORT tail.",
