@@ -44,6 +44,7 @@ fn build_page_content_stream_v0(
     let mut skip_indent_after_title_block = title_block_len > 0;
     let mut active_hang_indent_pt = 0.0f32;
     let mut active_quote_indent_pt = 0.0f32;
+    let mut active_inline_alignment = None::<InlineBlockAlignmentV0>;
     let mut annotations = Vec::<PdfLinkAnnotationV0>::new();
     let mut style_stack = Vec::<PdfTextStyleV0>::new();
     let mut current_style = PdfTextStyleV0::Regular;
@@ -88,6 +89,7 @@ fn build_page_content_stream_v0(
             skip_indent_after_title_block = false;
             active_hang_indent_pt = 0.0;
             active_quote_indent_pt = 0.0;
+            active_inline_alignment = None;
             line_index = table_end;
             continue;
         }
@@ -130,6 +132,7 @@ fn build_page_content_stream_v0(
             skip_indent_after_title_block = false;
             active_hang_indent_pt = 0.0;
             active_quote_indent_pt = 0.0;
+            active_inline_alignment = None;
             line_index = cursor + 1;
             continue;
         }
@@ -153,6 +156,7 @@ fn build_page_content_stream_v0(
             skip_indent_after_title_block = false;
             active_hang_indent_pt = 0.0;
             active_quote_indent_pt = 0.0;
+            active_inline_alignment = None;
             line_index += 1;
             continue;
         }
@@ -261,45 +265,74 @@ fn build_page_content_stream_v0(
             && previous_rendered_line_was_empty
             && next_raw_line_is_empty
             && is_heading_line_segments_v0(&segments);
+        let centered_continuation = !in_title_block
+            && !line_is_empty
+            && quote_prefix_advance_pt.is_none()
+            && !center_prefixed
+            && !right_prefixed
+            && !noindent_prefixed
+            && heading_kind.is_none()
+            && list_prefix.is_none()
+            && matches!(active_inline_alignment, Some(InlineBlockAlignmentV0::Center));
+        let right_continuation = !in_title_block
+            && !line_is_empty
+            && quote_prefix_advance_pt.is_none()
+            && !center_prefixed
+            && !right_prefixed
+            && !noindent_prefixed
+            && heading_kind.is_none()
+            && list_prefix.is_none()
+            && matches!(active_inline_alignment, Some(InlineBlockAlignmentV0::Right));
         if !line_is_empty {
             let line_width_pt: f32 = render_segments
                 .iter()
                 .map(|segment| segment.advance_pt)
                 .sum();
             let line_x = if in_title_block {
+                active_inline_alignment = None;
                 centered_line_x_v0(line_width_pt)
             } else if heading_kind.is_some() || heading_centered {
                 active_quote_indent_pt = 0.0;
                 active_hang_indent_pt = 0.0;
+                active_inline_alignment = None;
                 centered_line_x_v0(line_width_pt)
-            } else if center_prefixed {
+            } else if center_prefixed || centered_continuation {
                 active_quote_indent_pt = 0.0;
                 active_hang_indent_pt = 0.0;
+                active_inline_alignment = Some(InlineBlockAlignmentV0::Center);
                 centered_line_x_v0(line_width_pt)
-            } else if right_prefixed {
+            } else if right_prefixed || right_continuation {
                 active_quote_indent_pt = 0.0;
                 active_hang_indent_pt = 0.0;
+                active_inline_alignment = Some(InlineBlockAlignmentV0::Right);
                 (PAGE_WIDTH_PT_V0 - MARGIN_PT_V0 - line_width_pt).max(MARGIN_PT_V0)
             } else if let Some(prefix_advance_pt) = quote_prefix_advance_pt {
                 active_quote_indent_pt =
                     QUOTE_BODY_INDENT_PT_V0.max(prefix_advance_pt + QUOTE_PREFIX_GAP_PT_V0);
                 active_hang_indent_pt = 0.0;
+                active_inline_alignment = None;
                 MARGIN_PT_V0 + active_quote_indent_pt
             } else if let Some(prefix) = list_prefix {
                 active_hang_indent_pt = LIST_BODY_INDENT_PT_V0 + prefix.leading_advance_pt;
                 active_quote_indent_pt = 0.0;
+                active_inline_alignment = None;
                 MARGIN_PT_V0 + active_hang_indent_pt
             } else if noindent_prefixed {
                 active_hang_indent_pt = 0.0;
                 active_quote_indent_pt = 0.0;
+                active_inline_alignment = None;
                 MARGIN_PT_V0
             } else if active_quote_indent_pt > 0.0 {
+                active_inline_alignment = None;
                 MARGIN_PT_V0 + active_quote_indent_pt
             } else if active_hang_indent_pt > 0.0 {
+                active_inline_alignment = None;
                 MARGIN_PT_V0 + active_hang_indent_pt
             } else if previous_rendered_line_was_empty && !skip_indent_after_title_block {
+                active_inline_alignment = None;
                 MARGIN_PT_V0 + INDENT_PT_V0
             } else {
+                active_inline_alignment = None;
                 MARGIN_PT_V0
             };
             let mut equation_ordinal = None::<u32>;
@@ -395,6 +428,7 @@ fn build_page_content_stream_v0(
         } else {
             active_hang_indent_pt = 0.0;
             active_quote_indent_pt = 0.0;
+            active_inline_alignment = None;
         }
         previous_rendered_line_was_empty = line_is_empty;
         y -= LEADING_PT_V0;

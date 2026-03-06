@@ -98,6 +98,12 @@ enum FigurePlacementHintV0 {
     Top,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum InlineBlockAlignmentV0 {
+    Center,
+    Right,
+}
+
 
 // Inline/text segmentation and marker parsing.
 include!("pdf_v0/style_and_segments_v0.rs");
