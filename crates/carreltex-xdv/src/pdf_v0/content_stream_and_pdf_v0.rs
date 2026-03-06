@@ -1,3 +1,90 @@
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum BodyFlowKindV0 {
+    Paragraph,
+    List,
+    Quote,
+    Other,
+}
+
+fn classify_next_flow_kind_v0(
+    lines: &[LinePlanV0],
+    start_index: usize,
+    title_block_len: usize,
+) -> Option<BodyFlowKindV0> {
+    for (line_index, line) in lines.iter().enumerate().skip(start_index) {
+        if line.glyphs.is_empty() {
+            continue;
+        }
+        if line_index < title_block_len {
+            return Some(BodyFlowKindV0::Other);
+        }
+        if has_table_spec_prefix_v0(&line.glyphs)
+            || has_table_row_prefix_v0(&line.glyphs)
+            || has_figure_box_marker_prefix_v0(&line.glyphs)
+            || has_figure_image_prefix_v0(&line.glyphs)
+            || has_figure_caption_prefix_v0(&line.glyphs)
+            || has_toc_placeholder_line_v0(&line.glyphs)
+            || has_toc_entry_line_prefix_v0(&line.glyphs)
+        {
+            return Some(BodyFlowKindV0::Other);
+        }
+        if detect_quote_prefix_advance_pt_v0(&line.glyphs).is_some() {
+            return Some(BodyFlowKindV0::Quote);
+        }
+        let center_prefixed = has_center_prefix_v0(&line.glyphs);
+        let right_prefixed = has_right_prefix_v0(&line.glyphs);
+        let noindent_prefixed = has_noindent_prefix_v0(&line.glyphs);
+        if center_prefixed || right_prefixed {
+            return Some(BodyFlowKindV0::Other);
+        }
+        let heading_kind = if !noindent_prefixed {
+            detect_heading_prefix_v0(&line.glyphs)
+        } else {
+            None
+        };
+        if heading_kind.is_some() {
+            return Some(BodyFlowKindV0::Other);
+        }
+        let render_glyphs = if noindent_prefixed {
+            &line.glyphs[2..]
+        } else {
+            &line.glyphs
+        };
+        if let Some(prefix) = detect_list_prefix_v0(render_glyphs) {
+            if matches!(
+                prefix.kind,
+                ListPrefixKindV0::Itemize | ListPrefixKindV0::Enumerate
+            ) {
+                return Some(BodyFlowKindV0::List);
+            }
+            return Some(BodyFlowKindV0::Other);
+        }
+        return Some(BodyFlowKindV0::Paragraph);
+    }
+    None
+}
+
+fn should_tighten_transition_gap_v7(previous: BodyFlowKindV0, next: BodyFlowKindV0) -> bool {
+    matches!(
+        (previous, next),
+        (BodyFlowKindV0::Paragraph, BodyFlowKindV0::List)
+            | (BodyFlowKindV0::List, BodyFlowKindV0::Paragraph)
+            | (BodyFlowKindV0::Paragraph, BodyFlowKindV0::Quote)
+            | (BodyFlowKindV0::Quote, BodyFlowKindV0::Paragraph)
+            | (BodyFlowKindV0::List, BodyFlowKindV0::Quote)
+            | (BodyFlowKindV0::Quote, BodyFlowKindV0::List)
+    )
+}
+
+fn transition_blank_advance_pt_v7(previous: BodyFlowKindV0) -> f32 {
+    let previous_leading_pt = match previous {
+        BodyFlowKindV0::List => LIST_ENTRY_LEADING_PT_V7,
+        BodyFlowKindV0::Quote => QUOTE_ENTRY_LEADING_PT_V7,
+        BodyFlowKindV0::Paragraph | BodyFlowKindV0::Other => LEADING_PT_V0,
+    };
+    (BLOCK_TRANSITION_GAP_PT_V7 - previous_leading_pt).max(0.0)
+}
+
 fn build_page_content_stream_v0(
     lines: &[LinePlanV0],
     footnote_defs_by_id: &BTreeMap<u32, Vec<Vec<GlyphPlanV0>>>,
@@ -47,6 +134,7 @@ fn build_page_content_stream_v0(
     let mut active_quote_indent_pt = 0.0f32;
     let mut active_inline_alignment = None::<InlineBlockAlignmentV0>;
     let mut previous_line_was_bibliography_heading = false;
+    let mut last_non_empty_flow_kind = None::<BodyFlowKindV0>;
     let mut annotations = Vec::<PdfLinkAnnotationV0>::new();
     let mut style_stack = Vec::<PdfTextStyleV0>::new();
     let mut current_style = PdfTextStyleV0::Regular;
@@ -94,6 +182,7 @@ fn build_page_content_stream_v0(
             active_quote_indent_pt = 0.0;
             active_inline_alignment = None;
             previous_line_was_bibliography_heading = false;
+            last_non_empty_flow_kind = Some(BodyFlowKindV0::Other);
             line_index = table_end;
             continue;
         }
@@ -139,6 +228,7 @@ fn build_page_content_stream_v0(
             active_quote_indent_pt = 0.0;
             active_inline_alignment = None;
             previous_line_was_bibliography_heading = false;
+            last_non_empty_flow_kind = Some(BodyFlowKindV0::Other);
             line_index = cursor + 1;
             continue;
         }
@@ -165,6 +255,7 @@ fn build_page_content_stream_v0(
             active_quote_indent_pt = 0.0;
             active_inline_alignment = None;
             previous_line_was_bibliography_heading = false;
+            last_non_empty_flow_kind = Some(BodyFlowKindV0::Other);
             line_index += 1;
             continue;
         }
@@ -292,6 +383,28 @@ fn build_page_content_stream_v0(
             && heading_kind.is_none()
             && list_prefix.is_none()
             && matches!(active_inline_alignment, Some(InlineBlockAlignmentV0::Right));
+        let quote_continuation = !in_title_block
+            && !line_is_empty
+            && quote_prefix_advance_pt.is_none()
+            && !center_prefixed
+            && !right_prefixed
+            && !noindent_prefixed
+            && heading_kind.is_none()
+            && list_prefix.is_none()
+            && active_quote_indent_pt > 0.0;
+        let list_continuation = !in_title_block
+            && !line_is_empty
+            && quote_prefix_advance_pt.is_none()
+            && !center_prefixed
+            && !right_prefixed
+            && !noindent_prefixed
+            && heading_kind.is_none()
+            && list_prefix.is_none()
+            && active_hang_indent_pt > 0.0
+            && matches!(
+                active_hang_prefix_kind,
+                Some(ListPrefixKindV0::Itemize | ListPrefixKindV0::Enumerate)
+            );
         let bibliography_continuation = !in_title_block
             && !line_is_empty
             && quote_prefix_advance_pt.is_none()
@@ -304,18 +417,50 @@ fn build_page_content_stream_v0(
             && matches!(active_hang_prefix_kind, Some(ListPrefixKindV0::Bibliography));
         let mut line_advance_pt = LEADING_PT_V0;
         let mut bibliography_heading_line = false;
+        let mut current_flow_kind = BodyFlowKindV0::Other;
         if line_is_empty && previous_line_was_bibliography_heading {
             line_advance_pt = 0.0;
+        } else if line_is_empty {
+            if let (Some(previous_kind), Some(next_kind)) = (
+                last_non_empty_flow_kind,
+                classify_next_flow_kind_v0(lines, line_index + 1, title_block_len),
+            ) {
+                if should_tighten_transition_gap_v7(previous_kind, next_kind) {
+                    line_advance_pt = transition_blank_advance_pt_v7(previous_kind);
+                }
+            }
         }
         if !line_is_empty {
             let bibliography_line =
                 matches!(list_prefix.map(|prefix| prefix.kind), Some(ListPrefixKindV0::Bibliography))
                     || bibliography_continuation;
+            let list_line = matches!(
+                list_prefix.map(|prefix| prefix.kind),
+                Some(ListPrefixKindV0::Itemize | ListPrefixKindV0::Enumerate)
+            ) || list_continuation;
+            let quote_line = quote_prefix_advance_pt.is_some() || quote_continuation;
             bibliography_heading_line = matches!(heading_kind, Some(HeadingKindV0::Section))
                 && render_segments
                     .iter()
                     .flat_map(|segment| segment.bytes.iter().copied())
                     .eq(BIBLIOGRAPHY_HEADING_TEXT_V0.iter().copied());
+            current_flow_kind = if bibliography_line {
+                BodyFlowKindV0::Other
+            } else if quote_line {
+                BodyFlowKindV0::Quote
+            } else if list_line {
+                BodyFlowKindV0::List
+            } else if heading_kind.is_some()
+                || heading_centered
+                || center_prefixed
+                || right_prefixed
+                || right_continuation
+                || centered_continuation
+            {
+                BodyFlowKindV0::Other
+            } else {
+                BodyFlowKindV0::Paragraph
+            };
             let line_width_pt: f32 = render_segments
                 .iter()
                 .map(|segment| segment.advance_pt)
@@ -427,6 +572,10 @@ fn build_page_content_stream_v0(
                 line_advance_pt = BIBLIOGRAPHY_HEADING_TO_FIRST_ENTRY_GAP_PT_V6;
             } else if bibliography_line {
                 line_advance_pt = BIBLIOGRAPHY_ENTRY_LEADING_PT_V6;
+            } else if list_line {
+                line_advance_pt = LIST_ENTRY_LEADING_PT_V7;
+            } else if quote_line {
+                line_advance_pt = QUOTE_ENTRY_LEADING_PT_V7;
             }
             let mut line_annotations = collect_link_annotations_for_line_v0(
                 &render_segments,
@@ -484,6 +633,9 @@ fn build_page_content_stream_v0(
         }
         previous_rendered_line_was_empty = line_is_empty;
         previous_line_was_bibliography_heading = bibliography_heading_line;
+        if !line_is_empty {
+            last_non_empty_flow_kind = Some(current_flow_kind);
+        }
         y -= line_advance_pt;
         if title_block_len > 0 && line_index + 1 == title_block_len {
             y -= TITLE_EXTRA_GAP_PT_V0;
