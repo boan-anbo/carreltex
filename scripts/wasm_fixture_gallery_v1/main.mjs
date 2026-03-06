@@ -23,7 +23,7 @@ const STATUS_FAIL_V0 = 'FAIL';
 const STATUS_MISMATCH_V0 = 'MISMATCH';
 const EXPECTED_STATUS_VALUES_V0 = new Set([STATUS_OK_V0, STATUS_NI_V0, STATUS_INVALID_V0, STATUS_FAIL_V0]);
 const DEFAULT_ONDEMAND_FIXEDPOINT_MAX_ITERS_V1 = 3;
-const TYPED_ARTIFACT_KEYS_V0 = ['toc', 'labels', 'refs', 'bib', 'cite', 'bibitems', 'cites', 'hyperref', 'pkgopt', 'packages', 'graphics', 'input', 'math', 'table'];
+const TYPED_ARTIFACT_KEYS_V0 = ['toc', 'labels', 'refs', 'pageref', 'bib', 'cite', 'bibitems', 'cites', 'hyperref', 'pkgopt', 'packages', 'graphics', 'input', 'math', 'table'];
 const TYPED_ARTIFACTS_VERSION_V0 = 1;
 const MAX_TOC_ENTRIES_V0 = 256;
 const MAX_TOC_TITLE_BYTES_V0 = 256;
@@ -31,6 +31,8 @@ const MAX_LABEL_ENTRIES_V0 = 256;
 const MAX_LABEL_VALUE_BYTES_V0 = 256;
 const MAX_REF_ENTRIES_V0 = 256;
 const MAX_REF_OCCURRENCES_PER_KEY_V0 = 256;
+const MAX_PAGEREF_ENTRIES_V2 = 256;
+const MAX_PAGEREF_OCCURRENCES_PER_KEY_V2 = 256;
 const MAX_BIB_ENTRIES_V0 = 256;
 const MAX_BIB_VALUE_BYTES_V0 = 256;
 const MAX_PKGOPT_ENTRIES_V0 = 256;
@@ -721,6 +723,21 @@ async function loadFixtureCasesV0() {
       id: 'typeset_demo_hyperref_include_label_probe_v0',
       mode: 'typeset',
       fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_hyperref_include_label_probe_v0.tex',
+    },
+    {
+      id: 'typeset_demo_pageref_probe_v2',
+      mode: 'typeset',
+      fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_pageref_probe_v2.tex',
+    },
+    {
+      id: 'typeset_demo_pageref_include_probe_v2',
+      mode: 'typeset',
+      fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_pageref_include_probe_v2.tex',
+    },
+    {
+      id: 'typeset_demo_pageref_unresolved_probe_v2',
+      mode: 'typeset',
+      fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_pageref_unresolved_probe_v2.tex',
     },
     {
       id: 'typeset_demo_hyperref_toc_input_probe_v0',
@@ -3132,6 +3149,276 @@ function extractLabelsAndRefsFromSourceV1(sourceBytes) {
   };
 }
 
+function traversePagerefSourceV2(sourcePath, sourceBytes, sourcesByPath, state, pagerefByKey) {
+  if (state.visiting.has(sourcePath)) {
+    throw new Error(`pageref_v2 include cycle at ${sourcePath}`);
+  }
+  state.visiting.add(sourcePath);
+  try {
+    let index = 0;
+    while (index < sourceBytes.length) {
+      if (sourceBytes[index] !== 0x5c) {
+        index += 1;
+        continue;
+      }
+      let commandIndex = index + 1;
+      while (commandIndex < sourceBytes.length && isAsciiLetterByteV0(sourceBytes[commandIndex])) {
+        commandIndex += 1;
+      }
+      if (commandIndex === index + 1) {
+        index += 1;
+        continue;
+      }
+
+      const command = Buffer.from(sourceBytes.slice(index + 1, commandIndex)).toString('ascii');
+      if (command === 'begin') {
+        const envGroup = readBracedGroupV0(sourceBytes, commandIndex);
+        if (!envGroup.ok) {
+          index = commandIndex;
+          state.pendingLabelTarget = null;
+          continue;
+        }
+        const envName = envGroup.value.trim();
+        if (envName === 'figure') {
+          state.inFigure = true;
+        }
+        state.pendingLabelTarget = null;
+        index = envGroup.next;
+        continue;
+      }
+      if (command === 'end') {
+        const envGroup = readBracedGroupV0(sourceBytes, commandIndex);
+        if (!envGroup.ok) {
+          index = commandIndex;
+          state.pendingLabelTarget = null;
+          continue;
+        }
+        const envName = envGroup.value.trim();
+        if (envName === 'figure') {
+          state.inFigure = false;
+        }
+        state.pendingLabelTarget = null;
+        index = envGroup.next;
+        continue;
+      }
+      if (command === 'section' || command === 'subsection') {
+        const titleGroup = readBracedGroupV0(sourceBytes, commandIndex);
+        if (!titleGroup.ok) {
+          index = commandIndex;
+          state.pendingLabelTarget = null;
+          continue;
+        }
+        state.pendingLabelTarget = {
+          anchor_id: state.nextAnchorId,
+          page_no: state.currentPageNo,
+        };
+        state.nextAnchorId += 1;
+        index = titleGroup.next;
+        continue;
+      }
+      if (command === 'caption' && state.inFigure) {
+        const captionGroup = readBracedGroupV0(sourceBytes, commandIndex);
+        if (!captionGroup.ok) {
+          index = commandIndex;
+          state.pendingLabelTarget = null;
+          continue;
+        }
+        state.pendingLabelTarget = {
+          anchor_id: state.nextAnchorId,
+          page_no: state.currentPageNo,
+        };
+        state.nextAnchorId += 1;
+        index = captionGroup.next;
+        continue;
+      }
+      if (command === 'label') {
+        const keyGroup = readBracedGroupV0(sourceBytes, commandIndex);
+        if (!keyGroup.ok) {
+          index = commandIndex;
+          state.pendingLabelTarget = null;
+          continue;
+        }
+        const key = keyGroup.value.trim();
+        if (state.pendingLabelTarget && isSafeLabelRefKeyValueV1(key) && !state.labelsByKey.has(key)) {
+          const keyBytes = Buffer.from(key, 'utf8');
+          if (keyBytes.length > MAX_LABEL_VALUE_BYTES_V0) {
+            throw new Error(`pageref_v2 label key exceeds cap ${MAX_LABEL_VALUE_BYTES_V0}`);
+          }
+          state.labelsByKey.set(key, {
+            anchor_id: state.pendingLabelTarget.anchor_id,
+            page_no: state.pendingLabelTarget.page_no,
+          });
+        }
+        state.pendingLabelTarget = null;
+        index = keyGroup.next;
+        continue;
+      }
+      if (command === 'pageref') {
+        const keyGroup = readBracedGroupV0(sourceBytes, commandIndex);
+        if (!keyGroup.ok) {
+          index = commandIndex;
+          state.pendingLabelTarget = null;
+          continue;
+        }
+        const key = keyGroup.value.trim();
+        if (isSafeLabelRefKeyValueV1(key)) {
+          let entry = pagerefByKey.get(key);
+          if (!entry) {
+            entry = {
+              key,
+              resolved: false,
+              anchor_id: null,
+              page_no: null,
+              source_path: sourcePath,
+              source_span: buildSourceSpanV0(sourceBytes, index, keyGroup.next, 'pageref_v2'),
+              occurrences: [],
+            };
+            pagerefByKey.set(key, entry);
+          }
+          entry.occurrences.push({
+            source_path: sourcePath,
+            line_index: lineIndexForByteOffsetV1(sourceBytes, index),
+            page_no: null,
+          });
+          if (entry.occurrences.length > MAX_PAGEREF_OCCURRENCES_PER_KEY_V2) {
+            throw new Error(`pageref_v2 occurrences exceed cap ${MAX_PAGEREF_OCCURRENCES_PER_KEY_V2} for key ${key}`);
+          }
+        }
+        state.pendingLabelTarget = null;
+        index = keyGroup.next;
+        continue;
+      }
+      if (command === 'input' || command === 'include') {
+        const group = readBracedGroupV0(sourceBytes, commandIndex);
+        if (!group.ok || group.value.length === 0) {
+          index = commandIndex;
+          state.pendingLabelTarget = null;
+          continue;
+        }
+        const values = splitCommaValuesV0(group.value);
+        for (const rawValue of values) {
+          const mountPath = normalizeInputIncludeMountPathV1(rawValue);
+          if (!mountPath) {
+            continue;
+          }
+          const nestedBytes = sourcesByPath.get(mountPath);
+          if (!nestedBytes) {
+            continue;
+          }
+          if (command === 'include') {
+            state.currentPageNo += 1;
+          }
+          traversePagerefSourceV2(mountPath, nestedBytes, sourcesByPath, state, pagerefByKey);
+        }
+        state.pendingLabelTarget = null;
+        index = group.next;
+        continue;
+      }
+
+      state.pendingLabelTarget = null;
+      index = commandIndex;
+    }
+  } finally {
+    state.visiting.delete(sourcePath);
+  }
+}
+
+function extractPagerefEntriesFromSourcesV2(mainSourceBytes, mountedFiles = []) {
+  const sourcesByPath = new Map();
+  sourcesByPath.set('main.tex', toUint8ArrayV0(mainSourceBytes));
+  for (const [mountPath, mountBytes] of mountedFiles) {
+    sourcesByPath.set(mountPath, toUint8ArrayV0(mountBytes));
+  }
+
+  const state = {
+    nextAnchorId: 1,
+    currentPageNo: 1,
+    inFigure: false,
+    pendingLabelTarget: null,
+    labelsByKey: new Map(),
+    visiting: new Set(),
+  };
+  const pagerefByKey = new Map();
+  traversePagerefSourceV2('main.tex', toUint8ArrayV0(mainSourceBytes), sourcesByPath, state, pagerefByKey);
+
+  const entries = [...pagerefByKey.values()].sort((left, right) => left.key.localeCompare(right.key));
+  for (const entry of entries) {
+    const resolved = state.labelsByKey.get(entry.key);
+    if (!resolved) {
+      continue;
+    }
+    entry.resolved = true;
+    entry.anchor_id = resolved.anchor_id;
+    entry.page_no = resolved.page_no;
+    for (const occurrence of entry.occurrences) {
+      occurrence.page_no = resolved.page_no;
+    }
+  }
+  if (entries.length > MAX_PAGEREF_ENTRIES_V2) {
+    throw new Error(`pageref_v2 entries exceed cap ${MAX_PAGEREF_ENTRIES_V2}`);
+  }
+  return entries;
+}
+
+async function augmentPagerefMountedFilesWithFixtureSourceV2(caseOutDir, mainSourceBytes, mountedFiles = []) {
+  const mountedByPath = new Map();
+  for (const [mountPath, mountBytes] of mountedFiles) {
+    mountedByPath.set(mountPath, toUint8ArrayV0(mountBytes));
+  }
+  const fixtureSourceTexRoot = path.join(`${path.dirname(caseOutDir)}_fixture_source_v0`, 'xetex', 'tex');
+  const sourceBytesByPath = new Map();
+  sourceBytesByPath.set('main.tex', toUint8ArrayV0(mainSourceBytes));
+  for (const [mountPath, mountBytes] of mountedByPath.entries()) {
+    sourceBytesByPath.set(mountPath, mountBytes);
+  }
+
+  const queue = ['main.tex'];
+  const visited = new Set();
+  while (queue.length > 0) {
+    const sourcePath = queue.shift();
+    if (visited.has(sourcePath)) {
+      continue;
+    }
+    visited.add(sourcePath);
+    const sourceBytes = sourceBytesByPath.get(sourcePath);
+    if (!(sourceBytes instanceof Uint8Array)) {
+      continue;
+    }
+    const directives = extractInputIncludeDirectivesFromSourceV1(sourceBytes, sourcePath);
+    for (const directive of directives) {
+      const mountPath = directive.value;
+      if (mountedByPath.has(mountPath)) {
+        if (!visited.has(mountPath)) {
+          queue.push(mountPath);
+        }
+        continue;
+      }
+      const aliasPath = mountPath.replaceAll('/', '__');
+      const candidatePaths = aliasPath === mountPath
+        ? [mountPath]
+        : [aliasPath, mountPath];
+      let loadedBytes = null;
+      for (const candidatePath of candidatePaths) {
+        const candidateFile = path.join(fixtureSourceTexRoot, candidatePath);
+        try {
+          loadedBytes = toUint8ArrayV0(await readFile(candidateFile));
+          break;
+        } catch {
+          // ignore and continue trying candidate paths
+        }
+      }
+      if (!(loadedBytes instanceof Uint8Array)) {
+        continue;
+      }
+      mountedByPath.set(mountPath, loadedBytes);
+      sourceBytesByPath.set(mountPath, loadedBytes);
+      queue.push(mountPath);
+    }
+  }
+
+  return [...mountedByPath.entries()].sort(([leftPath], [rightPath]) => leftPath.localeCompare(rightPath));
+}
+
 async function emitLabelsTypedArtifactV0(caseOutDir, fixtureBytes) {
   const extracted = extractLabelsAndRefsFromSourceV1(fixtureBytes);
   const payload = {
@@ -3160,6 +3447,29 @@ async function emitRefsTypedArtifactV0(caseOutDir, fixtureBytes) {
   };
   const bytes = Buffer.from(`${JSON.stringify(payload, null, 2)}\n`, 'utf8');
   const relpath = 'refs_v1.json';
+  const fullPath = path.join(caseOutDir, relpath);
+  await writeFile(fullPath, bytes);
+  return {
+    present: true,
+    items: payload.entries.length,
+    artifact_relpath: relpath,
+    artifact_sha256: sha256HexV0(bytes),
+  };
+}
+
+async function emitPagerefTypedArtifactV2(caseOutDir, fixtureBytes, mountedFiles) {
+  const pagerefMountedFiles = await augmentPagerefMountedFilesWithFixtureSourceV2(
+    caseOutDir,
+    fixtureBytes,
+    mountedFiles,
+  );
+  const payload = {
+    version: TYPED_ARTIFACTS_VERSION_V0,
+    schema: 'pageref_v2',
+    entries: extractPagerefEntriesFromSourcesV2(fixtureBytes, pagerefMountedFiles),
+  };
+  const bytes = Buffer.from(`${JSON.stringify(payload, null, 2)}\n`, 'utf8');
+  const relpath = 'pageref_v2.json';
   const fullPath = path.join(caseOutDir, relpath);
   await writeFile(fullPath, bytes);
   return {
@@ -3416,6 +3726,7 @@ async function emitTypedArtifactsV0(
   caseOutDir,
   typedArtifacts,
   fixtureBytes,
+  mountedFiles = [],
   inputEntries = [],
 ) {
   if (caseSpec.id === 'typeset_demo_toc_probe_v0') {
@@ -3424,6 +3735,17 @@ async function emitTypedArtifactsV0(
   if (caseSpec.id === 'typeset_demo_labels_probe_v0') {
     typedArtifacts.labels = await emitLabelsTypedArtifactV0(caseOutDir, fixtureBytes);
     typedArtifacts.refs = await emitRefsTypedArtifactV0(caseOutDir, fixtureBytes);
+  }
+  if (
+    caseSpec.id === 'typeset_demo_pageref_probe_v2'
+    || caseSpec.id === 'typeset_demo_pageref_include_probe_v2'
+    || caseSpec.id === 'typeset_demo_pageref_unresolved_probe_v2'
+  ) {
+    typedArtifacts.pageref = await emitPagerefTypedArtifactV2(
+      caseOutDir,
+      fixtureBytes,
+      mountedFiles,
+    );
   }
   if (caseSpec.id === 'typeset_demo_bib_probe_v0') {
     const extractedBib = extractBibitemsAndCitesFromSourceV1(fixtureBytes);
@@ -4048,6 +4370,7 @@ async function runCaseV0(
     caseOutDir,
     summary.typed_artifacts,
     fixtureBytes,
+    inputInclusionGraph.mounted_files,
     inputInclusionGraph.entries,
   );
   const typedArtifactRequests = await collectResolverRequestsFromResourceHintsV0(

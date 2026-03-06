@@ -2271,15 +2271,15 @@ fn pdf_renderer_display_math_placeholder_line_is_centered_v0() {
 
 #[test]
 fn pdf_renderer_display_math_long_placeholder_is_wider_and_left_shifted_v2() {
-    let xdv =
-        write_dvi_v2_text_page_v0(b"Before.\n\n^ MATH DISPLAY\n\n^ MATH DISPLAY LONG FORM\n\nAfter.")
-            .expect("writer should accept display math placeholder marker lines");
+    let xdv = write_dvi_v2_text_page_v0(
+        b"Before.\n\n^ MATH DISPLAY\n\n^ MATH DISPLAY LONG FORM\n\nAfter.",
+    )
+    .expect("writer should accept display math placeholder marker lines");
     let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
     let (short_x, _) = tm_position_for_line_containing_text_v0(&pdf, "(MATH DISPLAY)")
         .expect("short display placeholder x coordinate");
-    let (long_x, _) =
-        tm_position_for_line_containing_text_v0(&pdf, "(MATH DISPLAY LONG FORM)")
-            .expect("long display placeholder x coordinate");
+    let (long_x, _) = tm_position_for_line_containing_text_v0(&pdf, "(MATH DISPLAY LONG FORM)")
+        .expect("long display placeholder x coordinate");
     assert!(
         long_x < short_x,
         "long placeholder should center from a wider line and shift left: short_x={short_x}, long_x={long_x}"
@@ -2377,7 +2377,11 @@ fn pdf_renderer_emits_figref_annotation_targeting_figure_anchor_v0() {
     );
     let page_one = parse_pdf_object_body_v0(&pdf, 3).expect("page object");
     let annots = parse_pdf_ref_ids_v0(&page_one, "/Annots");
-    assert_eq!(annots.len(), 1, "expected one internal figure ref annotation");
+    assert_eq!(
+        annots.len(),
+        1,
+        "expected one internal figure ref annotation"
+    );
     let annotation = parse_pdf_object_body_v0(&pdf, annots[0]).expect("annotation");
     assert!(
         annotation.contains("/Dest ["),
@@ -2405,7 +2409,11 @@ fn pdf_renderer_emits_eqref_annotation_targeting_equation_anchor_v1() {
 
     let page_one = parse_pdf_object_body_v0(&pdf, 3).expect("page object");
     let annots = parse_pdf_ref_ids_v0(&page_one, "/Annots");
-    assert_eq!(annots.len(), 1, "expected one internal equation ref annotation");
+    assert_eq!(
+        annots.len(),
+        1,
+        "expected one internal equation ref annotation"
+    );
     let annotation = parse_pdf_object_body_v0(&pdf, annots[0]).expect("annotation");
     assert!(
         annotation.contains("/Dest ["),
@@ -2415,6 +2423,52 @@ fn pdf_renderer_emits_eqref_annotation_targeting_equation_anchor_v1() {
         parse_pdf_annotation_dest_page_id_v0(&annotation),
         Some(3),
         "equation ref destination should target page containing equation anchor"
+    );
+}
+
+#[test]
+fn pdf_renderer_resolves_pageref_marker_and_emits_page_destination_link_v2() {
+    let xdv = write_dvi_v2_text_page_v0(
+        b"Prelude.\n\n@S {Intro}\x0cSee <@@PG:1@@>.\n\n!l sec:intro 1 heading 1 Intro\n!pr sec:intro 3 1\n!rp 1 1",
+    )
+    .expect("writer should accept pageref marker and metadata lines");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+    let pdf_text = String::from_utf8_lossy(&pdf);
+    assert!(
+        pdf_text.contains("(See ) Tj") && pdf_text.contains("(1) Tj"),
+        "pageref should render resolved destination page number: {pdf_text}"
+    );
+    assert!(
+        !pdf_text.contains("@@PG:"),
+        "internal pageref marker must not leak into rendered pdf text: {pdf_text}"
+    );
+
+    let page_two = parse_pdf_object_body_v0(&pdf, 4).expect("second page object");
+    let annots = parse_pdf_ref_ids_v0(&page_two, "/Annots");
+    assert_eq!(
+        annots.len(),
+        1,
+        "expected one pageref annotation on page two"
+    );
+    let annotation = parse_pdf_object_body_v0(&pdf, annots[0]).expect("annotation");
+    assert!(
+        annotation.contains("/Dest [3 0 R /Fit]"),
+        "pageref annotation must target stable page destination with /Fit: {annotation}"
+    );
+    assert!(
+        !annotation.contains("/XYZ"),
+        "pageref page destination must not use incidental /XYZ coordinates: {annotation}"
+    );
+}
+
+#[test]
+fn pdf_renderer_rejects_pageref_marker_with_unknown_anchor_v2() {
+    let xdv = write_dvi_v2_text_page_v0(b"See <@@PG:9@@>.\n\n!pr sec:missing 1 9\n!rp 1 9")
+        .expect("writer should accept pageref marker and metadata lines");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv);
+    assert!(
+        pdf.is_none(),
+        "renderer should fail-closed when pageref marker targets a missing anchor"
     );
 }
 
@@ -2822,8 +2876,12 @@ fn pdf_renderer_table_colspec_alignment_respects_lcr_per_column_v2() {
         "right-aligned first column should share right edge: {nine_right} vs {ten_right}"
     );
 
-    let mid_x = *tm_xs_for_segment_text_v0(&pdf, "Mid").first().expect("mid x");
-    let more_x = *tm_xs_for_segment_text_v0(&pdf, "More").first().expect("more x");
+    let mid_x = *tm_xs_for_segment_text_v0(&pdf, "Mid")
+        .first()
+        .expect("mid x");
+    let more_x = *tm_xs_for_segment_text_v0(&pdf, "More")
+        .first()
+        .expect("more x");
     let mid_center = mid_x + (segment_width_pt_v0(b"Mid") * 0.5);
     let more_center = more_x + (segment_width_pt_v0(b"More") * 0.5);
     assert!(
@@ -2831,15 +2889,23 @@ fn pdf_renderer_table_colspec_alignment_respects_lcr_per_column_v2() {
         "center-aligned second column should share center: {mid_center} vs {more_center}"
     );
 
-    let tail_x = *tm_xs_for_segment_text_v0(&pdf, "Tail").first().expect("tail x");
-    let tail2_x = *tm_xs_for_segment_text_v0(&pdf, "Tail2").first().expect("tail2 x");
+    let tail_x = *tm_xs_for_segment_text_v0(&pdf, "Tail")
+        .first()
+        .expect("tail x");
+    let tail2_x = *tm_xs_for_segment_text_v0(&pdf, "Tail2")
+        .first()
+        .expect("tail2 x");
     assert!(
         (tail_x - tail2_x).abs() <= 0.1,
         "left-aligned third column should share left edge: {tail_x} vs {tail2_x}"
     );
 
-    let end_x = *tm_xs_for_segment_text_v0(&pdf, "End").first().expect("end x");
-    let ending_x = *tm_xs_for_segment_text_v0(&pdf, "Ending").first().expect("ending x");
+    let end_x = *tm_xs_for_segment_text_v0(&pdf, "End")
+        .first()
+        .expect("end x");
+    let ending_x = *tm_xs_for_segment_text_v0(&pdf, "Ending")
+        .first()
+        .expect("ending x");
     assert!(
         (end_x - ending_x).abs() <= 0.1,
         "left-aligned fourth column should share left edge: {end_x} vs {ending_x}"
@@ -2868,10 +2934,8 @@ fn pdf_renderer_table_row_height_is_stable_v2() {
     let xdv = write_dvi_v2_text_page_v0(b"Before.\n\n!ts lcr\n!t A||B||C\n!t D||E||F\n\nAfter.")
         .expect("writer should accept table marker lines");
     let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
-    let (_, row1_y) = tm_position_for_line_containing_text_v0(&pdf, "(A)")
-        .expect("row 1 y");
-    let (_, row2_y) = tm_position_for_line_containing_text_v0(&pdf, "(D)")
-        .expect("row 2 y");
+    let (_, row1_y) = tm_position_for_line_containing_text_v0(&pdf, "(A)").expect("row 1 y");
+    let (_, row2_y) = tm_position_for_line_containing_text_v0(&pdf, "(D)").expect("row 2 y");
     let delta = row1_y - row2_y;
     assert!(
         (delta - 14.0).abs() <= 0.2,
@@ -3010,9 +3074,11 @@ fn pdf_renderer_figure_metadata_width_affects_placeholder_alignment_v2() {
     .expect("writer should accept figure marker lines");
     let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
 
-    let (narrow_x, _) =
-        tm_position_for_line_containing_text_v0(&pdf, "([ Figure placeholder: figures/narrow.png ])")
-            .expect("narrow placeholder position");
+    let (narrow_x, _) = tm_position_for_line_containing_text_v0(
+        &pdf,
+        "([ Figure placeholder: figures/narrow.png ])",
+    )
+    .expect("narrow placeholder position");
     let (wide_x, _) =
         tm_position_for_line_containing_text_v0(&pdf, "([ Figure placeholder: figures/wide.png ])")
             .expect("wide placeholder position");
@@ -3158,8 +3224,7 @@ fn pdf_renderer_toc_annotation_destination_order_is_stable_v2() {
         .collect::<Vec<_>>();
     for (page_id, _, _) in &destinations {
         assert_eq!(
-            *page_id,
-            3,
+            *page_id, 3,
             "toc annotations should target page containing heading anchors"
         );
     }
