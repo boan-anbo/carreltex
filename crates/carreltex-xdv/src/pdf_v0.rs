@@ -89,6 +89,12 @@ enum HeadingKindV0 {
     Subsection,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum FigurePlacementHintV0 {
+    Inline,
+    Top,
+}
+
 fn style_font_alias_v0(style: PdfTextStyleV0) -> &'static [u8] {
     match style {
         PdfTextStyleV0::Regular => b"F1",
@@ -572,12 +578,32 @@ fn has_table_spec_prefix_v0(glyphs: &[GlyphPlanV0]) -> bool {
             .eq(TABLE_SPEC_PREFIX_MARKER_V0.iter().copied())
 }
 
-fn has_figure_box_prefix_v0(glyphs: &[GlyphPlanV0]) -> bool {
-    glyphs.len() == FIGURE_BOX_PREFIX_MARKER_V0.len()
-        && glyphs
+fn has_figure_box_marker_prefix_v0(glyphs: &[GlyphPlanV0]) -> bool {
+    glyphs.len() >= FIGURE_BOX_PREFIX_MARKER_V0.len()
+        && glyphs[..FIGURE_BOX_PREFIX_MARKER_V0.len()]
             .iter()
             .map(|glyph| glyph.byte)
             .eq(FIGURE_BOX_PREFIX_MARKER_V0.iter().copied())
+}
+
+fn parse_figure_box_line_v0(glyphs: &[GlyphPlanV0]) -> Option<FigurePlacementHintV0> {
+    if !has_figure_box_marker_prefix_v0(glyphs) {
+        return None;
+    }
+    if glyphs.len() == FIGURE_BOX_PREFIX_MARKER_V0.len() {
+        return Some(FigurePlacementHintV0::Inline);
+    }
+    if glyphs.len() == FIGURE_BOX_PREFIX_MARKER_V0.len() + 2
+        && glyphs[FIGURE_BOX_PREFIX_MARKER_V0.len()].byte == b' '
+        && glyphs[FIGURE_BOX_PREFIX_MARKER_V0.len() + 1].byte == b't'
+    {
+        return Some(FigurePlacementHintV0::Top);
+    }
+    None
+}
+
+fn has_figure_box_prefix_v0(glyphs: &[GlyphPlanV0]) -> bool {
+    parse_figure_box_line_v0(glyphs).is_some()
 }
 
 fn has_figure_caption_prefix_v0(glyphs: &[GlyphPlanV0]) -> bool {
@@ -2011,7 +2037,8 @@ fn collect_nominal_anchor_destinations_v0(
         };
         let mut y = PAGE_HEIGHT_PT_V0 - MARGIN_PT_V0 - TITLE_FONT_SIZE_PT_V0;
         for (line_index, line) in lines.iter().enumerate() {
-            if line_index >= title_block_len && has_figure_box_prefix_v0(&line.glyphs) {
+            if line_index >= title_block_len && has_figure_box_marker_prefix_v0(&line.glyphs) {
+                parse_figure_box_line_v0(&line.glyphs)?;
                 if anchor_destinations
                     .insert(
                         next_anchor_id,
@@ -2280,7 +2307,9 @@ fn build_page_content_stream_v0(
             line_index = table_end;
             continue;
         }
-        if line_index >= title_block_len && has_figure_box_prefix_v0(&resolved_line_glyphs) {
+        if line_index >= title_block_len && has_figure_box_marker_prefix_v0(&resolved_line_glyphs)
+        {
+            let _figure_placement = parse_figure_box_line_v0(&resolved_line_glyphs)?;
             let figure_anchor_id = *next_anchor_id;
             *next_anchor_id = next_anchor_id.checked_add(1)?;
             if anchor_destinations

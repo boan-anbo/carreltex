@@ -63,7 +63,7 @@ if (resourceHintsShaSecond !== resourceHintsShaFirst) {
   console.error('FAIL: report.resource_hints_v0 must be stable across reruns');
   process.exit(1);
 }
-const requiredTypedKeys = ['toc', 'labels', 'refs', 'pageref', 'bib', 'cite', 'hyperref', 'pkgopt', 'packages', 'graphics', 'input', 'math', 'table'];
+const requiredTypedKeys = ['toc', 'labels', 'refs', 'pageref', 'bib', 'cite', 'hyperref', 'pkgopt', 'packages', 'graphics', 'float', 'input', 'math', 'table'];
 const labelsShaFirst = fs.readFileSync(path.join(`${outDir}_baseline`, 'labels_v1_first.sha256'), 'utf8').trim();
 const refsShaFirst = fs.readFileSync(path.join(`${outDir}_baseline`, 'refs_v1_first.sha256'), 'utf8').trim();
 const pagerefShaFirst = fs.readFileSync(path.join(`${outDir}_baseline`, 'pageref_v2_first.sha256'), 'utf8').trim();
@@ -74,6 +74,7 @@ const hyperrefShaFirst = fs.readFileSync(path.join(`${outDir}_baseline`, 'hyperr
 const pkgoptShaFirst = fs.readFileSync(path.join(`${outDir}_baseline`, 'pkgopt_v0_first.sha256'), 'utf8').trim();
 const packagesShaFirst = fs.readFileSync(path.join(`${outDir}_baseline`, 'packages_v1_first.sha256'), 'utf8').trim();
 const graphicsShaFirst = fs.readFileSync(path.join(`${outDir}_baseline`, 'graphics_v2_first.sha256'), 'utf8').trim();
+const floatShaFirst = fs.readFileSync(path.join(`${outDir}_baseline`, 'float_v0_first.sha256'), 'utf8').trim();
 const mathShaFirst = fs.readFileSync(path.join(`${outDir}_baseline`, 'math_v2_first.sha256'), 'utf8').trim();
 const tableShaFirst = fs.readFileSync(path.join(`${outDir}_baseline`, 'table_v2_first.sha256'), 'utf8').trim();
 
@@ -583,6 +584,31 @@ if (!Array.isArray(graphicsArtifactSecond?.entries) || graphicsArtifactSecond.en
   process.exit(1);
 }
 
+const floatSummary = JSON.parse(
+  fs.readFileSync(path.join(outDir, 'typeset_demo_float_probe_v0', 'summary.json'), 'utf8'),
+);
+const floatArtifact = floatSummary?.typed_artifacts?.float;
+if (!floatArtifact || floatArtifact.present !== true) {
+  console.error('FAIL: expected float typed artifact present after second run');
+  process.exit(1);
+}
+const floatShaSecond = floatArtifact.artifact_sha256;
+if (floatShaSecond !== floatShaFirst) {
+  console.error('FAIL: float_v0 artifact sha256 must be stable across reruns');
+  process.exit(1);
+}
+const floatArtifactSecond = JSON.parse(
+  fs.readFileSync(path.join(outDir, 'typeset_demo_float_probe_v0', 'float_v0.json'), 'utf8'),
+);
+if (!Array.isArray(floatArtifactSecond?.entries) || floatArtifactSecond.entries.length <= 0) {
+  console.error('FAIL: expected non-empty float_v0.entries after rerun');
+  process.exit(1);
+}
+if (floatArtifactSecond?.schema !== 'float_v0') {
+  console.error('FAIL: expected float_v0 schema after rerun');
+  process.exit(1);
+}
+
 const mathSummary = JSON.parse(
   fs.readFileSync(path.join(outDir, 'typeset_demo_minimal_v0', 'summary.json'), 'utf8'),
 );
@@ -696,6 +722,7 @@ console.log(`PASS: hyperref_v0 sha stable ${hyperrefShaSecond}`);
 console.log(`PASS: pkgopt_v0 sha stable ${pkgoptShaSecond}`);
 console.log(`PASS: packages_v1 sha stable ${packagesShaSecond}`);
 console.log(`PASS: graphics_v2 sha stable ${graphicsShaSecond}`);
+console.log(`PASS: float_v0 sha stable ${floatShaSecond}`);
 console.log(`PASS: math_v2 sha stable ${mathShaSecond}`);
 console.log(`PASS: table_v2 sha stable ${tableShaSecond}`);
 console.log('PASS: report typed_artifact_sha256 map present and stable');

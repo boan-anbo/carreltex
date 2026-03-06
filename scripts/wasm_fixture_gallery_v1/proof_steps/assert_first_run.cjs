@@ -685,6 +685,83 @@ for (const entry of graphicsArtifactFirst.entries) {
 assertEntrySourceSpans('typeset_demo_graphics_probe_v0', 'graphics_v2', graphicsArtifactFirst.entries);
 fs.writeFileSync(firstRunShaPath('graphics_v2'), `${graphicsShaFirst}\n`);
 
+const floatSummary = JSON.parse(
+  fs.readFileSync(path.join(outDir, 'typeset_demo_float_probe_v0', 'summary.json'), 'utf8'),
+);
+if (floatSummary?.typed_artifacts?.float?.present !== true) {
+  console.error('FAIL: expected float typed artifact present after first run');
+  process.exit(1);
+}
+const floatPath = path.join(outDir, 'typeset_demo_float_probe_v0', 'float_v0.json');
+if (!fs.existsSync(floatPath)) {
+  console.error('FAIL: expected float_v0.json artifact after first run');
+  process.exit(1);
+}
+const floatShaFirst = floatSummary.typed_artifacts.float.artifact_sha256;
+if (typeof floatShaFirst !== 'string' || !/^[0-9a-f]{64}$/.test(floatShaFirst)) {
+  console.error('FAIL: expected float artifact sha256 in first summary');
+  process.exit(1);
+}
+const floatArtifactFirst = JSON.parse(fs.readFileSync(floatPath, 'utf8'));
+if (!Array.isArray(floatArtifactFirst?.entries)) {
+  console.error('FAIL: expected float_v0.entries array in first-run artifact');
+  process.exit(1);
+}
+if (floatArtifactFirst?.schema !== 'float_v0') {
+  console.error('FAIL: expected float_v0 schema in first-run artifact');
+  process.exit(1);
+}
+if (floatArtifactFirst.entries.length <= 0) {
+  console.error('FAIL: expected non-empty float_v0.entries for float probe');
+  process.exit(1);
+}
+let sawTopPlacement = false;
+let sawInlinePlacement = false;
+const floatPageNos = new Set();
+for (const [index, entry] of floatArtifactFirst.entries.entries()) {
+  if (typeof entry?.float_id !== 'string' || !/^flt[1-9]\d*$/.test(entry.float_id)) {
+    console.error(`FAIL: float_v0.entries[${index}] invalid float_id`);
+    process.exit(1);
+  }
+  if (!Number.isInteger(entry?.figure_ordinal) || entry.figure_ordinal !== index + 1) {
+    console.error(`FAIL: float_v0.entries[${index}] invalid figure_ordinal`);
+    process.exit(1);
+  }
+  if (!(entry?.placement_hint === 'inline' || entry?.placement_hint === 't')) {
+    console.error(`FAIL: float_v0.entries[${index}] invalid placement_hint`);
+    process.exit(1);
+  }
+  if (entry.placement_hint === 't') {
+    sawTopPlacement = true;
+  }
+  if (entry.placement_hint === 'inline') {
+    sawInlinePlacement = true;
+  }
+  if (typeof entry?.caption_summary !== 'string' || entry.caption_summary.trim().length === 0) {
+    console.error(`FAIL: float_v0.entries[${index}] invalid caption_summary`);
+    process.exit(1);
+  }
+  if (!Number.isInteger(entry?.anchor_id) || entry.anchor_id <= 0) {
+    console.error(`FAIL: float_v0.entries[${index}] invalid anchor_id`);
+    process.exit(1);
+  }
+  if (!Number.isInteger(entry?.page_no) || entry.page_no <= 0) {
+    console.error(`FAIL: float_v0.entries[${index}] invalid page_no`);
+    process.exit(1);
+  }
+  floatPageNos.add(entry.page_no);
+}
+if (!sawTopPlacement || !sawInlinePlacement) {
+  console.error('FAIL: expected float_v0 entries to include both top and inline placements');
+  process.exit(1);
+}
+if (floatPageNos.size < 2) {
+  console.error('FAIL: expected float_v0 entries to span at least two pages');
+  process.exit(1);
+}
+assertEntrySourceSpans('typeset_demo_float_probe_v0', 'float_v0', floatArtifactFirst.entries);
+fs.writeFileSync(firstRunShaPath('float_v0'), `${floatShaFirst}\n`);
+
 const mathSummary = JSON.parse(
   fs.readFileSync(path.join(outDir, 'typeset_demo_minimal_v0', 'summary.json'), 'utf8'),
 );
@@ -897,7 +974,7 @@ if (!typedArtifactShaMap || typeof typedArtifactShaMap !== 'object') {
   console.error('FAIL: expected report.typed_artifact_sha256 map after first run');
   process.exit(1);
 }
-const typedKeys = ['toc', 'labels', 'bib', 'cite', 'pageref', 'hyperref', 'pkgopt', 'packages', 'graphics', 'input', 'math', 'table'];
+const typedKeys = ['toc', 'labels', 'bib', 'cite', 'pageref', 'hyperref', 'pkgopt', 'packages', 'graphics', 'float', 'input', 'math', 'table'];
 for (const key of typedKeys) {
   const value = typedArtifactShaMap[key];
   if (typeof value !== 'string' || !/^[0-9a-f]{64}$/.test(value)) {

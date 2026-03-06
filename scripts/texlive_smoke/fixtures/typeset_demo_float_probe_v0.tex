@@ -1,0 +1,14 @@
+\documentclass{article}
+\begin{document}
+Intro references before figure definitions: top=\ref{fig:top}, inline=\ref{fig:inline}.
+\begin{figure}
+\caption{Inline float caption that should stay inline.}
+\end{figure}
+\label{fig:inline}
+Reference after inline figure: \ref{fig:inline}.
+\begin{figure}[t]
+\caption{Top placed float caption for deterministic page placement.}
+\end{figure}
+\label{fig:top}
+Reference after top figure: \ref{fig:top}.
+\end{document}

@@ -194,6 +194,12 @@ struct IncludeGraphicsCommandV0 {
     sizing: FigureSizingMptV0,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum FigurePlacementHintV0 {
+    Inline,
+    Top,
+}
+
 #[derive(Default)]
 struct TitleMetaV0 {
     title: Option<Vec<u8>>,
@@ -496,6 +502,38 @@ fn consume_env_name_command_v0(
         return None;
     }
     Some((env_bytes, next))
+}
+
+fn consume_figure_placement_hint_v0(
+    tokens: &[TokenV0],
+    index: usize,
+) -> Option<(FigurePlacementHintV0, usize)> {
+    let mut cursor = skip_spaces(tokens, index);
+    if !matches!(tokens.get(cursor), Some(TokenV0::Char(b'['))) {
+        return Some((FigurePlacementHintV0::Inline, cursor));
+    }
+    cursor += 1;
+    let mut saw_non_space = false;
+    let mut saw_top = false;
+    loop {
+        match tokens.get(cursor) {
+            Some(TokenV0::Char(b']')) => {
+                if !saw_non_space || !saw_top {
+                    return None;
+                }
+                return Some((FigurePlacementHintV0::Top, cursor + 1));
+            }
+            Some(TokenV0::Space) => {}
+            Some(TokenV0::Char(byte)) if is_horizontal_space_v0(*byte) => {}
+            Some(TokenV0::Char(b't')) if !saw_top => {
+                saw_non_space = true;
+                saw_top = true;
+            }
+            Some(TokenV0::Char(_)) => return None,
+            _ => return None,
+        }
+        cursor += 1;
+    }
 }
 
 fn consume_document_env_command_v0(tokens: &[TokenV0], index: usize, name: &[u8]) -> Option<usize> {
@@ -1540,6 +1578,8 @@ fn consume_figure_environment_v0(
     if env_name.as_slice() != FIGURE_ENV_V0 {
         return None;
     }
+    let (placement_hint, after_placement) = consume_figure_placement_hint_v0(tokens, cursor)?;
+    cursor = after_placement;
 
     let mut caption: Option<Vec<u8>> = None;
     let mut image: Option<IncludeGraphicsCommandV0> = None;
@@ -1556,8 +1596,17 @@ fn consume_figure_environment_v0(
                 if figure_caption.is_empty() {
                     return None;
                 }
-                push_paragraph_break(out);
+                if matches!(placement_hint, FigurePlacementHintV0::Top) {
+                    if !out.is_empty() && !matches!(out.last().copied(), Some(PAGE_BREAK_MARKER_V0)) {
+                        push_page_break(out);
+                    }
+                } else {
+                    push_paragraph_break(out);
+                }
                 out.extend_from_slice(FIGURE_BOX_PREFIX_MARKER_V0);
+                if matches!(placement_hint, FigurePlacementHintV0::Top) {
+                    out.extend_from_slice(b" t");
+                }
                 push_newline(out);
                 if let Some(image_meta) = &image {
                     out.extend_from_slice(FIGURE_IMAGE_PREFIX_MARKER_V0);
