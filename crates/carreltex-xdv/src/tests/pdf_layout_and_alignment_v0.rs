@@ -1416,6 +1416,70 @@ fn pdf_renderer_enumerate_number_column_alignment_across_wraps_v0() {
 }
 
 #[test]
+fn pdf_renderer_bibliography_entries_use_hanging_indent_and_stable_rhythm_v6() {
+    let xdv = write_dvi_v2_text_page_v0(
+        b"@S {References}\n\n[1] ALPHASTART alpha alpha alpha alpha alpha alpha alpha alpha alpha alpha ALPHAWRAP\n[12] BETASTART beta beta beta beta beta beta beta beta beta beta beta beta beta beta beta beta BETAWRAP",
+    )
+    .expect("writer should accept bibliography-style lines");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+
+    let (references_x, references_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "(References)").expect("references heading");
+    let (alpha_start_x, alpha_start_y) =
+        tm_position_for_segment_substring_v0(&pdf, "ALPHASTART").expect("alpha start");
+    let (alpha_wrap_x, alpha_wrap_y) =
+        tm_position_for_segment_substring_v0(&pdf, "ALPHAWRAP").expect("alpha wrap");
+    let (beta_start_x, beta_start_y) =
+        tm_position_for_segment_substring_v0(&pdf, "BETASTART").expect("beta start");
+    let (beta_wrap_x, beta_wrap_y) =
+        tm_position_for_segment_substring_v0(&pdf, "BETAWRAP").expect("beta wrap");
+
+    let one_label_x = *tm_xs_for_segment_text_v0(&pdf, "1")
+        .first()
+        .expect("label [1] x");
+    let twelve_label_x = *tm_xs_for_segment_text_v0(&pdf, "12")
+        .first()
+        .expect("label [12] x");
+    let one_label_right = one_label_x + segment_width_pt_v0(b"1");
+    let twelve_label_right = twelve_label_x + segment_width_pt_v0(b"12");
+
+    let epsilon_pt = 0.2f32;
+    assert!(
+        (references_y - alpha_start_y - 12.0).abs() <= epsilon_pt,
+        "references heading -> first bibliography entry gap should be tightened and stable: references_y={references_y}, alpha_start_y={alpha_start_y}"
+    );
+    assert!(
+        (alpha_start_y - alpha_wrap_y - 13.0).abs() <= epsilon_pt,
+        "bibliography wrapped line rhythm should be stable: alpha_start_y={alpha_start_y}, alpha_wrap_y={alpha_wrap_y}"
+    );
+    assert!(
+        (alpha_wrap_y - beta_start_y - 13.0).abs() <= epsilon_pt,
+        "bibliography entry-to-entry rhythm should be stable: alpha_wrap_y={alpha_wrap_y}, beta_start_y={beta_start_y}"
+    );
+    assert!(
+        (beta_start_y - beta_wrap_y - 13.0).abs() <= epsilon_pt,
+        "bibliography wrapped line rhythm should be stable for later entries: beta_start_y={beta_start_y}, beta_wrap_y={beta_wrap_y}"
+    );
+    assert!(
+        (alpha_start_x - beta_start_x).abs() <= epsilon_pt,
+        "bibliography body column should remain stable across mixed-width ordinals: alpha_start_x={alpha_start_x}, beta_start_x={beta_start_x}"
+    );
+    assert!(
+        (alpha_start_x - alpha_wrap_x).abs() <= epsilon_pt
+            && (beta_start_x - beta_wrap_x).abs() <= epsilon_pt,
+        "bibliography wrapped continuation lines should keep hanging-indent column"
+    );
+    assert!(
+        (one_label_right - twelve_label_right).abs() <= epsilon_pt,
+        "bibliography ordinal label right edge should stay aligned: one_label_right={one_label_right}, twelve_label_right={twelve_label_right}"
+    );
+    assert!(
+        references_x >= 72.0,
+        "references heading should remain inside printable area"
+    );
+}
+
+#[test]
 fn pdf_renderer_nested_list_indentation_and_wrap_invariants_v0() {
     let xdv = write_dvi_v2_text_page_v0(b"- [OUTERSTART] item with enough repeated words to force wrapping in the first list level before token [OUTERWRAPTOKEN]\n  - [NESTEDSTART] item with enough repeated words to force wrapping in the second list level before token [NESTEDWRAPTOKEN]")
         .expect("writer should accept nested list text");

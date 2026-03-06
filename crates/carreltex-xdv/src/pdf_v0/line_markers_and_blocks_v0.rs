@@ -12,13 +12,43 @@ fn detect_list_prefix_v0(glyphs: &[GlyphPlanV0]) -> Option<ListPrefixV0> {
         && glyphs[leading].byte == b'-'
         && glyphs[leading + 1].byte == b' '
     {
+        let display_advance_pt = (glyphs[leading].advance_sp as f32) / 65_536.0;
         return Some(ListPrefixV0 {
             kind: ListPrefixKindV0::Itemize,
             prefix_len: leading + 2,
             display_start: leading,
             display_len: 1,
             leading_advance_pt,
+            display_advance_pt,
+            body_indent_pt: LIST_BODY_INDENT_PT_V0 + leading_advance_pt,
         });
+    }
+
+    // bibliography entry prefix: `[<digits>] `
+    if glyphs.len() >= leading + 4 && glyphs[leading].byte == b'[' {
+        let mut bib_index = leading + 1;
+        while bib_index < glyphs.len() && glyphs[bib_index].byte.is_ascii_digit() {
+            bib_index += 1;
+        }
+        if bib_index > leading + 1
+            && bib_index + 1 < glyphs.len()
+            && glyphs[bib_index].byte == b']'
+            && glyphs[bib_index + 1].byte == b' '
+        {
+            let display_advance_pt: f32 = glyphs[leading..=bib_index]
+                .iter()
+                .map(|glyph| (glyph.advance_sp as f32) / 65_536.0)
+                .sum();
+            return Some(ListPrefixV0 {
+                kind: ListPrefixKindV0::Bibliography,
+                prefix_len: bib_index + 2,
+                display_start: leading,
+                display_len: bib_index - leading + 1,
+                leading_advance_pt,
+                display_advance_pt,
+                body_indent_pt: leading_advance_pt + BIBLIOGRAPHY_BODY_INDENT_PT_V6,
+            });
+        }
     }
 
     let mut index = leading;
@@ -31,12 +61,18 @@ fn detect_list_prefix_v0(glyphs: &[GlyphPlanV0]) -> Option<ListPrefixV0> {
     if glyphs[index].byte != b'.' || glyphs[index + 1].byte != b' ' {
         return None;
     }
+    let display_advance_pt: f32 = glyphs[leading..=index]
+        .iter()
+        .map(|glyph| (glyph.advance_sp as f32) / 65_536.0)
+        .sum();
     Some(ListPrefixV0 {
         kind: ListPrefixKindV0::Enumerate,
         prefix_len: index + 2,
         display_start: leading,
         display_len: index - leading + 1,
         leading_advance_pt,
+        display_advance_pt,
+        body_indent_pt: LIST_BODY_INDENT_PT_V0 + leading_advance_pt,
     })
 }
 
@@ -387,4 +423,3 @@ fn placeholder_segments_v0(image_path: Option<&[u8]>) -> Vec<PdfStyledSegmentV0>
         is_link: false,
     }]
 }
-
