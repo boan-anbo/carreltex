@@ -59,6 +59,43 @@ const MAX_TABLE_COLS_PER_ENTRY_V0 = 16;
 const MAX_RESOURCE_HINT_ENTRIES_V0 = 512;
 const MAX_RESOURCE_HINT_VALUE_BYTES_V0 = 256;
 const RESOURCE_HINTS_V0_VERSION = 1;
+const DVI_PRE_OPCODE_V2 = 247;
+const DVI_BOP_OPCODE_V2 = 139;
+const DVI_EOP_OPCODE_V2 = 140;
+const DVI_POST_OPCODE_V2 = 248;
+const DVI_POSTPOST_OPCODE_V2 = 249;
+const DVI_FNT_DEF1_OPCODE_V2 = 243;
+const DVI_FNT_NUM_0_OPCODE_V2 = 171;
+const DVI_RIGHT3_OPCODE_V2 = 145;
+const DVI_DOWN3_OPCODE_V2 = 160;
+const DVI_ID_V2 = 2;
+const DVI_TRAILER_BYTE_V2 = 223;
+const DVI_NUM_V2 = 25_400_000;
+const DVI_DEN_V2 = 473_628_672;
+const DVI_MAG_V2 = 1000;
+const DVI_FONT_NAME_V2 = 'carreltex-v0';
+const TOC_PLACEHOLDER_MARKER_V2 = '!toc';
+const TOC_ENTRY_LINE_PREFIX_V2 = '!toc ';
+const SECTION_HEADING_PREFIX_V2 = '@S ';
+const SUBSECTION_HEADING_PREFIX_V2 = '@s ';
+const FIGURE_BOX_LINE_V2 = '!gbox';
+const FOOTNOTE_LINE_PREFIX_V2 = '!f ';
+const HREF_URL_LINE_PREFIX_V2 = '!u ';
+const LABEL_LINE_PREFIX_V2 = '!l ';
+const REF_LINE_PREFIX_V2 = '!r ';
+const PAGEREF_LINE_PREFIX_V2 = '!pr ';
+const REF_ANCHOR_LINK_LINE_PREFIX_V2 = '!ra ';
+const PAGEREF_PAGE_LINK_LINE_PREFIX_V2 = '!rp ';
+const EQUATION_LINE_PREFIX_V2 = '!eq ';
+const BIBITEM_LINE_PREFIX_V2 = '!b ';
+const CITE_LINE_PREFIX_V2 = '!c ';
+const TABLE_SPEC_LINE_PREFIX_V2 = '!ts ';
+const TABLE_ROW_LINE_PREFIX_V2 = '!t ';
+const FIGURE_CAPTION_LINE_PREFIX_V2 = '!gcap ';
+const FIGURE_IMAGE_LINE_PREFIX_V2 = '!gimg ';
+const DISPLAY_MATH_PLACEHOLDER_SHORT_V2 = 'MATH DISPLAY';
+const DISPLAY_MATH_PLACEHOLDER_MEDIUM_V2 = 'MATH DISPLAY MEDIUM';
+const DISPLAY_MATH_PLACEHOLDER_LONG_V2 = 'MATH DISPLAY LONG FORM';
 const DELTA_POLICY_V1_SCHEMA = 'wasm_fixture_gallery_delta_policy_v1';
 const DELTA_POLICY_V1_VERSION = 1;
 const BASELINE_CMP_CLASS_MATCH_V1 = 'MATCH';
@@ -1101,24 +1138,518 @@ function extractTocEntriesFromSourceV0(sourceBytes) {
     if (titleGroup.value.length > 0) {
       const titleBytes = Buffer.from(titleGroup.value, 'utf8');
       if (titleBytes.length > MAX_TOC_TITLE_BYTES_V0) {
-        throw new Error(`toc_v1 title exceeds cap ${MAX_TOC_TITLE_BYTES_V0}`);
+        throw new Error(`toc_v2 title exceeds cap ${MAX_TOC_TITLE_BYTES_V0}`);
       }
       const anchorId = `h${entries.length + 1}`;
       entries.push({
         level,
         title: titleGroup.value,
         anchor_id: anchorId,
-        page: null,
-        source_span: buildSourceSpanV0(sourceBytes, index, titleGroup.next, 'toc_v1'),
+        source_span: buildSourceSpanV0(sourceBytes, index, titleGroup.next, 'toc_v2'),
       });
       if (entries.length > MAX_TOC_ENTRIES_V0) {
-        throw new Error(`toc_v1 entries exceed cap ${MAX_TOC_ENTRIES_V0}`);
+        throw new Error(`toc_v2 entries exceed cap ${MAX_TOC_ENTRIES_V0}`);
       }
     }
 
     index = titleGroup.next;
   }
   return entries;
+}
+
+function parseTocAnchorIdTagV2(anchorId) {
+  if (typeof anchorId !== 'string') {
+    return null;
+  }
+  const match = /^h([1-9]\d*)$/.exec(anchorId);
+  if (!match) {
+    return null;
+  }
+  const parsed = Number.parseInt(match[1], 10);
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    return null;
+  }
+  return parsed;
+}
+
+function normalizeTocLinkWrappedTitleV2(title) {
+  if (typeof title !== 'string') {
+    return '';
+  }
+  const trimmed = title.trim();
+  if (trimmed.startsWith('<') && trimmed.endsWith('>') && trimmed.length >= 2) {
+    return trimmed.slice(1, -1).trim();
+  }
+  return trimmed;
+}
+
+function isStyleMarkerByteV2(byte) {
+  return byte === 0x5b
+    || byte === 0x5d
+    || byte === 0x7b
+    || byte === 0x7d
+    || byte === 0x3c
+    || byte === 0x3e;
+}
+
+function readU8V2(bytes, state) {
+  if (state.index >= bytes.length) {
+    throw new Error('toc_v2 dvi parse overflow (u8)');
+  }
+  const value = bytes[state.index];
+  state.index += 1;
+  return value;
+}
+
+function readI24V2(bytes, state) {
+  if (state.index + 3 > bytes.length) {
+    throw new Error('toc_v2 dvi parse overflow (i24)');
+  }
+  const b0 = bytes[state.index];
+  const b1 = bytes[state.index + 1];
+  const b2 = bytes[state.index + 2];
+  state.index += 3;
+  const raw = (b0 << 16) | (b1 << 8) | b2;
+  return (raw & 0x80_0000) !== 0 ? (raw | ~0x00ff_ffff) : raw;
+}
+
+function readI32V2(bytes, state) {
+  if (state.index + 4 > bytes.length) {
+    throw new Error('toc_v2 dvi parse overflow (i32)');
+  }
+  const value = (bytes[state.index] << 24)
+    | (bytes[state.index + 1] << 16)
+    | (bytes[state.index + 2] << 8)
+    | bytes[state.index + 3];
+  state.index += 4;
+  return value;
+}
+
+function readU32V2(bytes, state) {
+  if (state.index + 4 > bytes.length) {
+    throw new Error('toc_v2 dvi parse overflow (u32)');
+  }
+  const value = ((bytes[state.index] * 0x1000000) >>> 0)
+    + (bytes[state.index + 1] << 16)
+    + (bytes[state.index + 2] << 8)
+    + bytes[state.index + 3];
+  state.index += 4;
+  return value >>> 0;
+}
+
+function expectByteV2(bytes, state, expected, context) {
+  const got = readU8V2(bytes, state);
+  if (got !== expected) {
+    throw new Error(`toc_v2 dvi parse expected ${context}=${expected}, got ${got}`);
+  }
+}
+
+function expectU32V2(bytes, state, expected, context) {
+  const got = readU32V2(bytes, state);
+  if (got !== expected) {
+    throw new Error(`toc_v2 dvi parse expected ${context}=${expected}, got ${got}`);
+  }
+}
+
+function parseDviTextPagesForTocV2(xdvBytes) {
+  const bytes = toUint8ArrayV0(xdvBytes);
+  if (bytes.length === 0 || bytes.length % 4 !== 0) {
+    throw new Error('toc_v2 requires non-empty 4-byte aligned main.xdv');
+  }
+  const state = { index: 0 };
+  expectByteV2(bytes, state, DVI_PRE_OPCODE_V2, 'PRE');
+  expectByteV2(bytes, state, DVI_ID_V2, 'DVI_ID');
+  expectU32V2(bytes, state, DVI_NUM_V2, 'NUM');
+  expectU32V2(bytes, state, DVI_DEN_V2, 'DEN');
+  expectU32V2(bytes, state, DVI_MAG_V2, 'MAG');
+  const commentLen = readU8V2(bytes, state);
+  if (commentLen !== 0) {
+    throw new Error('toc_v2 expects empty DVI comment');
+  }
+
+  const pages = [];
+  let previousBopOffset = null;
+  let pageCount = 0;
+  let lastBopOffset = 0;
+
+  while (state.index < bytes.length) {
+    const opcode = bytes[state.index];
+    if (opcode === DVI_POST_OPCODE_V2) {
+      break;
+    }
+    if (opcode !== DVI_BOP_OPCODE_V2) {
+      throw new Error(`toc_v2 dvi parse expected BOP, got opcode=${opcode}`);
+    }
+    const bopOffset = state.index;
+    lastBopOffset = bopOffset >>> 0;
+    state.index += 1;
+    for (let counter = 0; counter < 10; counter += 1) {
+      if (readI32V2(bytes, state) !== 0) {
+        throw new Error('toc_v2 dvi parse expects zero bop counters');
+      }
+    }
+    const prevBop = readI32V2(bytes, state);
+    if (previousBopOffset === null) {
+      if (prevBop !== -1) {
+        throw new Error(`toc_v2 dvi parse expected first prev_bop=-1, got ${prevBop}`);
+      }
+    } else if (prevBop !== previousBopOffset) {
+      throw new Error(`toc_v2 dvi parse expected prev_bop=${previousBopOffset}, got ${prevBop}`);
+    }
+
+    expectByteV2(bytes, state, DVI_FNT_DEF1_OPCODE_V2, 'FNT_DEF1');
+    expectByteV2(bytes, state, 0, 'FONT_ID');
+    expectU32V2(bytes, state, 0, 'FONT_CHECKSUM');
+    expectU32V2(bytes, state, 0, 'FONT_SCALE');
+    expectU32V2(bytes, state, 0, 'FONT_DESIGN');
+    expectByteV2(bytes, state, 0, 'FONT_AREA_LEN');
+    const fontNameLen = readU8V2(bytes, state);
+    if (fontNameLen !== DVI_FONT_NAME_V2.length) {
+      throw new Error(`toc_v2 dvi parse expected font name length ${DVI_FONT_NAME_V2.length}`);
+    }
+    if (state.index + fontNameLen > bytes.length) {
+      throw new Error('toc_v2 dvi parse overflow (font name)');
+    }
+    const fontName = Buffer.from(bytes.slice(state.index, state.index + fontNameLen)).toString('utf8');
+    state.index += fontNameLen;
+    if (fontName !== DVI_FONT_NAME_V2) {
+      throw new Error(`toc_v2 dvi parse expected font ${DVI_FONT_NAME_V2}, got ${fontName}`);
+    }
+    expectByteV2(bytes, state, DVI_FNT_NUM_0_OPCODE_V2, 'FNT_NUM_0');
+
+    const lines = [];
+    let currentLine = [];
+    let expectWidthRightAfterChar = false;
+    let expectDownAfterReset = false;
+    let pendingByte = 0;
+    let pageH = 0;
+
+    while (state.index < bytes.length) {
+      const op = bytes[state.index];
+      if (op === DVI_EOP_OPCODE_V2) {
+        if (expectWidthRightAfterChar || expectDownAfterReset) {
+          throw new Error('toc_v2 dvi parse reached EOP with pending line state');
+        }
+        lines.push(currentLine);
+        state.index += 1;
+        break;
+      }
+      if (expectWidthRightAfterChar) {
+        if (op !== DVI_RIGHT3_OPCODE_V2) {
+          throw new Error(`toc_v2 dvi parse expected RIGHT3 after char, got ${op}`);
+        }
+        state.index += 1;
+        const amount = readI24V2(bytes, state);
+        if (amount < 0) {
+          throw new Error('toc_v2 dvi parse found negative RIGHT3 width after char');
+        }
+        if (isStyleMarkerByteV2(pendingByte)) {
+          if (amount !== 0) {
+            throw new Error('toc_v2 dvi parse style marker must have zero advance');
+          }
+        } else if (amount === 0) {
+          throw new Error('toc_v2 dvi parse printable glyph must have non-zero advance');
+        } else {
+          pageH += amount;
+        }
+        currentLine.push(pendingByte);
+        expectWidthRightAfterChar = false;
+        continue;
+      }
+      if (op === DVI_RIGHT3_OPCODE_V2) {
+        state.index += 1;
+        const amount = readI24V2(bytes, state);
+        if (amount >= 0) {
+          throw new Error('toc_v2 dvi parse expects negative RIGHT3 reset');
+        }
+        const back = -amount;
+        if (back <= 0 || back > pageH) {
+          throw new Error('toc_v2 dvi parse invalid RIGHT3 reset amount');
+        }
+        pageH -= back;
+        expectDownAfterReset = true;
+        continue;
+      }
+      if (op === DVI_DOWN3_OPCODE_V2) {
+        state.index += 1;
+        const amount = readI24V2(bytes, state);
+        if (amount <= 0) {
+          throw new Error('toc_v2 dvi parse DOWN3 must be positive');
+        }
+        if (pageH !== 0) {
+          throw new Error('toc_v2 dvi parse DOWN3 requires zero horizontal cursor');
+        }
+        if (expectDownAfterReset) {
+          expectDownAfterReset = false;
+        }
+        lines.push(currentLine);
+        currentLine = [];
+        continue;
+      }
+      if (op > 127 || op < 0x20 || op > 0x7e || expectDownAfterReset) {
+        throw new Error(`toc_v2 dvi parse found unsupported opcode/text byte ${op}`);
+      }
+      pendingByte = op;
+      state.index += 1;
+      expectWidthRightAfterChar = true;
+    }
+
+    if (lines.length === 0) {
+      throw new Error('toc_v2 dvi parse produced empty page');
+    }
+    pages.push(lines.map((line) => Uint8Array.from(line)));
+    previousBopOffset = bopOffset;
+    pageCount += 1;
+  }
+
+  if (pageCount <= 0) {
+    throw new Error('toc_v2 dvi parse found no pages');
+  }
+  expectByteV2(bytes, state, DVI_POST_OPCODE_V2, 'POST');
+  expectU32V2(bytes, state, lastBopOffset >>> 0, 'POST_LAST_BOP');
+  expectU32V2(bytes, state, DVI_NUM_V2, 'POST_NUM');
+  expectU32V2(bytes, state, DVI_DEN_V2, 'POST_DEN');
+  expectU32V2(bytes, state, DVI_MAG_V2, 'POST_MAG');
+  readU32V2(bytes, state); // max_h
+  readU32V2(bytes, state); // max_v
+  const stackDepth = (readU8V2(bytes, state) << 8) | readU8V2(bytes, state);
+  if (stackDepth !== 0) {
+    throw new Error(`toc_v2 dvi parse expected stack depth 0, got ${stackDepth}`);
+  }
+  const declaredPages = (readU8V2(bytes, state) << 8) | readU8V2(bytes, state);
+  if (declaredPages !== pageCount) {
+    throw new Error(`toc_v2 dvi parse page count mismatch ${declaredPages} vs ${pageCount}`);
+  }
+  expectByteV2(bytes, state, DVI_POSTPOST_OPCODE_V2, 'POSTPOST');
+  const postPointer = readU32V2(bytes, state);
+  if (postPointer >= bytes.length) {
+    throw new Error('toc_v2 dvi parse post pointer out of bounds');
+  }
+  expectByteV2(bytes, state, DVI_ID_V2, 'POSTPOST_DVI_ID');
+  if (bytes.length - state.index < 4) {
+    throw new Error('toc_v2 dvi parse trailer too short');
+  }
+  for (let index = state.index; index < bytes.length; index += 1) {
+    if (bytes[index] !== DVI_TRAILER_BYTE_V2) {
+      throw new Error('toc_v2 dvi parse trailer byte mismatch');
+    }
+  }
+
+  return pages;
+}
+
+function lineStartsWithAsciiV2(lineBytes, prefix) {
+  const prefixBytes = Buffer.from(prefix, 'ascii');
+  if (!lineBytes || lineBytes.length < prefixBytes.length) {
+    return false;
+  }
+  for (let index = 0; index < prefixBytes.length; index += 1) {
+    if (lineBytes[index] !== prefixBytes[index]) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function lineEqualsAsciiV2(lineBytes, value) {
+  const valueBytes = Buffer.from(value, 'ascii');
+  if (!lineBytes || lineBytes.length !== valueBytes.length) {
+    return false;
+  }
+  for (let index = 0; index < valueBytes.length; index += 1) {
+    if (lineBytes[index] !== valueBytes[index]) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function detectListPrefixLineV2(lineBytes) {
+  let leading = 0;
+  while (leading < lineBytes.length && lineBytes[leading] === 0x20) {
+    leading += 1;
+  }
+  if (leading + 2 <= lineBytes.length && lineBytes[leading] === 0x2d && lineBytes[leading + 1] === 0x20) {
+    return true;
+  }
+  let cursor = leading;
+  let sawDigit = false;
+  while (cursor < lineBytes.length && lineBytes[cursor] >= 0x30 && lineBytes[cursor] <= 0x39) {
+    sawDigit = true;
+    cursor += 1;
+  }
+  return sawDigit
+    && cursor + 1 < lineBytes.length
+    && lineBytes[cursor] === 0x2e
+    && lineBytes[cursor + 1] === 0x20;
+}
+
+function isStructuredNonTitleLineV2(lineBytes) {
+  return lineStartsWithAsciiV2(lineBytes, SECTION_HEADING_PREFIX_V2)
+    || lineStartsWithAsciiV2(lineBytes, SUBSECTION_HEADING_PREFIX_V2)
+    || detectListPrefixLineV2(lineBytes)
+    || lineStartsWithAsciiV2(lineBytes, '> ')
+    || lineStartsWithAsciiV2(lineBytes, '^ ')
+    || lineStartsWithAsciiV2(lineBytes, '| ')
+    || lineStartsWithAsciiV2(lineBytes, '~ ')
+    || lineStartsWithAsciiV2(lineBytes, TABLE_SPEC_LINE_PREFIX_V2)
+    || lineStartsWithAsciiV2(lineBytes, TABLE_ROW_LINE_PREFIX_V2)
+    || lineEqualsAsciiV2(lineBytes, FIGURE_BOX_LINE_V2)
+    || lineStartsWithAsciiV2(lineBytes, FIGURE_CAPTION_LINE_PREFIX_V2)
+    || lineStartsWithAsciiV2(lineBytes, FIGURE_IMAGE_LINE_PREFIX_V2)
+    || lineEqualsAsciiV2(lineBytes, TOC_PLACEHOLDER_MARKER_V2)
+    || lineStartsWithAsciiV2(lineBytes, TOC_ENTRY_LINE_PREFIX_V2)
+    || lineStartsWithAsciiV2(lineBytes, FOOTNOTE_LINE_PREFIX_V2)
+    || lineStartsWithAsciiV2(lineBytes, HREF_URL_LINE_PREFIX_V2)
+    || lineStartsWithAsciiV2(lineBytes, LABEL_LINE_PREFIX_V2)
+    || lineStartsWithAsciiV2(lineBytes, REF_LINE_PREFIX_V2)
+    || lineStartsWithAsciiV2(lineBytes, PAGEREF_LINE_PREFIX_V2)
+    || lineStartsWithAsciiV2(lineBytes, REF_ANCHOR_LINK_LINE_PREFIX_V2)
+    || lineStartsWithAsciiV2(lineBytes, PAGEREF_PAGE_LINK_LINE_PREFIX_V2)
+    || lineStartsWithAsciiV2(lineBytes, EQUATION_LINE_PREFIX_V2)
+    || lineStartsWithAsciiV2(lineBytes, BIBITEM_LINE_PREFIX_V2)
+    || lineStartsWithAsciiV2(lineBytes, CITE_LINE_PREFIX_V2);
+}
+
+function detectTitleBlockLenV2(lines) {
+  let index = 0;
+  while (index < lines.length && lines[index].length > 0 && !isStructuredNonTitleLineV2(lines[index])) {
+    index += 1;
+  }
+  return index > 0 && index < lines.length ? index : 0;
+}
+
+function hasMetadataPrefixLineV2(lineBytes) {
+  return lineStartsWithAsciiV2(lineBytes, FOOTNOTE_LINE_PREFIX_V2)
+    || lineStartsWithAsciiV2(lineBytes, HREF_URL_LINE_PREFIX_V2)
+    || lineStartsWithAsciiV2(lineBytes, TOC_ENTRY_LINE_PREFIX_V2)
+    || lineStartsWithAsciiV2(lineBytes, LABEL_LINE_PREFIX_V2)
+    || lineStartsWithAsciiV2(lineBytes, REF_LINE_PREFIX_V2)
+    || lineStartsWithAsciiV2(lineBytes, PAGEREF_LINE_PREFIX_V2)
+    || lineStartsWithAsciiV2(lineBytes, REF_ANCHOR_LINK_LINE_PREFIX_V2)
+    || lineStartsWithAsciiV2(lineBytes, PAGEREF_PAGE_LINK_LINE_PREFIX_V2)
+    || lineStartsWithAsciiV2(lineBytes, EQUATION_LINE_PREFIX_V2)
+    || lineStartsWithAsciiV2(lineBytes, BIBITEM_LINE_PREFIX_V2)
+    || lineStartsWithAsciiV2(lineBytes, CITE_LINE_PREFIX_V2);
+}
+
+function splitBodyAndMetadataLinesV2(pages) {
+  const bodyPages = pages.map(() => []);
+  const metadataLines = [];
+  let inMetadata = false;
+  for (let pageIndex = 0; pageIndex < pages.length; pageIndex += 1) {
+    const lines = pages[pageIndex];
+    for (const lineBytes of lines) {
+      if (hasMetadataPrefixLineV2(lineBytes)) {
+        inMetadata = true;
+      }
+      if (inMetadata) {
+        metadataLines.push(lineBytes);
+      } else {
+        bodyPages[pageIndex].push(lineBytes);
+      }
+    }
+  }
+  while (bodyPages.length > 1 && bodyPages[bodyPages.length - 1].length === 0) {
+    bodyPages.pop();
+  }
+  return { bodyPages, metadataLines };
+}
+
+function isDisplayMathPlaceholderLineV2(lineBytes) {
+  if (!lineStartsWithAsciiV2(lineBytes, '^ ')) {
+    return false;
+  }
+  const payload = Buffer.from(lineBytes.slice(2)).toString('ascii');
+  return payload === DISPLAY_MATH_PLACEHOLDER_SHORT_V2
+    || payload === DISPLAY_MATH_PLACEHOLDER_MEDIUM_V2
+    || payload === DISPLAY_MATH_PLACEHOLDER_LONG_V2;
+}
+
+function parseTocEntriesFromMetadataLinesV2(metadataLines) {
+  const entries = [];
+  const seenAnchors = new Set();
+  for (const lineBytes of metadataLines) {
+    if (!lineStartsWithAsciiV2(lineBytes, TOC_ENTRY_LINE_PREFIX_V2)) {
+      continue;
+    }
+    const raw = Buffer.from(lineBytes).toString('utf8');
+    const match = /^!toc ([12]) ([1-9]\d*) (.+)$/.exec(raw);
+    if (!match) {
+      throw new Error(`toc_v2 encountered malformed toc metadata line: ${raw}`);
+    }
+    const level = Number.parseInt(match[1], 10);
+    const anchorId = Number.parseInt(match[2], 10);
+    const title = match[3].trim();
+    if (!Number.isInteger(level) || (level !== 1 && level !== 2)) {
+      throw new Error(`toc_v2 encountered unsupported level in metadata: ${raw}`);
+    }
+    if (!Number.isInteger(anchorId) || anchorId <= 0) {
+      throw new Error(`toc_v2 encountered invalid anchor id in metadata: ${raw}`);
+    }
+    if (title.length === 0) {
+      throw new Error(`toc_v2 encountered empty title in metadata: ${raw}`);
+    }
+    if (seenAnchors.has(anchorId)) {
+      throw new Error(`toc_v2 encountered duplicate toc anchor metadata: ${anchorId}`);
+    }
+    seenAnchors.add(anchorId);
+    entries.push({ level, anchor_id: anchorId, title });
+  }
+  entries.sort((left, right) => left.anchor_id - right.anchor_id);
+  return entries;
+}
+
+function collectNominalAnchorPageNumbersFromBodyPagesV2(bodyPages) {
+  const pageNumbersByAnchorId = new Map();
+  let nextAnchorId = 1;
+  for (let pageIndex = 0; pageIndex < bodyPages.length; pageIndex += 1) {
+    const lines = bodyPages[pageIndex];
+    const titleBlockLen = pageIndex === 0 ? detectTitleBlockLenV2(lines) : 0;
+    for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
+      if (lineIndex < titleBlockLen) {
+        continue;
+      }
+      const lineBytes = lines[lineIndex];
+      const hasAnchor = lineEqualsAsciiV2(lineBytes, FIGURE_BOX_LINE_V2)
+        || isDisplayMathPlaceholderLineV2(lineBytes)
+        || lineStartsWithAsciiV2(lineBytes, SECTION_HEADING_PREFIX_V2)
+        || lineStartsWithAsciiV2(lineBytes, SUBSECTION_HEADING_PREFIX_V2);
+      if (!hasAnchor) {
+        continue;
+      }
+      if (pageNumbersByAnchorId.has(nextAnchorId)) {
+        throw new Error(`toc_v2 encountered duplicate nominal anchor id ${nextAnchorId}`);
+      }
+      pageNumbersByAnchorId.set(nextAnchorId, pageIndex + 1);
+      nextAnchorId += 1;
+    }
+  }
+  return pageNumbersByAnchorId;
+}
+
+function collectTocOutputSnapshotV2(xdvBytes) {
+  const pages = parseDviTextPagesForTocV2(xdvBytes);
+  const { bodyPages, metadataLines } = splitBodyAndMetadataLinesV2(pages);
+  if (bodyPages.length <= 0) {
+    throw new Error('toc_v2 requires at least one body page');
+  }
+  const tocEntries = parseTocEntriesFromMetadataLinesV2(metadataLines);
+  const pageNumbersByAnchorId = collectNominalAnchorPageNumbersFromBodyPagesV2(bodyPages);
+  for (const entry of tocEntries) {
+    const pageNo = pageNumbersByAnchorId.get(entry.anchor_id);
+    if (!Number.isInteger(pageNo)) {
+      throw new Error(`toc_v2 missing destination for anchor ${entry.anchor_id}`);
+    }
+    if (pageNo <= 0 || pageNo > bodyPages.length) {
+      throw new Error(`toc_v2 destination page out of range for anchor ${entry.anchor_id}: ${pageNo}`);
+    }
+  }
+  return {
+    tocEntries,
+    pageNumbersByAnchorId,
+    pageCount: bodyPages.length,
+  };
 }
 
 function isMathPayloadWhitespaceByteV0(byte) {
@@ -3480,14 +4011,61 @@ async function emitPagerefTypedArtifactV2(caseOutDir, fixtureBytes, mountedFiles
   };
 }
 
-async function emitTocTypedArtifactV0(caseOutDir, fixtureBytes) {
+async function emitTocTypedArtifactV2(caseOutDir, fixtureBytes, xdvBytes) {
+  const sourceEntries = extractTocEntriesFromSourceV0(fixtureBytes);
+  const outputSnapshot = collectTocOutputSnapshotV2(xdvBytes);
+  const outputByAnchorId = new Map();
+  for (const entry of outputSnapshot.tocEntries) {
+    outputByAnchorId.set(entry.anchor_id, entry);
+  }
+
+  const sourceAnchorIds = new Set();
+  for (const sourceEntry of sourceEntries) {
+    const anchorId = parseTocAnchorIdTagV2(sourceEntry.anchor_id);
+    if (!anchorId) {
+      throw new Error(`toc_v2 invalid source anchor tag: ${sourceEntry.anchor_id}`);
+    }
+    sourceAnchorIds.add(anchorId);
+  }
+
+  if (sourceAnchorIds.size !== outputByAnchorId.size) {
+    throw new Error(
+      `toc_v2 source/output anchor count mismatch (${sourceAnchorIds.size} vs ${outputByAnchorId.size})`,
+    );
+  }
+
+  const entries = [];
+  for (const sourceEntry of sourceEntries) {
+    const anchorId = parseTocAnchorIdTagV2(sourceEntry.anchor_id);
+    if (!anchorId) {
+      throw new Error(`toc_v2 invalid source anchor tag: ${sourceEntry.anchor_id}`);
+    }
+    const outputEntry = outputByAnchorId.get(anchorId);
+    if (!outputEntry) {
+      throw new Error(`toc_v2 output metadata missing anchor ${anchorId}`);
+    }
+    const expectedTitle = normalizeTocLinkWrappedTitleV2(sourceEntry.title);
+    const actualTitle = normalizeTocLinkWrappedTitleV2(outputEntry.title);
+    if (sourceEntry.level !== outputEntry.level || expectedTitle !== actualTitle) {
+      throw new Error(`toc_v2 source/output metadata mismatch for anchor ${anchorId}`);
+    }
+    const pageNo = outputSnapshot.pageNumbersByAnchorId.get(anchorId);
+    if (!Number.isInteger(pageNo) || pageNo <= 0 || pageNo > outputSnapshot.pageCount) {
+      throw new Error(`toc_v2 invalid page_no for anchor ${anchorId}: ${pageNo}`);
+    }
+    entries.push({
+      ...sourceEntry,
+      page_no: pageNo,
+    });
+  }
+
   const payload = {
     version: TYPED_ARTIFACTS_VERSION_V0,
-    schema: 'toc_v1',
-    entries: extractTocEntriesFromSourceV0(fixtureBytes),
+    schema: 'toc_v2',
+    entries,
   };
   const bytes = Buffer.from(`${JSON.stringify(payload, null, 2)}\n`, 'utf8');
-  const relpath = 'toc_v1.json';
+  const relpath = 'toc_v2.json';
   const fullPath = path.join(caseOutDir, relpath);
   await writeFile(fullPath, bytes);
   return {
@@ -3728,9 +4306,10 @@ async function emitTypedArtifactsV0(
   fixtureBytes,
   mountedFiles = [],
   inputEntries = [],
+  xdvBytes = new Uint8Array(),
 ) {
   if (caseSpec.id === 'typeset_demo_toc_probe_v0') {
-    typedArtifacts.toc = await emitTocTypedArtifactV0(caseOutDir, fixtureBytes);
+    typedArtifacts.toc = await emitTocTypedArtifactV2(caseOutDir, fixtureBytes, xdvBytes);
   }
   if (caseSpec.id === 'typeset_demo_labels_probe_v0') {
     typedArtifacts.labels = await emitLabelsTypedArtifactV0(caseOutDir, fixtureBytes);
@@ -4372,6 +4951,7 @@ async function runCaseV0(
     fixtureBytes,
     inputInclusionGraph.mounted_files,
     inputInclusionGraph.entries,
+    xdvBytes,
   );
   const typedArtifactRequests = await collectResolverRequestsFromResourceHintsV0(
     caseSpec,

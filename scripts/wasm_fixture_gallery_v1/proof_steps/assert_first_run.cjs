@@ -189,9 +189,9 @@ if (tocSummary?.typed_artifacts?.toc?.present !== true) {
   console.error('FAIL: expected toc typed artifact present after first run');
   process.exit(1);
 }
-const tocPath = path.join(outDir, 'typeset_demo_toc_probe_v0', 'toc_v1.json');
+const tocPath = path.join(outDir, 'typeset_demo_toc_probe_v0', 'toc_v2.json');
 if (!fs.existsSync(tocPath)) {
-  console.error('FAIL: expected toc_v1.json artifact after first run');
+  console.error('FAIL: expected toc_v2.json artifact after first run');
   process.exit(1);
 }
 const tocShaFirst = tocSummary.typed_artifacts.toc.artifact_sha256;
@@ -201,33 +201,38 @@ if (typeof tocShaFirst !== 'string' || !/^[0-9a-f]{64}$/.test(tocShaFirst)) {
 }
 const tocArtifactFirst = JSON.parse(fs.readFileSync(tocPath, 'utf8'));
 if (!Array.isArray(tocArtifactFirst?.entries)) {
-  console.error('FAIL: expected toc_v1.entries array in first-run artifact');
+  console.error('FAIL: expected toc_v2.entries array in first-run artifact');
   process.exit(1);
 }
-if (tocArtifactFirst?.schema !== 'toc_v1') {
-  console.error('FAIL: expected toc_v1 schema in first-run artifact');
+if (tocArtifactFirst?.schema !== 'toc_v2') {
+  console.error('FAIL: expected toc_v2 schema in first-run artifact');
   process.exit(1);
 }
 if (tocArtifactFirst.entries.length <= 0) {
-  console.error('FAIL: expected non-empty toc_v1.entries for toc probe');
+  console.error('FAIL: expected non-empty toc_v2.entries for toc probe');
   process.exit(1);
 }
 for (const [index, entry] of tocArtifactFirst.entries.entries()) {
   if (!Number.isInteger(entry?.level) || entry.level < 1 || entry.level > 2) {
-    console.error(`FAIL: toc_v1.entries[${index}] must have level in [1,2]`);
+    console.error(`FAIL: toc_v2.entries[${index}] must have level in [1,2]`);
     process.exit(1);
   }
   if (typeof entry?.anchor_id !== 'string' || !/^h[1-9]\d*$/.test(entry.anchor_id)) {
-    console.error(`FAIL: toc_v1.entries[${index}] must have anchor_id like hN`);
+    console.error(`FAIL: toc_v2.entries[${index}] must have anchor_id like hN`);
     process.exit(1);
   }
-  if (entry?.page !== null) {
-    console.error(`FAIL: toc_v1.entries[${index}].page must be null in v1`);
+  if (!Number.isInteger(entry?.page_no) || entry.page_no <= 0) {
+    console.error(`FAIL: toc_v2.entries[${index}].page_no must be positive integer`);
     process.exit(1);
   }
 }
-assertEntrySourceSpans('typeset_demo_toc_probe_v0', 'toc_v1', tocArtifactFirst.entries);
-fs.writeFileSync(firstRunShaPath('toc_v1'), `${tocShaFirst}\n`);
+const tocDistinctPagesFirst = new Set(tocArtifactFirst.entries.map((entry) => entry.page_no));
+if (tocDistinctPagesFirst.size < 2 || ![...tocDistinctPagesFirst].some((pageNo) => pageNo >= 2)) {
+  console.error('FAIL: expected toc_v2 probe to include mixed page_no values including page 2');
+  process.exit(1);
+}
+assertEntrySourceSpans('typeset_demo_toc_probe_v0', 'toc_v2', tocArtifactFirst.entries);
+fs.writeFileSync(firstRunShaPath('toc_v2'), `${tocShaFirst}\n`);
 
 const bibSummary = JSON.parse(
   fs.readFileSync(path.join(outDir, 'typeset_demo_bib_probe_v0', 'summary.json'), 'utf8'),

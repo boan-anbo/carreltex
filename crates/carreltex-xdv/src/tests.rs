@@ -3115,7 +3115,7 @@ fn pdf_renderer_rejects_malformed_figure_image_metadata_line_v0() {
 #[test]
 fn pdf_renderer_renders_toc_block_with_level_indentation_v0() {
     let xdv = write_dvi_v2_text_page_v0(
-        b"Before paragraph.\n\n!toc\n\nAfter paragraph.\n\n!toc 1 1 Intro entry\n!toc 2 2 Detail entry",
+        b"Before paragraph.\n\n!toc\n\nAfter paragraph.\n\n@S {Anchor section one}\n\n@s {Anchor subsection two}\n\n!toc 1 1 Intro toc entry\n!toc 2 2 Detail toc entry",
     )
     .expect("writer should accept toc marker lines");
     let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
@@ -3134,18 +3134,22 @@ fn pdf_renderer_renders_toc_block_with_level_indentation_v0() {
         "toc title should render"
     );
     assert!(
-        pdf_text.contains("(Intro entry) Tj"),
+        pdf_text.contains("(Intro toc entry) Tj"),
         "toc level 1 entry should render"
     );
     assert!(
-        pdf_text.contains("(Detail entry) Tj"),
+        pdf_text.contains("(Detail toc entry) Tj"),
         "toc level 2 entry should render"
     );
+    assert!(
+        pdf_text.contains("(1) Tj"),
+        "toc entries should render page number column values"
+    );
 
-    let intro_x =
-        tm_x_for_line_containing_text_v0(&pdf, "(Intro entry)").expect("toc level 1 position");
-    let detail_x =
-        tm_x_for_line_containing_text_v0(&pdf, "(Detail entry)").expect("toc level 2 position");
+    let intro_x = tm_x_for_line_containing_text_v0(&pdf, "(Intro toc entry)")
+        .expect("toc level 1 position");
+    let detail_x = tm_x_for_line_containing_text_v0(&pdf, "(Detail toc entry)")
+        .expect("toc level 2 position");
     assert!(
         detail_x > intro_x + 8.0,
         "toc level 2 should be indented from level 1: {intro_x} vs {detail_x}"
@@ -3155,7 +3159,7 @@ fn pdf_renderer_renders_toc_block_with_level_indentation_v0() {
 #[test]
 fn pdf_renderer_emits_toc_link_annotations_targeting_heading_anchors_v0() {
     let xdv = write_dvi_v2_text_page_v0(
-        b"Prelude.\n\n!toc\n\n@S {Intro section}\n\n@s {Detail section}\n\n!toc 1 1 <Intro section>\n!toc 2 2 <Detail section>",
+        b"Prelude.\n\n!toc\n\n@S {Intro section}\x0c@s {Detail section}\n\n!toc 1 1 <Intro section>\n!toc 2 2 <Detail section>",
     )
     .expect("writer should accept toc metadata and heading lines");
     let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
@@ -3171,8 +3175,14 @@ fn pdf_renderer_emits_toc_link_annotations_targeting_heading_anchors_v0() {
 
     let page_one = parse_pdf_object_body_v0(&pdf, 3).expect("page object");
     let annots = parse_pdf_ref_ids_v0(&page_one, "/Annots");
-    assert_eq!(annots.len(), 2, "toc block should emit two annotations");
+    assert_eq!(
+        annots.len(),
+        4,
+        "toc block should emit title and page-number annotations for each entry"
+    );
 
+    let mut xyz_pages = Vec::<u32>::new();
+    let mut fit_pages = Vec::<u32>::new();
     for annotation_id in annots {
         let annotation = parse_pdf_object_body_v0(&pdf, annotation_id).expect("annotation body");
         assert!(
@@ -3183,11 +3193,20 @@ fn pdf_renderer_emits_toc_link_annotations_targeting_heading_anchors_v0() {
             !annotation.contains("/A "),
             "toc links should not use URI actions: {annotation}"
         );
-        assert_eq!(
-            parse_pdf_annotation_dest_page_id_v0(&annotation),
-            Some(3),
-            "toc links should target page containing heading anchors"
-        );
+        let Some(page_id) = parse_pdf_annotation_dest_page_id_v0(&annotation) else {
+            panic!("toc annotation should include destination page id: {annotation}");
+        };
+        if annotation.contains("/XYZ") {
+            xyz_pages.push(page_id);
+        } else if annotation.contains("/Fit]") {
+            fit_pages.push(page_id);
+            assert!(
+                !annotation.contains("/XYZ"),
+                "toc page-number links should target /Fit page destinations only: {annotation}"
+            );
+        } else {
+            panic!("unexpected toc annotation destination shape: {annotation}");
+        }
         let rect = parse_pdf_annotation_rect_v0(&annotation).expect("annotation rect");
         assert!(
             rect[2] > rect[0],
@@ -3202,38 +3221,89 @@ fn pdf_renderer_emits_toc_link_annotations_targeting_heading_anchors_v0() {
             "annotation rect must stay within page bounds: {rect:?}"
         );
     }
+    xyz_pages.sort_unstable();
+    fit_pages.sort_unstable();
+    assert_eq!(
+        xyz_pages,
+        vec![3, 4],
+        "toc title links should target heading anchor pages in document order"
+    );
+    assert_eq!(
+        fit_pages,
+        vec![3, 4],
+        "toc page-number links should target page destinations in document order"
+    );
 }
 
 #[test]
 fn pdf_renderer_toc_annotation_destination_order_is_stable_v2() {
     let xdv = write_dvi_v2_text_page_v0(
-        b"Prelude.\n\n!toc\n\n@S {Intro section}\n\n@s {Detail section}\n\n!toc 1 1 <Intro section>\n!toc 2 2 <Detail section>",
+        b"Prelude.\n\n!toc\n\n@S {Intro section}\x0c@s {Detail section}\n\n!toc 1 1 <Intro section>\n!toc 2 2 <Detail section>",
     ).expect("writer should accept toc metadata and heading lines");
     let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
 
     let page_one = parse_pdf_object_body_v0(&pdf, 3).expect("page object");
     let annots = parse_pdf_ref_ids_v0(&page_one, "/Annots");
-    assert_eq!(annots.len(), 2, "expected two toc annotations");
+    assert_eq!(annots.len(), 4, "expected title+page toc annotations");
 
-    let destinations = annots
-        .iter()
-        .map(|id| {
-            let body = parse_pdf_object_body_v0(&pdf, *id).expect("annotation body");
-            parse_pdf_annotation_dest_xyz_v0(&body).expect("annotation destination")
-        })
-        .collect::<Vec<_>>();
-    for (page_id, _, _) in &destinations {
-        assert_eq!(
-            *page_id, 3,
-            "toc annotations should target page containing heading anchors"
-        );
+    let mut xyz_destinations = Vec::<(u32, f32, f32)>::new();
+    let mut fit_page_ids = Vec::<u32>::new();
+    for id in annots {
+        let body = parse_pdf_object_body_v0(&pdf, id).expect("annotation body");
+        if body.contains("/XYZ") {
+            xyz_destinations.push(parse_pdf_annotation_dest_xyz_v0(&body).expect("xyz destination"));
+        } else if body.contains("/Fit]") {
+            fit_page_ids.push(
+                parse_pdf_annotation_dest_page_id_v0(&body).expect("fit destination page id"),
+            );
+        } else {
+            panic!("unexpected toc annotation destination shape: {body}");
+        }
     }
+    assert_eq!(
+        xyz_destinations.len(),
+        2,
+        "expected one heading-anchor link per toc title"
+    );
+    assert_eq!(
+        fit_page_ids.len(),
+        2,
+        "expected one page-destination link per toc page number"
+    );
+    assert_eq!(
+        xyz_destinations.iter().map(|dest| dest.0).collect::<Vec<_>>(),
+        vec![3, 4],
+        "toc title link destinations should remain stable and ordered"
+    );
+    assert_eq!(
+        fit_page_ids,
+        vec![3, 4],
+        "toc page-number link destinations should remain stable and ordered"
+    );
+}
 
-    let (_, _, section_y) = destinations[0];
-    let (_, _, subsection_y) = destinations[1];
+#[test]
+fn pdf_renderer_renders_toc_page_numbers_with_mixed_values_v2() {
+    let xdv = write_dvi_v2_text_page_v0(
+        b"Prelude.\n\n!toc\n\n@S {First anchor}\x0c@S {Second anchor}\n\n!toc 1 1 First toc entry\n!toc 1 2 Second toc entry",
+    )
+    .expect("writer should accept toc marker lines");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+    let pdf_text = String::from_utf8_lossy(&pdf);
     assert!(
-        section_y > subsection_y,
-        "section anchor should appear above subsection anchor: {destinations:?}"
+        pdf_text.contains("(First toc entry) Tj") && pdf_text.contains("(Second toc entry) Tj"),
+        "toc entry titles should render: {pdf_text}"
+    );
+    assert!(
+        pdf_text.contains("(1) Tj") && pdf_text.contains("(2) Tj"),
+        "toc page-number column should render mixed values: {pdf_text}"
+    );
+
+    let (one_x, _) = tm_position_for_segment_substring_v0(&pdf, "(1)").expect("page one number x");
+    let (two_x, _) = tm_position_for_segment_substring_v0(&pdf, "(2)").expect("page two number x");
+    assert!(
+        one_x >= 492.0 && two_x >= 492.0,
+        "toc page numbers should be right-column aligned: one_x={one_x}, two_x={two_x}"
     );
 }
 
@@ -3262,7 +3332,7 @@ fn pdf_renderer_rejects_toc_entries_with_unsupported_level_v0() {
 #[test]
 fn pdf_renderer_toc_block_renders_between_surrounding_paragraphs_v0() {
     let xdv = write_dvi_v2_text_page_v0(
-        b"Before block.\n\n!toc\n\nAfter block.\n\n!toc 1 1 Intro\n!toc 2 2 Detail",
+        b"Before block.\n\n!toc\n\nAfter block.\n\n@S {Anchor One}\n\n@s {Anchor Two}\n\n!toc 1 1 Intro toc line\n!toc 2 2 Detail toc line",
     )
     .expect("writer should accept toc marker lines");
     let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
@@ -3271,9 +3341,9 @@ fn pdf_renderer_toc_block_renders_between_surrounding_paragraphs_v0() {
     let (toc_title_x, toc_title_y) =
         tm_position_for_line_containing_text_v0(&pdf, "(Contents)").expect("toc title");
     let (_, toc_intro_y) =
-        tm_position_for_line_containing_text_v0(&pdf, "(Intro)").expect("toc intro");
+        tm_position_for_line_containing_text_v0(&pdf, "(Intro toc line)").expect("toc intro");
     let (_, toc_detail_y) =
-        tm_position_for_line_containing_text_v0(&pdf, "(Detail)").expect("toc detail");
+        tm_position_for_line_containing_text_v0(&pdf, "(Detail toc line)").expect("toc detail");
     let (after_x, after_y) =
         tm_position_for_line_containing_text_v0(&pdf, "(After block.)").expect("after");
 
