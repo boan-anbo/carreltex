@@ -145,6 +145,52 @@ fn render_advance_pt_for_segment_with_profile_v0(
     }
 }
 
+fn trailing_space_bounded_seam_trim_pt_v30(
+    segment: &PdfRenderSegmentV0,
+    next_segment: Option<&PdfRenderSegmentV0>,
+    profile: SegmentEmitProfileV0,
+    font_size_pt: f32,
+) -> f32 {
+    if !matches!(
+        profile,
+        SegmentEmitProfileV0::BodyWrappedProseV27
+            | SegmentEmitProfileV0::WrappedIndentedV29
+            | SegmentEmitProfileV0::FootnoteProseV26
+    ) {
+        return 0.0;
+    }
+    if segment.superscript || matches!(segment.style, PdfTextStyleV0::Regular) {
+        return 0.0;
+    }
+    let Some(next_segment) = next_segment else {
+        return 0.0;
+    };
+    if next_segment.bytes.first().copied() != Some(b' ') {
+        return 0.0;
+    }
+    let requested_trim_pt = match segment.style {
+        PdfTextStyleV0::Italic => font_size_pt * 0.12,
+        PdfTextStyleV0::Bold => font_size_pt * 0.15,
+        PdfTextStyleV0::Regular => 0.0,
+    };
+    requested_trim_pt.min(segment.advance_pt * 0.25)
+}
+
+fn contextual_render_advance_pt_for_segment_v30(
+    segments: &[PdfRenderSegmentV0],
+    index: usize,
+    profile: SegmentEmitProfileV0,
+    font_size_pt: f32,
+) -> f32 {
+    let Some(segment) = segments.get(index) else {
+        return 0.0;
+    };
+    let base_advance_pt = render_advance_pt_for_segment_with_profile_v0(segment, profile);
+    let seam_trim_pt =
+        trailing_space_bounded_seam_trim_pt_v30(segment, segments.get(index + 1), profile, font_size_pt);
+    (base_advance_pt - seam_trim_pt).max(0.0)
+}
+
 fn emit_styled_segments_v0(
     out: &mut Vec<u8>,
     segments: &[PdfStyledSegmentV0],
@@ -224,7 +270,7 @@ fn emit_render_segments_with_superscript_with_profile_v0(
     }
     let mut cursor_x = f64::from(x_pt);
     let y_pt_f64 = f64::from(y_pt);
-    for segment in segments {
+    for (index, segment) in segments.iter().enumerate() {
         if segment.bytes.is_empty() {
             cursor_x += f64::from(segment.advance_sp) / 65_536.0;
             continue;
@@ -257,7 +303,12 @@ fn emit_render_segments_with_superscript_with_profile_v0(
         if style_scale_percent != 100 {
             out.extend_from_slice(b"100 Tz ");
         }
-        cursor_x += f64::from(render_advance_pt_for_segment_with_profile_v0(segment, profile));
+        cursor_x += f64::from(contextual_render_advance_pt_for_segment_v30(
+            segments,
+            index,
+            profile,
+            segment_font_size_pt,
+        ));
     }
     out.extend_from_slice(b"0 Ts ");
 }
