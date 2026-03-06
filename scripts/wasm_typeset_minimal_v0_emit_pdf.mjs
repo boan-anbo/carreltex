@@ -52,7 +52,7 @@ function parsePdfAnnotationActionIdV0(body) {
 }
 
 function parsePdfAnnotationDestPageIdV0(body) {
-  const match = body.match(/\/Dest \[(\d+)\s+0\s+R\s+\/XYZ/);
+  const match = body.match(/\/Dest \[(\d+)\s+0\s+R\s+\/(?:XYZ|Fit)\b/);
   if (!match) return null;
   const id = Number.parseInt(match[1], 10);
   return Number.isFinite(id) ? id : null;

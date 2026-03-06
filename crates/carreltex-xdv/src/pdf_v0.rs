@@ -62,6 +62,8 @@ const FIGURE_PLACEHOLDER_TO_CAPTION_GAP_PT_V0: f32 = 8.0;
 const TOC_TITLE_TEXT_V0: &[u8] = b"Contents";
 const TOC_TITLE_FONT_SIZE_PT_V0: f32 = 14.0;
 const TOC_ENTRY_INDENT_STEP_PT_V0: f32 = 18.0;
+const TOC_PAGE_NO_COLUMN_WIDTH_PT_V2: f32 = 48.0;
+const TOC_PAGE_NO_COLUMN_GAP_PT_V2: f32 = 12.0;
 const SECTION_HEADING_PREFIX_MARKER_V0: &[u8] = b"@S ";
 const SUBSECTION_HEADING_PREFIX_MARKER_V0: &[u8] = b"@s ";
 const DISPLAY_MATH_PLACEHOLDER_SHORT_V0: &[u8] = b"MATH DISPLAY";
@@ -1036,6 +1038,8 @@ fn emit_figure_block_v0(
 fn emit_toc_block_v0(
     out: &mut Vec<u8>,
     toc_entries: &[TocEntryMetadataV0],
+    page_numbers_by_anchor_id: &BTreeMap<u32, u32>,
+    page_count: usize,
     y: &mut f32,
     min_body_y_pt: f32,
     annotations: &mut Vec<PdfLinkAnnotationV0>,
@@ -1075,22 +1079,78 @@ fn emit_toc_block_v0(
         if *y < min_body_y_pt {
             return None;
         }
+        let page_no = *page_numbers_by_anchor_id.get(&entry.anchor_id)?;
+        if page_no == 0 || usize::try_from(page_no).ok()? > page_count {
+            return None;
+        }
         let base_segments = parse_styled_segments_v0(&entry.title_glyphs)?;
         let render_segments = split_superscript_segments_v0(&base_segments);
         if render_segments.iter().any(|segment| segment.superscript) {
             return None;
         }
+        let title_width_pt = render_segments.iter().map(|segment| segment.advance_pt).sum::<f32>();
         let indent_steps = f32::from(entry.level.saturating_sub(1));
         let x_pt = MARGIN_PT_V0 + (indent_steps * TOC_ENTRY_INDENT_STEP_PT_V0);
-        let mut toc_annotations = collect_toc_anchor_annotations_for_line_v0(
+        let mut toc_annotations = collect_toc_link_annotations_for_line_v0(
             &render_segments,
             x_pt,
             *y,
             FONT_SIZE_PT_V0,
-            entry.anchor_id,
+            PdfLinkTargetV0::Anchor(entry.anchor_id),
         )?;
         annotations.append(&mut toc_annotations);
         emit_render_segments_with_superscript_v0(out, &render_segments, x_pt, *y, FONT_SIZE_PT_V0);
+
+        let page_no_glyphs = page_no
+            .to_string()
+            .bytes()
+            .map(|byte| {
+                Some(GlyphPlanV0 {
+                    byte,
+                    advance_sp: glyph_width_sp_v0(byte, 65_536)?,
+                })
+            })
+            .collect::<Option<Vec<GlyphPlanV0>>>()?;
+        if page_no_glyphs.is_empty() {
+            return None;
+        }
+        let page_no_width_pt = glyphs_advance_pt_v0(&page_no_glyphs);
+        if page_no_width_pt <= 0.0 || page_no_width_pt > TOC_PAGE_NO_COLUMN_WIDTH_PT_V2 {
+            return None;
+        }
+        let page_no_right_pt = PAGE_WIDTH_PT_V0 - MARGIN_PT_V0;
+        let page_no_column_left_pt = page_no_right_pt - TOC_PAGE_NO_COLUMN_WIDTH_PT_V2;
+        let page_no_x_pt = page_no_right_pt - page_no_width_pt;
+        if page_no_x_pt < page_no_column_left_pt
+            || page_no_x_pt <= x_pt + title_width_pt + TOC_PAGE_NO_COLUMN_GAP_PT_V2
+        {
+            return None;
+        }
+        let title_links_enabled = render_segments.iter().any(|segment| segment.is_link);
+        let page_no_segments = vec![PdfRenderSegmentV0 {
+            style: PdfTextStyleV0::Regular,
+            bytes: bytes_from_glyphs_v0(&page_no_glyphs),
+            advance_pt: page_no_width_pt,
+            is_link: title_links_enabled,
+            superscript: false,
+        }];
+        if title_links_enabled {
+            let mut page_no_annotations = collect_toc_link_annotations_for_line_v0(
+                &page_no_segments,
+                page_no_x_pt,
+                *y,
+                FONT_SIZE_PT_V0,
+                PdfLinkTargetV0::AnchorPage(entry.anchor_id),
+            )?;
+            annotations.append(&mut page_no_annotations);
+        }
+        emit_render_segments_with_superscript_v0(
+            out,
+            &page_no_segments,
+            page_no_x_pt,
+            *y,
+            FONT_SIZE_PT_V0,
+        );
         out.extend_from_slice(b"\n");
         *y -= LEADING_PT_V0;
     }
@@ -1788,12 +1848,12 @@ fn collect_link_annotations_for_line_v0(
     Some(annotations)
 }
 
-fn collect_toc_anchor_annotations_for_line_v0(
+fn collect_toc_link_annotations_for_line_v0(
     segments: &[PdfRenderSegmentV0],
     line_x_pt: f32,
     line_y_pt: f32,
     font_size_pt: f32,
-    anchor_id: u32,
+    target: PdfLinkTargetV0,
 ) -> Option<Vec<PdfLinkAnnotationV0>> {
     let mut annotations = Vec::<PdfLinkAnnotationV0>::new();
     let mut cursor_x = line_x_pt;
@@ -1822,7 +1882,7 @@ fn collect_toc_anchor_annotations_for_line_v0(
                 return None;
             }
             annotations.push(PdfLinkAnnotationV0 {
-                target: PdfLinkTargetV0::Anchor(anchor_id),
+                target: target.clone(),
                 rect,
             });
         }
@@ -1842,10 +1902,7 @@ fn collect_toc_anchor_annotations_for_line_v0(
         if rect[2] <= rect[0] || rect[3] <= rect[1] {
             return None;
         }
-        annotations.push(PdfLinkAnnotationV0 {
-            target: PdfLinkTargetV0::Anchor(anchor_id),
-            rect,
-        });
+        annotations.push(PdfLinkAnnotationV0 { target, rect });
     }
 
     Some(annotations)
@@ -2123,6 +2180,7 @@ fn build_page_content_stream_v0(
     footnote_defs_by_id: &BTreeMap<u32, Vec<Vec<GlyphPlanV0>>>,
     link_targets_by_id: &BTreeMap<u32, PdfLinkTargetV0>,
     page_numbers_by_anchor_id: &BTreeMap<u32, u32>,
+    page_count: usize,
     toc_entries: &[TocEntryMetadataV0],
     equation_ordinals_by_anchor_id: &BTreeMap<u32, u32>,
     next_link_id: &mut u32,
@@ -2260,6 +2318,8 @@ fn build_page_content_stream_v0(
             emit_toc_block_v0(
                 &mut out,
                 toc_entries,
+                page_numbers_by_anchor_id,
+                page_count,
                 &mut y,
                 min_body_y_pt,
                 &mut annotations,
@@ -2594,6 +2654,7 @@ fn build_pdf_for_pages_v0(pages: &[PagePlanV0]) -> Vec<u8> {
             &footnote_defs_by_id,
             &link_targets_by_id,
             &page_numbers_by_anchor_id,
+            body_pages.len(),
             &toc_entries,
             &equation_ordinals_by_anchor_id,
             &mut next_link_id,
