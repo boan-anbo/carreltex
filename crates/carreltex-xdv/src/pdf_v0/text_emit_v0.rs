@@ -262,7 +262,7 @@ fn trailing_space_bounded_seam_trim_pt_v30(
             && matches!(next_segment.style, PdfTextStyleV0::Regular)
             && segment.advance_pt >= 28.0
         {
-            (segment.advance_pt * 0.014).min(font_size_pt * 0.34)
+            (segment.advance_pt * 0.016).min(font_size_pt * 0.38)
         } else if matches!(profile, SegmentEmitProfileV0::WrappedAlignedV28)
             && segment.advance_pt >= 95.0
         {
