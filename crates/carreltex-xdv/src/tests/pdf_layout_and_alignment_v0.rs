@@ -3417,3 +3417,24 @@ fn pdf_renderer_live_quote_medium_prefix_gap_is_tightened_v45() {
         "quote medium-prefix pre-style seam should stay tightened: prefix_x={quote_prefix_x}, style_x={quote_style_x}"
     );
 }
+
+#[test]
+fn pdf_renderer_live_list_medium_prefix_gap_is_tightened_v46() {
+    let xdv = write_dvi_v2_text_page_v0(
+        b"- List prefix with [inline words] and compact trailing text.",
+    )
+    .expect("writer should accept medium list seam text");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+
+    let list_prefix_x =
+        tm_x_for_segment_substring_v0(&pdf, "(inline words)", "(List prefix with )")
+            .expect("medium list prefix x");
+    let list_style_x =
+        tm_x_for_segment_substring_v0(&pdf, "(inline words)", "(inline words)")
+            .expect("medium list style x");
+
+    assert!(
+        list_style_x - list_prefix_x <= 84.0,
+        "list medium-prefix pre-style seam should stay tightened: prefix_x={list_prefix_x}, style_x={list_style_x}"
+    );
+}
