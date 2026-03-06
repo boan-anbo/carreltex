@@ -930,6 +930,46 @@ fn pdf_renderer_footnote_styled_seams_track_scaled_advances_v26() {
 }
 
 #[test]
+fn pdf_renderer_wrapped_body_paragraph_styled_seams_track_scaled_advances_v27() {
+    let demo_text = b"Title\nAuthor\n2026-03-05\n\nWRAPSTART alpha alpha alpha alpha alpha alpha alpha alpha <{BODYLINKWRAPV27}> and [ITALICWRAPV27],right beside punctuation with {BOLDWRAPV27} seam before WRAPTOKENV27.\n\n!u 1 https://example.com/v27";
+    let xdv = write_dvi_v2_text_page_v0(demo_text).expect("writer should accept wrapped v27 seam text");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+    let pdf_text = String::from_utf8_lossy(&pdf);
+    let link_line = pdf_text
+        .lines()
+        .find(|line| line.contains("(BODYLINKWRAPV27) Tj"))
+        .expect("wrapped body link line should render");
+    let italic_line = pdf_text
+        .lines()
+        .find(|line| line.contains("(ITALICWRAPV27) Tj"))
+        .expect("wrapped body italic line should render");
+    let bold_line = pdf_text
+        .lines()
+        .find(|line| line.contains("(BOLDWRAPV27) Tj"))
+        .expect("wrapped body bold line should render");
+
+    assert!(
+        link_line.contains("95 Tz") && link_line.contains("(BODYLINKWRAPV27) Tj 100 Tz"),
+        "wrapped body link segment should use v27 seam compensation"
+    );
+    assert!(
+        italic_line.contains("97 Tz") && italic_line.contains("(ITALICWRAPV27) Tj 100 Tz"),
+        "wrapped body italic segment should use v27 seam compensation"
+    );
+    assert!(
+        bold_line.contains("95 Tz") && bold_line.contains("(BOLDWRAPV27) Tj 100 Tz"),
+        "wrapped body bold segment should use v27 seam compensation"
+    );
+    let (_, wrap_start_y) =
+        tm_position_for_segment_substring_v0(&pdf, "WRAPSTART").expect("wrapped paragraph start");
+    let (_, wrap_token_y) =
+        tm_position_for_segment_substring_v0(&pdf, "WRAPTOKENV27").expect("wrapped paragraph tail");
+    assert!(
+        wrap_start_y > wrap_token_y,
+        "fixture should wrap onto a later body line: wrap_start_y={wrap_start_y}, wrap_token_y={wrap_token_y}"
+    );
+}
+
 fn pdf_renderer_centers_title_block_lines_within_epsilon_v0() {
     let demo_text = b"Centering Accuracy Title\nAlice Bob\n2026-03-05\n\nBody line.";
     let xdv = write_dvi_v2_text_page_v0(demo_text).expect("writer should accept demo text");
