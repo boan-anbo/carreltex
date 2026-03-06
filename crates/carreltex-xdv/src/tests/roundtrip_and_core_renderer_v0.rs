@@ -431,6 +431,51 @@ fn pdf_renderer_emits_link_annotation_with_in_bounds_rect_v0() {
 }
 
 #[test]
+fn pdf_renderer_bibliography_wrapped_link_annotations_follow_hanging_indent_v6() {
+    let xdv = write_dvi_v2_text_page_v0(
+        b"@S {References}\n\n[1] ALPHASTART <{linked phrase begins on bibliography line\nand LINKCONT closes here}> tail.\n\n!u 1 https://example.com/bib",
+    )
+    .expect("writer should accept bibliography link marker lines");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+    let (alpha_start_x, _) =
+        tm_position_for_segment_substring_v0(&pdf, "ALPHASTART").expect("alpha start x");
+    let (link_cont_x, _) =
+        tm_position_for_segment_substring_v0(&pdf, "LINKCONT").expect("continuation line x");
+    let epsilon_pt = 0.2f32;
+    assert!(
+        (alpha_start_x - link_cont_x).abs() <= epsilon_pt,
+        "wrapped bibliography continuation should preserve hanging-indent column: alpha_start_x={alpha_start_x}, link_cont_x={link_cont_x}"
+    );
+
+    let page_one = parse_pdf_object_body_v0(&pdf, 3).expect("page object");
+    let annots = parse_pdf_ref_ids_v0(&page_one, "/Annots");
+    assert_eq!(
+        annots.len(),
+        2,
+        "wrapped bibliography link should emit one annotation rect per wrapped line"
+    );
+    for annotation_id in annots {
+        let annotation = parse_pdf_object_body_v0(&pdf, annotation_id).expect("annotation body");
+        let rect = parse_pdf_annotation_rect_v0(&annotation).expect("annotation rect");
+        assert!(
+            rect[0] >= alpha_start_x - epsilon_pt,
+            "wrapped bibliography link annotation should stay in body column: rect={rect:?}, alpha_start_x={alpha_start_x}"
+        );
+        assert!(
+            rect[2] > rect[0] && rect[3] > rect[1],
+            "annotation rect must stay positive: {rect:?}"
+        );
+        let action_id = parse_pdf_annotation_action_id_v0(&annotation).expect("annotation action");
+        let action_body = parse_pdf_object_body_v0(&pdf, action_id).expect("action body");
+        assert_eq!(
+            parse_pdf_action_uri_v0(&action_body).as_deref(),
+            Some("https://example.com/bib"),
+            "wrapped bibliography link annotation should keep href target"
+        );
+    }
+}
+
+#[test]
 fn pdf_renderer_emits_internal_ref_and_external_href_annotations_v0() {
     let xdv = write_dvi_v2_text_page_v0(
         b"Prelude.\n\n@S {Intro}\n\nSee <1> and <{Example}>.\n\n!l sec:intro 1 heading 1 Intro\n!r sec:intro 5 1\n!ra 1 1\n!u 2 https://example.com",
