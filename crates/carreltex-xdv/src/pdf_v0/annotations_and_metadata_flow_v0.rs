@@ -1,3 +1,9 @@
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum AnnotationRectProfileV0 {
+    DefaultV9,
+    BibliographyV14,
+}
+
 fn annotation_trimmed_run_bounds_v9(run_start_x: f32, run_end_x: f32, run_bytes: &[u8]) -> Option<(f32, f32)> {
     if run_end_x <= run_start_x {
         return None;
@@ -36,12 +42,21 @@ fn annotation_rect_for_run_v9(
     run_bytes: &[u8],
     line_y_pt: f32,
     font_size_pt: f32,
+    profile: AnnotationRectProfileV0,
 ) -> Option<[f32; 4]> {
     let (x0, x1) = annotation_trimmed_run_bounds_v9(run_start_x, run_end_x, run_bytes)?;
-    let descent_pt = font_size_pt * ANNOTATION_RECT_DESCENT_RATIO_V9;
-    let mut ascent_pt = font_size_pt * ANNOTATION_RECT_ASCENT_RATIO_V9;
-    if ascent_pt + descent_pt < ANNOTATION_RECT_MIN_HEIGHT_PT_V9 {
-        ascent_pt = ANNOTATION_RECT_MIN_HEIGHT_PT_V9 - descent_pt;
+    let (descent_ratio, ascent_ratio, min_height_pt) = match profile {
+        AnnotationRectProfileV0::DefaultV9 => (
+            ANNOTATION_RECT_DESCENT_RATIO_V9,
+            ANNOTATION_RECT_ASCENT_RATIO_V9,
+            ANNOTATION_RECT_MIN_HEIGHT_PT_V9,
+        ),
+        AnnotationRectProfileV0::BibliographyV14 => (0.20, 0.72, 8.0),
+    };
+    let descent_pt = font_size_pt * descent_ratio;
+    let mut ascent_pt = font_size_pt * ascent_ratio;
+    if ascent_pt + descent_pt < min_height_pt {
+        ascent_pt = min_height_pt - descent_pt;
     }
     let rect = [
         x0.clamp(0.0, PAGE_WIDTH_PT_V0),
@@ -60,6 +75,7 @@ fn collect_link_annotations_for_line_v0(
     line_x_pt: f32,
     line_y_pt: f32,
     font_size_pt: f32,
+    profile: AnnotationRectProfileV0,
     link_targets_by_id: &BTreeMap<u32, PdfLinkTargetV0>,
     next_link_id: &mut u32,
     active_link_target: &mut Option<PdfLinkTargetV0>,
@@ -88,7 +104,14 @@ fn collect_link_annotations_for_line_v0(
             run_bytes.extend_from_slice(&segment.bytes);
         } else if let Some(run_x) = run_start_x.take() {
             let target = active_link_target.clone()?;
-            let rect = annotation_rect_for_run_v9(run_x, run_end_x, &run_bytes, line_y_pt, font_size_pt)?;
+            let rect = annotation_rect_for_run_v9(
+                run_x,
+                run_end_x,
+                &run_bytes,
+                line_y_pt,
+                font_size_pt,
+                profile,
+            )?;
             annotations.push(PdfLinkAnnotationV0 { target, rect });
             *active_link_target = None;
             run_bytes.clear();
@@ -104,7 +127,14 @@ fn collect_link_annotations_for_line_v0(
             }
             return None;
         }
-        let rect = annotation_rect_for_run_v9(run_x, run_end_x, &run_bytes, line_y_pt, font_size_pt)?;
+        let rect = annotation_rect_for_run_v9(
+            run_x,
+            run_end_x,
+            &run_bytes,
+            line_y_pt,
+            font_size_pt,
+            profile,
+        )?;
         annotations.push(PdfLinkAnnotationV0 { target, rect });
         if !link_active_at_line_end {
             *active_link_target = None;
@@ -141,7 +171,14 @@ fn collect_toc_link_annotations_for_line_v0(
             run_end_x = end_x;
             run_bytes.extend_from_slice(&segment.bytes);
         } else if let Some(run_x) = run_start_x.take() {
-            let rect = annotation_rect_for_run_v9(run_x, run_end_x, &run_bytes, line_y_pt, font_size_pt)?;
+            let rect = annotation_rect_for_run_v9(
+                run_x,
+                run_end_x,
+                &run_bytes,
+                line_y_pt,
+                font_size_pt,
+                AnnotationRectProfileV0::DefaultV9,
+            )?;
             annotations.push(PdfLinkAnnotationV0 {
                 target: target.clone(),
                 rect,
@@ -152,7 +189,14 @@ fn collect_toc_link_annotations_for_line_v0(
     }
 
     if let Some(run_x) = run_start_x {
-        let rect = annotation_rect_for_run_v9(run_x, run_end_x, &run_bytes, line_y_pt, font_size_pt)?;
+        let rect = annotation_rect_for_run_v9(
+            run_x,
+            run_end_x,
+            &run_bytes,
+            line_y_pt,
+            font_size_pt,
+            AnnotationRectProfileV0::DefaultV9,
+        )?;
         annotations.push(PdfLinkAnnotationV0 { target, rect });
     }
 
