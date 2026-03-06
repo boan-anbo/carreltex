@@ -2840,3 +2840,47 @@ fn pdf_renderer_right_alignment_keeps_wrapped_continuation_right_v1() {
         "wrapped right styled segment should use v28 seam compensation"
     );
 }
+
+#[test]
+fn pdf_renderer_wrapped_quote_and_list_styled_seams_use_v29_profile() {
+    let xdv = write_dvi_v2_text_page_v0(
+        b"\n- LISTSTART alpha alpha alpha alpha alpha alpha alpha [LISTITALICV29] beta beta beta beta beta beta LISTWRAPV29.\n\n> QUOTESTART gamma gamma gamma gamma gamma gamma gamma {QUOTEBOLDV29} delta delta delta delta delta QUOTEWRAPV29.",
+    )
+    .expect("writer should accept wrapped quote/list text");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+    let pdf_text = String::from_utf8_lossy(&pdf);
+    let list_line = pdf_text
+        .lines()
+        .find(|line| line.contains("(LISTITALICV29) Tj"))
+        .expect("wrapped list styled line should render");
+    let quote_line = pdf_text
+        .lines()
+        .find(|line| line.contains("(QUOTEBOLDV29) Tj"))
+        .expect("wrapped quote styled line should render");
+
+    assert!(
+        list_line.contains("97 Tz") && list_line.contains("(LISTITALICV29) Tj 100 Tz"),
+        "wrapped list styled segment should use v29 seam compensation"
+    );
+    assert!(
+        quote_line.contains("95 Tz") && quote_line.contains("(QUOTEBOLDV29) Tj 100 Tz"),
+        "wrapped quote styled segment should use v29 seam compensation"
+    );
+
+    let (_, list_start_y) =
+        tm_position_for_segment_substring_v0(&pdf, "LISTSTART").expect("wrapped list start");
+    let (_, list_wrap_y) =
+        tm_position_for_segment_substring_v0(&pdf, "LISTWRAPV29").expect("wrapped list wrap");
+    let (_, quote_start_y) =
+        tm_position_for_segment_substring_v0(&pdf, "QUOTESTART").expect("wrapped quote start");
+    let (_, quote_wrap_y) =
+        tm_position_for_segment_substring_v0(&pdf, "QUOTEWRAPV29").expect("wrapped quote wrap");
+    assert!(
+        list_start_y > list_wrap_y,
+        "list fixture should wrap onto a later line: list_start_y={list_start_y}, list_wrap_y={list_wrap_y}"
+    );
+    assert!(
+        quote_start_y > quote_wrap_y,
+        "quote fixture should wrap onto a later line: quote_start_y={quote_start_y}, quote_wrap_y={quote_wrap_y}"
+    );
+}
