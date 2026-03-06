@@ -69,6 +69,8 @@ fn pdf_renderer_emits_toc_link_annotations_targeting_heading_anchors_v0() {
 
     let mut xyz_pages = Vec::<u32>::new();
     let mut fit_pages = Vec::<u32>::new();
+    let mut intro_title_rect = None::<[f32; 4]>;
+    let mut intro_page_rect = None::<[f32; 4]>;
     for annotation_id in annots {
         let annotation = parse_pdf_object_body_v0(&pdf, annotation_id).expect("annotation body");
         assert!(
@@ -106,6 +108,17 @@ fn pdf_renderer_emits_toc_link_annotations_targeting_heading_anchors_v0() {
             rect[0] >= 0.0 && rect[1] >= 0.0 && rect[2] <= 612.0 && rect[3] <= 792.0,
             "annotation rect must stay within page bounds: {rect:?}"
         );
+        let rect_height = rect[3] - rect[1];
+        assert!(
+            (8.0..=14.0).contains(&rect_height),
+            "toc annotation hitbox height should stay in stable bounds: height={rect_height}, rect={rect:?}"
+        );
+        if page_id == 3 && annotation.contains("/XYZ") {
+            intro_title_rect = Some(rect);
+        }
+        if page_id == 3 && annotation.contains("/Fit]") {
+            intro_page_rect = Some(rect);
+        }
     }
     xyz_pages.sort_unstable();
     fit_pages.sort_unstable();
@@ -118,6 +131,27 @@ fn pdf_renderer_emits_toc_link_annotations_targeting_heading_anchors_v0() {
         fit_pages,
         vec![3, 4],
         "toc page-number links should target page destinations in document order"
+    );
+
+    let stream_one = parse_pdf_object_body_v0(&pdf, 5).expect("page one content stream");
+    let intro_page_no_x = tm_position_for_line_containing_text_in_body_v0(&stream_one, "(1)")
+        .expect("intro toc page number x")
+        .0;
+    let intro_title_rect = intro_title_rect.expect("intro title annotation rect");
+    let intro_page_rect = intro_page_rect.expect("intro page annotation rect");
+    let intro_title_width = intro_title_rect[2] - intro_title_rect[0];
+    let intro_page_width = intro_page_rect[2] - intro_page_rect[0];
+    assert!(
+        (intro_title_width - segment_width_pt_v0(b"Intro section")).abs() <= 1.0,
+        "toc title hitbox width should track rendered title width: rect_width={intro_title_width}"
+    );
+    assert!(
+        (intro_page_rect[0] - intro_page_no_x).abs() <= 0.2,
+        "toc page-number hitbox x should align to rendered page number: rect={intro_page_rect:?}, page_x={intro_page_no_x}"
+    );
+    assert!(
+        (intro_page_width - segment_width_pt_v0(b"1")).abs() <= 1.0,
+        "toc page-number hitbox width should track rendered number width: rect_width={intro_page_width}"
     );
 }
 
