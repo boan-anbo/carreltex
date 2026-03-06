@@ -96,13 +96,17 @@ fn typeset_minimal_input_inlines_referenced_tex_file() {
         .collect::<Vec<Vec<u8>>>()
         .join(&b'\n');
     let rendered = String::from_utf8_lossy(&text);
-    assert!(rendered.contains("Start. Included body. End."), "text={rendered:?}");
+    assert!(
+        rendered.contains("Start. Included body. End."),
+        "text={rendered:?}"
+    );
 }
 
 #[test]
 fn typeset_minimal_include_emits_forced_page_break_before_inlined_file() {
     let main = b"\\documentclass{article}\\begin{document}PageA\\include{sections/next}PageB\\end{document}";
-    let result = compile_typeset_with_files(main, &[(b"sections/next.tex", b" Included section. ")]);
+    let result =
+        compile_typeset_with_files(main, &[(b"sections/next.tex", b" Included section. ")]);
     assert_eq!(result.status, CompileStatus::Ok);
     let layout =
         parse_dvi_v2_text_page_to_layout_v0(&result.main_xdv_bytes, 917_504).expect("layout parse");
@@ -111,7 +115,12 @@ fn typeset_minimal_include_emits_forced_page_break_before_inlined_file() {
         &layout.pages[0]
             .lines
             .iter()
-            .flat_map(|line| line.glyphs.iter().map(|glyph| glyph.byte).chain(std::iter::once(b'\n')))
+            .flat_map(|line| {
+                line.glyphs
+                    .iter()
+                    .map(|glyph| glyph.byte)
+                    .chain(std::iter::once(b'\n'))
+            })
             .collect::<Vec<u8>>(),
     )
     .to_string();
@@ -119,7 +128,12 @@ fn typeset_minimal_include_emits_forced_page_break_before_inlined_file() {
         &layout.pages[1]
             .lines
             .iter()
-            .flat_map(|line| line.glyphs.iter().map(|glyph| glyph.byte).chain(std::iter::once(b'\n')))
+            .flat_map(|line| {
+                line.glyphs
+                    .iter()
+                    .map(|glyph| glyph.byte)
+                    .chain(std::iter::once(b'\n'))
+            })
             .collect::<Vec<u8>>(),
     )
     .to_string();
@@ -147,7 +161,10 @@ fn typeset_minimal_hyperref_refs_keep_anchor_order_across_include_boundaries_v2(
     let main = b"\\documentclass{article}\\begin{document}\\section{Main}\\label{sec:main}\\include{sections/two}Refs: \\ref{sec:two}, \\ref{fig:two}, \\ref{eq:two}.\\href{https://example.com}{link}\\end{document}";
     let included = b"\\section{Included Two}\\label{sec:two}\\begin{figure}\\caption{Included figure}\\end{figure}\\label{fig:two}\\[x+y\\]\\label{eq:two}";
     let text = compile_typeset_text_with_files(main, &[(b"sections/two.tex", included)]);
-    assert!(text.contains("!l sec:main 1 heading 1 Main"), "text={text:?}");
+    assert!(
+        text.contains("!l sec:main 1 heading 1 Main"),
+        "text={text:?}"
+    );
     assert!(
         text.contains("!l sec:two 2 heading 1 Included Two"),
         "text={text:?}"
@@ -175,7 +192,10 @@ fn typeset_minimal_rejects_input_include_cycle() {
     let b = b"\\input{cycle/a}";
     let result = compile_typeset_with_files(
         main,
-        &[(b"cycle/a.tex", a.as_slice()), (b"cycle/b.tex", b.as_slice())],
+        &[
+            (b"cycle/a.tex", a.as_slice()),
+            (b"cycle/b.tex", b.as_slice()),
+        ],
     );
     assert_eq!(result.status, CompileStatus::InvalidInput);
     assert!(result.main_xdv_bytes.is_empty());
@@ -292,7 +312,9 @@ fn typeset_minimal_toc_links_keep_input_heading_anchor_order_with_hyperref_v2() 
     let main = b"\\documentclass{article}\\title{T}\\author{A}\\date{D}\\begin{document}\\maketitle\\tableofcontents\\input{sections/toc}\\section{Tail}\\href{https://example.com}{link}\\end{document}";
     let included = b"\\section{Input Section}\\subsection{Input Detail}";
     let text = compile_typeset_text_with_files(main, &[(b"sections/toc.tex", included)]);
-    let first = text.find("!toc 1 1 <Input Section>").expect("first toc entry");
+    let first = text
+        .find("!toc 1 1 <Input Section>")
+        .expect("first toc entry");
     let second = text
         .find("!toc 2 2 <Input Detail>")
         .expect("second toc entry");
@@ -474,6 +496,40 @@ fn typeset_minimal_crossref_pass_v1_wraps_resolved_refs_as_links_when_hyperref_i
     assert!(text.contains("!r sec:missing 3 0"), "body={text:?}");
     assert!(text.contains("!ra 1 1"), "body={text:?}");
     assert!(text.contains("!u 2 https://example.com"), "body={text:?}");
+}
+
+#[test]
+fn typeset_minimal_pageref_resolves_to_render_marker_and_emits_page_link_metadata_v2() {
+    let main = b"\\documentclass{article}\\begin{document}\\section{Intro}\\label{sec:intro}See pages \\pageref{sec:intro} and \\pageref{sec:missing} with \\href{https://example.com}{link}.\\end{document}";
+    let body = extract_typeset_body(main);
+    let text = String::from_utf8(body).expect("body should be valid utf8");
+    assert!(
+        text.contains("~ See pages <@@PG:1@@> and ?? with <{link}>."),
+        "body={text:?}"
+    );
+    assert!(text.contains("!pr sec:intro 3 1"), "body={text:?}");
+    assert!(text.contains("!pr sec:missing 3 0"), "body={text:?}");
+    assert!(text.contains("!rp 1 1"), "body={text:?}");
+    assert!(text.contains("!u 2 https://example.com"), "body={text:?}");
+    assert!(
+        !text.contains("!r sec:intro "),
+        "pageref should not be emitted as regular ref metadata: body={text:?}"
+    );
+}
+
+#[test]
+fn typeset_minimal_pageref_resolves_across_include_boundary_with_hyperref_v2() {
+    let main = b"\\documentclass{article}\\begin{document}\\include{sections/two}Page ref: \\pageref{sec:two}.\\href{https://example.com}{link}\\end{document}";
+    let included = b"\\section{Included Two}\\label{sec:two}\\begin{figure}\\caption{Included figure}\\end{figure}\\label{fig:two}\\[x+y\\]\\label{eq:two}";
+    let text = compile_typeset_text_with_files(main, &[(b"sections/two.tex", included)]);
+    assert!(text.contains("@S {Included Two}"), "text={text:?}");
+    assert!(text.contains("Page ref: <@@PG:1@@>."), "text={text:?}");
+    assert!(
+        text.contains("!l sec:two 1 heading 1 Included Two"),
+        "text={text:?}"
+    );
+    assert!(text.contains("!pr sec:two "), "text={text:?}");
+    assert!(text.contains("!rp 1 1"), "text={text:?}");
 }
 
 #[test]
@@ -813,7 +869,9 @@ fn typeset_minimal_figure_stub_emits_placeholder_and_caption_markers() {
     let body = extract_typeset_body(main);
     let text = String::from_utf8(body).expect("body should be valid utf8");
     assert!(
-        text.contains("Before.\n\n!gbox\n!gcap Figure 1: Demo figure caption with [emphasis].\n\nAfter."),
+        text.contains(
+            "Before.\n\n!gbox\n!gcap Figure 1: Demo figure caption with [emphasis].\n\nAfter."
+        ),
         "body={text:?}"
     );
 }
@@ -1256,7 +1314,10 @@ fn typeset_minimal_display_math_emits_equation_metadata_and_ref_resolution_v1() 
     assert!(text.contains("!eq 1 1"), "body={text:?}");
     assert!(text.contains("!eq 2 2"), "body={text:?}");
     assert!(text.contains("!l eq:first 1 equation 1 -"), "body={text:?}");
-    assert!(text.contains("!l eq:second 2 equation 2 -"), "body={text:?}");
+    assert!(
+        text.contains("!l eq:second 2 equation 2 -"),
+        "body={text:?}"
+    );
 }
 
 #[test]
