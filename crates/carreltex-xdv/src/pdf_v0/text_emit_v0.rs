@@ -176,10 +176,15 @@ fn trailing_space_bounded_seam_trim_pt_v30(
         let Some(next_segment) = next_segment else {
             return 0.0;
         };
+        let require_prose_prefix_floor = matches!(
+            profile,
+            SegmentEmitProfileV0::BodyProseV13 | SegmentEmitProfileV0::BodyWrappedProseV27
+        );
         if next_segment.superscript
             || next_segment.is_link
-            || segment.bytes.len() < 8
-            || !segment.bytes.iter().any(|byte| byte.is_ascii_alphabetic())
+            || (require_prose_prefix_floor
+                && (segment.bytes.len() < 8
+                    || !segment.bytes.iter().any(|byte| byte.is_ascii_alphabetic())))
             || !segment.bytes.last().is_some_and(|byte| *byte == b' ')
         {
             return 0.0;
