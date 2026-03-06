@@ -3396,3 +3396,24 @@ fn pdf_renderer_live_quote_very_long_prefix_gap_is_tightened_v39() {
         "quote very-long-prefix pre-style seam should stay tightened: tm_gap={quote_line_tm_gap}"
     );
 }
+
+#[test]
+fn pdf_renderer_live_quote_medium_prefix_gap_is_tightened_v45() {
+    let xdv = write_dvi_v2_text_page_v0(
+        b"> Quote prefix with [inline words] and compact trailing text.",
+    )
+    .expect("writer should accept medium quote seam text");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+
+    let quote_prefix_x =
+        tm_x_for_segment_substring_v0(&pdf, "(inline words)", "(Quote prefix with )")
+            .expect("medium quote prefix x");
+    let quote_style_x =
+        tm_x_for_segment_substring_v0(&pdf, "(inline words)", "(inline words)")
+            .expect("medium quote style x");
+
+    assert!(
+        quote_style_x - quote_prefix_x <= 88.0,
+        "quote medium-prefix pre-style seam should stay tightened: prefix_x={quote_prefix_x}, style_x={quote_style_x}"
+    );
+}
