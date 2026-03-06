@@ -2347,6 +2347,42 @@ fn pdf_renderer_live_bibliography_long_prefix_gaps_are_tightened_v42() {
 }
 
 #[test]
+fn pdf_renderer_live_bibliography_medium_prefix_gaps_are_tightened_v44() {
+    let xdv = write_dvi_v2_text_page_v0(
+        b"@S {References}\n\n[1] Bibliography prefix with [inline words].\n[12] Second source prefix with {bold words}.",
+    )
+    .expect("writer should accept medium bibliography seam text");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+
+    let inline_prefix_x = tm_x_for_segment_substring_v0(
+        &pdf,
+        "(inline words)",
+        "(Bibliography prefix with )",
+    )
+    .expect("medium bibliography inline prefix x");
+    let inline_x =
+        tm_x_for_segment_substring_v0(&pdf, "(inline words)", "(inline words)")
+            .expect("medium bibliography inline style x");
+    let bold_prefix_x = tm_x_for_segment_substring_v0(
+        &pdf,
+        "(bold words)",
+        "(Second source prefix with )",
+    )
+    .expect("medium bibliography bold prefix x");
+    let bold_x = tm_x_for_segment_substring_v0(&pdf, "(bold words)", "(bold words)")
+        .expect("medium bibliography bold style x");
+
+    assert!(
+        inline_x - inline_prefix_x <= 128.0,
+        "bibliography medium-prefix italic seam should stay tightened: prefix_x={inline_prefix_x}, style_x={inline_x}"
+    );
+    assert!(
+        bold_x - bold_prefix_x <= 136.0,
+        "bibliography medium-prefix bold seam should stay tightened: prefix_x={bold_prefix_x}, style_x={bold_x}"
+    );
+}
+
+#[test]
 fn pdf_renderer_body_to_bibliography_opening_gap_is_tightened_v17() {
     let xdv = write_dvi_v2_text_page_v0(
         b"~ Body before references.\n\n@S {References}\n\n[1] ALPHASTART alpha source text.",
