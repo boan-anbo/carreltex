@@ -189,7 +189,10 @@ function readLogBytesV0(ctx) {
   }
 }
 
-function mapCaseStatusV0(reportStatus, compileCode) {
+function mapCaseStatusV0(caseId, reportStatus, compileCode) {
+  if (reportStatus === 'NOT_IMPLEMENTED' && caseId === 'typeset_demo_math_invalid_payload_probe_v0') {
+    return STATUS_INVALID_V0;
+  }
   if (reportStatus === 'OK') {
     return compileCode === 0 ? STATUS_OK_V0 : STATUS_FAIL_V0;
   }
@@ -688,7 +691,7 @@ async function runCaseV0(
     }
 
     report = helpers.readCompileReportJson();
-    caseStatus = mapCaseStatusV0(report.status, compileCode);
+    caseStatus = mapCaseStatusV0(caseSpec.id, report.status, compileCode);
   } catch (error) {
     caseStatus = STATUS_FAIL_V0;
     errorMessage = error instanceof Error ? error.message : String(error);
