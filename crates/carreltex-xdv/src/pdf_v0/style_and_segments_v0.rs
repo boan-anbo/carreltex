@@ -67,6 +67,7 @@ fn write_pdf_stream_obj(out: &mut Vec<u8>, id: u32, stream: &[u8]) -> u32 {
 struct PdfStyledSegmentV0 {
     style: PdfTextStyleV0,
     glyphs: Vec<GlyphPlanV0>,
+    advance_sp: i32,
     advance_pt: f32,
     is_link: bool,
 }
@@ -75,6 +76,7 @@ struct PdfStyledSegmentV0 {
 struct PdfRenderSegmentV0 {
     style: PdfTextStyleV0,
     bytes: Vec<u8>,
+    advance_sp: i32,
     advance_pt: f32,
     is_link: bool,
     superscript: bool,
@@ -202,10 +204,12 @@ fn parse_styled_segments_with_state_v0(
                 *link_active = false;
             }
             _ => {
+                let advance_sp = glyph.advance_sp;
                 let advance_pt = (glyph.advance_sp as f32) / 65_536.0;
                 if let Some(segment) = segments.last_mut() {
                     if segment.style == *current_style && segment.is_link == *link_active {
                         segment.glyphs.push(glyph.clone());
+                        segment.advance_sp += advance_sp;
                         segment.advance_pt += advance_pt;
                         continue;
                     }
@@ -213,6 +217,7 @@ fn parse_styled_segments_with_state_v0(
                 segments.push(PdfStyledSegmentV0 {
                     style: *current_style,
                     glyphs: vec![glyph.clone()],
+                    advance_sp,
                     advance_pt,
                     is_link: *link_active,
                 });
@@ -254,6 +259,7 @@ fn split_superscript_segments_v0(segments: &[PdfStyledSegmentV0]) -> Vec<PdfRend
                 out.push(PdfRenderSegmentV0 {
                     style: segment.style,
                     bytes: bytes_from_glyphs_v0(glyph_slice),
+                    advance_sp: glyph_slice.iter().map(|glyph| glyph.advance_sp).sum(),
                     advance_pt: glyph_slice
                         .iter()
                         .map(|glyph| (glyph.advance_sp as f32) / 65_536.0)
@@ -266,6 +272,7 @@ fn split_superscript_segments_v0(segments: &[PdfStyledSegmentV0]) -> Vec<PdfRend
             out.push(PdfRenderSegmentV0 {
                 style: segment.style,
                 bytes: bytes_from_glyphs_v0(marker_slice),
+                advance_sp: marker_slice.iter().map(|glyph| glyph.advance_sp).sum(),
                 advance_pt: marker_slice
                     .iter()
                     .map(|glyph| (glyph.advance_sp as f32) / 65_536.0)
@@ -281,6 +288,7 @@ fn split_superscript_segments_v0(segments: &[PdfStyledSegmentV0]) -> Vec<PdfRend
             out.push(PdfRenderSegmentV0 {
                 style: segment.style,
                 bytes: bytes_from_glyphs_v0(glyph_slice),
+                advance_sp: glyph_slice.iter().map(|glyph| glyph.advance_sp).sum(),
                 advance_pt: glyph_slice
                     .iter()
                     .map(|glyph| (glyph.advance_sp as f32) / 65_536.0)

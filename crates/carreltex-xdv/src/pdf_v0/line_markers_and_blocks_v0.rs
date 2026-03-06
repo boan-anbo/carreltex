@@ -416,6 +416,7 @@ fn placeholder_segments_v0(image_path: Option<&[u8]>) -> Vec<PdfStyledSegmentV0>
     vec![PdfStyledSegmentV0 {
         style: PdfTextStyleV0::Regular,
         glyphs: glyphs.clone(),
+        advance_sp: glyphs.iter().map(|glyph| glyph.advance_sp).sum(),
         advance_pt: glyphs
             .iter()
             .map(|glyph| (glyph.advance_sp as f32) / 65_536.0)
