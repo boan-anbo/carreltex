@@ -747,9 +747,42 @@ fn build_page_content_stream_v0(
                 current_flow_kind == BodyFlowKindV0::Paragraph
                     && !previous_rendered_line_was_empty
                     && matches!(last_non_empty_flow_kind, Some(BodyFlowKindV0::Paragraph));
+            let next_line_unprefixed_alignment_continuation_v28 = lines
+                .get(line_index + 1)
+                .filter(|next_line| !next_line.glyphs.is_empty())
+                .map(|next_line| {
+                    detect_quote_prefix_advance_pt_v0(&next_line.glyphs).is_none()
+                        && !has_center_prefix_v0(&next_line.glyphs)
+                        && !has_right_prefix_v0(&next_line.glyphs)
+                        && !has_noindent_prefix_v0(&next_line.glyphs)
+                        && detect_heading_prefix_v0(&next_line.glyphs).is_none()
+                        && detect_list_prefix_v0(&next_line.glyphs).is_none()
+                })
+                .unwrap_or(false);
+            let wrapped_centered_alignment_v28 = !display_math_line
+                && (center_prefixed || centered_continuation)
+                && (centered_continuation
+                    || (!next_raw_line_is_empty && next_line_unprefixed_alignment_continuation_v28));
+            let wrapped_right_alignment_v28 = right_continuation
+                || (right_prefixed
+                    && !next_raw_line_is_empty
+                    && next_line_unprefixed_alignment_continuation_v28);
+            let emit_profile = if current_flow_kind == BodyFlowKindV0::Paragraph {
+                if line_contains_inline_math_placeholder_token_v15(&render_segments) {
+                    SegmentEmitProfileV0::BodyProseInlineMathV15
+                } else if flowing_line_continues_next_v27 || flowing_line_continues_from_previous_v27 {
+                    SegmentEmitProfileV0::BodyWrappedProseV27
+                } else {
+                    SegmentEmitProfileV0::BodyProseV13
+                }
+            } else if wrapped_centered_alignment_v28 || wrapped_right_alignment_v28 {
+                SegmentEmitProfileV0::WrappedAlignedV28
+            } else {
+                SegmentEmitProfileV0::Default
+            };
             let line_width_pt: f32 = render_segments
                 .iter()
-                .map(|segment| segment.advance_pt)
+                .map(|segment| render_advance_pt_for_segment_with_profile_v0(segment, emit_profile))
                 .sum();
             let line_x = if in_title_block {
                 active_inline_alignment = None;
@@ -892,17 +925,6 @@ fn build_page_content_stream_v0(
                 || heading_centered
                 || center_prefixed
                 || centered_continuation;
-            let emit_profile = if current_flow_kind == BodyFlowKindV0::Paragraph {
-                if line_contains_inline_math_placeholder_token_v15(&render_segments) {
-                    SegmentEmitProfileV0::BodyProseInlineMathV15
-                } else if flowing_line_continues_next_v27 || flowing_line_continues_from_previous_v27 {
-                    SegmentEmitProfileV0::BodyWrappedProseV27
-                } else {
-                    SegmentEmitProfileV0::BodyProseV13
-                }
-            } else {
-                SegmentEmitProfileV0::Default
-            };
             let annotation_profile = if bibliography_line {
                 AnnotationRectProfileV0::BibliographyV14
             } else if centered_or_heading_context {
