@@ -467,6 +467,76 @@ if (typeof packagesShaFirst !== 'string' || !/^[0-9a-f]{64}$/.test(packagesShaFi
 }
 fs.writeFileSync(firstRunShaPath('packages_v1'), `${packagesShaFirst}\n`);
 
+const mathProbeSummary = JSON.parse(
+  fs.readFileSync(path.join(outDir, 'typeset_demo_math_probe_v0', 'summary.json'), 'utf8'),
+);
+if (mathProbeSummary?.status !== 'OK' || mathProbeSummary?.compile_status !== 'OK') {
+  console.error('FAIL: expected typeset_demo_math_probe_v0 status/compile_status OK after first run');
+  process.exit(1);
+}
+if (mathProbeSummary?.typed_artifacts?.packages?.present !== true) {
+  console.error('FAIL: expected packages_v1 artifact present for typeset_demo_math_probe_v0 after first run');
+  process.exit(1);
+}
+const mathProbePackagesArtifact = JSON.parse(
+  fs.readFileSync(path.join(outDir, 'typeset_demo_math_probe_v0', 'packages_v1.json'), 'utf8'),
+);
+if (!Array.isArray(mathProbePackagesArtifact?.entries) || mathProbePackagesArtifact.entries.length <= 0) {
+  console.error('FAIL: expected non-empty packages_v1 entries for typeset_demo_math_probe_v0');
+  process.exit(1);
+}
+if (!mathProbePackagesArtifact.entries.some((entry) => entry.name === 'amsmath.sty')) {
+  console.error('FAIL: expected typeset_demo_math_probe_v0 packages_v1 entries to include amsmath.sty');
+  process.exit(1);
+}
+assertEntrySourceSpans('typeset_demo_math_probe_v0', 'packages_v1', mathProbePackagesArtifact.entries);
+const mathProbeResourceHintsArtifact = JSON.parse(
+  fs.readFileSync(path.join(outDir, 'typeset_demo_math_probe_v0', 'resource_hints_v0.json'), 'utf8'),
+);
+if (!Array.isArray(mathProbeResourceHintsArtifact?.entries)) {
+  console.error('FAIL: expected resource_hints_v0.entries for typeset_demo_math_probe_v0');
+  process.exit(1);
+}
+if (!mathProbeResourceHintsArtifact.entries.some((entry) => entry.hint_type === 'package_file' && entry.value === 'amsmath.sty')) {
+  console.error('FAIL: expected typeset_demo_math_probe_v0 resource_hints_v0 package_file=amsmath.sty');
+  process.exit(1);
+}
+
+const cjkProbeSummary = JSON.parse(
+  fs.readFileSync(path.join(outDir, 'typeset_demo_cjk_probe_v0', 'summary.json'), 'utf8'),
+);
+if (cjkProbeSummary?.status !== 'OK' || cjkProbeSummary?.compile_status !== 'OK') {
+  console.error('FAIL: expected typeset_demo_cjk_probe_v0 status/compile_status OK after first run');
+  process.exit(1);
+}
+if (cjkProbeSummary?.typed_artifacts?.packages?.present !== true) {
+  console.error('FAIL: expected packages_v1 artifact present for typeset_demo_cjk_probe_v0 after first run');
+  process.exit(1);
+}
+const cjkProbePackagesArtifact = JSON.parse(
+  fs.readFileSync(path.join(outDir, 'typeset_demo_cjk_probe_v0', 'packages_v1.json'), 'utf8'),
+);
+if (!Array.isArray(cjkProbePackagesArtifact?.entries) || cjkProbePackagesArtifact.entries.length <= 0) {
+  console.error('FAIL: expected non-empty packages_v1 entries for typeset_demo_cjk_probe_v0');
+  process.exit(1);
+}
+if (!cjkProbePackagesArtifact.entries.some((entry) => entry.name === 'xeCJK.sty')) {
+  console.error('FAIL: expected typeset_demo_cjk_probe_v0 packages_v1 entries to include xeCJK.sty');
+  process.exit(1);
+}
+assertEntrySourceSpans('typeset_demo_cjk_probe_v0', 'packages_v1', cjkProbePackagesArtifact.entries);
+const cjkProbeResourceHintsArtifact = JSON.parse(
+  fs.readFileSync(path.join(outDir, 'typeset_demo_cjk_probe_v0', 'resource_hints_v0.json'), 'utf8'),
+);
+if (!Array.isArray(cjkProbeResourceHintsArtifact?.entries)) {
+  console.error('FAIL: expected resource_hints_v0.entries for typeset_demo_cjk_probe_v0');
+  process.exit(1);
+}
+if (!cjkProbeResourceHintsArtifact.entries.some((entry) => entry.hint_type === 'package_file' && entry.value === 'xeCJK.sty')) {
+  console.error('FAIL: expected typeset_demo_cjk_probe_v0 resource_hints_v0 package_file=xeCJK.sty');
+  process.exit(1);
+}
+
 const packageMultiCaptureArtifact = JSON.parse(
   fs.readFileSync(path.join(outDir, 'typeset_demo_usepackage_multi_capture_probe_v1', 'packages_v1.json'), 'utf8'),
 );

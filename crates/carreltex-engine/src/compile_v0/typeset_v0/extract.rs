@@ -54,6 +54,9 @@ pub(crate) fn extract_typeset_minimal_text_body_with_external_bib_v0(
             {
                 index = consume_pass_options_declaration_noop_v0(tokens, index)?;
             }
+            Some(TokenV0::ControlSeq(name)) if name.as_slice() == SETCJKMAINFONT_CONTROL_V0 => {
+                index = consume_setcjkmainfont_declaration_noop_v0(tokens, index)?;
+            }
             Some(TokenV0::ControlSeq(name)) if name.as_slice() == INCLUDEONLY_CONTROL_V0 => {
                 index = consume_includeonly_declaration_noop_v0(tokens, index)?;
             }
