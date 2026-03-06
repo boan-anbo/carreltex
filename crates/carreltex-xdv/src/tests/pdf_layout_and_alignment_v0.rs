@@ -934,6 +934,29 @@ fn pdf_renderer_footnote_styled_seams_track_scaled_advances_v26() {
 }
 
 #[test]
+fn pdf_renderer_footnote_pre_style_gap_is_tightened_v33() {
+    let demo_text = b"Title\nAuthor\n2026-03-05\n\nBody prose through punctuation.^1\n\n!f 1 Footnote text with [INLINEFOOTNOTEV33].";
+    let xdv = write_dvi_v2_text_page_v0(demo_text).expect("writer should accept v33 footnote seam text");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+
+    let footnote_prefix_x = tm_x_for_segment_substring_v0(
+        &pdf,
+        "(INLINEFOOTNOTEV33)",
+        "(1 Footnote text with )",
+    )
+    .expect("footnote prefix x");
+    let footnote_italic_x =
+        tm_x_for_segment_substring_v0(&pdf, "(INLINEFOOTNOTEV33)", "(INLINEFOOTNOTEV33)")
+            .expect("footnote italic x");
+    let expected_gap = segment_width_pt_v0(b"1 Footnote text with ") - (10.0 * 0.12);
+    let epsilon_pt = 0.3f32;
+    assert!(
+        ((footnote_italic_x - footnote_prefix_x) - expected_gap).abs() <= epsilon_pt,
+        "footnote pre-style seam should trim the preceding space-bounded gap: prefix_x={footnote_prefix_x}, italic_x={footnote_italic_x}, expected_gap={expected_gap}"
+    );
+}
+
+#[test]
 fn pdf_renderer_wrapped_body_paragraph_styled_seams_track_scaled_advances_v27() {
     let demo_text = b"Title\nAuthor\n2026-03-05\n\nWRAPSTART alpha alpha alpha alpha alpha alpha alpha alpha <{BODYLINKWRAPV27}> and [ITALICWRAPV27],right beside punctuation with {BOLDWRAPV27} seam before WRAPTOKENV27.\n\n!u 1 https://example.com/v27";
     let xdv = write_dvi_v2_text_page_v0(demo_text).expect("writer should accept wrapped v27 seam text");
@@ -2935,5 +2958,45 @@ fn pdf_renderer_single_line_quote_and_list_styled_seams_use_v31_profile() {
     assert!(
         quote_line.contains("95 Tz") && quote_line.contains("(QUOTEBOLDV31) Tj 100 Tz"),
         "single-line quote styled segment should use indented seam compensation"
+    );
+}
+
+#[test]
+fn pdf_renderer_single_line_quote_and_list_pre_style_gaps_are_tightened_v33() {
+    let xdv = write_dvi_v2_text_page_v0(
+        b"\n- LISTPREV33 with [LISTITALICPREV33] tail.\n\n> QUOTEPREV33 with {QUOTEBOLDPREV33} tail.",
+    )
+    .expect("writer should accept single-line quote/list v33 text");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+
+    let list_prefix_x = tm_x_for_segment_substring_v0(
+        &pdf,
+        "(LISTITALICPREV33)",
+        "(LISTPREV33 with )",
+    )
+    .expect("list prefix x");
+    let list_italic_x =
+        tm_x_for_segment_substring_v0(&pdf, "(LISTITALICPREV33)", "(LISTITALICPREV33)")
+            .expect("list italic x");
+    let quote_prefix_x = tm_x_for_segment_substring_v0(
+        &pdf,
+        "(QUOTEBOLDPREV33)",
+        "(QUOTEPREV33 with )",
+    )
+    .expect("quote prefix x");
+    let quote_bold_x =
+        tm_x_for_segment_substring_v0(&pdf, "(QUOTEBOLDPREV33)", "(QUOTEBOLDPREV33)")
+            .expect("quote bold x");
+
+    let expected_list_gap = segment_width_pt_v0(b"LISTPREV33 with ") - (12.0 * 0.12);
+    let expected_quote_gap = segment_width_pt_v0(b"QUOTEPREV33 with ") - (12.0 * 0.15);
+    let epsilon_pt = 0.3f32;
+    assert!(
+        ((list_italic_x - list_prefix_x) - expected_list_gap).abs() <= epsilon_pt,
+        "single-line list pre-style seam should trim the preceding space-bounded gap: prefix_x={list_prefix_x}, italic_x={list_italic_x}, expected_gap={expected_list_gap}"
+    );
+    assert!(
+        ((quote_bold_x - quote_prefix_x) - expected_quote_gap).abs() <= epsilon_pt,
+        "single-line quote pre-style seam should trim the preceding space-bounded gap: prefix_x={quote_prefix_x}, bold_x={quote_bold_x}, expected_gap={expected_quote_gap}"
     );
 }
