@@ -3173,6 +3173,40 @@ fn pdf_renderer_wrapped_right_pre_style_gap_is_tightened_v41() {
 }
 
 #[test]
+fn pdf_renderer_wrapped_right_bold_pre_style_gap_is_tightened_v49() {
+    let xdv = write_dvi_v2_text_page_with_layout_and_wrap_v0(
+        b"\n| RIGHTSTART edge, {core} trail words words words words WRAPRIGHT tail.",
+        65_536,
+        786_432,
+        30,
+    )
+    .expect("writer should accept wrapped right bold text");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+
+    let (prefix_x, prefix_y) =
+        tm_position_for_segment_substring_v0(&pdf, "RIGHTSTART").expect("right bold prefix position");
+    let (_, wrap_y) =
+        tm_position_for_segment_substring_v0(&pdf, "WRAPRIGHT").expect("right bold wrap y");
+    let rendered =
+        rendered_text_for_line_containing_needle_v0(&pdf, "RIGHTSTART").expect("right bold rendered text");
+    let max_tm_gap =
+        max_tm_gap_pt_for_line_containing_v0(&pdf, "core").expect("right bold tm gap");
+
+    assert!(
+        rendered == "RIGHTSTART edge, core",
+        "wrapped right bold line should preserve stable spacing: {rendered}"
+    );
+    assert!(
+        max_tm_gap <= 112.0,
+        "wrapped right bold pre-style seam should stay tightened: tm_gap={max_tm_gap}"
+    );
+    assert!(
+        prefix_y > wrap_y && prefix_x >= 72.0,
+        "right bold fixture should still wrap after the tightened seam: prefix_y={prefix_y}, wrap_y={wrap_y}, prefix_x={prefix_x}"
+    );
+}
+
+#[test]
 fn pdf_renderer_wrapped_quote_and_list_styled_seams_use_v29_profile() {
     let xdv = write_dvi_v2_text_page_v0(
         b"\n- LISTSTART alpha alpha alpha alpha alpha alpha alpha [LISTITALICV29] beta beta beta beta beta beta LISTWRAPV29.\n\n> QUOTESTART gamma gamma gamma gamma gamma gamma gamma {QUOTEBOLDV29} delta delta delta delta delta QUOTEWRAPV29.",
