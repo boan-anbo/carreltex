@@ -162,7 +162,9 @@ fn trailing_space_bounded_seam_trim_pt_v30(
     if segment.superscript || segment.is_link || matches!(segment.style, PdfTextStyleV0::Regular) {
         if !matches!(
             profile,
-            SegmentEmitProfileV0::WrappedIndentedV29 | SegmentEmitProfileV0::FootnoteProseV26
+            SegmentEmitProfileV0::BodyWrappedProseV27
+                | SegmentEmitProfileV0::WrappedIndentedV29
+                | SegmentEmitProfileV0::FootnoteProseV26
         ) || segment.superscript
             || segment.is_link
             || !matches!(segment.style, PdfTextStyleV0::Regular)
