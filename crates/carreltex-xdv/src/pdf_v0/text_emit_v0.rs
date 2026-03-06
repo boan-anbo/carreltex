@@ -195,6 +195,10 @@ fn trailing_space_bounded_seam_trim_pt_v30(
             PdfTextStyleV0::Regular => 0.0,
         };
         let long_indented_prefix_bias_pt = if matches!(profile, SegmentEmitProfileV0::WrappedIndentedV29)
+            && segment.advance_pt >= 250.0
+        {
+            (segment.advance_pt * 0.16).min(font_size_pt * 3.8)
+        } else if matches!(profile, SegmentEmitProfileV0::WrappedIndentedV29)
             && segment.advance_pt >= 120.0
         {
             (segment.advance_pt * 0.12).min(font_size_pt * 2.8)
