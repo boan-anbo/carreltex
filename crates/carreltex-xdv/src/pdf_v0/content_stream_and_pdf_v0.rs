@@ -737,6 +737,16 @@ fn build_page_content_stream_v0(
                     classify_next_flow_kind_v0(lines, line_index + 1, title_block_len),
                     Some(BodyFlowKindV0::Paragraph)
                 );
+            let flowing_line_continues_next_v27 = current_flow_kind == BodyFlowKindV0::Paragraph
+                && !next_raw_line_is_empty
+                && matches!(
+                    classify_next_flow_kind_v0(lines, line_index + 1, title_block_len),
+                    Some(BodyFlowKindV0::Paragraph)
+                );
+            let flowing_line_continues_from_previous_v27 =
+                current_flow_kind == BodyFlowKindV0::Paragraph
+                    && !previous_rendered_line_was_empty
+                    && matches!(last_non_empty_flow_kind, Some(BodyFlowKindV0::Paragraph));
             let line_width_pt: f32 = render_segments
                 .iter()
                 .map(|segment| segment.advance_pt)
@@ -885,6 +895,8 @@ fn build_page_content_stream_v0(
             let emit_profile = if current_flow_kind == BodyFlowKindV0::Paragraph {
                 if line_contains_inline_math_placeholder_token_v15(&render_segments) {
                     SegmentEmitProfileV0::BodyProseInlineMathV15
+                } else if flowing_line_continues_next_v27 || flowing_line_continues_from_previous_v27 {
+                    SegmentEmitProfileV0::BodyWrappedProseV27
                 } else {
                     SegmentEmitProfileV0::BodyProseV13
                 }
