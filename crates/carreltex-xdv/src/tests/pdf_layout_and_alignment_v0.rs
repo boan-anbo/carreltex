@@ -1507,6 +1507,55 @@ fn pdf_renderer_heading_transitions_across_list_quote_table_polish_v22() {
 }
 
 #[test]
+fn pdf_renderer_front_matter_list_and_table_opening_transitions_are_tightened_v25() {
+    let list_pdf = render_dvi_v2_text_page_to_pdf_v0(
+        &write_dvi_v2_text_page_v0(
+            b"Front Matter Title\nAuthor Name\n2026-03-05\n\n- LISTOPEN first list item.\n- LISTNEXT second list item.",
+        )
+        .expect("writer should accept front-matter list text"),
+    )
+    .expect("list pdf render");
+    let (_, list_date_y) =
+        tm_position_for_line_containing_text_v0(&list_pdf, "(2026-03-05)").expect("list date");
+    let (_, list_open_y) = tm_position_for_line_containing_text_v0(&list_pdf, "(LISTOPEN first list item.)")
+        .expect("list opening line");
+    let (_, list_next_y) = tm_position_for_line_containing_text_v0(&list_pdf, "(LISTNEXT second list item.)")
+        .expect("list second line");
+
+    let table_pdf = render_dvi_v2_text_page_to_pdf_v0(
+        &write_dvi_v2_text_page_v0(
+            b"Front Matter Title\nAuthor Name\n2026-03-05\n\n!ts ll\n!t TABOPENA||TABOPENB\n!t TABNEXTA||TABNEXTB",
+        )
+        .expect("writer should accept front-matter table text"),
+    )
+    .expect("table pdf render");
+    let (_, table_date_y) =
+        tm_position_for_line_containing_text_v0(&table_pdf, "(2026-03-05)").expect("table date");
+    let (_, table_open_y) =
+        tm_position_for_segment_substring_v0(&table_pdf, "TABOPENA").expect("table opening row");
+    let (_, table_next_y) =
+        tm_position_for_segment_substring_v0(&table_pdf, "TABNEXTA").expect("table second row");
+
+    let epsilon_pt = 0.05f32;
+    assert!(
+        (list_date_y - list_open_y - 38.0).abs() <= epsilon_pt,
+        "front-matter date->list opening transition should stay tightened: list_date_y={list_date_y}, list_open_y={list_open_y}"
+    );
+    assert!(
+        (list_open_y - list_next_y - 13.0).abs() <= epsilon_pt,
+        "list internal rhythm should stay stable after front-matter opening: list_open_y={list_open_y}, list_next_y={list_next_y}"
+    );
+    assert!(
+        (table_date_y - table_open_y - 38.0).abs() <= epsilon_pt,
+        "front-matter date->table opening transition should stay tightened: table_date_y={table_date_y}, table_open_y={table_open_y}"
+    );
+    assert!(
+        (table_open_y - table_next_y - 13.0).abs() <= epsilon_pt,
+        "table row rhythm should stay stable after front-matter opening: table_open_y={table_open_y}, table_next_y={table_next_y}"
+    );
+}
+
+#[test]
 fn pdf_renderer_heading_list_quote_rhythm_invariants_v0() {
     let demo_text = b"\nPrelude paragraph.\n\n{Heading}\n\n~ After heading paragraph.\n\n- First list item\n- Second list item\n\n> Quote line one\n> Quote line two\n\nAfter quote paragraph.";
     let xdv = write_dvi_v2_text_page_v0(demo_text).expect("writer should accept rhythm text");
@@ -2027,6 +2076,74 @@ fn pdf_renderer_body_to_bibliography_opening_gap_is_tightened_v17() {
     assert!(
         (references_y - alpha_start_y - 12.0).abs() <= epsilon_pt,
         "bibliography heading->first entry gap should remain stable: references_y={references_y}, alpha_start_y={alpha_start_y}"
+    );
+}
+
+#[test]
+fn pdf_renderer_mixed_surface_quote_table_list_bibliography_flow_rhythm_v25() {
+    let xdv = write_dvi_v2_text_page_v0(
+        b"Front Matter Title\nAuthor Name\n2026-03-05\n\n> QUOTESTART quote opening line.\n> QUOTECONT quote continuation line.\n\n!ts ll\n!t TABSTARTA||TABSTARTB\n!t TABNEXTA||TABNEXTB\n\n- LISTSTART list opening line.\n- LISTNEXT list continuation line.\n\n@S {References}\n\n[1] BIBSTART alpha source text.",
+    )
+    .expect("writer should accept mixed-surface v25 text");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+
+    let (_, date_y) = tm_position_for_line_containing_text_v0(&pdf, "(2026-03-05)")
+        .expect("date");
+    let (quote_x, quote_start_y) =
+        tm_position_for_segment_substring_v0(&pdf, "QUOTESTART").expect("quote opening");
+    let (_, quote_cont_y) =
+        tm_position_for_segment_substring_v0(&pdf, "QUOTECONT").expect("quote continuation");
+    let (_, table_start_y) =
+        tm_position_for_segment_substring_v0(&pdf, "TABSTARTA").expect("table opening");
+    let (_, table_next_y) =
+        tm_position_for_segment_substring_v0(&pdf, "TABNEXTA").expect("table continuation");
+    let (list_x, list_start_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "(LISTSTART list opening line.)")
+            .expect("list opening");
+    let (_, list_next_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "(LISTNEXT list continuation line.)")
+            .expect("list continuation");
+    let (_, references_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "(References)").expect("references");
+    let (_, bib_start_y) =
+        tm_position_for_segment_substring_v0(&pdf, "BIBSTART").expect("bibliography opening");
+
+    let epsilon_pt = 0.05f32;
+    assert!(
+        (date_y - quote_start_y - 37.0).abs() <= epsilon_pt,
+        "front-matter date->quote transition should stay tightened: date_y={date_y}, quote_start_y={quote_start_y}"
+    );
+    assert!(
+        (quote_start_y - quote_cont_y - 12.5).abs() <= epsilon_pt,
+        "quote internal rhythm should remain stable: quote_start_y={quote_start_y}, quote_cont_y={quote_cont_y}"
+    );
+    assert!(
+        (quote_cont_y - table_start_y - 23.0).abs() <= epsilon_pt,
+        "quote->table transition should stay tightened in mixed-surface pages: quote_cont_y={quote_cont_y}, table_start_y={table_start_y}"
+    );
+    assert!(
+        (table_start_y - table_next_y - 13.0).abs() <= epsilon_pt,
+        "table internal rhythm should remain stable: table_start_y={table_start_y}, table_next_y={table_next_y}"
+    );
+    assert!(
+        (table_next_y - list_start_y - 24.0).abs() <= epsilon_pt,
+        "table->list transition should stay tightened in mixed-surface pages: table_next_y={table_next_y}, list_start_y={list_start_y}"
+    );
+    assert!(
+        (list_start_y - list_next_y - 13.0).abs() <= epsilon_pt,
+        "list internal rhythm should remain stable after table transition: list_start_y={list_start_y}, list_next_y={list_next_y}"
+    );
+    assert!(
+        (list_next_y - references_y - 24.0).abs() <= epsilon_pt,
+        "list->bibliography opening should stay tightened: list_next_y={list_next_y}, references_y={references_y}"
+    );
+    assert!(
+        (references_y - bib_start_y - 12.0).abs() <= epsilon_pt,
+        "bibliography heading->first entry gap should remain stable: references_y={references_y}, bib_start_y={bib_start_y}"
+    );
+    assert!(
+        quote_x >= list_x + 6.0,
+        "quote indent should remain visibly deeper than list body indent on mixed-surface pages: quote_x={quote_x}, list_x={list_x}"
     );
 }
 
