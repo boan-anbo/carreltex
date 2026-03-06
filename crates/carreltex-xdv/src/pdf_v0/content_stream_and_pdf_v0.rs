@@ -43,8 +43,10 @@ fn build_page_content_stream_v0(
     let mut previous_rendered_line_was_empty = false;
     let mut skip_indent_after_title_block = title_block_len > 0;
     let mut active_hang_indent_pt = 0.0f32;
+    let mut active_hang_prefix_kind = None::<ListPrefixKindV0>;
     let mut active_quote_indent_pt = 0.0f32;
     let mut active_inline_alignment = None::<InlineBlockAlignmentV0>;
+    let mut previous_line_was_bibliography_heading = false;
     let mut annotations = Vec::<PdfLinkAnnotationV0>::new();
     let mut style_stack = Vec::<PdfTextStyleV0>::new();
     let mut current_style = PdfTextStyleV0::Regular;
@@ -88,8 +90,10 @@ fn build_page_content_stream_v0(
             previous_rendered_line_was_empty = false;
             skip_indent_after_title_block = false;
             active_hang_indent_pt = 0.0;
+            active_hang_prefix_kind = None;
             active_quote_indent_pt = 0.0;
             active_inline_alignment = None;
+            previous_line_was_bibliography_heading = false;
             line_index = table_end;
             continue;
         }
@@ -131,8 +135,10 @@ fn build_page_content_stream_v0(
             previous_rendered_line_was_empty = false;
             skip_indent_after_title_block = false;
             active_hang_indent_pt = 0.0;
+            active_hang_prefix_kind = None;
             active_quote_indent_pt = 0.0;
             active_inline_alignment = None;
+            previous_line_was_bibliography_heading = false;
             line_index = cursor + 1;
             continue;
         }
@@ -155,8 +161,10 @@ fn build_page_content_stream_v0(
             previous_rendered_line_was_empty = false;
             skip_indent_after_title_block = false;
             active_hang_indent_pt = 0.0;
+            active_hang_prefix_kind = None;
             active_quote_indent_pt = 0.0;
             active_inline_alignment = None;
+            previous_line_was_bibliography_heading = false;
             line_index += 1;
             continue;
         }
@@ -238,6 +246,7 @@ fn build_page_content_stream_v0(
         let line_is_empty = render_segments.is_empty();
         // Collapse consecutive blank lines to a single rhythm gap so vertical spacing stays stable.
         if line_is_empty && previous_rendered_line_was_empty {
+            previous_line_was_bibliography_heading = false;
             line_index += 1;
             continue;
         }
@@ -283,7 +292,30 @@ fn build_page_content_stream_v0(
             && heading_kind.is_none()
             && list_prefix.is_none()
             && matches!(active_inline_alignment, Some(InlineBlockAlignmentV0::Right));
+        let bibliography_continuation = !in_title_block
+            && !line_is_empty
+            && quote_prefix_advance_pt.is_none()
+            && !center_prefixed
+            && !right_prefixed
+            && !noindent_prefixed
+            && heading_kind.is_none()
+            && list_prefix.is_none()
+            && active_hang_indent_pt > 0.0
+            && matches!(active_hang_prefix_kind, Some(ListPrefixKindV0::Bibliography));
+        let mut line_advance_pt = LEADING_PT_V0;
+        let mut bibliography_heading_line = false;
+        if line_is_empty && previous_line_was_bibliography_heading {
+            line_advance_pt = 0.0;
+        }
         if !line_is_empty {
+            let bibliography_line =
+                matches!(list_prefix.map(|prefix| prefix.kind), Some(ListPrefixKindV0::Bibliography))
+                    || bibliography_continuation;
+            bibliography_heading_line = matches!(heading_kind, Some(HeadingKindV0::Section))
+                && render_segments
+                    .iter()
+                    .flat_map(|segment| segment.bytes.iter().copied())
+                    .eq(BIBLIOGRAPHY_HEADING_TEXT_V0.iter().copied());
             let line_width_pt: f32 = render_segments
                 .iter()
                 .map(|segment| segment.advance_pt)
@@ -294,44 +326,53 @@ fn build_page_content_stream_v0(
             } else if heading_kind.is_some() || heading_centered {
                 active_quote_indent_pt = 0.0;
                 active_hang_indent_pt = 0.0;
+                active_hang_prefix_kind = None;
                 active_inline_alignment = None;
                 centered_line_x_v0(line_width_pt)
             } else if center_prefixed || centered_continuation {
                 active_quote_indent_pt = 0.0;
                 active_hang_indent_pt = 0.0;
+                active_hang_prefix_kind = None;
                 active_inline_alignment = Some(InlineBlockAlignmentV0::Center);
                 centered_line_x_v0(line_width_pt)
             } else if right_prefixed || right_continuation {
                 active_quote_indent_pt = 0.0;
                 active_hang_indent_pt = 0.0;
+                active_hang_prefix_kind = None;
                 active_inline_alignment = Some(InlineBlockAlignmentV0::Right);
                 (PAGE_WIDTH_PT_V0 - MARGIN_PT_V0 - line_width_pt).max(MARGIN_PT_V0)
             } else if let Some(prefix_advance_pt) = quote_prefix_advance_pt {
                 active_quote_indent_pt =
                     QUOTE_BODY_INDENT_PT_V0.max(prefix_advance_pt + QUOTE_PREFIX_GAP_PT_V0);
                 active_hang_indent_pt = 0.0;
+                active_hang_prefix_kind = None;
                 active_inline_alignment = None;
                 MARGIN_PT_V0 + active_quote_indent_pt
             } else if let Some(prefix) = list_prefix {
-                active_hang_indent_pt = LIST_BODY_INDENT_PT_V0 + prefix.leading_advance_pt;
+                active_hang_indent_pt = prefix.body_indent_pt;
+                active_hang_prefix_kind = Some(prefix.kind);
                 active_quote_indent_pt = 0.0;
                 active_inline_alignment = None;
                 MARGIN_PT_V0 + active_hang_indent_pt
             } else if noindent_prefixed {
                 active_hang_indent_pt = 0.0;
+                active_hang_prefix_kind = None;
                 active_quote_indent_pt = 0.0;
                 active_inline_alignment = None;
                 MARGIN_PT_V0
             } else if active_quote_indent_pt > 0.0 {
+                active_hang_prefix_kind = None;
                 active_inline_alignment = None;
                 MARGIN_PT_V0 + active_quote_indent_pt
             } else if active_hang_indent_pt > 0.0 {
                 active_inline_alignment = None;
                 MARGIN_PT_V0 + active_hang_indent_pt
             } else if previous_rendered_line_was_empty && !skip_indent_after_title_block {
+                active_hang_prefix_kind = None;
                 active_inline_alignment = None;
                 MARGIN_PT_V0 + INDENT_PT_V0
             } else {
+                active_hang_prefix_kind = None;
                 active_inline_alignment = None;
                 MARGIN_PT_V0
             };
@@ -362,12 +403,17 @@ fn build_page_content_stream_v0(
                 else {
                     return None;
                 };
-                let prefix_width_pt = glyphs_advance_pt_v0(display_prefix_glyphs);
                 let prefix_x = match prefix.kind {
                     ListPrefixKindV0::Itemize => MARGIN_PT_V0 + prefix.leading_advance_pt,
                     ListPrefixKindV0::Enumerate => {
-                        ENUM_NUMBER_COLUMN_RIGHT_PT_V0 + prefix.leading_advance_pt - prefix_width_pt
+                        ENUM_NUMBER_COLUMN_RIGHT_PT_V0 + prefix.leading_advance_pt
+                            - prefix.display_advance_pt
                     }
+                    ListPrefixKindV0::Bibliography => (MARGIN_PT_V0
+                        + prefix.leading_advance_pt
+                        + BIBLIOGRAPHY_LABEL_COLUMN_RIGHT_PT_V6
+                        - prefix.display_advance_pt)
+                        .max(MARGIN_PT_V0),
                 };
                 emit_styled_segments_v0(
                     &mut out,
@@ -376,6 +422,11 @@ fn build_page_content_stream_v0(
                     y,
                     font_size_pt,
                 );
+            }
+            if bibliography_heading_line && next_raw_line_is_empty {
+                line_advance_pt = BIBLIOGRAPHY_HEADING_TO_FIRST_ENTRY_GAP_PT_V6;
+            } else if bibliography_line {
+                line_advance_pt = BIBLIOGRAPHY_ENTRY_LEADING_PT_V6;
             }
             let mut line_annotations = collect_link_annotations_for_line_v0(
                 &render_segments,
@@ -427,11 +478,13 @@ fn build_page_content_stream_v0(
             }
         } else {
             active_hang_indent_pt = 0.0;
+            active_hang_prefix_kind = None;
             active_quote_indent_pt = 0.0;
             active_inline_alignment = None;
         }
         previous_rendered_line_was_empty = line_is_empty;
-        y -= LEADING_PT_V0;
+        previous_line_was_bibliography_heading = bibliography_heading_line;
+        y -= line_advance_pt;
         if title_block_len > 0 && line_index + 1 == title_block_len {
             y -= TITLE_EXTRA_GAP_PT_V0;
         }
