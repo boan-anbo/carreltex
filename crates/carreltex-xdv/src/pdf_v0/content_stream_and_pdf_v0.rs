@@ -869,8 +869,16 @@ fn build_page_content_stream_v0(
             if in_title_block && has_tall_front_matter_title_block_v23(title_block_len) {
                 line_advance_pt = TITLE_BLOCK_LINE_LEADING_PT_V23;
             }
+            let centered_or_heading_context = (in_title_block
+                && has_front_matter_title_block_v11(title_block_len))
+                || heading_kind.is_some()
+                || heading_centered
+                || center_prefixed
+                || centered_continuation;
             let annotation_profile = if bibliography_line {
                 AnnotationRectProfileV0::BibliographyV14
+            } else if centered_or_heading_context {
+                AnnotationRectProfileV0::CenteredV24
             } else {
                 AnnotationRectProfileV0::DefaultV9
             };

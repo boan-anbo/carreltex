@@ -1,6 +1,7 @@
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum AnnotationRectProfileV0 {
     DefaultV9,
+    CenteredV24,
     BibliographyV14,
     FootnoteV18,
 }
@@ -45,16 +46,27 @@ fn annotation_rect_for_run_v9(
     font_size_pt: f32,
     profile: AnnotationRectProfileV0,
 ) -> Option<[f32; 4]> {
-    let (x0, x1) = annotation_trimmed_run_bounds_v9(run_start_x, run_end_x, run_bytes)?;
-    let (descent_ratio, ascent_ratio, min_height_pt) = match profile {
+    let (mut x0, mut x1) = annotation_trimmed_run_bounds_v9(run_start_x, run_end_x, run_bytes)?;
+    let (descent_ratio, ascent_ratio, min_height_pt, horizontal_inset_pt) = match profile {
         AnnotationRectProfileV0::DefaultV9 => (
             ANNOTATION_RECT_DESCENT_RATIO_V9,
             ANNOTATION_RECT_ASCENT_RATIO_V9,
             ANNOTATION_RECT_MIN_HEIGHT_PT_V9,
+            0.0,
         ),
-        AnnotationRectProfileV0::BibliographyV14 => (0.20, 0.72, 8.0),
-        AnnotationRectProfileV0::FootnoteV18 => (0.20, 0.70, 7.2),
+        AnnotationRectProfileV0::CenteredV24 => (
+            ANNOTATION_RECT_CENTERED_DESCENT_RATIO_V24,
+            ANNOTATION_RECT_CENTERED_ASCENT_RATIO_V24,
+            ANNOTATION_RECT_CENTERED_MIN_HEIGHT_PT_V24,
+            ANNOTATION_RECT_CENTERED_HORIZONTAL_INSET_PT_V24,
+        ),
+        AnnotationRectProfileV0::BibliographyV14 => (0.20, 0.72, 8.0, 0.0),
+        AnnotationRectProfileV0::FootnoteV18 => (0.20, 0.70, 7.2, 0.0),
     };
+    if horizontal_inset_pt > 0.0 && (x1 - x0) > (2.0 * horizontal_inset_pt) {
+        x0 += horizontal_inset_pt;
+        x1 -= horizontal_inset_pt;
+    }
     let descent_pt = font_size_pt * descent_ratio;
     let mut ascent_pt = font_size_pt * ascent_ratio;
     if ascent_pt + descent_pt < min_height_pt {
