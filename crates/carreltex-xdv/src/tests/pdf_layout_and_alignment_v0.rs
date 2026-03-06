@@ -1322,6 +1322,74 @@ fn pdf_renderer_front_matter_title_to_first_body_rhythm_is_tightened_v11() {
 }
 
 #[test]
+fn pdf_renderer_tall_title_block_spacing_and_body_transition_polish_v23() {
+    let demo_text = b"Front Matter Main Title\nFront Matter Subtitle\nAuthor One\nAuthor Two\n2026-03-05\n\nFirst body paragraph line.";
+    let xdv = write_dvi_v2_text_page_v0(demo_text).expect("writer should accept tall title block text");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+
+    let (_, title_y) = tm_position_for_line_containing_text_v0(&pdf, "(Front Matter Main Title)")
+        .expect("title line");
+    let (_, subtitle_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "(Front Matter Subtitle)")
+            .expect("subtitle line");
+    let (_, author_one_y) = tm_position_for_line_containing_text_v0(&pdf, "(Author One)")
+        .expect("author one line");
+    let (_, author_two_y) = tm_position_for_line_containing_text_v0(&pdf, "(Author Two)")
+        .expect("author two line");
+    let (_, date_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "(2026-03-05)").expect("date line");
+    let (body_x, body_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "(First body paragraph line.)")
+            .expect("body line");
+
+    let epsilon_pt = 0.05f32;
+    assert!(
+        (title_y - subtitle_y - 13.0).abs() <= epsilon_pt
+            && (subtitle_y - author_one_y - 13.0).abs() <= epsilon_pt
+            && (author_one_y - author_two_y - 13.0).abs() <= epsilon_pt
+            && (author_two_y - date_y - 13.0).abs() <= epsilon_pt,
+        "tall title-block internal line spacing should stay compact and stable: title_y={title_y}, subtitle_y={subtitle_y}, author_one_y={author_one_y}, author_two_y={author_two_y}, date_y={date_y}"
+    );
+    assert!(
+        (date_y - body_y - 33.0).abs() <= epsilon_pt,
+        "tall title-block date->first-body transition should stay tightened: date_y={date_y}, body_y={body_y}"
+    );
+    assert!(
+        (body_x - 72.0).abs() <= 0.02,
+        "first body line after tall title block should remain unindented: body_x={body_x}"
+    );
+}
+
+#[test]
+fn pdf_renderer_tall_title_block_to_heading_transition_polish_v23() {
+    let demo_text = b"Front Matter Main Title\nFront Matter Subtitle\nAuthor One\nAuthor Two\n2026-03-05\n\n@S {Heading After Tall Front Matter}\n\n~ Body after heading.";
+    let xdv = write_dvi_v2_text_page_v0(demo_text).expect("writer should accept tall title->heading text");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+
+    let (_, date_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "(2026-03-05)").expect("date line");
+    let (_, heading_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "(Heading After Tall Front Matter)")
+            .expect("heading line");
+    let (body_x, body_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "(Body after heading.)").expect("body line");
+
+    let epsilon_pt = 0.05f32;
+    assert!(
+        (date_y - heading_y - 33.0).abs() <= epsilon_pt,
+        "tall title-block->heading opening gap mismatch: date_y={date_y}, heading_y={heading_y}"
+    );
+    assert!(
+        (heading_y - body_y - 24.0).abs() <= epsilon_pt,
+        "heading->first-body gap after tall title block mismatch: heading_y={heading_y}, body_y={body_y}"
+    );
+    assert!(
+        (body_x - 72.0).abs() <= 0.02,
+        "first body line after heading should remain unindented: body_x={body_x}"
+    );
+}
+
+#[test]
 fn pdf_renderer_section_heading_spacing_invariants_v0() {
     let demo_text =
         b"Title\nAuthor\n2026-03-05\n\nIntro paragraph.\n\n{Section Heading}\n\n~ Body after heading.";
