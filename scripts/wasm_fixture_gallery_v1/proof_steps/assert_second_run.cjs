@@ -162,6 +162,24 @@ if (!mathInvalidStatus || mathInvalidStatus.status !== 'INVALID') {
   console.error('FAIL: expected typeset_demo_math_invalid_payload_probe_v0 status INVALID');
   process.exit(1);
 }
+const mathProbeStatus = statuses.find((entry) => entry.case_id === 'typeset_demo_math_probe_v0');
+if (!mathProbeStatus || mathProbeStatus.status !== 'OK') {
+  console.error('FAIL: expected typeset_demo_math_probe_v0 status OK');
+  process.exit(1);
+}
+if (mathProbeStatus?.typed_artifacts_presence?.packages !== true) {
+  console.error('FAIL: expected typeset_demo_math_probe_v0 typed_artifacts_presence.packages=true');
+  process.exit(1);
+}
+const cjkProbeStatus = statuses.find((entry) => entry.case_id === 'typeset_demo_cjk_probe_v0');
+if (!cjkProbeStatus || cjkProbeStatus.status !== 'OK') {
+  console.error('FAIL: expected typeset_demo_cjk_probe_v0 status OK');
+  process.exit(1);
+}
+if (cjkProbeStatus?.typed_artifacts_presence?.packages !== true) {
+  console.error('FAIL: expected typeset_demo_cjk_probe_v0 typed_artifacts_presence.packages=true');
+  process.exit(1);
+}
 const pagerefStatus = statuses.find((entry) => entry.case_id === 'typeset_demo_pageref_probe_v2');
 if (!pagerefStatus || pagerefStatus.status !== 'OK') {
   console.error('FAIL: expected typeset_demo_pageref_probe_v2 status OK');
@@ -560,6 +578,20 @@ if (!rerunHyperrefPackage) {
 }
 if (JSON.stringify(rerunHyperrefPackage.options) !== JSON.stringify(['unicode'])) {
   console.error('FAIL: expected packages_v1 rerun options for hyperref.sty to remain [unicode]');
+  process.exit(1);
+}
+const mathProbePackagesRerun = JSON.parse(
+  fs.readFileSync(path.join(outDir, 'typeset_demo_math_probe_v0', 'packages_v1.json'), 'utf8'),
+);
+if (!Array.isArray(mathProbePackagesRerun?.entries) || !mathProbePackagesRerun.entries.some((entry) => entry.name === 'amsmath.sty')) {
+  console.error('FAIL: expected typeset_demo_math_probe_v0 packages_v1 rerun entries to include amsmath.sty');
+  process.exit(1);
+}
+const cjkProbePackagesRerun = JSON.parse(
+  fs.readFileSync(path.join(outDir, 'typeset_demo_cjk_probe_v0', 'packages_v1.json'), 'utf8'),
+);
+if (!Array.isArray(cjkProbePackagesRerun?.entries) || !cjkProbePackagesRerun.entries.some((entry) => entry.name === 'xeCJK.sty')) {
+  console.error('FAIL: expected typeset_demo_cjk_probe_v0 packages_v1 rerun entries to include xeCJK.sty');
   process.exit(1);
 }
 

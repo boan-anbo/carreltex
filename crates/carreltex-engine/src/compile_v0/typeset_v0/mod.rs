@@ -30,6 +30,7 @@ const REQUIREPACKAGE_CONTROL_V0: &[u8] = b"RequirePackage";
 const REQUIREPACKAGEWITHOPTIONS_CONTROL_V0: &[u8] = b"RequirePackageWithOptions";
 const PASSOPTIONSTOPACKAGE_CONTROL_V0: &[u8] = b"PassOptionsToPackage";
 const PASSOPTIONSTOCLASS_CONTROL_V0: &[u8] = b"PassOptionsToClass";
+const SETCJKMAINFONT_CONTROL_V0: &[u8] = b"setCJKmainfont";
 const ADDBIBRESOURCE_CONTROL_V0: &[u8] = b"addbibresource";
 const PRINTBIBLIOGRAPHY_CONTROL_V0: &[u8] = b"printbibliography";
 const CAPTION_CONTROL_V0: &[u8] = b"caption";
