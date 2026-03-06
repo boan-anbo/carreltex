@@ -1395,20 +1395,20 @@ fn pdf_renderer_heading_list_quote_rhythm_invariants_v0() {
         "list line gap mismatch: list_one_y={list_one_y}, list_two_y={list_two_y}"
     );
     assert!(
-        (list_two_y - quote_one_y - 24.0).abs() <= epsilon_pt,
+        (list_two_y - quote_one_y - 23.0).abs() <= epsilon_pt,
         "list->quote gap mismatch: list_two_y={list_two_y}, quote_one_y={quote_one_y}"
     );
     assert!(
-        (quote_one_y - quote_two_y - 13.0).abs() <= epsilon_pt,
+        (quote_one_y - quote_two_y - 12.5).abs() <= epsilon_pt,
         "quote line gap mismatch: quote_one_y={quote_one_y}, quote_two_y={quote_two_y}"
     );
     assert!(
-        (quote_two_y - after_quote_y - 24.0).abs() <= epsilon_pt,
+        (quote_two_y - after_quote_y - 23.0).abs() <= epsilon_pt,
         "quote->paragraph gap mismatch: quote_two_y={quote_two_y}, after_quote_y={after_quote_y}"
     );
     assert!(quote_one_x > 72.0, "quote line should be indented");
     assert!(
-        quote_one_x >= list_one_x + 4.0,
+        quote_one_x >= list_one_x + 6.0,
         "quote indent should be visibly deeper than list body indent: list_one_x={list_one_x}, quote_one_x={quote_one_x}"
     );
     assert!(
@@ -1800,7 +1800,7 @@ fn pdf_renderer_applies_quote_indent_and_hides_prefix_v0() {
         "expected at least two rendered lines, got {xs:?}"
     );
     assert!(
-        (xs[0] - 102.0).abs() <= 0.02,
+        (xs[0] - 104.0).abs() <= 0.02,
         "quote line indent should be stable and deeper than body indent: {xs:?}"
     );
     assert!(
@@ -1832,7 +1832,7 @@ fn pdf_renderer_quote_indent_and_paragraph_break_invariants_v0() {
 
     let epsilon_pt = 0.02f32;
     assert!(
-        (x1 - 102.0).abs() <= epsilon_pt,
+        (x1 - 104.0).abs() <= epsilon_pt,
         "quote indent baseline mismatch: {x1}"
     );
     assert!(
@@ -1848,15 +1848,15 @@ fn pdf_renderer_quote_indent_and_paragraph_break_invariants_v0() {
         "quote line x drift: {x1} vs {x4}"
     );
     assert!(
-        (y1 - y2 - 13.0).abs() <= epsilon_pt,
+        (y1 - y2 - 12.5).abs() <= epsilon_pt,
         "quote line gap mismatch"
     );
     assert!(
-        (y2 - y3 - 27.0).abs() <= epsilon_pt,
+        (y2 - y3 - 26.5).abs() <= epsilon_pt,
         "quote paragraph gap mismatch"
     );
     assert!(
-        (y3 - y4 - 13.0).abs() <= epsilon_pt,
+        (y3 - y4 - 12.5).abs() <= epsilon_pt,
         "quote line gap mismatch"
     );
 }
@@ -1881,20 +1881,76 @@ fn pdf_renderer_paragraph_quote_transition_spacing_polish_v7() {
 
     let epsilon_pt = 0.02f32;
     assert!(
-        (before_quote_y - quote_start_y - 24.0).abs() <= epsilon_pt,
+        (before_quote_y - quote_start_y - 23.0).abs() <= epsilon_pt,
         "paragraph->quote transition gap mismatch: before_quote_y={before_quote_y}, quote_start_y={quote_start_y}"
     );
     assert!(
-        (quote_start_y - quote_wrap_y - 13.0).abs() <= epsilon_pt,
+        (quote_start_y - quote_wrap_y - 12.5).abs() <= epsilon_pt,
         "quote wrapped-line rhythm mismatch: quote_start_y={quote_start_y}, quote_wrap_y={quote_wrap_y}"
     );
     assert!(
-        (quote_wrap_y - after_quote_y - 24.0).abs() <= epsilon_pt,
+        (quote_wrap_y - after_quote_y - 23.0).abs() <= epsilon_pt,
         "quote->paragraph transition gap mismatch: quote_wrap_y={quote_wrap_y}, after_quote_y={after_quote_y}"
     );
     assert!(
         (quote_start_x - quote_wrap_x).abs() <= epsilon_pt,
         "wrapped quote continuation should preserve quote indent: quote_start_x={quote_start_x}, quote_wrap_x={quote_wrap_x}"
+    );
+}
+
+#[test]
+fn pdf_renderer_mixed_paragraph_quote_list_transition_spacing_polish_v19() {
+    let xdv = write_dvi_v2_text_page_v0(
+        b"\nParagraph before quote.\n\n> QUOTESTART quote quote quote quote quote quote quote quote quote quote quote quote QUOTEWRAP\n\n- List after quote line.\n- List continuation line.\n\nParagraph after list.",
+    )
+    .expect("writer should accept mixed paragraph/quote/list transition text");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+
+    let (_, before_quote_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "(Paragraph before quote.)")
+            .expect("before quote paragraph");
+    let (quote_start_x, quote_start_y) =
+        tm_position_for_segment_substring_v0(&pdf, "QUOTESTART").expect("quote start");
+    let (quote_wrap_x, quote_wrap_y) =
+        tm_position_for_segment_substring_v0(&pdf, "QUOTEWRAP").expect("quote wrap");
+    let (list_start_x, list_start_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "(List after quote line.)")
+            .expect("list after quote");
+    let (_, list_next_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "(List continuation line.)")
+            .expect("list continuation");
+    let (_, after_list_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "(Paragraph after list.)")
+            .expect("after list paragraph");
+
+    let epsilon_pt = 0.05f32;
+    assert!(
+        (before_quote_y - quote_start_y - 23.0).abs() <= epsilon_pt,
+        "paragraph->quote transition gap mismatch: before_quote_y={before_quote_y}, quote_start_y={quote_start_y}"
+    );
+    assert!(
+        (quote_start_y - quote_wrap_y - 12.5).abs() <= epsilon_pt,
+        "quote wrapped-line rhythm mismatch: quote_start_y={quote_start_y}, quote_wrap_y={quote_wrap_y}"
+    );
+    assert!(
+        (quote_wrap_y - list_start_y - 23.0).abs() <= epsilon_pt,
+        "quote->list transition gap mismatch: quote_wrap_y={quote_wrap_y}, list_start_y={list_start_y}"
+    );
+    assert!(
+        (list_start_y - list_next_y - 13.0).abs() <= epsilon_pt,
+        "list internal rhythm mismatch: list_start_y={list_start_y}, list_next_y={list_next_y}"
+    );
+    assert!(
+        (list_next_y - after_list_y - 24.0).abs() <= epsilon_pt,
+        "list->paragraph transition gap mismatch: list_next_y={list_next_y}, after_list_y={after_list_y}"
+    );
+    assert!(
+        (quote_start_x - quote_wrap_x).abs() <= epsilon_pt,
+        "wrapped quote continuation should preserve quote indent: quote_start_x={quote_start_x}, quote_wrap_x={quote_wrap_x}"
+    );
+    assert!(
+        quote_start_x >= list_start_x + 6.0,
+        "quote indent should remain visibly deeper than list body indent: quote_start_x={quote_start_x}, list_start_x={list_start_x}"
     );
 }
 
