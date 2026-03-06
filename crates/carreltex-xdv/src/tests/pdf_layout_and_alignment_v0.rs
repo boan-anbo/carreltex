@@ -3000,6 +3000,72 @@ fn pdf_renderer_right_alignment_keeps_wrapped_continuation_right_v1() {
 }
 
 #[test]
+fn pdf_renderer_wrapped_centered_pre_style_gap_is_tightened_v41() {
+    let xdv = write_dvi_v2_text_page_with_layout_and_wrap_v0(
+        b"\n^ CENTERSTART alpha [mid] gamma words words words words WRAPCENTER tail.",
+        65_536,
+        786_432,
+        30,
+    )
+    .expect("writer should accept wrapped centered v41 text");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+
+    let (_, prefix_y) =
+        tm_position_for_segment_substring_v0(&pdf, "CENTERSTART").expect("centered prefix y");
+    let (_, wrap_y) =
+        tm_position_for_segment_substring_v0(&pdf, "WRAPCENTER").expect("centered wrap y");
+    let rendered = rendered_text_for_line_containing_needle_v0(&pdf, "CENTERSTART")
+        .expect("centered rendered text");
+    let max_tm_gap =
+        max_tm_gap_pt_for_line_containing_v0(&pdf, "mid").expect("centered tm gap");
+    assert!(
+        rendered == "CENTERSTART alpha mid",
+        "wrapped centered line should preserve stable spacing: {rendered}"
+    );
+    assert!(
+        max_tm_gap <= 128.0,
+        "wrapped centered pre-style seam should stay tightened: tm_gap={max_tm_gap}"
+    );
+    assert!(
+        prefix_y > wrap_y,
+        "centered fixture should still wrap after the tightened seam: prefix_y={prefix_y}, wrap_y={wrap_y}"
+    );
+}
+
+#[test]
+fn pdf_renderer_wrapped_right_pre_style_gap_is_tightened_v41() {
+    let xdv = write_dvi_v2_text_page_with_layout_and_wrap_v0(
+        b"\n| RIGHTSTART edge, [core] trail words words words words WRAPRIGHT tail.",
+        65_536,
+        786_432,
+        30,
+    )
+    .expect("writer should accept wrapped right v41 text");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+
+    let (_, prefix_y) =
+        tm_position_for_segment_substring_v0(&pdf, "RIGHTSTART").expect("right prefix y");
+    let (_, wrap_y) =
+        tm_position_for_segment_substring_v0(&pdf, "WRAPRIGHT").expect("right wrap y");
+    let rendered =
+        rendered_text_for_line_containing_needle_v0(&pdf, "RIGHTSTART").expect("right rendered text");
+    let max_tm_gap =
+        max_tm_gap_pt_for_line_containing_v0(&pdf, "core").expect("right tm gap");
+    assert!(
+        rendered == "RIGHTSTART edge, core",
+        "wrapped right line should preserve stable spacing: {rendered}"
+    );
+    assert!(
+        max_tm_gap <= 110.0,
+        "wrapped right pre-style seam should stay tightened: tm_gap={max_tm_gap}"
+    );
+    assert!(
+        prefix_y > wrap_y,
+        "right fixture should still wrap after the tightened seam: prefix_y={prefix_y}, wrap_y={wrap_y}"
+    );
+}
+
+#[test]
 fn pdf_renderer_wrapped_quote_and_list_styled_seams_use_v29_profile() {
     let xdv = write_dvi_v2_text_page_v0(
         b"\n- LISTSTART alpha alpha alpha alpha alpha alpha alpha [LISTITALICV29] beta beta beta beta beta beta LISTWRAPV29.\n\n> QUOTESTART gamma gamma gamma gamma gamma gamma gamma {QUOTEBOLDV29} delta delta delta delta delta QUOTEWRAPV29.",
