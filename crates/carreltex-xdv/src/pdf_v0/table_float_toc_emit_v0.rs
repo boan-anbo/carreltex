@@ -199,7 +199,7 @@ fn emit_figure_block_v0(
     );
     out.extend_from_slice(b"BT\n");
     out.extend_from_slice(b"0 g\n");
-    *y = required_placeholder_bottom_y - FIGURE_PLACEHOLDER_TO_CAPTION_GAP_PT_V0;
+    *y = required_placeholder_bottom_y - FIGURE_PLACEHOLDER_TO_CAPTION_GAP_PT_V21;
 
     if *y < min_body_y_pt {
         return None;
@@ -225,6 +225,7 @@ fn emit_figure_block_v0(
         FIGURE_CAPTION_FONT_SIZE_PT_V0,
     );
     out.extend_from_slice(b"\n");
+    *y -= FIGURE_CAPTION_LEADING_PT_V21;
     Some(())
 }
 
