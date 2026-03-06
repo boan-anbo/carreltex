@@ -129,6 +129,17 @@ fn rendered_text_for_line_containing_segment_v0(pdf: &[u8], segment_text: &str) 
     None
 }
 
+fn rendered_text_for_line_containing_needle_v0(pdf: &[u8], needle: &str) -> Option<String> {
+    let text = String::from_utf8_lossy(pdf);
+    for line in text.lines() {
+        if !line.contains(needle) || !line.contains(" Tj ") {
+            continue;
+        }
+        return decode_pdf_text_segments_from_line_v0(line);
+    }
+    None
+}
+
 fn rendered_text_for_first_text_line_v0(pdf: &[u8]) -> Option<String> {
     let text = String::from_utf8_lossy(pdf);
     for line in text.lines() {
@@ -599,6 +610,28 @@ fn layout_line_width_for_exact_bytes_v0(
             if bytes == target {
                 return Some(line.width_sp);
             }
+        }
+    }
+    None
+}
+
+fn layout_render_width_for_substring_v0(
+    layout: &super::LayoutPlanV0,
+    needle: &[u8],
+) -> Option<u32> {
+    for page in &layout.pages {
+        for line in &page.lines {
+            let bytes: Vec<u8> = line.glyphs.iter().map(|glyph| glyph.byte).collect();
+            if !bytes.windows(needle.len()).any(|window| window == needle) {
+                continue;
+            }
+            if let Some(width_sp) = width_sp_for_prefixed_rendered_line_v0(line, [b'^', b' ']) {
+                return Some(width_sp);
+            }
+            if let Some(width_sp) = width_sp_for_prefixed_rendered_line_v0(line, [b'|', b' ']) {
+                return Some(width_sp);
+            }
+            return Some(line.width_sp);
         }
     }
     None
@@ -1795,5 +1828,87 @@ fn pdf_renderer_right_alignment_handles_styled_segments_without_drift_v0() {
     assert!(
         ((trail_x - core_x) - segment_width_pt_v0(b"core")).abs() <= epsilon_pt,
         "core->trail spacing drift: core_x={core_x}, trail_x={trail_x}"
+    );
+}
+
+#[test]
+fn pdf_renderer_center_alignment_keeps_wrapped_continuation_centered_v1() {
+    let xdv = write_dvi_v2_text_page_with_layout_and_wrap_v0(
+        b"\n^ CENTERSTART alpha [mid] gamma words words words words WRAPCENTER tail.",
+        65_536,
+        786_432,
+        30,
+    )
+    .expect("writer should accept wrapped centered text");
+    let layout = parse_dvi_v2_text_page_to_layout_v0(&xdv, 786_432).expect("layout parse");
+    let expected_start_x = expected_center_x_pt_v0(
+        layout_render_width_for_substring_v0(&layout, b"CENTERSTART")
+            .expect("center start width"),
+    );
+    let expected_wrap_x = expected_center_x_pt_v0(
+        layout_render_width_for_substring_v0(&layout, b"WRAPCENTER").expect("center wrap width"),
+    );
+
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+    let (start_x, start_y) = tm_position_for_line_containing_text_v0(&pdf, "CENTERSTART")
+        .expect("center start line position");
+    let (wrap_x, wrap_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "WRAPCENTER").expect("center wrap line position");
+    let epsilon_pt = 0.02f32;
+    assert!(
+        (start_x - expected_start_x).abs() <= epsilon_pt,
+        "center wrapped first line drift: actual={start_x}, expected={expected_start_x}"
+    );
+    assert!(
+        (wrap_x - expected_wrap_x).abs() <= epsilon_pt,
+        "center wrapped continuation drift: actual={wrap_x}, expected={expected_wrap_x}"
+    );
+    assert!(start_y > wrap_y, "wrapped continuation should render below first line");
+    let rendered = rendered_text_for_line_containing_needle_v0(&pdf, "CENTERSTART")
+        .expect("center wrapped styled line should decode");
+    assert!(
+        rendered == "CENTERSTART alpha mid",
+        "center wrapped style boundaries should retain stable spacing: {rendered}"
+    );
+}
+
+#[test]
+fn pdf_renderer_right_alignment_keeps_wrapped_continuation_right_v1() {
+    let xdv = write_dvi_v2_text_page_with_layout_and_wrap_v0(
+        b"\n| RIGHTSTART edge, [core] trail words words words words WRAPRIGHT tail.",
+        65_536,
+        786_432,
+        30,
+    )
+    .expect("writer should accept wrapped right-aligned text");
+    let layout = parse_dvi_v2_text_page_to_layout_v0(&xdv, 786_432).expect("layout parse");
+    let expected_start_x = expected_right_x_pt_v0(
+        layout_render_width_for_substring_v0(&layout, b"RIGHTSTART")
+            .expect("right start width"),
+    );
+    let expected_wrap_x = expected_right_x_pt_v0(
+        layout_render_width_for_substring_v0(&layout, b"WRAPRIGHT").expect("right wrap width"),
+    );
+
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+    let (start_x, start_y) = tm_position_for_line_containing_text_v0(&pdf, "RIGHTSTART")
+        .expect("right start line position");
+    let (wrap_x, wrap_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "WRAPRIGHT").expect("right wrap line position");
+    let epsilon_pt = 0.02f32;
+    assert!(
+        (start_x - expected_start_x).abs() <= epsilon_pt,
+        "right wrapped first line drift: actual={start_x}, expected={expected_start_x}"
+    );
+    assert!(
+        (wrap_x - expected_wrap_x).abs() <= epsilon_pt,
+        "right wrapped continuation drift: actual={wrap_x}, expected={expected_wrap_x}"
+    );
+    assert!(start_y > wrap_y, "wrapped continuation should render below first line");
+    let rendered = rendered_text_for_line_containing_needle_v0(&pdf, "RIGHTSTART")
+        .expect("right wrapped styled line should decode");
+    assert!(
+        rendered == "RIGHTSTART edge, core",
+        "right wrapped style boundaries should retain stable spacing: {rendered}"
     );
 }
