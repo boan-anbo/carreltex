@@ -2270,6 +2270,23 @@ fn pdf_renderer_display_math_placeholder_line_is_centered_v0() {
 }
 
 #[test]
+fn pdf_renderer_display_math_long_placeholder_is_wider_and_left_shifted_v2() {
+    let xdv =
+        write_dvi_v2_text_page_v0(b"Before.\n\n^ MATH DISPLAY\n\n^ MATH DISPLAY LONG FORM\n\nAfter.")
+            .expect("writer should accept display math placeholder marker lines");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+    let (short_x, _) = tm_position_for_line_containing_text_v0(&pdf, "(MATH DISPLAY)")
+        .expect("short display placeholder x coordinate");
+    let (long_x, _) =
+        tm_position_for_line_containing_text_v0(&pdf, "(MATH DISPLAY LONG FORM)")
+            .expect("long display placeholder x coordinate");
+    assert!(
+        long_x < short_x,
+        "long placeholder should center from a wider line and shift left: short_x={short_x}, long_x={long_x}"
+    );
+}
+
+#[test]
 fn pdf_renderer_display_math_with_equation_metadata_renders_right_number_v1() {
     let xdv = write_dvi_v2_text_page_v0(b"Before.\n\n^ MATH DISPLAY\n\nAfter.\n\n!eq 1 1")
         .expect("writer should accept equation metadata line");

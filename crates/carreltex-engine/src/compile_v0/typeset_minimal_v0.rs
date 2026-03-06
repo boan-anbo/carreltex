@@ -63,7 +63,11 @@ const REF_MARKER_SUFFIX_V0: &[u8] = b"@@";
 const CITE_MARKER_PREFIX_V0: &[u8] = b"@@CITE:";
 const CITE_MARKER_SUFFIX_V0: &[u8] = b"@@";
 const INLINE_MATH_PLACEHOLDER_V0: &[u8] = b"MATH";
-const DISPLAY_MATH_PLACEHOLDER_V0: &[u8] = b"MATH DISPLAY";
+const DISPLAY_MATH_PLACEHOLDER_SHORT_V0: &[u8] = b"MATH DISPLAY";
+const DISPLAY_MATH_PLACEHOLDER_MEDIUM_V0: &[u8] = b"MATH DISPLAY MEDIUM";
+const DISPLAY_MATH_PLACEHOLDER_LONG_V0: &[u8] = b"MATH DISPLAY LONG FORM";
+const DISPLAY_MATH_SHORT_MAX_PAYLOAD_BYTES_V0: usize = 24;
+const DISPLAY_MATH_MEDIUM_MAX_PAYLOAD_BYTES_V0: usize = 72;
 const LINK_START_MARKER_V0: u8 = b'<';
 const LINK_END_MARKER_V0: u8 = b'>';
 const NOINDENT_PREFIX_MARKER_V0: &[u8] = b"~ ";
@@ -512,6 +516,32 @@ fn is_safe_math_payload_char_v0(byte: u8) -> bool {
         )
 }
 
+fn is_ascii_alpha_bytes_v0(bytes: &[u8]) -> bool {
+    !bytes.is_empty()
+        && bytes
+            .iter()
+            .copied()
+            .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_uppercase())
+}
+
+fn is_safe_display_math_payload_char_v0(byte: u8) -> bool {
+    byte.is_ascii_alphanumeric()
+        || matches!(
+            byte,
+            b'+' | b'-' | b'/' | b'*' | b'=' | b'(' | b')' | b'^' | b'_' | b'{' | b'}'
+        )
+}
+
+fn display_math_placeholder_for_payload_v0(payload: &[u8]) -> &'static [u8] {
+    if payload.len() <= DISPLAY_MATH_SHORT_MAX_PAYLOAD_BYTES_V0 {
+        DISPLAY_MATH_PLACEHOLDER_SHORT_V0
+    } else if payload.len() <= DISPLAY_MATH_MEDIUM_MAX_PAYLOAD_BYTES_V0 {
+        DISPLAY_MATH_PLACEHOLDER_MEDIUM_V0
+    } else {
+        DISPLAY_MATH_PLACEHOLDER_LONG_V0
+    }
+}
+
 fn consume_inline_math_command_v0(
     tokens: &[TokenV0],
     index: usize,
@@ -571,15 +601,20 @@ fn consume_display_math_command_v0(
                 }
                 push_paragraph_break(out);
                 out.extend_from_slice(b"^ ");
-                out.extend_from_slice(DISPLAY_MATH_PLACEHOLDER_V0);
+                out.extend_from_slice(display_math_placeholder_for_payload_v0(&payload));
                 push_paragraph_break(out);
                 return Some(cursor + 1);
+            }
+            Some(TokenV0::ControlSeq(name)) if is_ascii_alpha_bytes_v0(name.as_slice()) => {
+                payload.push(b'\\');
+                payload.extend_from_slice(name.as_slice());
+                cursor += 1;
             }
             Some(TokenV0::Char(byte)) if *byte == NEWLINE_MARKER_V0 => {
                 push_space(&mut payload);
                 cursor += 1;
             }
-            Some(TokenV0::Char(byte)) if is_safe_math_payload_char_v0(*byte) => {
+            Some(TokenV0::Char(byte)) if is_safe_display_math_payload_char_v0(*byte) => {
                 payload.push(*byte);
                 cursor += 1;
             }

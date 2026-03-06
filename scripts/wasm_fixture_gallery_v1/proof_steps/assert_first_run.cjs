@@ -587,9 +587,9 @@ if (mathSummary?.typed_artifacts?.math?.present !== true) {
   console.error('FAIL: expected math typed artifact present for minimal demo after first run');
   process.exit(1);
 }
-const mathPath = path.join(outDir, 'typeset_demo_minimal_v0', 'math_v1.json');
+const mathPath = path.join(outDir, 'typeset_demo_minimal_v0', 'math_v2.json');
 if (!fs.existsSync(mathPath)) {
-  console.error('FAIL: expected math_v1.json artifact after first run');
+  console.error('FAIL: expected math_v2.json artifact after first run');
   process.exit(1);
 }
 const mathShaFirst = mathSummary.typed_artifacts.math.artifact_sha256;
@@ -599,33 +599,45 @@ if (typeof mathShaFirst !== 'string' || !/^[0-9a-f]{64}$/.test(mathShaFirst)) {
 }
 const mathArtifactFirst = JSON.parse(fs.readFileSync(mathPath, 'utf8'));
 if (!Array.isArray(mathArtifactFirst?.entries)) {
-  console.error('FAIL: expected math_v1.entries array in first-run artifact');
+  console.error('FAIL: expected math_v2.entries array in first-run artifact');
   process.exit(1);
 }
-if (mathArtifactFirst?.schema !== 'math_v1') {
-  console.error('FAIL: expected math_v1 schema in first-run artifact');
+if (mathArtifactFirst?.schema !== 'math_v2') {
+  console.error('FAIL: expected math_v2 schema in first-run artifact');
   process.exit(1);
 }
 if (mathArtifactFirst.entries.length <= 0) {
-  console.error('FAIL: expected non-empty math_v1.entries for minimal demo');
+  console.error('FAIL: expected non-empty math_v2.entries for minimal demo');
   process.exit(1);
 }
 for (const [index, entry] of mathArtifactFirst.entries.entries()) {
-  if (entry?.kind !== 'inline' && entry?.kind !== 'display') {
-    console.error(`FAIL: math_v1.entries[${index}] has invalid kind`);
+  if (!Number.isInteger(entry?.ordinal) || entry.ordinal <= 0) {
+    console.error(`FAIL: math_v2.entries[${index}] has invalid ordinal`);
     process.exit(1);
   }
-  if (!Number.isInteger(entry?.line_index) || entry.line_index <= 0) {
-    console.error(`FAIL: math_v1.entries[${index}] has invalid line_index`);
+  if (entry.ordinal !== index + 1) {
+    console.error(`FAIL: math_v2.entries[${index}] ordinal is not stable sequence`);
     process.exit(1);
   }
-  if (typeof entry?.payload_sha256 !== 'string' || !/^[0-9a-f]{64}$/.test(entry.payload_sha256)) {
-    console.error(`FAIL: math_v1.entries[${index}] has invalid payload_sha256`);
+  if (typeof entry?.payload_preview !== 'string' || entry.payload_preview.trim().length === 0) {
+    console.error(`FAIL: math_v2.entries[${index}] has invalid payload_preview`);
+    process.exit(1);
+  }
+  if (!/^[\x20-\x7e]+$/.test(entry.payload_preview)) {
+    console.error(`FAIL: math_v2.entries[${index}] payload_preview must be ASCII printable`);
+    process.exit(1);
+  }
+  if (typeof entry?.anchor_id !== 'string' || !/^eq[1-9]\d*$/.test(entry.anchor_id)) {
+    console.error(`FAIL: math_v2.entries[${index}] has invalid anchor_id`);
+    process.exit(1);
+  }
+  if (entry.anchor_id !== `eq${entry.ordinal}`) {
+    console.error(`FAIL: math_v2.entries[${index}] anchor_id/ordinal mismatch`);
     process.exit(1);
   }
 }
-assertEntrySourceSpans('typeset_demo_minimal_v0', 'math_v1', mathArtifactFirst.entries);
-fs.writeFileSync(firstRunShaPath('math_v1'), `${mathShaFirst}\n`);
+assertEntrySourceSpans('typeset_demo_minimal_v0', 'math_v2', mathArtifactFirst.entries);
+fs.writeFileSync(firstRunShaPath('math_v2'), `${mathShaFirst}\n`);
 
 const tableSummary = JSON.parse(
   fs.readFileSync(path.join(outDir, 'typeset_demo_minimal_v0', 'summary.json'), 'utf8'),
