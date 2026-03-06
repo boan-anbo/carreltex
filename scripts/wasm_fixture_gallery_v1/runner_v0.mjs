@@ -817,12 +817,20 @@ async function runCaseV0(
     const typedArtifactsMessage = `typed_artifacts: ${message}`;
     errorMessage = errorMessage ? `${errorMessage}; ${typedArtifactsMessage}` : typedArtifactsMessage;
   }
-  const typedArtifactRequests = await collectResolverRequestsFromResourceHintsV0(
+  const typedArtifactRequests = await collectResolverRequestsFromTypedArtifactsV0(
+    caseSpec,
+    caseOutDir,
+    summary.typed_artifacts,
+  );
+  const resourceHintRequests = await collectResolverRequestsFromResourceHintsV0(
     caseSpec,
     caseOutDir,
     summary.resource_hints_v0,
   );
   for (const request of typedArtifactRequests) {
+    resolverRequestsByKey.set(resolverRequestKeyV0(request), request);
+  }
+  for (const request of resourceHintRequests) {
     resolverRequestsByKey.set(resolverRequestKeyV0(request), request);
   }
   const resolverRequests = [...resolverRequestsByKey.values()].sort(

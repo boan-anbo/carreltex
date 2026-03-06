@@ -299,3 +299,16 @@ fn consume_pass_options_declaration_noop_v0(tokens: &[TokenV0], index: usize) ->
     validate_package_or_class_list_v0(&raw_group)?;
     Some(next)
 }
+
+fn consume_includeonly_declaration_noop_v0(tokens: &[TokenV0], index: usize) -> Option<usize> {
+    if !matches!(
+        tokens.get(index),
+        Some(TokenV0::ControlSeq(name)) if name.as_slice() == INCLUDEONLY_CONTROL_V0
+    ) {
+        return None;
+    }
+    let (group_start, group_end, next) = consume_group_bounds(tokens, index + 1)?;
+    let raw_group = parse_char_space_group_trimmed_v0(tokens, group_start, group_end)?;
+    validate_non_empty_comma_values_v0(&raw_group)?;
+    Some(next)
+}

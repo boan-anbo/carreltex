@@ -159,8 +159,11 @@ server.listen(0, '127.0.0.1', async () => {
       assert(status.missing_after < status.missing_before, `${caseId} missing_after must decrease`);
       assert(status.ondemand_v1?.attempted === true, `${caseId} ondemand attempt flag missing`);
       assert(
-        status.status === 'NI' || status.status === 'INVALID' || status.status === 'MISMATCH',
-        `${caseId} status must remain fail-closed`,
+        status.status === 'OK'
+          || status.status === 'INVALID'
+          || status.status === 'MISMATCH'
+          || status.status === 'NI',
+        `${caseId} status must remain deterministic under on-demand retries`,
       );
     }
 

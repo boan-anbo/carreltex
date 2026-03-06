@@ -593,6 +593,22 @@ fn typeset_minimal_bibliography_and_cites_emit_block_and_metadata() {
 }
 
 #[test]
+fn typeset_minimal_accepts_printbibliography_with_thebibliography_entries() {
+    let main = b"\\documentclass{article}\\begin{document}See \\cite{ref:a}.\\begin{thebibliography}{9}\\bibitem{ref:a}Alpha source text.\\end{thebibliography}\\printbibliography\\end{document}";
+    let result = compile_typeset(main);
+    assert_eq!(result.status, CompileStatus::Ok);
+    assert!(!result.main_xdv_bytes.is_empty());
+}
+
+#[test]
+fn typeset_minimal_accepts_bibliography_command_without_cites_or_entries() {
+    let main = b"\\documentclass{article}\\begin{document}Bibliography probe.\\bibliography{phase2_fixedpoint_refs}\\end{document}";
+    let result = compile_typeset(main);
+    assert_eq!(result.status, CompileStatus::Ok);
+    assert!(!result.main_xdv_bytes.is_empty());
+}
+
+#[test]
 fn typeset_minimal_rejects_missing_cite_key_in_bibliography_fixedpoint() {
     let main = b"\\documentclass{article}\\begin{document}See \\cite{ref:missing}.\\begin{thebibliography}{9}\\bibitem{ref:a}Alpha source text.\\end{thebibliography}\\end{document}";
     let result = compile_typeset(main);
@@ -993,6 +1009,45 @@ fn typeset_minimal_figure_stub_accepts_includegraphics_scale_option() {
 }
 
 #[test]
+fn typeset_minimal_figure_stub_accepts_includegraphics_textwidth_ratio_option() {
+    let main = b"\\documentclass{article}\\begin{document}\\begin{figure}\\includegraphics[width=0.5\\textwidth]{demo.png}\\caption{Half}\\end{figure}\\end{document}";
+    let body = extract_typeset_body(main);
+    let text = String::from_utf8(body).expect("body should be valid utf8");
+    assert!(
+        text.contains("!gimg 1 demo.png 234000 156000"),
+        "body={text:?}"
+    );
+}
+
+#[test]
+fn typeset_minimal_figure_stub_accepts_includegraphics_path_ext_type_and_page_options() {
+    let main = b"\\documentclass{article}\\begin{document}\\begin{figure}\\includegraphics[path=assets/hires,type=pdf,keepaspectratio,page=1,width=0.4\\textwidth]{chart}\\caption{Opts}\\end{figure}\\end{document}";
+    let body = extract_typeset_body(main);
+    let text = String::from_utf8(body).expect("body should be valid utf8");
+    assert!(
+        text.contains("!gimg 1 assets/hires/chart.pdf 187200 124800"),
+        "body={text:?}"
+    );
+}
+
+#[test]
+fn typeset_minimal_accepts_inline_includegraphics_without_figure_environment() {
+    let main = b"\\documentclass{article}\\begin{document}Before.\\includegraphics[dir=figs/,ext=.pdf,width=0.6\\textwidth]{diagram}\\label{fig:inline}See \\ref{fig:inline}.\\end{document}";
+    let body = extract_typeset_body(main);
+    let text = String::from_utf8(body).expect("body should be valid utf8");
+    assert!(
+        text.contains("!gimg 1 figs/diagram.pdf 280800 187200"),
+        "body={text:?}"
+    );
+    assert!(
+        text.contains("!gcap Figure 1: Inline graphic"),
+        "body={text:?}"
+    );
+    assert!(text.contains("See 1."), "body={text:?}");
+    assert!(text.contains("!l fig:inline 1 figure 1 -"), "body={text:?}");
+}
+
+#[test]
 fn typeset_minimal_figure_top_placement_emits_top_marker_and_page_break_v0() {
     let main = b"\\documentclass{article}\\begin{document}Before.\\begin{figure}[t]\\caption{Top figure}\\end{figure}After.\\end{document}";
     let body = extract_typeset_body(main);
@@ -1049,6 +1104,14 @@ fn typeset_minimal_rejects_figure_includegraphics_macro_payload_option_value() {
     let result = compile_typeset(main);
     assert_eq!(result.status, CompileStatus::NotImplemented);
     assert!(result.main_xdv_bytes.is_empty());
+}
+
+#[test]
+fn typeset_minimal_accepts_includeonly_preamble_declaration_as_noop() {
+    let main = b"\\documentclass{article}\\includeonly{appendices/apx_a,appendices/apx_b.tex}\\begin{document}IncludeOnly probe fixture.\\end{document}";
+    let result = compile_typeset(main);
+    assert_eq!(result.status, CompileStatus::Ok);
+    assert!(!result.main_xdv_bytes.is_empty());
 }
 
 #[test]

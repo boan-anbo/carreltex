@@ -89,6 +89,10 @@ fn parse_dimension_milli_pt_v0(value: &[u8]) -> Option<u32> {
     if trimmed.is_empty() {
         return None;
     }
+    if let Some(prefix) = trimmed.strip_suffix(b"\\textwidth") {
+        let ratio_milli = parse_decimal_milli_v0(trim_horizontal_space_bytes_v0(prefix))?;
+        return scale_dimension_milli_pt_v0(MAX_FIGURE_PLACEHOLDER_WIDTH_MPT_V0, ratio_milli);
+    }
     let mut suffix_start = trimmed.len();
     while suffix_start > 0 && trimmed[suffix_start - 1].is_ascii_alphabetic() {
         suffix_start -= 1;
@@ -142,10 +146,101 @@ fn apply_figure_sizing_caps_v0(sizing: FigureSizingMptV0) -> FigureSizingMptV0 {
     }
 }
 
-fn parse_includegraphics_options_v0(raw: &[u8]) -> Option<FigureSizingMptV0> {
+#[derive(Clone)]
+struct IncludeGraphicsOptionsV0 {
+    sizing: FigureSizingMptV0,
+    path_prefix: Option<Vec<u8>>,
+    ext_override: Option<Vec<u8>>,
+}
+
+fn normalize_graphics_path_prefix_option_v0(raw_value: &[u8]) -> Option<Vec<u8>> {
+    let trimmed = trim_horizontal_space_bytes_v0(raw_value);
+    if trimmed.is_empty() {
+        return None;
+    }
+    let mut without_trailing = trimmed.to_vec();
+    while without_trailing.ends_with(b"/") {
+        without_trailing.pop();
+    }
+    if without_trailing.is_empty() {
+        return None;
+    }
+    if without_trailing.starts_with(b"/") || without_trailing.starts_with(b"\\") {
+        return None;
+    }
+    if without_trailing.contains(&b'\\') || without_trailing.contains(&b':') {
+        return None;
+    }
+    if !without_trailing
+        .iter()
+        .copied()
+        .all(is_safe_graphics_path_byte_v0)
+    {
+        return None;
+    }
+    let mut normalized_segments = Vec::<Vec<u8>>::new();
+    for segment in without_trailing.split(|byte| *byte == b'/') {
+        if segment.is_empty() || segment == b"." || segment == b".." {
+            return None;
+        }
+        normalized_segments.push(segment.to_vec());
+    }
+    if normalized_segments.is_empty() {
+        return None;
+    }
+    let mut normalized = Vec::<u8>::new();
+    for (segment_index, segment) in normalized_segments.iter().enumerate() {
+        if segment_index > 0 {
+            normalized.push(b'/');
+        }
+        normalized.extend_from_slice(segment);
+    }
+    Some(normalized)
+}
+
+fn normalize_graphics_extension_option_v0(raw_value: &[u8]) -> Option<Vec<u8>> {
+    let trimmed = trim_horizontal_space_bytes_v0(raw_value);
+    if trimmed.is_empty() {
+        return None;
+    }
+    let ext = if let Some(rest) = trimmed.strip_prefix(b".") {
+        rest
+    } else {
+        trimmed
+    };
+    if ext.is_empty() || !ext.iter().all(u8::is_ascii_alphanumeric) {
+        return None;
+    }
+    let lowered = ext
+        .iter()
+        .map(u8::to_ascii_lowercase)
+        .collect::<Vec<u8>>();
+    if !matches!(lowered.as_slice(), b"png" | b"jpg" | b"jpeg" | b"pdf") {
+        return None;
+    }
+    Some(lowered)
+}
+
+fn parse_positive_integer_option_v0(raw_value: &[u8]) -> Option<u32> {
+    let trimmed = trim_horizontal_space_bytes_v0(raw_value);
+    if trimmed.is_empty() || !trimmed.iter().all(u8::is_ascii_digit) {
+        return None;
+    }
+    let parsed = std::str::from_utf8(trimmed).ok()?.parse::<u32>().ok()?;
+    if parsed == 0 {
+        return None;
+    }
+    Some(parsed)
+}
+
+fn parse_includegraphics_options_v0(raw: &[u8]) -> Option<IncludeGraphicsOptionsV0> {
     let mut width_mpt = None::<u32>;
     let mut height_mpt = None::<u32>;
     let mut scale_milli = None::<u32>;
+    let mut path_prefix = None::<Vec<u8>>;
+    let mut ext_override = None::<Vec<u8>>;
+    let mut saw_keepaspectratio = false;
+    let mut saw_page = false;
     let mut saw_entry = false;
     for chunk in raw.split(|byte| *byte == b',') {
         let trimmed = trim_horizontal_space_bytes_v0(chunk);
@@ -153,21 +248,29 @@ fn parse_includegraphics_options_v0(raw: &[u8]) -> Option<FigureSizingMptV0> {
             return None;
         }
         saw_entry = true;
-        let equals_index = trimmed.iter().position(|byte| *byte == b'=')?;
-        if equals_index == 0 || equals_index + 1 >= trimmed.len() {
-            return None;
-        }
-        let key = trim_horizontal_space_bytes_v0(&trimmed[..equals_index])
+        let equals_index = trimmed.iter().position(|byte| *byte == b'=');
+        let (key_raw, value_opt) = if let Some(equals_index) = equals_index {
+            if equals_index == 0 || equals_index + 1 >= trimmed.len() {
+                return None;
+            }
+            (
+                trim_horizontal_space_bytes_v0(&trimmed[..equals_index]),
+                Some(trim_horizontal_space_bytes_v0(&trimmed[equals_index + 1..])),
+            )
+        } else {
+            (trimmed, None)
+        };
+        let key = key_raw
             .iter()
             .map(u8::to_ascii_lowercase)
             .collect::<Vec<u8>>();
-        let value = trim_horizontal_space_bytes_v0(&trimmed[equals_index + 1..]);
-        if value.is_empty() {
-            return None;
-        }
         match key.as_slice() {
             b"width" => {
                 if width_mpt.is_some() {
+                    return None;
+                }
+                let value = value_opt?;
+                if value.is_empty() {
                     return None;
                 }
                 width_mpt = Some(parse_dimension_milli_pt_v0(value)?);
@@ -176,13 +279,58 @@ fn parse_includegraphics_options_v0(raw: &[u8]) -> Option<FigureSizingMptV0> {
                 if height_mpt.is_some() {
                     return None;
                 }
+                let value = value_opt?;
+                if value.is_empty() {
+                    return None;
+                }
                 height_mpt = Some(parse_dimension_milli_pt_v0(value)?);
             }
             b"scale" => {
                 if scale_milli.is_some() {
                     return None;
                 }
+                let value = value_opt?;
+                if value.is_empty() {
+                    return None;
+                }
                 scale_milli = Some(parse_decimal_milli_v0(value)?);
+            }
+            b"dir" | b"path" => {
+                if path_prefix.is_some() {
+                    return None;
+                }
+                let value = value_opt?;
+                if value.is_empty() {
+                    return None;
+                }
+                path_prefix = Some(normalize_graphics_path_prefix_option_v0(value)?);
+            }
+            b"ext" | b"extension" | b"type" => {
+                if ext_override.is_some() {
+                    return None;
+                }
+                let value = value_opt?;
+                if value.is_empty() {
+                    return None;
+                }
+                ext_override = Some(normalize_graphics_extension_option_v0(value)?);
+            }
+            b"page" => {
+                if saw_page {
+                    return None;
+                }
+                let value = value_opt?;
+                if value.is_empty() {
+                    return None;
+                }
+                parse_positive_integer_option_v0(value)?;
+                saw_page = true;
+            }
+            b"keepaspectratio" => {
+                if value_opt.is_some() || saw_keepaspectratio {
+                    return None;
+                }
+                saw_keepaspectratio = true;
             }
             _ => return None,
         }
@@ -227,10 +375,14 @@ fn parse_includegraphics_options_v0(raw: &[u8]) -> Option<FigureSizingMptV0> {
             (None, None) => return None,
         }
     };
-    Some(apply_figure_sizing_caps_v0(resolved))
+    Some(IncludeGraphicsOptionsV0 {
+        sizing: apply_figure_sizing_caps_v0(resolved),
+        path_prefix,
+        ext_override,
+    })
 }
 
-fn normalize_graphics_path_v0(raw_path: &[u8]) -> Option<Vec<u8>> {
+fn normalize_graphics_path_v0(raw_path: &[u8], ext_override: Option<&[u8]>) -> Option<Vec<u8>> {
     if raw_path.is_empty() {
         return None;
     }
@@ -271,7 +423,15 @@ fn normalize_graphics_path_v0(raw_path: &[u8]) -> Option<Vec<u8>> {
         if has_explicit_extension {
             return None;
         }
-        normalized.extend_from_slice(b".png");
+        if let Some(ext) = ext_override {
+            normalized.push(b'.');
+            normalized.extend_from_slice(ext);
+        } else {
+            normalized.extend_from_slice(b".png");
+        }
+    }
+    if !has_allowed_graphics_extension_v0(&normalized) {
+        return None;
     }
     Some(normalized)
 }
@@ -320,12 +480,13 @@ fn normalize_graphics_prefix_v0(raw_prefix: &[u8]) -> Option<Vec<u8>> {
 fn resolve_includegraphics_paths_with_prefixes_v0(
     raw_path: &[u8],
     graphicspath_prefixes: &[Vec<u8>],
+    ext_override: Option<&[u8]>,
 ) -> Option<Vec<Vec<u8>>> {
     let use_graphicspath_prefixes = !graphicspath_prefixes.is_empty()
         && !raw_path.contains(&b'/')
         && !raw_path.contains(&b'\\');
     if !use_graphicspath_prefixes {
-        return Some(vec![normalize_graphics_path_v0(raw_path)?]);
+        return Some(vec![normalize_graphics_path_v0(raw_path, ext_override)?]);
     }
     let mut candidates = Vec::<Vec<u8>>::new();
     for prefix in graphicspath_prefixes {
@@ -333,7 +494,7 @@ fn resolve_includegraphics_paths_with_prefixes_v0(
         prefixed_path.extend_from_slice(prefix);
         prefixed_path.push(b'/');
         prefixed_path.extend_from_slice(raw_path);
-        candidates.push(normalize_graphics_path_v0(&prefixed_path)?);
+        candidates.push(normalize_graphics_path_v0(&prefixed_path, ext_override)?);
     }
     if candidates.is_empty() {
         return None;
@@ -353,9 +514,13 @@ fn consume_includegraphics_command_v0(
         return None;
     }
     let mut group_index = skip_spaces(tokens, index + 1);
-    let mut sizing = FigureSizingMptV0 {
-        width_mpt: DEFAULT_FIGURE_PLACEHOLDER_WIDTH_MPT_V0,
-        height_mpt: DEFAULT_FIGURE_PLACEHOLDER_HEIGHT_MPT_V0,
+    let mut options = IncludeGraphicsOptionsV0 {
+        sizing: FigureSizingMptV0 {
+            width_mpt: DEFAULT_FIGURE_PLACEHOLDER_WIDTH_MPT_V0,
+            height_mpt: DEFAULT_FIGURE_PLACEHOLDER_HEIGHT_MPT_V0,
+        },
+        path_prefix: None,
+        ext_override: None,
     };
     if matches!(tokens.get(group_index), Some(TokenV0::Char(b'['))) {
         let mut cursor = group_index + 1;
@@ -367,7 +532,7 @@ fn consume_includegraphics_command_v0(
                     if !saw_non_space {
                         return None;
                     }
-                    sizing = parse_includegraphics_options_v0(&option_bytes)?;
+                    options = parse_includegraphics_options_v0(&option_bytes)?;
                     group_index = cursor + 1;
                     break;
                 }
@@ -378,6 +543,11 @@ fn consume_includegraphics_command_v0(
                     }
                 }
                 TokenV0::Space => option_bytes.push(b' '),
+                TokenV0::ControlSeq(name) => {
+                    option_bytes.push(b'\\');
+                    option_bytes.extend_from_slice(name);
+                    saw_non_space = true;
+                }
                 _ => return None,
             }
             cursor += 1;
@@ -394,16 +564,58 @@ fn consume_includegraphics_command_v0(
             _ => return None,
         }
     }
+    if raw_path.is_empty() {
+        return None;
+    }
+    let resolved_raw_path = if let Some(prefix) = options.path_prefix.as_ref() {
+        let mut prefixed = Vec::<u8>::new();
+        prefixed.extend_from_slice(prefix);
+        prefixed.push(b'/');
+        prefixed.extend_from_slice(&raw_path);
+        prefixed
+    } else {
+        raw_path
+    };
     let mut candidates =
-        resolve_includegraphics_paths_with_prefixes_v0(&raw_path, graphicspath_prefixes)?;
+        resolve_includegraphics_paths_with_prefixes_v0(
+            &resolved_raw_path,
+            graphicspath_prefixes,
+            options.ext_override.as_deref(),
+        )?;
     let normalized = candidates.remove(0);
     Some((
         IncludeGraphicsCommandV0 {
             path: normalized,
-            sizing,
+            sizing: options.sizing,
         },
         next,
     ))
+}
+
+fn emit_inline_includegraphics_placeholder_v0(
+    out: &mut Vec<u8>,
+    image: &IncludeGraphicsCommandV0,
+    figure_anchor_id: u32,
+    figure_ordinal: u32,
+) {
+    push_paragraph_break(out);
+    out.extend_from_slice(FIGURE_BOX_PREFIX_MARKER_V0);
+    push_newline(out);
+    out.extend_from_slice(FIGURE_IMAGE_PREFIX_MARKER_V0);
+    out.extend_from_slice(figure_anchor_id.to_string().as_bytes());
+    out.push(b' ');
+    out.extend_from_slice(&image.path);
+    out.push(b' ');
+    out.extend_from_slice(image.sizing.width_mpt.to_string().as_bytes());
+    out.push(b' ');
+    out.extend_from_slice(image.sizing.height_mpt.to_string().as_bytes());
+    push_newline(out);
+    out.extend_from_slice(FIGURE_CAPTION_PREFIX_MARKER_V0);
+    out.extend_from_slice(b"Figure ");
+    out.extend_from_slice(figure_ordinal.to_string().as_bytes());
+    out.extend_from_slice(b": Inline graphic");
+    push_newline(out);
+    push_paragraph_break(out);
 }
 
 fn consume_tabular_environment_v0(
