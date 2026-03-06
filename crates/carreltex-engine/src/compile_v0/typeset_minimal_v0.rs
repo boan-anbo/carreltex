@@ -24,8 +24,12 @@ const RIGHTLINE_CONTROL_V0: &[u8] = b"rightline";
 const TABULAR_ENV_V0: &[u8] = b"tabular";
 const FIGURE_ENV_V0: &[u8] = b"figure";
 const THEBIBLIOGRAPHY_ENV_V0: &[u8] = b"thebibliography";
+const DOCUMENTCLASS_CONTROL_V0: &[u8] = b"documentclass";
 const USEPACKAGE_CONTROL_V0: &[u8] = b"usepackage";
 const REQUIREPACKAGE_CONTROL_V0: &[u8] = b"RequirePackage";
+const REQUIREPACKAGEWITHOPTIONS_CONTROL_V0: &[u8] = b"RequirePackageWithOptions";
+const PASSOPTIONSTOPACKAGE_CONTROL_V0: &[u8] = b"PassOptionsToPackage";
+const PASSOPTIONSTOCLASS_CONTROL_V0: &[u8] = b"PassOptionsToClass";
 const ADDBIBRESOURCE_CONTROL_V0: &[u8] = b"addbibresource";
 const PRINTBIBLIOGRAPHY_CONTROL_V0: &[u8] = b"printbibliography";
 const CAPTION_CONTROL_V0: &[u8] = b"caption";
@@ -443,32 +447,86 @@ fn consume_simple_bracket_non_empty(tokens: &[TokenV0], index: usize) -> Option<
     None
 }
 
+fn consume_simple_bracket_options_non_empty_v0(tokens: &[TokenV0], index: usize) -> Option<usize> {
+    let mut cursor = skip_spaces(tokens, index);
+    if !matches!(tokens.get(cursor), Some(TokenV0::Char(b'['))) {
+        return Some(cursor);
+    }
+    cursor += 1;
+    let mut raw = Vec::<u8>::new();
+    while let Some(token) = tokens.get(cursor) {
+        match token {
+            TokenV0::Char(b']') => {
+                let trimmed = trim_horizontal_space_bytes_v0(&raw);
+                validate_non_empty_comma_values_v0(trimmed)?;
+                return Some(cursor + 1);
+            }
+            TokenV0::Char(byte) => raw.push(*byte),
+            TokenV0::Space => raw.push(b' '),
+            _ => return None,
+        }
+        cursor += 1;
+    }
+    None
+}
+
+fn is_safe_package_or_class_name_byte_v0(byte: u8) -> bool {
+    byte.is_ascii_alphanumeric() || matches!(byte, b'/' | b'.' | b'_' | b'-')
+}
+
+fn normalize_package_or_class_name_v0(raw_value: &[u8]) -> Option<Vec<u8>> {
+    let value = trim_horizontal_space_bytes_v0(raw_value);
+    if value.is_empty()
+        || value.starts_with(b"/")
+        || value.starts_with(b"\\")
+        || value.windows(2).any(|window| window == b"..")
+        || !value
+            .iter()
+            .copied()
+            .all(is_safe_package_or_class_name_byte_v0)
+    {
+        return None;
+    }
+    Some(value.to_vec())
+}
+
+fn validate_non_empty_comma_values_v0(raw_value: &[u8]) -> Option<()> {
+    let mut saw_value = false;
+    for raw_segment in raw_value.split(|byte| *byte == b',') {
+        if trim_horizontal_space_bytes_v0(raw_segment).is_empty() {
+            return None;
+        }
+        saw_value = true;
+    }
+    if !saw_value {
+        return None;
+    }
+    Some(())
+}
+
+fn validate_package_or_class_list_v0(raw_group: &[u8]) -> Option<()> {
+    let mut saw_target = false;
+    for raw_segment in raw_group.split(|byte| *byte == b',') {
+        normalize_package_or_class_name_v0(raw_segment)?;
+        saw_target = true;
+    }
+    if !saw_target {
+        return None;
+    }
+    Some(())
+}
+
 fn consume_documentclass_v0(tokens: &[TokenV0], index: usize) -> Option<usize> {
     if !matches!(
         tokens.get(index),
-        Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"documentclass"
+        Some(TokenV0::ControlSeq(name)) if name.as_slice() == DOCUMENTCLASS_CONTROL_V0
     ) {
         return None;
     }
-    let mut cursor = consume_simple_bracket_non_empty(tokens, index + 1)?;
+    let mut cursor = consume_simple_bracket_options_non_empty_v0(tokens, index + 1)?;
     let (group_start, group_end, next) = consume_group_bounds(tokens, cursor)?;
-    let mut class_bytes = Vec::new();
-    for token in &tokens[group_start..group_end] {
-        match token {
-            TokenV0::Char(byte) => class_bytes.push(*byte),
-            TokenV0::Space => class_bytes.push(b' '),
-            _ => return None,
-        }
-    }
-    while matches!(class_bytes.first(), Some(b' ')) {
-        class_bytes.remove(0);
-    }
-    while matches!(class_bytes.last(), Some(b' ')) {
-        class_bytes.pop();
-    }
-    if class_bytes != b"article" {
-        return None;
-    }
+    let class_bytes = parse_char_space_group_trimmed_v0(tokens, group_start, group_end)?;
+    normalize_package_or_class_name_v0(&class_bytes)?;
     cursor = next;
     Some(cursor)
 }
@@ -1700,7 +1758,8 @@ fn consume_figure_environment_v0(
                     return None;
                 }
                 if matches!(placement_hint, FigurePlacementHintV0::Top) {
-                    if !out.is_empty() && !matches!(out.last().copied(), Some(PAGE_BREAK_MARKER_V0)) {
+                    if !out.is_empty() && !matches!(out.last().copied(), Some(PAGE_BREAK_MARKER_V0))
+                    {
                         push_page_break(out);
                     }
                 } else {
@@ -2355,31 +2414,46 @@ fn consume_package_declaration_noop_v0(tokens: &[TokenV0], index: usize) -> Opti
     ) {
         return None;
     }
-    let mut cursor = consume_simple_bracket_non_empty(tokens, index + 1)?;
+    let mut cursor = consume_simple_bracket_options_non_empty_v0(tokens, index + 1)?;
     let (group_start, group_end, next) = consume_group_bounds(tokens, cursor)?;
     let raw_group = parse_char_space_group_trimmed_v0(tokens, group_start, group_end)?;
-    if raw_group.is_empty() {
-        return None;
-    }
-    let mut saw_package = false;
-    for raw_segment in raw_group.split(|byte| *byte == b',') {
-        let package = trim_horizontal_space_bytes_v0(raw_segment);
-        if package.is_empty()
-            || package.starts_with(b"/")
-            || package.windows(2).any(|window| window == b"..")
-            || !package.iter().copied().all(|byte| {
-                byte.is_ascii_alphanumeric() || matches!(byte, b'/' | b'.' | b'_' | b'-')
-            })
-        {
-            return None;
-        }
-        saw_package = true;
-    }
-    if !saw_package {
-        return None;
-    }
+    validate_package_or_class_list_v0(&raw_group)?;
     cursor = next;
     Some(cursor)
+}
+
+fn consume_requirepackage_with_options_declaration_noop_v0(
+    tokens: &[TokenV0],
+    index: usize,
+) -> Option<usize> {
+    if !matches!(
+        tokens.get(index),
+        Some(TokenV0::ControlSeq(name)) if name.as_slice() == REQUIREPACKAGEWITHOPTIONS_CONTROL_V0
+    ) {
+        return None;
+    }
+    let (group_start, group_end, next) = consume_group_bounds(tokens, index + 1)?;
+    let raw_group = parse_char_space_group_trimmed_v0(tokens, group_start, group_end)?;
+    validate_package_or_class_list_v0(&raw_group)?;
+    Some(next)
+}
+
+fn consume_pass_options_declaration_noop_v0(tokens: &[TokenV0], index: usize) -> Option<usize> {
+    if !matches!(
+        tokens.get(index),
+        Some(TokenV0::ControlSeq(name))
+            if name.as_slice() == PASSOPTIONSTOPACKAGE_CONTROL_V0
+                || name.as_slice() == PASSOPTIONSTOCLASS_CONTROL_V0
+    ) {
+        return None;
+    }
+    let (option_start, option_end, option_next) = consume_group_bounds(tokens, index + 1)?;
+    let option_group = parse_char_space_group_trimmed_v0(tokens, option_start, option_end)?;
+    validate_non_empty_comma_values_v0(&option_group)?;
+    let (target_start, target_end, next) = consume_group_bounds(tokens, option_next)?;
+    let raw_group = parse_char_space_group_trimmed_v0(tokens, target_start, target_end)?;
+    validate_package_or_class_list_v0(&raw_group)?;
+    Some(next)
 }
 
 fn skip_horizontal_space_bytes_v0(bytes: &[u8], mut index: usize) -> usize {
@@ -3169,13 +3243,20 @@ pub(crate) fn extract_typeset_minimal_text_body_with_external_bib_v0(
     external_bib_entries: &BTreeMap<Vec<u8>, Vec<u8>>,
 ) -> Option<Vec<u8>> {
     let mut index = skip_spaces(tokens, 0);
-    index = consume_documentclass_v0(tokens, index)?;
+    let mut saw_documentclass = false;
 
     let mut meta = TitleMetaV0::default();
     let mut graphicspath_prefixes = Vec::<Vec<u8>>::new();
     loop {
         index = skip_spaces(tokens, index);
         match tokens.get(index) {
+            Some(TokenV0::ControlSeq(name)) if name.as_slice() == DOCUMENTCLASS_CONTROL_V0 => {
+                if saw_documentclass {
+                    return None;
+                }
+                index = consume_documentclass_v0(tokens, index)?;
+                saw_documentclass = true;
+            }
             Some(TokenV0::ControlSeq(name)) if name.as_slice() == b"title" => {
                 let (next, value) = consume_meta_declaration_v0(tokens, index, b"title", false)?;
                 meta.title = Some(value);
@@ -3198,6 +3279,17 @@ pub(crate) fn extract_typeset_minimal_text_body_with_external_bib_v0(
                 index = consume_package_declaration_noop_v0(tokens, index)?;
             }
             Some(TokenV0::ControlSeq(name))
+                if name.as_slice() == REQUIREPACKAGEWITHOPTIONS_CONTROL_V0 =>
+            {
+                index = consume_requirepackage_with_options_declaration_noop_v0(tokens, index)?;
+            }
+            Some(TokenV0::ControlSeq(name))
+                if name.as_slice() == PASSOPTIONSTOPACKAGE_CONTROL_V0
+                    || name.as_slice() == PASSOPTIONSTOCLASS_CONTROL_V0 =>
+            {
+                index = consume_pass_options_declaration_noop_v0(tokens, index)?;
+            }
+            Some(TokenV0::ControlSeq(name))
                 if name.as_slice() == ADDBIBRESOURCE_CONTROL_V0
                     || name.as_slice() == BIBLIOGRAPHY_CONTROL_V0 =>
             {
@@ -3213,6 +3305,9 @@ pub(crate) fn extract_typeset_minimal_text_body_with_external_bib_v0(
                 index = consume_bibliographystyle_command_v0(tokens, index)?;
             }
             Some(TokenV0::ControlSeq(name)) if name.as_slice() == BEGIN_CONTROL_V0 => {
+                if !saw_documentclass {
+                    return None;
+                }
                 index = consume_document_env_command_v0(tokens, index, BEGIN_CONTROL_V0)?;
                 break;
             }

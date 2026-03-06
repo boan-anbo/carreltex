@@ -78,6 +78,22 @@ fn typeset_minimal_subset_compiles_ok() {
 }
 
 #[test]
+fn typeset_minimal_accepts_package_class_capture_preamble_commands_v1() {
+    let main = b"\\PassOptionsToPackage{dvipsnames}{xcolor}\\PassOptionsToClass{twoside,openright}{memoir}\\RequirePackageWithOptions{fooopts}\\documentclass[twoside]{memoir}\\usepackage[table]{xcolor}\\RequirePackage{foo/bar}\\title{T}\\author{A}\\date{D}\\begin{document}\\maketitle Body text.\\end{document}";
+    let result = compile_typeset(main);
+    assert_eq!(result.status, CompileStatus::Ok);
+    assert!(!result.main_xdv_bytes.is_empty());
+}
+
+#[test]
+fn typeset_minimal_rejects_unsafe_documentclass_path_v1() {
+    let main = b"\\documentclass{../evil}\\begin{document}Body\\end{document}";
+    let result = compile_typeset(main);
+    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert!(result.main_xdv_bytes.is_empty());
+}
+
+#[test]
 fn typeset_minimal_input_inlines_referenced_tex_file() {
     let main = b"\\documentclass{article}\\begin{document}Start.\\input{sections/intro}End.\\end{document}";
     let result = compile_typeset_with_files(main, &[(b"sections/intro.tex", b" Included body. ")]);

@@ -165,9 +165,9 @@
     },
     {
       "id": "typeset_demo_pkgopt_probe_v0",
-      "tags": ["typeset", "package-options", "probe", "ni"],
-      "expected_status": "NI",
-      "purpose": "Probes preamble package-option plumbing seam planned for future typed artifacts."
+      "tags": ["typeset", "package-options", "probe", "ok"],
+      "expected_status": "OK",
+      "purpose": "Exercises preamble package-option plumbing and pkgopt typed-artifact extraction."
     },
     {
       "id": "typeset_demo_input_include_probe_v0",
@@ -263,39 +263,39 @@
     },
     {
       "id": "typeset_demo_package_require_probe_v0",
-      "tags": ["typeset", "packages", "requirepackage", "probe", "ni"],
-      "expected_status": "NI",
-      "purpose": "Probes usepackage/RequirePackage resource-hint seam for sty/cls requests."
+      "tags": ["typeset", "packages", "requirepackage", "probe", "ok"],
+      "expected_status": "OK",
+      "purpose": "Exercises usepackage/RequirePackage resource-hint extraction for deterministic sty/cls requests."
     },
     {
       "id": "typeset_demo_pkgopt_require_pass_probe_v0",
-      "tags": ["typeset", "packages", "pkgopt", "requirepackagewithoptions", "passoptionstopackage", "probe", "ni"],
-      "expected_status": "NI",
-      "purpose": "Probes RequirePackageWithOptions and PassOptionsToPackage seams for package hints and pkgopt artifact extraction."
+      "tags": ["typeset", "packages", "pkgopt", "requirepackagewithoptions", "passoptionstopackage", "probe", "ok"],
+      "expected_status": "OK",
+      "purpose": "Exercises RequirePackageWithOptions and PassOptionsToPackage extraction for package hints and pkgopt artifacts."
     },
     {
       "id": "typeset_demo_class_options_probe_v0",
-      "tags": ["typeset", "class", "pkgopt", "documentclass", "passoptionstoclass", "probe", "ni"],
-      "expected_status": "NI",
-      "purpose": "Probes PassOptionsToClass plus documentclass options seams for class_file hints and pkgopt artifact extraction."
+      "tags": ["typeset", "class", "pkgopt", "documentclass", "passoptionstoclass", "probe", "ok"],
+      "expected_status": "OK",
+      "purpose": "Exercises PassOptionsToClass plus documentclass options extraction for class_file hints and pkgopt artifacts."
     },
     {
       "id": "typeset_demo_documentclass_opts_probe_v0",
-      "tags": ["typeset", "class", "pkgopt", "documentclass", "options", "probe", "ni"],
-      "expected_status": "NI",
-      "purpose": "Probes documentclass option hints for class_file requests and class-target pkgopt extraction."
+      "tags": ["typeset", "class", "pkgopt", "documentclass", "options", "probe", "ok"],
+      "expected_status": "OK",
+      "purpose": "Exercises documentclass option hints for class_file requests and class-target pkgopt extraction."
     },
     {
       "id": "typeset_demo_documentclass_opts_multi_probe_v0",
-      "tags": ["typeset", "class", "pkgopt", "documentclass", "options", "whitespace", "dedupe", "probe", "ni"],
-      "expected_status": "NI",
-      "purpose": "Probes documentclass/PassOptionsToClass option normalization with deduped stable ordering."
+      "tags": ["typeset", "class", "pkgopt", "documentclass", "options", "whitespace", "dedupe", "probe", "ok"],
+      "expected_status": "OK",
+      "purpose": "Exercises documentclass/PassOptionsToClass option normalization with deduped stable ordering."
     },
     {
       "id": "typeset_demo_passoptionstoclass_probe_v0",
-      "tags": ["typeset", "class", "pkgopt", "passoptionstoclass", "probe", "ni"],
-      "expected_status": "NI",
-      "purpose": "Probes PassOptionsToClass hints and class-target pkgopt extraction with deterministic ordering."
+      "tags": ["typeset", "class", "pkgopt", "passoptionstoclass", "probe", "ok"],
+      "expected_status": "OK",
+      "purpose": "Exercises PassOptionsToClass hints and class-target pkgopt extraction with deterministic ordering."
     },
     {
       "id": "typeset_demo_documentclass_invalid_probe_v0",
@@ -311,32 +311,32 @@
     },
     {
       "id": "typeset_demo_usepackage_opts_multi_probe_v0",
-      "tags": ["typeset", "packages", "pkgopt", "usepackage", "options", "whitespace", "dedupe", "probe", "ni"],
-      "expected_status": "NI",
-      "purpose": "Probes usepackage option normalization with stable dedupe/ordering across repeated declarations."
+      "tags": ["typeset", "packages", "pkgopt", "usepackage", "options", "whitespace", "dedupe", "probe", "ok"],
+      "expected_status": "OK",
+      "purpose": "Exercises usepackage option normalization with stable dedupe/ordering across repeated declarations."
     },
     {
       "id": "typeset_demo_usepackage_multipackage_probe_v0",
-      "tags": ["typeset", "packages", "pkgopt", "usepackage", "requirepackage", "multi-package", "path", "probe", "ni"],
-      "expected_status": "NI",
-      "purpose": "Probes multi-package usepackage/RequirePackage hints and per-package pkgopt extraction with path normalization."
+      "tags": ["typeset", "packages", "pkgopt", "usepackage", "requirepackage", "multi-package", "path", "probe", "ok"],
+      "expected_status": "OK",
+      "purpose": "Exercises multi-package usepackage/RequirePackage hints and per-package pkgopt extraction with path normalization."
     },
     {
       "id": "typeset_demo_usepackage_capture_probe_v1",
-      "tags": ["typeset", "packages", "usepackage", "options", "hyperref", "probe", "ni"],
-      "expected_status": "NI",
+      "tags": ["typeset", "packages", "usepackage", "options", "hyperref", "probe", "ok"],
+      "expected_status": "OK",
       "purpose": "Captures usepackage options into packages_v1 for deterministic request mapping and stable sha gates."
     },
     {
       "id": "typeset_demo_usepackage_multi_capture_probe_v1",
-      "tags": ["typeset", "packages", "usepackage", "multi-package", "probe", "ni"],
-      "expected_status": "NI",
+      "tags": ["typeset", "packages", "usepackage", "multi-package", "probe", "ok"],
+      "expected_status": "OK",
       "purpose": "Captures comma-list usepackage declarations into deterministic per-package packages_v1 entries."
     },
     {
       "id": "typeset_demo_usepackage_opts_normalize_probe_v1",
-      "tags": ["typeset", "packages", "usepackage", "options", "normalize", "probe", "ni"],
-      "expected_status": "NI",
+      "tags": ["typeset", "packages", "usepackage", "options", "normalize", "probe", "ok"],
+      "expected_status": "OK",
       "purpose": "Captures whitespace-normalized usepackage options into stable packages_v1 entries."
     },
     {
