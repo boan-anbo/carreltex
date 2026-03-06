@@ -1146,7 +1146,7 @@ fn pdf_renderer_preserves_wrapped_list_and_quote_continuation_indent_across_page
         "quote continuation x must remain stable across page boundary: start_x={quote_start_x}, wrap_x={quote_wrap_x}"
     );
     assert!(
-        quote_start_x >= list_start_x + 4.0,
+        quote_start_x >= list_start_x + 6.0,
         "quote indentation should remain deeper than list indentation across pages: list_x={list_start_x}, quote_x={quote_start_x}"
     );
 }

@@ -149,13 +149,17 @@ fn should_tighten_transition_gap_v7(previous: BodyFlowKindV0, next: BodyFlowKind
     )
 }
 
+fn is_quote_transition_v19(previous: BodyFlowKindV0, next: BodyFlowKindV0) -> bool {
+    previous == BodyFlowKindV0::Quote || next == BodyFlowKindV0::Quote
+}
+
 fn transition_blank_advance_pt_v7(previous: BodyFlowKindV0, next: BodyFlowKindV0) -> f32 {
     let previous_leading_pt = match previous {
         BodyFlowKindV0::FrontMatter => LEADING_PT_V0,
         BodyFlowKindV0::DisplayMath => LEADING_PT_V0,
         BodyFlowKindV0::BibliographyHeading => LEADING_PT_V0,
         BodyFlowKindV0::List => LIST_ENTRY_LEADING_PT_V7,
-        BodyFlowKindV0::Quote => QUOTE_ENTRY_LEADING_PT_V7,
+        BodyFlowKindV0::Quote => QUOTE_ENTRY_LEADING_PT_V19,
         BodyFlowKindV0::Table => TABLE_ROW_LEADING_PT_V10,
         BodyFlowKindV0::Paragraph | BodyFlowKindV0::Other => LEADING_PT_V0,
     };
@@ -163,6 +167,8 @@ fn transition_blank_advance_pt_v7(previous: BodyFlowKindV0, next: BodyFlowKindV0
         || next == BodyFlowKindV0::DisplayMath
     {
         DISPLAY_MATH_TRANSITION_GAP_PT_V16
+    } else if is_quote_transition_v19(previous, next) {
+        QUOTE_TRANSITION_GAP_PT_V19
     } else if previous == BodyFlowKindV0::BibliographyHeading
         || next == BodyFlowKindV0::BibliographyHeading
     {
@@ -733,7 +739,7 @@ fn build_page_content_stream_v0(
                 (PAGE_WIDTH_PT_V0 - MARGIN_PT_V0 - line_width_pt).max(MARGIN_PT_V0)
             } else if let Some(prefix_advance_pt) = quote_prefix_advance_pt {
                 active_quote_indent_pt =
-                    QUOTE_BODY_INDENT_PT_V0.max(prefix_advance_pt + QUOTE_PREFIX_GAP_PT_V0);
+                    QUOTE_BODY_INDENT_PT_V19.max(prefix_advance_pt + QUOTE_PREFIX_GAP_PT_V0);
                 active_hang_indent_pt = 0.0;
                 active_hang_prefix_kind = None;
                 active_inline_alignment = None;
@@ -831,7 +837,7 @@ fn build_page_content_stream_v0(
             } else if list_line {
                 line_advance_pt = LIST_ENTRY_LEADING_PT_V7;
             } else if quote_line {
-                line_advance_pt = QUOTE_ENTRY_LEADING_PT_V7;
+                line_advance_pt = QUOTE_ENTRY_LEADING_PT_V19;
             } else if paragraph_continues_next_line {
                 line_advance_pt = BODY_PARAGRAPH_CONTINUATION_LEADING_PT_V12;
             }
