@@ -155,6 +155,7 @@ fn trailing_space_bounded_seam_trim_pt_v30(
         profile,
         SegmentEmitProfileV0::BodyProseV13
             | SegmentEmitProfileV0::BodyWrappedProseV27
+            | SegmentEmitProfileV0::WrappedAlignedV28
             | SegmentEmitProfileV0::WrappedIndentedV29
             | SegmentEmitProfileV0::FootnoteProseV26
     ) {
@@ -165,6 +166,7 @@ fn trailing_space_bounded_seam_trim_pt_v30(
             profile,
             SegmentEmitProfileV0::BodyProseV13
                 | SegmentEmitProfileV0::BodyWrappedProseV27
+                | SegmentEmitProfileV0::WrappedAlignedV28
                 | SegmentEmitProfileV0::WrappedIndentedV29
                 | SegmentEmitProfileV0::FootnoteProseV26
         ) || segment.superscript
@@ -215,7 +217,10 @@ fn trailing_space_bounded_seam_trim_pt_v30(
         };
         return (requested_trim_pt + long_indented_prefix_bias_pt).min(segment.advance_pt * 0.4);
     }
-    if matches!(profile, SegmentEmitProfileV0::BodyProseV13) {
+    if matches!(
+        profile,
+        SegmentEmitProfileV0::BodyProseV13 | SegmentEmitProfileV0::WrappedAlignedV28
+    ) {
         return 0.0;
     }
     let Some(next_segment) = next_segment else {
