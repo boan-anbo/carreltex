@@ -2225,6 +2225,34 @@ function ensureDefaultExtensionV0(value, extension) {
   return `${value}.${extension}`;
 }
 
+function normalizeIncludegraphicsCandidatePathV1(rawValue, extOption) {
+  const trimmed = `${rawValue}`.trim();
+  if (trimmed.length === 0) {
+    throw new Error('resource_hints_v0 includegraphics path is empty');
+  }
+  const slashIndex = Math.max(trimmed.lastIndexOf('/'), trimmed.lastIndexOf('\\'));
+  const lastSegment = trimmed.slice(slashIndex + 1);
+  const hasAnyDot = lastSegment.includes('.');
+  let resolved = trimmed;
+  if (extOption.length > 0) {
+    resolved = ensureDefaultExtensionV0(resolved, extOption);
+  } else if (!hasAnyDot) {
+    resolved = ensureDefaultExtensionV0(resolved, 'png');
+  }
+
+  const resolvedSlashIndex = Math.max(resolved.lastIndexOf('/'), resolved.lastIndexOf('\\'));
+  const resolvedLastSegment = resolved.slice(resolvedSlashIndex + 1);
+  const dotIndex = resolvedLastSegment.lastIndexOf('.');
+  if (dotIndex <= 0 || dotIndex === resolvedLastSegment.length - 1) {
+    throw new Error(`resource_hints_v0 includegraphics rejects extension '${resolved}'`);
+  }
+  const ext = resolvedLastSegment.slice(dotIndex + 1).toLowerCase();
+  if (!['png', 'jpg', 'jpeg', 'pdf'].includes(ext)) {
+    throw new Error(`resource_hints_v0 includegraphics rejects extension '${ext}'`);
+  }
+  return resolved;
+}
+
 function normalizePathHintTokenV0(rawValue, hintType) {
   if (typeof rawValue !== 'string') {
     return null;
@@ -2309,9 +2337,10 @@ function parseGraphicspathValuesV0(rawValue) {
       throw new Error(`resource_hints_v0 graphicspath has unterminated entry '${rawValue}'`);
     }
     const value = rawValue.slice(start, index).trim();
-    if (value.length > 0) {
-      values.push(value);
+    if (value.length === 0) {
+      throw new Error(`resource_hints_v0 graphicspath rejects empty prefix '${rawValue}'`);
     }
+    values.push(value);
     index += 1;
   }
   if (values.length === 0) {
@@ -3173,13 +3202,11 @@ function extractResourceHintEntriesFromSourceV0(sourceBytes, caseId) {
         if (useGraphicspathPrefixes) {
           for (const prefix of graphicspathPrefixes) {
             const withDir = `${prefix}/${value}`;
-            const withExt = extNormalized.length > 0 ? ensureDefaultExtensionV0(withDir, extNormalized) : withDir;
-            candidates.push(withExt);
+            candidates.push(normalizeIncludegraphicsCandidatePathV1(withDir, extNormalized));
           }
         } else {
           const withDir = dirNormalized ? `${dirNormalized}/${value}` : value;
-          const withExt = extNormalized.length > 0 ? ensureDefaultExtensionV0(withDir, extNormalized) : withDir;
-          candidates.push(withExt);
+          candidates.push(normalizeIncludegraphicsCandidatePathV1(withDir, extNormalized));
         }
       }
       addHintValues('graphics_path', candidates, index, graphicsGroup.next);
@@ -3195,14 +3222,18 @@ function extractResourceHintEntriesFromSourceV0(sourceBytes, caseId) {
       }
       const prefixes = [];
       for (const rawValue of parseGraphicspathValuesV0(pathGroup.value)) {
-        try {
-          const normalized = normalizePathHintTokenV0(rawValue, 'graphics_path');
-          if (normalized && normalized.length > 0) {
-            prefixes.push(normalized);
-          }
-        } catch {
-          continue;
+        if (!rawValue.endsWith('/')) {
+          throw new Error(`resource_hints_v0 graphicspath entry must end with '/': '${rawValue}'`);
         }
+        const withoutTrailingSlash = rawValue.slice(0, -1).trim();
+        if (withoutTrailingSlash.length === 0) {
+          throw new Error(`resource_hints_v0 graphicspath rejects empty prefix '${rawValue}'`);
+        }
+        const normalized = normalizePathHintTokenV0(withoutTrailingSlash, 'graphics_path');
+        if (!normalized || normalized.length === 0) {
+          throw new Error(`resource_hints_v0 graphicspath normalized empty prefix '${rawValue}'`);
+        }
+        prefixes.push(normalized);
       }
       graphicspathPrefixes = prefixes;
       index = pathGroup.next;
