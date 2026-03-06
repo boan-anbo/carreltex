@@ -4488,6 +4488,27 @@ fn pdf_renderer_live_quote_medium_bold_prefix_gap_is_tightened_v47() {
 }
 
 #[test]
+fn pdf_renderer_live_quote_medium_bold_prefix_gap_is_tightened_v89() {
+    let xdv = write_dvi_v2_text_page_v0(
+        b"> Quote prefix with {bold words} and compact trailing text.",
+    )
+    .expect("writer should accept medium bold quote seam text");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+
+    let quote_prefix_x =
+        tm_x_for_segment_substring_v0(&pdf, "(bold words)", "(Quote prefix with )")
+            .expect("medium bold quote prefix x");
+    let quote_style_x =
+        tm_x_for_segment_substring_v0(&pdf, "(bold words)", "(bold words)")
+            .expect("medium bold quote style x");
+
+    assert!(
+        quote_style_x - quote_prefix_x <= 89.0,
+        "quote medium-bold-prefix seam should stay slightly tighter after v89: prefix_x={quote_prefix_x}, style_x={quote_style_x}"
+    );
+}
+
+#[test]
 fn pdf_renderer_live_list_medium_prefix_gap_is_tightened_v46() {
     let xdv = write_dvi_v2_text_page_v0(
         b"- List prefix with [inline words] and compact trailing text.",
