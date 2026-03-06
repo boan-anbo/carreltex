@@ -3683,6 +3683,40 @@ fn pdf_renderer_wrapped_right_very_short_pre_style_gap_is_tightened_v63() {
 }
 
 #[test]
+fn pdf_renderer_wrapped_centered_very_short_pre_style_gap_is_tightened_v64() {
+    let xdv = write_dvi_v2_text_page_with_layout_and_wrap_v0(
+        b"\n^ GO core words trail words words words WRAPCENTERVSHORT tail.",
+        65_536,
+        786_432,
+        30,
+    )
+    .expect("writer should accept wrapped centered very-short text");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+
+    let (_, prefix_y) =
+        tm_position_for_segment_substring_v0(&pdf, "GO").expect("centered very-short prefix y");
+    let (_, wrap_y) = tm_position_for_segment_substring_v0(&pdf, "WRAPCENTERVSHORT")
+        .expect("centered very-short wrap y");
+    let rendered = rendered_text_for_line_containing_needle_v0(&pdf, "GO")
+        .expect("centered very-short rendered text");
+    let max_tm_gap = max_tm_gap_pt_for_line_containing_v0(&pdf, "core words")
+        .expect("centered very-short tm gap");
+
+    assert!(
+        rendered == "GO core words trail words",
+        "wrapped centered very-short line should preserve stable spacing: {rendered}"
+    );
+    assert!(
+        max_tm_gap <= 104.0,
+        "wrapped centered very-short pre-style seam should stay tightened: tm_gap={max_tm_gap}"
+    );
+    assert!(
+        prefix_y > wrap_y,
+        "centered very-short fixture should still wrap after the tightened seam: prefix_y={prefix_y}, wrap_y={wrap_y}"
+    );
+}
+
+#[test]
 fn pdf_renderer_wrapped_quote_and_list_styled_seams_use_v29_profile() {
     let xdv = write_dvi_v2_text_page_v0(
         b"\n- LISTSTART alpha alpha alpha alpha alpha alpha alpha [LISTITALICV29] beta beta beta beta beta beta LISTWRAPV29.\n\n> QUOTESTART gamma gamma gamma gamma gamma gamma gamma {QUOTEBOLDV29} delta delta delta delta delta QUOTEWRAPV29.",
