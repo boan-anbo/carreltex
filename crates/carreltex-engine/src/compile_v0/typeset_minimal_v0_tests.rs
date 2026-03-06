@@ -86,6 +86,14 @@ fn typeset_minimal_accepts_package_class_capture_preamble_commands_v1() {
 }
 
 #[test]
+fn typeset_minimal_accepts_setcjkmainfont_preamble_declaration_as_noop_v1() {
+    let main = b"\\documentclass{article}\\usepackage{xeCJK}\\setCJKmainfont{FoundSans}\\begin{document}CJK seam probe body.\\end{document}";
+    let result = compile_typeset(main);
+    assert_eq!(result.status, CompileStatus::Ok);
+    assert!(!result.main_xdv_bytes.is_empty());
+}
+
+#[test]
 fn typeset_minimal_rejects_unsafe_documentclass_path_v1() {
     let main = b"\\documentclass{../evil}\\begin{document}Body\\end{document}";
     let result = compile_typeset(main);
