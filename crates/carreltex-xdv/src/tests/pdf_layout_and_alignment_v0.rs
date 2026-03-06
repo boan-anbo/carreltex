@@ -993,6 +993,41 @@ fn pdf_renderer_footnote_pre_style_gap_is_tightened_v33() {
 }
 
 #[test]
+fn pdf_renderer_live_footnote_long_prefix_gaps_are_tightened_v40() {
+    let demo_text = b"Title\nAuthor\n2026-03-05\n\nBody prose through punctuation.^1^2\n\n!f 1 First demo footnote text with [inline emphasis].\n!f 2 Second demo footnote text with {bold emphasis}.";
+    let xdv = write_dvi_v2_text_page_v0(demo_text).expect("writer should accept live footnote seam text");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+
+    let footnote_inline_prefix_x = tm_x_for_segment_substring_v0(
+        &pdf,
+        "(inline emphasis)",
+        "(1 First demo footnote text with )",
+    )
+    .expect("inline footnote prefix x");
+    let footnote_inline_x =
+        tm_x_for_segment_substring_v0(&pdf, "(inline emphasis)", "(inline emphasis)")
+            .expect("inline footnote style x");
+    let footnote_bold_prefix_x = tm_x_for_segment_substring_v0(
+        &pdf,
+        "(bold emphasis)",
+        "(2 Second demo footnote text with )",
+    )
+    .expect("bold footnote prefix x");
+    let footnote_bold_x =
+        tm_x_for_segment_substring_v0(&pdf, "(bold emphasis)", "(bold emphasis)")
+            .expect("bold footnote style x");
+
+    assert!(
+        footnote_inline_x - footnote_inline_prefix_x <= 195.0,
+        "live inline footnote long-prefix seam should stay tightened: prefix_x={footnote_inline_prefix_x}, style_x={footnote_inline_x}"
+    );
+    assert!(
+        footnote_bold_x - footnote_bold_prefix_x <= 205.0,
+        "live bold footnote long-prefix seam should stay tightened: prefix_x={footnote_bold_prefix_x}, style_x={footnote_bold_x}"
+    );
+}
+
+#[test]
 fn pdf_renderer_wrapped_body_paragraph_styled_seams_track_scaled_advances_v27() {
     let demo_text = b"Title\nAuthor\n2026-03-05\n\nWRAPSTART alpha alpha alpha alpha alpha alpha alpha alpha <{BODYLINKWRAPV27}> and [ITALICWRAPV27],right beside punctuation with {BOLDWRAPV27} seam before WRAPTOKENV27.\n\n!u 1 https://example.com/v27";
     let xdv = write_dvi_v2_text_page_v0(demo_text).expect("writer should accept wrapped v27 seam text");
