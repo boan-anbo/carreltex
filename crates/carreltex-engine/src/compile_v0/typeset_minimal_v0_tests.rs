@@ -899,6 +899,39 @@ fn typeset_minimal_figure_stub_accepts_includegraphics_without_extension_by_norm
 }
 
 #[test]
+fn typeset_minimal_figure_stub_applies_ordered_graphicspath_prefixes_v1() {
+    let main = b"\\documentclass{article}\\graphicspath{{figs/}{plots/}}\\begin{document}\\begin{figure}\\includegraphics{demo}\\caption{With prefix}\\end{figure}\\end{document}";
+    let body = extract_typeset_body(main);
+    let text = String::from_utf8(body).expect("body should be valid utf8");
+    assert!(
+        text.contains("!gimg 1 figs/demo.png 180000 120000"),
+        "body={text:?}"
+    );
+}
+
+#[test]
+fn typeset_minimal_figure_stub_preserves_explicit_extension_with_graphicspath_v1() {
+    let main = b"\\documentclass{article}\\graphicspath{{figs/}{plots/}}\\begin{document}\\begin{figure}\\includegraphics{banner.pdf}\\caption{With ext}\\end{figure}\\end{document}";
+    let body = extract_typeset_body(main);
+    let text = String::from_utf8(body).expect("body should be valid utf8");
+    assert!(
+        text.contains("!gimg 1 figs/banner.pdf 180000 120000"),
+        "body={text:?}"
+    );
+}
+
+#[test]
+fn typeset_minimal_figure_stub_does_not_apply_graphicspath_to_nested_paths_v1() {
+    let main = b"\\documentclass{article}\\graphicspath{{figs/}{plots/}}\\begin{document}\\begin{figure}\\includegraphics{sub/demo}\\caption{Nested}\\end{figure}\\end{document}";
+    let body = extract_typeset_body(main);
+    let text = String::from_utf8(body).expect("body should be valid utf8");
+    assert!(
+        text.contains("!gimg 1 sub/demo.png 180000 120000"),
+        "body={text:?}"
+    );
+}
+
+#[test]
 fn typeset_minimal_figure_ordinals_stay_stable_with_interleaved_headings() {
     let main = b"\\documentclass{article}\\begin{document}\\section{One}\\begin{figure}\\caption{First}\\end{figure}\\label{fig:first}\\subsection{Two}\\begin{figure}\\caption{Second}\\end{figure}\\label{fig:second}Refs: \\ref{fig:first}, \\ref{fig:second}.\\end{document}";
     let body = extract_typeset_body(main);
@@ -1016,6 +1049,22 @@ fn typeset_minimal_rejects_figure_includegraphics_unsafe_path() {
     let result = compile_typeset(main);
     assert_eq!(result.status, CompileStatus::NotImplemented);
     assert!(result.main_xdv_bytes.is_empty());
+}
+
+#[test]
+fn typeset_minimal_rejects_graphicspath_with_unsafe_or_malformed_entries_v1() {
+    let unsafe_absolute = b"\\documentclass{article}\\graphicspath{{/abs/}{figs/}}\\begin{document}\\begin{figure}\\includegraphics{demo}\\caption{Nope}\\end{figure}\\end{document}";
+    let malformed_non_nested = b"\\documentclass{article}\\graphicspath{figs/}\\begin{document}\\begin{figure}\\includegraphics{demo}\\caption{Nope}\\end{figure}\\end{document}";
+    let empty_prefix = b"\\documentclass{article}\\graphicspath{{}}\\begin{document}\\begin{figure}\\includegraphics{demo}\\caption{Nope}\\end{figure}\\end{document}";
+    for main in [
+        unsafe_absolute.as_slice(),
+        malformed_non_nested.as_slice(),
+        empty_prefix.as_slice(),
+    ] {
+        let result = compile_typeset(main);
+        assert_eq!(result.status, CompileStatus::NotImplemented);
+        assert!(result.main_xdv_bytes.is_empty());
+    }
 }
 
 #[test]

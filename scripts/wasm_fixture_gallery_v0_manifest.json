@@ -135,21 +135,21 @@
     },
     {
       "id": "typeset_demo_graphicspath_probe_v0",
-      "tags": ["typeset", "graphics", "graphicspath", "probe", "ni"],
-      "expected_status": "NI",
-      "purpose": "Probes graphicspath normalization and includegraphics request mapping."
+      "tags": ["typeset", "graphics", "graphicspath", "probe", "ok"],
+      "expected_status": "OK",
+      "purpose": "Exercises ordered graphicspath prefix expansion for includegraphics without an explicit extension."
     },
     {
       "id": "typeset_demo_graphicspath_explicit_ext_probe_v0",
-      "tags": ["typeset", "graphics", "graphicspath", "explicit-ext", "probe", "ni"],
-      "expected_status": "NI",
-      "purpose": "Probes explicit extension includegraphics with ordered graphicspath expansion."
+      "tags": ["typeset", "graphics", "graphicspath", "explicit-ext", "probe", "ok"],
+      "expected_status": "OK",
+      "purpose": "Exercises ordered graphicspath prefix expansion while preserving explicit includegraphics extensions."
     },
     {
       "id": "typeset_demo_graphicspath_invalid_probe_v0",
-      "tags": ["typeset", "graphics", "graphicspath", "negative", "probe", "ni"],
-      "expected_status": "NI",
-      "purpose": "Probes fail-closed graphicspath handling for unsafe ../ and absolute path entries."
+      "tags": ["typeset", "graphics", "graphicspath", "negative", "probe", "invalid"],
+      "expected_status": "INVALID",
+      "purpose": "Probes fail-closed graphicspath handling for unsafe and malformed prefix declarations."
     },
     {
       "id": "typeset_demo_graphics_multipath_probe_v0",

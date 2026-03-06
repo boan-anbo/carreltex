@@ -256,31 +256,31 @@ if (!graphicsOptsRequest) {
   process.exit(1);
 }
 const graphicspathRequestA = listA.requests.find(
-  (request) => request.kind === 'texmf' && request.format === 'pdf' && request.name === 'figs__demo_graphic.pdf' && request.variant === 'typeset',
+  (request) => request.kind === 'texmf' && request.format === 'png' && request.name === 'figs__demo_graphic.png' && request.variant === 'typeset',
 );
 if (!graphicspathRequestA) {
-  console.error('FAIL: request list must include graphicspath hint request for figs__demo_graphic.pdf');
+  console.error('FAIL: request list must include graphicspath hint request for figs__demo_graphic.png');
   process.exit(1);
 }
 const graphicspathRequestB = listA.requests.find(
-  (request) => request.kind === 'texmf' && request.format === 'pdf' && request.name === 'plots__demo_graphic.pdf' && request.variant === 'typeset',
+  (request) => request.kind === 'texmf' && request.format === 'png' && request.name === 'plots__demo_graphic.png' && request.variant === 'typeset',
 );
 if (!graphicspathRequestB) {
-  console.error('FAIL: request list must include graphicspath hint request for plots__demo_graphic.pdf');
+  console.error('FAIL: request list must include graphicspath hint request for plots__demo_graphic.png');
   process.exit(1);
 }
 const graphicspathExplicitRequestA = listA.requests.find(
-  (request) => request.kind === 'texmf' && request.format === 'pdf' && request.name === 'figs__banner_graphic.pdf' && request.variant === 'typeset',
+  (request) => request.kind === 'texmf' && request.format === 'png' && request.name === 'figs__banner_graphic.png' && request.variant === 'typeset',
 );
 if (!graphicspathExplicitRequestA) {
-  console.error('FAIL: request list must include explicit-ext graphicspath hint request for figs__banner_graphic.pdf');
+  console.error('FAIL: request list must include explicit-ext graphicspath hint request for figs__banner_graphic.png');
   process.exit(1);
 }
 const graphicspathExplicitRequestB = listA.requests.find(
-  (request) => request.kind === 'texmf' && request.format === 'pdf' && request.name === 'figs__sub__banner_graphic.pdf' && request.variant === 'typeset',
+  (request) => request.kind === 'texmf' && request.format === 'png' && request.name === 'figs__sub__banner_graphic.png' && request.variant === 'typeset',
 );
 if (!graphicspathExplicitRequestB) {
-  console.error('FAIL: request list must include explicit-ext graphicspath hint request for figs__sub__banner_graphic.pdf');
+  console.error('FAIL: request list must include explicit-ext graphicspath hint request for figs__sub__banner_graphic.png');
   process.exit(1);
 }
 const graphicsMultipathRequestA = listA.requests.find(
@@ -304,7 +304,7 @@ if (!graphicsTypePathRequest) {
   console.error('FAIL: request list must include includegraphics type/path hint request for assets__hires__chart.pdf');
   process.exit(1);
 }
-if (listA.requests.some((request) => request.name === 'bad__danger_graphic.pdf' || request.name === 'abs__danger_graphic.pdf')) {
+if (listA.requests.some((request) => request.name === 'bad__danger_graphic.png' || request.name === 'abs__danger_graphic.png')) {
   console.error('FAIL: request list must fail-closed for unsafe graphicspath entries');
   process.exit(1);
 }

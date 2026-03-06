@@ -29,6 +29,7 @@ const REQUIREPACKAGE_CONTROL_V0: &[u8] = b"RequirePackage";
 const ADDBIBRESOURCE_CONTROL_V0: &[u8] = b"addbibresource";
 const PRINTBIBLIOGRAPHY_CONTROL_V0: &[u8] = b"printbibliography";
 const CAPTION_CONTROL_V0: &[u8] = b"caption";
+const GRAPHICSPATH_CONTROL_V0: &[u8] = b"graphicspath";
 const INCLUDEGRAPHICS_CONTROL_V0: &[u8] = b"includegraphics";
 const BIBITEM_CONTROL_V0: &[u8] = b"bibitem";
 const BIBLIOGRAPHY_CONTROL_V0: &[u8] = b"bibliography";
@@ -470,6 +471,39 @@ fn consume_documentclass_v0(tokens: &[TokenV0], index: usize) -> Option<usize> {
     }
     cursor = next;
     Some(cursor)
+}
+
+fn consume_graphicspath_declaration_v0(
+    tokens: &[TokenV0],
+    index: usize,
+) -> Option<(usize, Vec<Vec<u8>>)> {
+    if !matches!(
+        tokens.get(index),
+        Some(TokenV0::ControlSeq(name)) if name.as_slice() == GRAPHICSPATH_CONTROL_V0
+    ) {
+        return None;
+    }
+    let (group_start, group_end, next) = consume_group_bounds(tokens, index + 1)?;
+    let mut prefixes = Vec::<Vec<u8>>::new();
+    let mut cursor = group_start;
+    while cursor < group_end {
+        cursor = skip_spaces(tokens, cursor);
+        if cursor >= group_end {
+            break;
+        }
+        if !matches!(tokens.get(cursor), Some(TokenV0::BeginGroup)) {
+            return None;
+        }
+        let (entry_start, entry_end, entry_next) = consume_group_bounds(tokens, cursor)?;
+        let raw_entry = parse_char_space_group_trimmed_v0(tokens, entry_start, entry_end)?;
+        let normalized = normalize_graphics_prefix_v0(&raw_entry)?;
+        prefixes.push(normalized);
+        cursor = entry_next;
+    }
+    if prefixes.is_empty() {
+        return None;
+    }
+    Some((next, prefixes))
 }
 
 fn consume_env_name_command_v0(
@@ -1411,9 +1445,75 @@ fn normalize_graphics_path_v0(raw_path: &[u8]) -> Option<Vec<u8>> {
     Some(normalized)
 }
 
+fn normalize_graphics_prefix_v0(raw_prefix: &[u8]) -> Option<Vec<u8>> {
+    if raw_prefix.is_empty() || !raw_prefix.ends_with(b"/") {
+        return None;
+    }
+    let prefix_without_trailing = &raw_prefix[..raw_prefix.len() - 1];
+    if prefix_without_trailing.is_empty() {
+        return None;
+    }
+    if prefix_without_trailing.starts_with(b"/") || prefix_without_trailing.starts_with(b"\\") {
+        return None;
+    }
+    if prefix_without_trailing.contains(&b'\\') || prefix_without_trailing.contains(&b':') {
+        return None;
+    }
+    if !prefix_without_trailing
+        .iter()
+        .copied()
+        .all(is_safe_graphics_path_byte_v0)
+    {
+        return None;
+    }
+    let mut normalized_segments = Vec::<Vec<u8>>::new();
+    for segment in prefix_without_trailing.split(|byte| *byte == b'/') {
+        if segment.is_empty() || segment == b"." || segment == b".." {
+            return None;
+        }
+        normalized_segments.push(segment.to_vec());
+    }
+    if normalized_segments.is_empty() {
+        return None;
+    }
+    let mut normalized = Vec::<u8>::new();
+    for (segment_index, segment) in normalized_segments.iter().enumerate() {
+        if segment_index > 0 {
+            normalized.push(b'/');
+        }
+        normalized.extend_from_slice(segment);
+    }
+    Some(normalized)
+}
+
+fn resolve_includegraphics_paths_with_prefixes_v0(
+    raw_path: &[u8],
+    graphicspath_prefixes: &[Vec<u8>],
+) -> Option<Vec<Vec<u8>>> {
+    let use_graphicspath_prefixes = !graphicspath_prefixes.is_empty()
+        && !raw_path.contains(&b'/')
+        && !raw_path.contains(&b'\\');
+    if !use_graphicspath_prefixes {
+        return Some(vec![normalize_graphics_path_v0(raw_path)?]);
+    }
+    let mut candidates = Vec::<Vec<u8>>::new();
+    for prefix in graphicspath_prefixes {
+        let mut prefixed_path = Vec::<u8>::new();
+        prefixed_path.extend_from_slice(prefix);
+        prefixed_path.push(b'/');
+        prefixed_path.extend_from_slice(raw_path);
+        candidates.push(normalize_graphics_path_v0(&prefixed_path)?);
+    }
+    if candidates.is_empty() {
+        return None;
+    }
+    Some(candidates)
+}
+
 fn consume_includegraphics_command_v0(
     tokens: &[TokenV0],
     index: usize,
+    graphicspath_prefixes: &[Vec<u8>],
 ) -> Option<(IncludeGraphicsCommandV0, usize)> {
     if !matches!(
         tokens.get(index),
@@ -1463,7 +1563,9 @@ fn consume_includegraphics_command_v0(
             _ => return None,
         }
     }
-    let normalized = normalize_graphics_path_v0(&raw_path)?;
+    let mut candidates =
+        resolve_includegraphics_paths_with_prefixes_v0(&raw_path, graphicspath_prefixes)?;
+    let normalized = candidates.remove(0);
     Some((
         IncludeGraphicsCommandV0 {
             path: normalized,
@@ -1571,6 +1673,7 @@ fn consume_figure_environment_v0(
     tokens: &[TokenV0],
     index: usize,
     out: &mut Vec<u8>,
+    graphicspath_prefixes: &[Vec<u8>],
     figure_anchor_id: u32,
     figure_ordinal: u32,
 ) -> Option<usize> {
@@ -1656,7 +1759,8 @@ fn consume_figure_environment_v0(
                 if image.is_some() {
                     return None;
                 }
-                let (parsed_image, next) = consume_includegraphics_command_v0(tokens, cursor)?;
+                let (parsed_image, next) =
+                    consume_includegraphics_command_v0(tokens, cursor, graphicspath_prefixes)?;
                 image = Some(parsed_image);
                 cursor = next;
             }
@@ -3068,6 +3172,7 @@ pub(crate) fn extract_typeset_minimal_text_body_with_external_bib_v0(
     index = consume_documentclass_v0(tokens, index)?;
 
     let mut meta = TitleMetaV0::default();
+    let mut graphicspath_prefixes = Vec::<Vec<u8>>::new();
     loop {
         index = skip_spaces(tokens, index);
         match tokens.get(index) {
@@ -3097,6 +3202,11 @@ pub(crate) fn extract_typeset_minimal_text_body_with_external_bib_v0(
                     || name.as_slice() == BIBLIOGRAPHY_CONTROL_V0 =>
             {
                 let (_, next) = parse_bibliography_resource_command_v0(tokens, index)?;
+                index = next;
+            }
+            Some(TokenV0::ControlSeq(name)) if name.as_slice() == GRAPHICSPATH_CONTROL_V0 => {
+                let (next, prefixes) = consume_graphicspath_declaration_v0(tokens, index)?;
+                graphicspath_prefixes = prefixes;
                 index = next;
             }
             Some(TokenV0::ControlSeq(name)) if name.as_slice() == BIBLIOGRAPHYSTYLE_CONTROL_V0 => {
@@ -3179,6 +3289,7 @@ pub(crate) fn extract_typeset_minimal_text_body_with_external_bib_v0(
                         tokens,
                         index,
                         &mut body,
+                        &graphicspath_prefixes,
                         anchor_id,
                         figure_ordinal,
                     )?;
