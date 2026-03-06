@@ -40,7 +40,12 @@ export async function createCtx(rootDir) {
     mountReadFileLen: instance.exports.carreltex_wasm_mount_read_file_len_v0,
     mountReadFileCopy: instance.exports.carreltex_wasm_mount_read_file_copy_v0,
     compileMain: instance.exports.carreltex_wasm_compile_main_v0,
-    compileMainTypesetMinimal: instance.exports.carreltex_wasm_compile_main_typeset_minimal_v0,
+    compileMainTypeset:
+      instance.exports.carreltex_wasm_compile_main_typeset_v0
+      ?? instance.exports.carreltex_wasm_compile_main_typeset_minimal_v0,
+    compileMainTypesetMinimal:
+      instance.exports.carreltex_wasm_compile_main_typeset_v0
+      ?? instance.exports.carreltex_wasm_compile_main_typeset_minimal_v0,
     compileRequestReset: instance.exports.carreltex_wasm_compile_request_reset_v0,
     compileRequestSetEntrypoint: instance.exports.carreltex_wasm_compile_request_set_entrypoint_v0,
     compileRequestSetEpoch: instance.exports.carreltex_wasm_compile_request_set_source_date_epoch_v0,
@@ -76,7 +81,7 @@ export async function createCtx(rootDir) {
     ['carreltex_wasm_mount_read_file_len_v0', ctx.mountReadFileLen],
     ['carreltex_wasm_mount_read_file_copy_v0', ctx.mountReadFileCopy],
     ['carreltex_wasm_compile_main_v0', ctx.compileMain],
-    ['carreltex_wasm_compile_main_typeset_minimal_v0', ctx.compileMainTypesetMinimal],
+    ['carreltex_wasm_compile_main_typeset_v0', ctx.compileMainTypeset],
     ['carreltex_wasm_compile_request_reset_v0', ctx.compileRequestReset],
     ['carreltex_wasm_compile_request_set_entrypoint_v0', ctx.compileRequestSetEntrypoint],
     ['carreltex_wasm_compile_request_set_source_date_epoch_v0', ctx.compileRequestSetEpoch],

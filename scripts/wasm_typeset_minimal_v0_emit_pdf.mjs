@@ -266,12 +266,12 @@ async function run() {
   }
 
   expectOk(
-    ctx.compileMainTypesetMinimal(),
-    'compile_main_typeset_minimal_v0(typeset_minimal_main)',
+    ctx.compileMainTypeset(),
+    'compile_main_typeset_v0(typeset_main)',
   );
   const report = readCompileReportJson();
   if (report.status !== 'OK') {
-    throw new Error(`compile_main_typeset_minimal status expected OK, got ${report.status}`);
+    throw new Error(`compile_main_typeset status expected OK, got ${report.status}`);
   }
 
   expectOk(ctx.renderMainPdf(), 'render_main_pdf_v0(typeset_minimal_main)');

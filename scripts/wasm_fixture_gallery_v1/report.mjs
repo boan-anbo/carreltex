@@ -1,4 +1,4 @@
 export {
   buildConfigHashV0,
   buildTypedArtifactsPlaceholderV0,
-} from './main.mjs';
+} from './runner_v0.mjs';
