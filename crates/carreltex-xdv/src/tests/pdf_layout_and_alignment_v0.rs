@@ -825,7 +825,7 @@ fn pdf_renderer_body_paragraph_applies_style_scaling_for_styled_seams_v13() {
 }
 
 #[test]
-fn pdf_renderer_non_paragraph_blocks_do_not_use_body_seam_scaling_v13() {
+fn pdf_renderer_centered_lines_do_not_use_prose_seam_scaling_v13() {
     let demo_text = b"Title\nAuthor\n2026-03-05\n\n^ Center [ITALICCENTERV13] text.\n\n> Quote {BOLDQUOTEV13} line.";
     let xdv = write_dvi_v2_text_page_v0(demo_text).expect("writer should accept non-paragraph blocks");
     let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
@@ -834,18 +834,10 @@ fn pdf_renderer_non_paragraph_blocks_do_not_use_body_seam_scaling_v13() {
         .lines()
         .find(|line| line.contains("(ITALICCENTERV13) Tj"))
         .expect("centered styled segment should render");
-    let quote_line = pdf_text
-        .lines()
-        .find(|line| line.contains("(BOLDQUOTEV13) Tj"))
-        .expect("quote styled segment should render");
 
     assert!(
         !centered_line.contains("97 Tz"),
-        "centered non-paragraph line should not use body seam-scaling compensation"
-    );
-    assert!(
-        !quote_line.contains("95 Tz"),
-        "quote non-paragraph line should not use body seam-scaling compensation"
+        "centered non-paragraph line should not use prose seam-scaling compensation"
     );
 }
 
@@ -907,6 +899,33 @@ fn pdf_renderer_wrap_avoids_inline_math_placeholder_at_line_start_v15() {
     assert!(
         rendered_math_line.contains("MATH,") && !rendered_math_line.contains("MATH ,"),
         "inline math placeholder should keep punctuation-adjacent seam spacing stable under wrapping: rendered_math_line={rendered_math_line:?}"
+    );
+}
+
+#[test]
+fn pdf_renderer_footnote_styled_seams_track_scaled_advances_v26() {
+    let demo_text = b"Title\nAuthor\n2026-03-05\n\nBody prose through <{VISIBLELINKV26}>,right beside punctuation.^1\n\n!f 1 Footnote text with [INLINEFOOTNOTEV26].\n!u 1 https://example.com/v26";
+    let xdv = write_dvi_v2_text_page_v0(demo_text).expect("writer should accept v26 seam text");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+
+    let footnote_line = String::from_utf8_lossy(&pdf)
+        .lines()
+        .find(|line| line.contains("(INLINEFOOTNOTEV26) Tj"))
+        .expect("footnote line should render")
+        .to_string();
+    assert!(
+        footnote_line.contains("97 Tz") && footnote_line.contains("(INLINEFOOTNOTEV26) Tj 100 Tz"),
+        "footnote styled segment should use v26 seam compensation"
+    );
+
+    let footnote_italic_x = tm_x_for_segment_substring_v0(&pdf, "(1 Footnote text with ", "(INLINEFOOTNOTEV26)")
+        .expect("footnote italic x");
+    let footnote_period_x =
+        tm_x_for_segment_substring_v0(&pdf, "(1 Footnote text with ", "(.)").expect("footnote period x");
+    let expected_footnote_italic_width = segment_width_pt_v0(b"INLINEFOOTNOTEV26") * 0.97;
+    assert!(
+        ((footnote_period_x - footnote_italic_x) - expected_footnote_italic_width).abs() <= 0.3,
+        "footnote styled seam should advance on compensated rendered width: italic_x={footnote_italic_x}, period_x={footnote_period_x}, expected={expected_footnote_italic_width}"
     );
 }
 

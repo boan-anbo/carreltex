@@ -882,6 +882,15 @@ fn build_page_content_stream_v0(
                 || heading_centered
                 || center_prefixed
                 || centered_continuation;
+            let emit_profile = if current_flow_kind == BodyFlowKindV0::Paragraph {
+                if line_contains_inline_math_placeholder_token_v15(&render_segments) {
+                    SegmentEmitProfileV0::BodyProseInlineMathV15
+                } else {
+                    SegmentEmitProfileV0::BodyProseV13
+                }
+            } else {
+                SegmentEmitProfileV0::Default
+            };
             let annotation_profile = if bibliography_line {
                 AnnotationRectProfileV0::BibliographyV14
             } else if centered_or_heading_context {
@@ -894,6 +903,7 @@ fn build_page_content_stream_v0(
                 line_x,
                 y,
                 font_size_pt,
+                emit_profile,
                 annotation_profile,
                 link_targets_by_id,
                 next_link_id,
@@ -902,15 +912,6 @@ fn build_page_content_stream_v0(
             )?;
             annotations.append(&mut line_annotations);
             let has_superscript = render_segments.iter().any(|segment| segment.superscript);
-            let emit_profile = if current_flow_kind == BodyFlowKindV0::Paragraph {
-                if line_contains_inline_math_placeholder_token_v15(&render_segments) {
-                    SegmentEmitProfileV0::BodyProseInlineMathV15
-                } else {
-                    SegmentEmitProfileV0::BodyProseV13
-                }
-            } else {
-                SegmentEmitProfileV0::Default
-            };
             if has_superscript {
                 emit_render_segments_with_superscript_with_profile_v0(
                     &mut out,
@@ -1016,6 +1017,7 @@ fn build_page_content_stream_v0(
                         line_x_pt,
                         footnote_y,
                         FOOTNOTE_FONT_SIZE_PT_V0,
+                        SegmentEmitProfileV0::FootnoteProseV26,
                         AnnotationRectProfileV0::FootnoteV18,
                         link_targets_by_id,
                         next_link_id,
@@ -1028,20 +1030,22 @@ fn build_page_content_stream_v0(
                     annotations.append(&mut line_annotations);
                     let has_superscript = render_segments.iter().any(|segment| segment.superscript);
                     if has_superscript {
-                        emit_render_segments_with_superscript_v0(
+                        emit_render_segments_with_superscript_with_profile_v0(
                             &mut out,
                             &render_segments,
                             line_x_pt,
                             footnote_y,
                             FOOTNOTE_FONT_SIZE_PT_V0,
+                            SegmentEmitProfileV0::FootnoteProseV26,
                         );
                     } else {
-                        emit_styled_segments_v0(
+                        emit_styled_segments_with_profile_v0(
                             &mut out,
                             &segments,
                             line_x_pt,
                             footnote_y,
                             FOOTNOTE_FONT_SIZE_PT_V0,
+                            SegmentEmitProfileV0::FootnoteProseV26,
                         );
                     }
                     out.extend_from_slice(b"\n");

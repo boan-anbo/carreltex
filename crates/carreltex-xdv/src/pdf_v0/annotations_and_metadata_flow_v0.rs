@@ -89,6 +89,7 @@ fn collect_link_annotations_for_line_v0(
     line_x_pt: f32,
     line_y_pt: f32,
     font_size_pt: f32,
+    emit_profile: SegmentEmitProfileV0,
     profile: AnnotationRectProfileV0,
     link_targets_by_id: &BTreeMap<u32, PdfLinkTargetV0>,
     next_link_id: &mut u32,
@@ -103,7 +104,7 @@ fn collect_link_annotations_for_line_v0(
 
     for segment in segments {
         let start_x = cursor_x;
-        let end_x = cursor_x + segment.advance_pt;
+        let end_x = cursor_x + render_advance_pt_for_segment_with_profile_v0(segment, emit_profile);
         if segment.is_link {
             if run_start_x.is_none() {
                 run_start_x = Some(start_x);
