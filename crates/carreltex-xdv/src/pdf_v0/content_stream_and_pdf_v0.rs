@@ -85,6 +85,22 @@ fn transition_blank_advance_pt_v7(previous: BodyFlowKindV0) -> f32 {
     (BLOCK_TRANSITION_GAP_PT_V7 - previous_leading_pt).max(0.0)
 }
 
+#[derive(Clone)]
+struct PageContinuationStateV0 {
+    previous_rendered_line_was_empty: bool,
+    skip_indent_after_title_block: bool,
+    active_hang_indent_pt: f32,
+    active_hang_prefix_kind: Option<ListPrefixKindV0>,
+    active_quote_indent_pt: f32,
+    active_inline_alignment: Option<InlineBlockAlignmentV0>,
+    previous_line_was_bibliography_heading: bool,
+    last_non_empty_flow_kind: Option<BodyFlowKindV0>,
+    style_stack: Vec<PdfTextStyleV0>,
+    current_style: PdfTextStyleV0,
+    link_active: bool,
+    active_link_target: Option<PdfLinkTargetV0>,
+}
+
 fn build_page_content_stream_v0(
     lines: &[LinePlanV0],
     footnote_defs_by_id: &BTreeMap<u32, Vec<Vec<GlyphPlanV0>>>,
@@ -98,7 +114,9 @@ fn build_page_content_stream_v0(
     next_anchor_id: &mut u32,
     anchor_destinations: &mut BTreeMap<u32, AnchorDestinationV0>,
     allow_title_block: bool,
-) -> Option<PageRenderV0> {
+    initial_state: Option<&PageContinuationStateV0>,
+    is_last_page: bool,
+) -> Option<(PageRenderV0, PageContinuationStateV0)> {
     let mut out = Vec::new();
     out.extend_from_slice(b"BT\n");
     out.extend_from_slice(b"0 g\n");
@@ -127,19 +145,44 @@ fn build_page_content_stream_v0(
         0
     };
     let mut y = PAGE_HEIGHT_PT_V0 - MARGIN_PT_V0 - TITLE_FONT_SIZE_PT_V0;
-    let mut previous_rendered_line_was_empty = false;
-    let mut skip_indent_after_title_block = title_block_len > 0;
-    let mut active_hang_indent_pt = 0.0f32;
-    let mut active_hang_prefix_kind = None::<ListPrefixKindV0>;
-    let mut active_quote_indent_pt = 0.0f32;
-    let mut active_inline_alignment = None::<InlineBlockAlignmentV0>;
-    let mut previous_line_was_bibliography_heading = false;
-    let mut last_non_empty_flow_kind = None::<BodyFlowKindV0>;
+    let mut previous_rendered_line_was_empty = initial_state
+        .map(|state| state.previous_rendered_line_was_empty)
+        .unwrap_or(false);
+    let mut skip_indent_after_title_block = if title_block_len > 0 {
+        true
+    } else {
+        initial_state
+            .map(|state| state.skip_indent_after_title_block)
+            .unwrap_or(false)
+    };
+    let mut active_hang_indent_pt = initial_state
+        .map(|state| state.active_hang_indent_pt)
+        .unwrap_or(0.0);
+    let mut active_hang_prefix_kind = initial_state
+        .map(|state| state.active_hang_prefix_kind)
+        .unwrap_or(None);
+    let mut active_quote_indent_pt = initial_state
+        .map(|state| state.active_quote_indent_pt)
+        .unwrap_or(0.0);
+    let mut active_inline_alignment = initial_state
+        .map(|state| state.active_inline_alignment)
+        .unwrap_or(None);
+    let mut previous_line_was_bibliography_heading = initial_state
+        .map(|state| state.previous_line_was_bibliography_heading)
+        .unwrap_or(false);
+    let mut last_non_empty_flow_kind = initial_state
+        .map(|state| state.last_non_empty_flow_kind)
+        .unwrap_or(None);
     let mut annotations = Vec::<PdfLinkAnnotationV0>::new();
-    let mut style_stack = Vec::<PdfTextStyleV0>::new();
-    let mut current_style = PdfTextStyleV0::Regular;
-    let mut link_active = false;
-    let mut active_link_target = None::<PdfLinkTargetV0>;
+    let mut style_stack = initial_state
+        .map(|state| state.style_stack.clone())
+        .unwrap_or_default();
+    let mut current_style = initial_state
+        .map(|state| state.current_style)
+        .unwrap_or(PdfTextStyleV0::Regular);
+    let mut link_active = initial_state.map(|state| state.link_active).unwrap_or(false);
+    let mut active_link_target = initial_state
+        .and_then(|state| state.active_link_target.clone());
     let mut line_index = 0usize;
     while line_index < lines.len() {
         let line = &lines[line_index];
@@ -642,11 +685,13 @@ fn build_page_content_stream_v0(
         }
         line_index += 1;
     }
-    if !style_stack.is_empty() || link_active {
-        return None;
-    }
-    if active_link_target.is_some() {
-        return None;
+    if is_last_page {
+        if !style_stack.is_empty() || link_active {
+            return None;
+        }
+        if active_link_target.is_some() {
+            return None;
+        }
     }
 
     if footnote_line_count > 0 {
@@ -687,10 +732,27 @@ fn build_page_content_stream_v0(
     }
 
     out.extend_from_slice(b"ET\n");
-    Some(PageRenderV0 {
-        stream: out,
-        annotations,
-    })
+    let continuation_state = PageContinuationStateV0 {
+        previous_rendered_line_was_empty,
+        skip_indent_after_title_block,
+        active_hang_indent_pt,
+        active_hang_prefix_kind,
+        active_quote_indent_pt,
+        active_inline_alignment,
+        previous_line_was_bibliography_heading,
+        last_non_empty_flow_kind,
+        style_stack,
+        current_style,
+        link_active,
+        active_link_target,
+    };
+    Some((
+        PageRenderV0 {
+            stream: out,
+            annotations,
+        },
+        continuation_state,
+    ))
 }
 
 fn build_pdf_for_pages_v0(pages: &[PagePlanV0]) -> Vec<u8> {
@@ -716,10 +778,11 @@ fn build_pdf_for_pages_v0(pages: &[PagePlanV0]) -> Vec<u8> {
 
     let mut next_link_id = 1u32;
     let mut next_anchor_id = 1u32;
+    let mut continuation_state = None::<PageContinuationStateV0>;
     let mut anchor_destinations = BTreeMap::<u32, AnchorDestinationV0>::new();
     let mut page_renders = Vec::<PageRenderV0>::with_capacity(body_pages.len());
     for (page_index, body_lines) in body_pages.iter().enumerate() {
-        let Some(rendered) = build_page_content_stream_v0(
+        let Some((rendered, next_state)) = build_page_content_stream_v0(
             body_lines,
             &footnote_defs_by_id,
             &link_targets_by_id,
@@ -732,9 +795,12 @@ fn build_pdf_for_pages_v0(pages: &[PagePlanV0]) -> Vec<u8> {
             &mut next_anchor_id,
             &mut anchor_destinations,
             page_index == 0,
+            continuation_state.as_ref(),
+            page_index + 1 == body_pages.len(),
         ) else {
             return Vec::new();
         };
+        continuation_state = Some(next_state);
         page_renders.push(rendered);
     }
     for (anchor_id, destination) in nominal_anchor_destinations {
