@@ -1676,6 +1676,32 @@ fn pdf_renderer_bibliography_entries_use_hanging_indent_and_stable_rhythm_v14() 
 }
 
 #[test]
+fn pdf_renderer_body_to_bibliography_opening_gap_is_tightened_v17() {
+    let xdv = write_dvi_v2_text_page_v0(
+        b"~ Body before references.\n\n@S {References}\n\n[1] ALPHASTART alpha source text.",
+    )
+    .expect("writer should accept bibliography transition bytes");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+
+    let (_, body_y) = tm_position_for_line_containing_text_v0(&pdf, "(Body before references.)")
+        .expect("body before references");
+    let (_, references_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "(References)").expect("references heading");
+    let (_, alpha_start_y) =
+        tm_position_for_segment_substring_v0(&pdf, "ALPHASTART").expect("first bibliography body");
+
+    let epsilon_pt = 0.05f32;
+    assert!(
+        (body_y - references_y - 24.0).abs() <= epsilon_pt,
+        "body->bibliography heading transition should stay tightened: body_y={body_y}, references_y={references_y}"
+    );
+    assert!(
+        (references_y - alpha_start_y - 12.0).abs() <= epsilon_pt,
+        "bibliography heading->first entry gap should remain stable: references_y={references_y}, alpha_start_y={alpha_start_y}"
+    );
+}
+
+#[test]
 fn pdf_renderer_nested_list_indentation_and_wrap_invariants_v0() {
     let xdv = write_dvi_v2_text_page_v0(b"- [OUTERSTART] item with enough repeated words to force wrapping in the first list level before token [OUTERWRAPTOKEN]\n  - [NESTEDSTART] item with enough repeated words to force wrapping in the second list level before token [NESTEDWRAPTOKEN]")
         .expect("writer should accept nested list text");
