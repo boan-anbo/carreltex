@@ -3479,6 +3479,40 @@ fn pdf_renderer_wrapped_centered_short_bold_pre_style_gap_is_tightened_v57() {
 }
 
 #[test]
+fn pdf_renderer_wrapped_centered_short_italic_pre_style_gap_is_tightened_v58() {
+    let xdv = write_dvi_v2_text_page_with_layout_and_wrap_v0(
+        b"\n^ CENTER [core words] trail words words WRAPCENTERSHORTITALIC tail.",
+        65_536,
+        786_432,
+        30,
+    )
+    .expect("writer should accept wrapped centered short italic text");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+
+    let (_, prefix_y) = tm_position_for_segment_substring_v0(&pdf, "CENTER")
+        .expect("centered short italic prefix y");
+    let (_, wrap_y) = tm_position_for_segment_substring_v0(&pdf, "WRAPCENTERSHORTITALIC")
+        .expect("centered short italic wrap y");
+    let rendered = rendered_text_for_line_containing_needle_v0(&pdf, "CENTER")
+        .expect("centered short italic rendered text");
+    let max_tm_gap = max_tm_gap_pt_for_line_containing_v0(&pdf, "core words")
+        .expect("centered short italic tm gap");
+
+    assert!(
+        rendered == "CENTER core words trail",
+        "wrapped centered short italic line should preserve stable spacing: {rendered}"
+    );
+    assert!(
+        max_tm_gap <= 106.0,
+        "wrapped centered short italic pre-style seam should stay tightened: tm_gap={max_tm_gap}"
+    );
+    assert!(
+        prefix_y > wrap_y,
+        "centered short italic fixture should still wrap after the tightened seam: prefix_y={prefix_y}, wrap_y={wrap_y}"
+    );
+}
+
+#[test]
 fn pdf_renderer_wrapped_quote_and_list_styled_seams_use_v29_profile() {
     let xdv = write_dvi_v2_text_page_v0(
         b"\n- LISTSTART alpha alpha alpha alpha alpha alpha alpha [LISTITALICV29] beta beta beta beta beta beta LISTWRAPV29.\n\n> QUOTESTART gamma gamma gamma gamma gamma gamma gamma {QUOTEBOLDV29} delta delta delta delta delta QUOTEWRAPV29.",
