@@ -2,6 +2,7 @@
 enum AnnotationRectProfileV0 {
     DefaultV9,
     BibliographyV14,
+    FootnoteV18,
 }
 
 fn annotation_trimmed_run_bounds_v9(run_start_x: f32, run_end_x: f32, run_bytes: &[u8]) -> Option<(f32, f32)> {
@@ -52,6 +53,7 @@ fn annotation_rect_for_run_v9(
             ANNOTATION_RECT_MIN_HEIGHT_PT_V9,
         ),
         AnnotationRectProfileV0::BibliographyV14 => (0.20, 0.72, 8.0),
+        AnnotationRectProfileV0::FootnoteV18 => (0.20, 0.70, 7.2),
     };
     let descent_pt = font_size_pt * descent_ratio;
     let mut ascent_pt = font_size_pt * ascent_ratio;
