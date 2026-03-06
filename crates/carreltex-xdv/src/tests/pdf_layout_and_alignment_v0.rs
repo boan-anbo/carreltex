@@ -1044,7 +1044,7 @@ fn pdf_renderer_consecutive_blank_lines_collapse_to_single_rhythm_gap_v1() {
 
 #[test]
 fn pdf_renderer_list_rhythm_and_wrap_indent_invariants_v0() {
-    let demo_text = b"Paragraph before list.\n\n- ITEMONE lead words with deterministic wrapping content to force continuation line token WRAPONE after many repeated words in this same item.\n- ITEMTWO lead words with deterministic wrapping content to force continuation line token WRAPTWO after many repeated words in this same item.\n\nParagraph after list.";
+    let demo_text = b"\nParagraph before list.\n\n- ITEMONE lead words with deterministic wrapping content to force continuation line token WRAPONE after many repeated words in this same item.\n- ITEMTWO lead words with deterministic wrapping content to force continuation line token WRAPTWO after many repeated words in this same item.\n\nParagraph after list.";
     let xdv = write_dvi_v2_text_page_v0(demo_text).expect("writer should accept list rhythm demo");
     let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
 
@@ -1067,11 +1067,11 @@ fn pdf_renderer_list_rhythm_and_wrap_indent_invariants_v0() {
 
     let epsilon_pt = 0.02f32;
     assert!(
-        (28.0 - epsilon_pt..=56.0 + epsilon_pt).contains(&(before_list_y - item_one_y)),
+        (before_list_y - item_one_y - 24.0).abs() <= epsilon_pt,
         "before->list top gap out of range: before_list_y={before_list_y}, item_one_y={item_one_y}"
     );
     assert!(
-        (item_two_y - after_list_y).abs() >= 28.0 - epsilon_pt,
+        (item_two_y - after_list_y).abs() >= 24.0 - epsilon_pt,
         "list->after paragraph gap must be at least one paragraph break: item_two_y={item_two_y}, after_list_y={after_list_y}"
     );
     assert!(
@@ -1191,23 +1191,23 @@ fn pdf_renderer_heading_list_quote_rhythm_invariants_v0() {
         "heading->first paragraph gap mismatch: heading_y={heading_y}, after_heading_y={after_heading_y}"
     );
     assert!(
-        (after_heading_y - list_one_y - 28.0).abs() <= epsilon_pt,
+        (after_heading_y - list_one_y - 24.0).abs() <= epsilon_pt,
         "paragraph->list gap mismatch: after_heading_y={after_heading_y}, list_one_y={list_one_y}"
     );
     assert!(
-        (list_one_y - list_two_y - 14.0).abs() <= epsilon_pt,
+        (list_one_y - list_two_y - 13.0).abs() <= epsilon_pt,
         "list line gap mismatch: list_one_y={list_one_y}, list_two_y={list_two_y}"
     );
     assert!(
-        (list_two_y - quote_one_y - 28.0).abs() <= epsilon_pt,
+        (list_two_y - quote_one_y - 24.0).abs() <= epsilon_pt,
         "list->quote gap mismatch: list_two_y={list_two_y}, quote_one_y={quote_one_y}"
     );
     assert!(
-        (quote_one_y - quote_two_y - 14.0).abs() <= epsilon_pt,
+        (quote_one_y - quote_two_y - 13.0).abs() <= epsilon_pt,
         "quote line gap mismatch: quote_one_y={quote_one_y}, quote_two_y={quote_two_y}"
     );
     assert!(
-        (quote_two_y - after_quote_y - 28.0).abs() <= epsilon_pt,
+        (quote_two_y - after_quote_y - 24.0).abs() <= epsilon_pt,
         "quote->paragraph gap mismatch: quote_two_y={quote_two_y}, after_quote_y={after_quote_y}"
     );
     assert!(quote_one_x > 72.0, "quote line should be indented");
@@ -1487,9 +1487,17 @@ fn pdf_renderer_nested_list_indentation_and_wrap_invariants_v0() {
 
     let bullet_xs = tm_xs_for_segment_text_v0(&pdf, "-");
     let outer_start_x = tm_xs_for_segment_text_v0(&pdf, "OUTERSTART");
+    let (_, outer_start_y) =
+        tm_position_for_segment_substring_v0(&pdf, "OUTERSTART").expect("outer start y");
     let outer_wrap_x = tm_line_start_xs_for_segment_text_v0(&pdf, "OUTERWRAPTOKEN");
+    let (_, outer_wrap_y) =
+        tm_position_for_segment_substring_v0(&pdf, "OUTERWRAPTOKEN").expect("outer wrap y");
     let nested_start_x = tm_xs_for_segment_text_v0(&pdf, "NESTEDSTART");
+    let (_, nested_start_y) =
+        tm_position_for_segment_substring_v0(&pdf, "NESTEDSTART").expect("nested start y");
     let nested_wrap_x = tm_line_start_xs_for_segment_text_v0(&pdf, "NESTEDWRAPTOKEN");
+    let (_, nested_wrap_y) =
+        tm_position_for_segment_substring_v0(&pdf, "NESTEDWRAPTOKEN").expect("nested wrap y");
 
     assert_eq!(bullet_xs.len(), 2, "expected two bullets: {bullet_xs:?}");
     assert_eq!(outer_start_x.len(), 1, "expected outer start render");
@@ -1528,6 +1536,14 @@ fn pdf_renderer_nested_list_indentation_and_wrap_invariants_v0() {
         "nested continuation x mismatch: nested={}, wrap={}",
         nested_start_x[0],
         nested_wrap_x[0]
+    );
+    assert!(
+        (outer_start_y - outer_wrap_y - 13.0).abs() <= epsilon_pt,
+        "outer wrapped list rhythm mismatch: outer_start_y={outer_start_y}, outer_wrap_y={outer_wrap_y}"
+    );
+    assert!(
+        (nested_start_y - nested_wrap_y - 13.0).abs() <= epsilon_pt,
+        "nested wrapped list rhythm mismatch: nested_start_y={nested_start_y}, nested_wrap_y={nested_wrap_y}"
     );
 }
 
@@ -1610,16 +1626,53 @@ fn pdf_renderer_quote_indent_and_paragraph_break_invariants_v0() {
         "quote line x drift: {x1} vs {x4}"
     );
     assert!(
-        (y1 - y2 - 14.0).abs() <= epsilon_pt,
+        (y1 - y2 - 13.0).abs() <= epsilon_pt,
         "quote line gap mismatch"
     );
     assert!(
-        (y2 - y3 - 28.0).abs() <= epsilon_pt,
+        (y2 - y3 - 27.0).abs() <= epsilon_pt,
         "quote paragraph gap mismatch"
     );
     assert!(
-        (y3 - y4 - 14.0).abs() <= epsilon_pt,
+        (y3 - y4 - 13.0).abs() <= epsilon_pt,
         "quote line gap mismatch"
+    );
+}
+
+#[test]
+fn pdf_renderer_paragraph_quote_transition_spacing_polish_v7() {
+    let xdv = write_dvi_v2_text_page_v0(
+        b"\nParagraph before quote.\n\n> QUOTESTART quote quote quote quote quote quote quote quote quote quote quote quote QUOTEWRAP\n\nParagraph after quote.",
+    )
+    .expect("writer should accept paragraph-quote transition text");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+
+    let (_, before_quote_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "(Paragraph before quote.)")
+            .expect("before quote paragraph");
+    let (quote_start_x, quote_start_y) =
+        tm_position_for_segment_substring_v0(&pdf, "QUOTESTART").expect("quote start");
+    let (quote_wrap_x, quote_wrap_y) =
+        tm_position_for_segment_substring_v0(&pdf, "QUOTEWRAP").expect("quote wrap");
+    let (_, after_quote_y) = tm_position_for_line_containing_text_v0(&pdf, "(Paragraph after quote.)")
+        .expect("after quote paragraph");
+
+    let epsilon_pt = 0.02f32;
+    assert!(
+        (before_quote_y - quote_start_y - 24.0).abs() <= epsilon_pt,
+        "paragraph->quote transition gap mismatch: before_quote_y={before_quote_y}, quote_start_y={quote_start_y}"
+    );
+    assert!(
+        (quote_start_y - quote_wrap_y - 13.0).abs() <= epsilon_pt,
+        "quote wrapped-line rhythm mismatch: quote_start_y={quote_start_y}, quote_wrap_y={quote_wrap_y}"
+    );
+    assert!(
+        (quote_wrap_y - after_quote_y - 24.0).abs() <= epsilon_pt,
+        "quote->paragraph transition gap mismatch: quote_wrap_y={quote_wrap_y}, after_quote_y={after_quote_y}"
+    );
+    assert!(
+        (quote_start_x - quote_wrap_x).abs() <= epsilon_pt,
+        "wrapped quote continuation should preserve quote indent: quote_start_x={quote_start_x}, quote_wrap_x={quote_wrap_x}"
     );
 }
 
