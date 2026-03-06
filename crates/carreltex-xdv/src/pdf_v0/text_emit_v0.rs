@@ -283,7 +283,7 @@ fn trailing_space_bounded_seam_trim_pt_v30(
         } else if matches!(profile, SegmentEmitProfileV0::WrappedIndentedV29)
             && segment.advance_pt >= 80.0
         {
-            (segment.advance_pt * 0.09).min(font_size_pt * 2.0)
+            (segment.advance_pt * 0.092).min(font_size_pt * 2.1)
         } else if matches!(profile, SegmentEmitProfileV0::WrappedIndentedV29)
             && segment.advance_pt >= 60.0
         {
