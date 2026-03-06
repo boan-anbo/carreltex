@@ -410,6 +410,59 @@ fn pdf_renderer_display_math_with_equation_metadata_renders_right_number_v1() {
 }
 
 #[test]
+fn pdf_renderer_display_math_blank_transition_rhythm_is_tightened_v16() {
+    let xdv =
+        write_dvi_v2_text_page_v0(b"~ Paragraph before.\n\n^ MATH DISPLAY\n\n~ Paragraph after.")
+        .expect("writer should accept display-math transition text");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+    let (_, before_y) = tm_position_for_line_containing_text_v0(&pdf, "(Paragraph before.)")
+        .expect("paragraph before y");
+    let (_, math_y) = tm_position_for_line_containing_text_v0(&pdf, "(MATH DISPLAY)")
+        .expect("display math y");
+    let (_, after_y) = tm_position_for_line_containing_text_v0(&pdf, "(Paragraph after.)")
+        .expect("paragraph after y");
+    let before_gap = before_y - math_y;
+    let after_gap = math_y - after_y;
+    assert!(
+        (before_gap - 24.0).abs() <= 0.05,
+        "paragraph->display baseline gap should tighten to 24pt: {before_gap}"
+    );
+    assert!(
+        (after_gap - 24.0).abs() <= 0.05,
+        "display->paragraph baseline gap should tighten to 24pt: {after_gap}"
+    );
+}
+
+#[test]
+fn pdf_renderer_display_math_does_not_force_centered_continuation_v16() {
+    let xdv = write_dvi_v2_text_page_v0(
+        b"~ Body lead line with [style] seam.\n^ MATH DISPLAY\nBody continuation after display.",
+    )
+    .expect("writer should accept display-math continuation text");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+    let (math_x, math_y) = tm_position_for_line_containing_text_v0(&pdf, "(MATH DISPLAY)")
+        .expect("display math position");
+    let (body_x, body_y) = tm_position_for_line_containing_text_v0(
+        &pdf,
+        "(Body continuation after display.)",
+    )
+    .expect("body continuation position");
+    assert!(
+        (body_x - 72.0).abs() <= 0.05,
+        "body line after display math should return to paragraph margin, not stay centered: x={body_x}"
+    );
+    assert!(
+        math_x > body_x + 20.0,
+        "display math should remain centered away from paragraph margin: math_x={math_x}, body_x={body_x}"
+    );
+    let baseline_gap = math_y - body_y;
+    assert!(
+        (baseline_gap - 14.0).abs() <= 0.05,
+        "display line to immediate following body line should keep stable line-leading rhythm: gap={baseline_gap}"
+    );
+}
+
+#[test]
 fn pdf_renderer_emits_link_annotation_with_in_bounds_rect_v0() {
     let xdv = write_dvi_v2_text_page_v0(b"Visit <{Example link}> now.\n\n!u 1 https://example.com")
         .expect("writer should accept href marker lines");
