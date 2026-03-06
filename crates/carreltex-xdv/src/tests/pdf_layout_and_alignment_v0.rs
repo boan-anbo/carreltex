@@ -1,0 +1,1712 @@
+#[test]
+fn pdf_renderer_keeps_multi_space_line_unwrapped_under_width_limit_v0() {
+    let layout =
+        plan_layout_width_v0(b"A     B", 65_536, 786_432, 300_000, 200).expect("layout plan");
+    assert_eq!(layout.pages.len(), 1);
+    assert_eq!(layout.pages[0].lines.len(), 1);
+
+    let xdv = write_dvi_v2_text_page_from_layout_v0(&layout, 786_432).expect("xdv bytes");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+    assert!(pdf
+        .windows(b"(A     B) Tj".len())
+        .any(|w| w == b"(A     B) Tj"));
+}
+
+fn max_tm_gap_pt_for_line_containing_v0(pdf: &[u8], needle: &str) -> Option<f32> {
+    let text = String::from_utf8_lossy(pdf);
+    for line in text.lines() {
+        if !line.contains(needle) {
+            continue;
+        }
+        let mut xs = Vec::<f32>::new();
+        let fields = line.split_whitespace().collect::<Vec<_>>();
+        let mut index = 0usize;
+        while index + 6 < fields.len() {
+            if fields[index] == "1"
+                && fields[index + 1] == "0"
+                && fields[index + 2] == "0"
+                && fields[index + 3] == "1"
+                && fields[index + 6] == "Tm"
+            {
+                let x_pt = fields[index + 4].parse::<f32>().ok()?;
+                xs.push(x_pt);
+                index += 7;
+                continue;
+            }
+            index += 1;
+        }
+        if xs.len() < 2 {
+            return Some(0.0);
+        }
+        let mut max_gap = 0.0f32;
+        for pair in xs.windows(2) {
+            let gap = pair[1] - pair[0];
+            if gap > max_gap {
+                max_gap = gap;
+            }
+        }
+        return Some(max_gap);
+    }
+    None
+}
+
+fn tm_line_start_xs_for_segment_text_v0(pdf: &[u8], segment_text: &str) -> Vec<f32> {
+    let target_token = format!("({segment_text})");
+    let text = String::from_utf8_lossy(pdf);
+    let mut xs = Vec::<f32>::new();
+    for line in text.lines() {
+        if !line.contains(&target_token) || !line.contains(" Tm ") {
+            continue;
+        }
+        let fields = line.split_whitespace().collect::<Vec<_>>();
+        let mut index = 0usize;
+        while index + 6 < fields.len() {
+            let is_tm = fields[index] == "1"
+                && fields[index + 1] == "0"
+                && fields[index + 2] == "0"
+                && fields[index + 3] == "1"
+                && fields[index + 6] == "Tm";
+            if !is_tm {
+                index += 1;
+                continue;
+            }
+            if let Ok(x_pt) = fields[index + 4].parse::<f32>() {
+                xs.push(x_pt);
+            }
+            break;
+        }
+    }
+    xs
+}
+
+fn segment_width_pt_v0(segment: &[u8]) -> f32 {
+    let layout = plan_layout_width_v0(segment, 65_536, 786_432, 10_000_000, 16)
+        .expect("segment layout should parse");
+    let line = &layout.pages[0].lines[0];
+    line.width_sp as f32 / 65_536.0
+}
+
+fn decode_pdf_text_segments_from_line_v0(line: &str) -> Option<String> {
+    let mut out = Vec::<u8>::new();
+    let bytes = line.as_bytes();
+    let mut index = 0usize;
+    while index < bytes.len() {
+        if bytes[index] != b'(' {
+            index += 1;
+            continue;
+        }
+        index += 1;
+        while index < bytes.len() {
+            let byte = bytes[index];
+            if byte == b'\\' {
+                index += 1;
+                if index < bytes.len() {
+                    out.push(bytes[index]);
+                    index += 1;
+                }
+                continue;
+            }
+            if byte == b')' {
+                index += 1;
+                break;
+            }
+            out.push(byte);
+            index += 1;
+        }
+    }
+    String::from_utf8(out).ok()
+}
+
+fn rendered_text_for_line_containing_segment_v0(pdf: &[u8], segment_text: &str) -> Option<String> {
+    let target_token = format!("({segment_text})");
+    let text = String::from_utf8_lossy(pdf);
+    for line in text.lines() {
+        if !line.contains(&target_token) || !line.contains(" Tj ") {
+            continue;
+        }
+        return decode_pdf_text_segments_from_line_v0(line);
+    }
+    None
+}
+
+fn rendered_text_for_first_text_line_v0(pdf: &[u8]) -> Option<String> {
+    let text = String::from_utf8_lossy(pdf);
+    for line in text.lines() {
+        if line.contains(" Tj ") {
+            return decode_pdf_text_segments_from_line_v0(line);
+        }
+    }
+    None
+}
+
+fn parse_tm_positions_in_line_v0(line: &str) -> Vec<(usize, f32, f32)> {
+    let mut positions = Vec::<(usize, f32, f32)>::new();
+    let mut search_from = 0usize;
+    while let Some(rel_start) = line[search_from..].find("1 0 0 1 ") {
+        let start = search_from + rel_start + "1 0 0 1 ".len();
+        let x_end = match line[start..].find(' ') {
+            Some(value) => start + value,
+            None => break,
+        };
+        let x_pt = match line[start..x_end].parse::<f32>() {
+            Ok(value) => value,
+            Err(_) => break,
+        };
+        let y_start = x_end + 1;
+        let y_end = match line[y_start..].find(' ') {
+            Some(value) => y_start + value,
+            None => break,
+        };
+        let y_pt = match line[y_start..y_end].parse::<f32>() {
+            Ok(value) => value,
+            Err(_) => break,
+        };
+        if !line[y_end..].starts_with(" Tm") {
+            break;
+        }
+        let tm_end = y_end + " Tm".len();
+        positions.push((tm_end, x_pt, y_pt));
+        search_from = tm_end;
+    }
+    positions
+}
+
+fn tm_x_for_segment_substring_v0(
+    pdf: &[u8],
+    line_needle: &str,
+    segment_substring: &str,
+) -> Option<f32> {
+    let text = String::from_utf8_lossy(pdf);
+    for line in text.lines() {
+        if !line.contains(line_needle) || !line.contains(segment_substring) {
+            continue;
+        }
+        let target_index = line.find(segment_substring)?;
+        let positions = parse_tm_positions_in_line_v0(line);
+        let mut best_x = None::<f32>;
+        for (tm_end, x_pt, _) in positions {
+            if tm_end <= target_index {
+                best_x = Some(x_pt);
+            }
+        }
+        return best_x;
+    }
+    None
+}
+
+fn tm_count_for_line_containing_v0(pdf: &[u8], needle: &str) -> usize {
+    let text = String::from_utf8_lossy(pdf);
+    for line in text.lines() {
+        if !line.contains(needle) {
+            continue;
+        }
+        let fields = line.split_whitespace().collect::<Vec<_>>();
+        let mut count = 0usize;
+        let mut index = 0usize;
+        while index + 6 < fields.len() {
+            if fields[index] == "1"
+                && fields[index + 1] == "0"
+                && fields[index + 2] == "0"
+                && fields[index + 3] == "1"
+                && fields[index + 6] == "Tm"
+            {
+                count += 1;
+                index += 7;
+                continue;
+            }
+            index += 1;
+        }
+        return count;
+    }
+    0
+}
+
+fn tm_x_for_line_containing_text_v0(pdf: &[u8], needle: &str) -> Option<f32> {
+    let text = String::from_utf8_lossy(pdf);
+    for line in text.lines() {
+        if !line.contains(needle) || !line.contains(" Tm ") {
+            continue;
+        }
+        let fields = line.split_whitespace().collect::<Vec<_>>();
+        if fields.len() < 7 || fields[6] != "Tm" {
+            continue;
+        }
+        if let Ok(x_pt) = fields[4].parse::<f32>() {
+            return Some(x_pt);
+        }
+    }
+    None
+}
+
+fn tm_position_for_line_containing_text_v0(pdf: &[u8], needle: &str) -> Option<(f32, f32)> {
+    let text = String::from_utf8_lossy(pdf);
+    for line in text.lines() {
+        if !line.contains(needle) || !line.contains(" Tm ") {
+            continue;
+        }
+        let fields = line.split_whitespace().collect::<Vec<_>>();
+        if fields.len() < 7 || fields[6] != "Tm" {
+            continue;
+        }
+        let x_pt = fields[4].parse::<f32>().ok()?;
+        let y_pt = fields[5].parse::<f32>().ok()?;
+        return Some((x_pt, y_pt));
+    }
+    None
+}
+
+fn tf_sizes_for_line_containing_text_v0(pdf: &[u8], needle: &str) -> Vec<f32> {
+    let text = String::from_utf8_lossy(pdf);
+    for line in text.lines() {
+        if !line.contains(needle) {
+            continue;
+        }
+        let fields = line.split_whitespace().collect::<Vec<_>>();
+        let mut sizes = Vec::<f32>::new();
+        let mut index = 0usize;
+        while index + 1 < fields.len() {
+            if fields[index + 1] == "Tf" {
+                if let Ok(size_pt) = fields[index].parse::<f32>() {
+                    sizes.push(size_pt);
+                }
+            }
+            index += 1;
+        }
+        return sizes;
+    }
+    Vec::new()
+}
+
+fn tm_xs_for_segment_text_v0(pdf: &[u8], segment_text: &str) -> Vec<f32> {
+    let target_token = format!("({segment_text})");
+    let text = String::from_utf8_lossy(pdf);
+    let mut xs = Vec::<f32>::new();
+    for line in text.lines() {
+        if !line.contains(&target_token) || !line.contains(" Tm ") {
+            continue;
+        }
+        let fields = line.split_whitespace().collect::<Vec<_>>();
+        let mut index = 0usize;
+        while index + 6 < fields.len() {
+            let is_tm = fields[index] == "1"
+                && fields[index + 1] == "0"
+                && fields[index + 2] == "0"
+                && fields[index + 3] == "1"
+                && fields[index + 6] == "Tm";
+            if !is_tm {
+                index += 1;
+                continue;
+            }
+            let Some(x_pt) = fields[index + 4].parse::<f32>().ok() else {
+                index += 7;
+                continue;
+            };
+            let mut cursor = index + 7;
+            let mut matched = false;
+            while cursor < fields.len() {
+                if fields[cursor] == "1"
+                    && cursor + 6 < fields.len()
+                    && fields[cursor + 1] == "0"
+                    && fields[cursor + 2] == "0"
+                    && fields[cursor + 3] == "1"
+                    && fields[cursor + 6] == "Tm"
+                {
+                    break;
+                }
+                if fields[cursor] == target_token {
+                    matched = true;
+                    break;
+                }
+                cursor += 1;
+            }
+            if matched {
+                xs.push(x_pt);
+            }
+            index += 7;
+        }
+    }
+    xs
+}
+
+fn tm_position_for_segment_substring_v0(pdf: &[u8], needle: &str) -> Option<(f32, f32)> {
+    let text = String::from_utf8_lossy(pdf);
+    for line in text.lines() {
+        if !line.contains(needle) || !line.contains(" Tm ") {
+            continue;
+        }
+        let fields = line.split_whitespace().collect::<Vec<_>>();
+        let mut index = 0usize;
+        while index + 6 < fields.len() {
+            let is_tm = fields[index] == "1"
+                && fields[index + 1] == "0"
+                && fields[index + 2] == "0"
+                && fields[index + 3] == "1"
+                && fields[index + 6] == "Tm";
+            if !is_tm {
+                index += 1;
+                continue;
+            }
+            let x_pt = fields[index + 4].parse::<f32>().ok()?;
+            let y_pt = fields[index + 5].parse::<f32>().ok()?;
+            let mut cursor = index + 7;
+            while cursor < fields.len() {
+                if cursor + 6 < fields.len()
+                    && fields[cursor] == "1"
+                    && fields[cursor + 1] == "0"
+                    && fields[cursor + 2] == "0"
+                    && fields[cursor + 3] == "1"
+                    && fields[cursor + 6] == "Tm"
+                {
+                    break;
+                }
+                if fields[cursor].contains(needle) {
+                    return Some((x_pt, y_pt));
+                }
+                cursor += 1;
+            }
+            index += 7;
+        }
+    }
+    None
+}
+
+fn parse_first_link_rect_v0(pdf: &[u8]) -> Option<[f32; 4]> {
+    let text = String::from_utf8_lossy(pdf);
+    for line in text.lines() {
+        if !line.contains("/Subtype /Link") || !line.contains("/Rect [") {
+            continue;
+        }
+        let rect_start = line.find("/Rect [")?;
+        let rect_body_start = rect_start + "/Rect [".len();
+        let rect_body_end = line[rect_body_start..].find(']')?;
+        let rect_text = &line[rect_body_start..rect_body_start + rect_body_end];
+        let values: Vec<f32> = rect_text
+            .split_whitespace()
+            .filter_map(|value| value.parse::<f32>().ok())
+            .collect();
+        if values.len() != 4 {
+            return None;
+        }
+        return Some([values[0], values[1], values[2], values[3]]);
+    }
+    None
+}
+
+fn count_pdf_page_objects_v0(pdf: &[u8]) -> usize {
+    String::from_utf8_lossy(pdf)
+        .matches("/Type /Page /Parent")
+        .count()
+}
+
+fn parse_pdf_object_body_v0(pdf: &[u8], id: u32) -> Option<String> {
+    let text = String::from_utf8_lossy(pdf);
+    let start_token = format!("{id} 0 obj\n");
+    let start = text.find(&start_token)? + start_token.len();
+    let end = text[start..].find("\nendobj\n")? + start;
+    Some(text[start..end].to_string())
+}
+
+fn parse_pdf_ref_ids_v0(body: &str, key: &str) -> Vec<u32> {
+    let marker = format!("{key} [");
+    let Some(start) = body.find(&marker) else {
+        return Vec::new();
+    };
+    let values_start = start + marker.len();
+    let Some(values_end_rel) = body[values_start..].find(']') else {
+        return Vec::new();
+    };
+    body[values_start..values_start + values_end_rel]
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .chunks(3)
+        .filter_map(|chunk| match chunk {
+            [id, "0", "R"] => id.parse::<u32>().ok(),
+            _ => None,
+        })
+        .collect()
+}
+
+fn parse_pdf_single_ref_id_v0(body: &str, key: &str) -> Option<u32> {
+    let marker = format!("{key} ");
+    let start = body.find(&marker)? + marker.len();
+    let fields = body[start..].split_whitespace().collect::<Vec<_>>();
+    if fields.len() < 3 || fields[1] != "0" || fields[2] != "R" {
+        return None;
+    }
+    fields[0].parse::<u32>().ok()
+}
+
+fn parse_pdf_outline_count_v0(body: &str) -> Option<i32> {
+    let marker = "/Count ";
+    let start = body.find(marker)? + marker.len();
+    let token = body[start..].split_whitespace().next()?;
+    token.parse::<i32>().ok()
+}
+
+fn collect_outline_item_ids_depth_first_v0(pdf: &[u8], outline_root_id: u32) -> Option<Vec<u32>> {
+    let root_body = parse_pdf_object_body_v0(pdf, outline_root_id)?;
+    let Some(root_first_id) = parse_pdf_single_ref_id_v0(&root_body, "/First") else {
+        return Some(Vec::new());
+    };
+    let mut out = Vec::<u32>::new();
+    let mut seen = BTreeSet::<u32>::new();
+    let mut stack = vec![root_first_id];
+    while let Some(item_id) = stack.pop() {
+        if !seen.insert(item_id) {
+            return None;
+        }
+        out.push(item_id);
+        let body = parse_pdf_object_body_v0(pdf, item_id)?;
+        if let Some(next_id) = parse_pdf_single_ref_id_v0(&body, "/Next") {
+            stack.push(next_id);
+        }
+        if let Some(first_child_id) = parse_pdf_single_ref_id_v0(&body, "/First") {
+            stack.push(first_child_id);
+        }
+    }
+    Some(out)
+}
+
+fn parse_pdf_annotation_action_id_v0(body: &str) -> Option<u32> {
+    let marker = "/A ";
+    let start = body.find(marker)? + marker.len();
+    let fields = body[start..].split_whitespace().collect::<Vec<_>>();
+    if fields.len() < 3 || fields[1] != "0" || fields[2] != "R" {
+        return None;
+    }
+    fields[0].parse::<u32>().ok()
+}
+
+fn parse_pdf_annotation_dest_page_id_v0(body: &str) -> Option<u32> {
+    let marker = "/Dest [";
+    let start = body.find(marker)? + marker.len();
+    let fields = body[start..].split_whitespace().collect::<Vec<_>>();
+    if fields.len() < 3 || fields[1] != "0" || fields[2] != "R" {
+        return None;
+    }
+    fields[0].parse::<u32>().ok()
+}
+
+fn parse_pdf_annotation_dest_xyz_v0(body: &str) -> Option<(u32, f32, f32)> {
+    let marker = "/Dest [";
+    let start = body.find(marker)? + marker.len();
+    let end = body[start..].find(']')? + start;
+    let fields = body[start..end].split_whitespace().collect::<Vec<_>>();
+    if fields.len() < 6 || fields[1] != "0" || fields[2] != "R" || fields[3] != "/XYZ" {
+        return None;
+    }
+    let page_id = fields[0].parse::<u32>().ok()?;
+    let x_pt = fields[4].parse::<f32>().ok()?;
+    let y_token = fields[5].trim_end_matches(']');
+    let y_pt = y_token.parse::<f32>().ok()?;
+    Some((page_id, x_pt, y_pt))
+}
+
+fn parse_pdf_action_uri_v0(body: &str) -> Option<String> {
+    let marker = "/URI (";
+    let start = body.find(marker)? + marker.len();
+    let end = body[start..].find(')')? + start;
+    Some(body[start..end].to_string())
+}
+
+fn parse_pdf_annotation_rect_v0(body: &str) -> Option<[f32; 4]> {
+    let marker = "/Rect [";
+    let start = body.find(marker)? + marker.len();
+    let end = body[start..].find(']')? + start;
+    let values = body[start..end]
+        .split_whitespace()
+        .filter_map(|value| value.parse::<f32>().ok())
+        .collect::<Vec<_>>();
+    if values.len() != 4 {
+        return None;
+    }
+    Some([values[0], values[1], values[2], values[3]])
+}
+
+fn tm_position_for_line_containing_text_in_body_v0(body: &str, needle: &str) -> Option<(f32, f32)> {
+    for line in body.lines() {
+        if !line.contains(needle) || !line.contains(" Tm ") {
+            continue;
+        }
+        let fields = line.split_whitespace().collect::<Vec<_>>();
+        let mut index = 0usize;
+        while index + 6 < fields.len() {
+            let is_tm = fields[index] == "1"
+                && fields[index + 1] == "0"
+                && fields[index + 2] == "0"
+                && fields[index + 3] == "1"
+                && fields[index + 6] == "Tm";
+            if !is_tm {
+                index += 1;
+                continue;
+            }
+            let x_pt = fields[index + 4].parse::<f32>().ok()?;
+            let y_pt = fields[index + 5].parse::<f32>().ok()?;
+            let mut cursor = index + 7;
+            while cursor < fields.len() {
+                if cursor + 6 < fields.len()
+                    && fields[cursor] == "1"
+                    && fields[cursor + 1] == "0"
+                    && fields[cursor + 2] == "0"
+                    && fields[cursor + 3] == "1"
+                    && fields[cursor + 6] == "Tm"
+                {
+                    break;
+                }
+                if fields[cursor].contains(needle) {
+                    return Some((x_pt, y_pt));
+                }
+                cursor += 1;
+            }
+            index += 7;
+        }
+    }
+    None
+}
+
+fn expected_center_x_pt_v0(width_sp: u32) -> f32 {
+    let width_pt = (width_sp as f32) / 65_536.0;
+    ((612.0 - width_pt) * 0.5).clamp(72.0, 612.0 - 72.0)
+}
+
+fn expected_right_x_pt_v0(width_sp: u32) -> f32 {
+    let width_pt = (width_sp as f32) / 65_536.0;
+    (612.0 - 72.0 - width_pt).max(72.0)
+}
+
+fn width_sp_for_prefixed_rendered_line_v0(line: &LinePlanV0, prefix: [u8; 2]) -> Option<u32> {
+    if line.glyphs.len() < 2 {
+        return None;
+    }
+    if line.glyphs[0].byte != prefix[0] || line.glyphs[1].byte != prefix[1] {
+        return None;
+    }
+    let mut width_sp = 0u32;
+    for glyph in &line.glyphs[2..] {
+        let advance = u32::try_from(glyph.advance_sp).ok()?;
+        width_sp = width_sp.checked_add(advance)?;
+    }
+    Some(width_sp)
+}
+
+fn layout_line_width_for_exact_bytes_v0(
+    layout: &super::LayoutPlanV0,
+    target: &[u8],
+) -> Option<u32> {
+    for page in &layout.pages {
+        for line in &page.lines {
+            let bytes: Vec<u8> = line.glyphs.iter().map(|glyph| glyph.byte).collect();
+            if bytes == target {
+                return Some(line.width_sp);
+            }
+        }
+    }
+    None
+}
+
+#[test]
+fn pdf_renderer_caps_segment_tm_gap_for_styled_line_v0() {
+    let xdv = write_dvi_v2_text_page_v0(b"Styled [emphasis] and {bold} run.")
+        .expect("writer should accept styled text");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+    let max_tm_gap = max_tm_gap_pt_for_line_containing_v0(&pdf, "Styled")
+        .expect("pdf should include styled line");
+    assert!(
+        max_tm_gap <= 24.0,
+        "styled line tm gap should be capped, got {max_tm_gap}"
+    );
+}
+
+#[test]
+fn pdf_renderer_inline_wrapper_spacing_invariants_v0() {
+    let xdv = write_dvi_v2_text_page_v0(b"word[mid]word word [lead] trail,{bold}!")
+        .expect("writer should accept styled text");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+    let rendered = rendered_text_for_line_containing_segment_v0(&pdf, "word")
+        .expect("styled line should decode");
+    assert_eq!(rendered, "wordmidword word lead trail,bold!");
+
+    let word_x = tm_xs_for_segment_text_v0(&pdf, "word")[0];
+    let mid_x = tm_xs_for_segment_text_v0(&pdf, "mid")[0];
+    let trailing_word_x =
+        tm_x_for_segment_substring_v0(&pdf, "(word)", "(word word )").expect("word word segment x");
+    let lead_x = tm_xs_for_segment_text_v0(&pdf, "lead")[0];
+    let trail_x =
+        tm_x_for_segment_substring_v0(&pdf, "(word)", "( trail,)").expect("trail segment x");
+    let bold_x = tm_xs_for_segment_text_v0(&pdf, "bold")[0];
+
+    let epsilon_pt = 0.02f32;
+    assert!(
+        ((mid_x - word_x) - segment_width_pt_v0(b"word")).abs() <= epsilon_pt,
+        "word->mid advance mismatch: word_x={word_x}, mid_x={mid_x}"
+    );
+    assert!(
+        ((trailing_word_x - mid_x) - segment_width_pt_v0(b"mid")).abs() <= epsilon_pt,
+        "mid->trailing advance mismatch: mid_x={mid_x}, trailing_word_x={trailing_word_x}"
+    );
+    assert!(
+        ((trail_x - lead_x) - segment_width_pt_v0(b"lead")).abs() <= epsilon_pt,
+        "lead->trail advance mismatch: lead_x={lead_x}, trail_x={trail_x}"
+    );
+    assert!(
+        ((bold_x - trail_x) - segment_width_pt_v0(b" trail,")).abs() <= epsilon_pt,
+        "trail->bold advance mismatch: trail_x={trail_x}, bold_x={bold_x}"
+    );
+}
+
+#[test]
+fn pdf_renderer_punctuation_adjacent_wrapper_gap_invariants_v0() {
+    let xdv = write_dvi_v2_text_page_v0(
+        b"word[mid],word word,[mid]word word{mid}. (a[mid]b) lead, [trail]",
+    )
+    .expect("writer should accept punctuation-adjacent styled text");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+    let rendered = rendered_text_for_line_containing_segment_v0(&pdf, "word")
+        .expect("punctuation-adjacent line should decode");
+    assert_eq!(
+        rendered,
+        "wordmid,word word,midword wordmid. (amidb) lead, trail"
+    );
+
+    let word_x = tm_xs_for_segment_text_v0(&pdf, "word")[0];
+    let mid_x = tm_xs_for_segment_text_v0(&pdf, "mid")[0];
+    let comma_word_x = tm_x_for_segment_substring_v0(&pdf, "(word)", "(,word word,)")
+        .expect("comma-word segment x");
+    let epsilon_pt = 0.02f32;
+    assert!(
+        ((mid_x - word_x) - segment_width_pt_v0(b"word")).abs() <= epsilon_pt,
+        "word->mid punctuation boundary drifted: word_x={word_x}, mid_x={mid_x}"
+    );
+    assert!(
+        ((comma_word_x - mid_x) - segment_width_pt_v0(b"mid")).abs() <= epsilon_pt,
+        "mid->comma segment boundary drifted: mid_x={mid_x}, comma_word_x={comma_word_x}"
+    );
+}
+
+#[test]
+fn pdf_renderer_wrapper_punctuation_patterns_are_stable_v0() {
+    let cases: [(&[u8], &str); 6] = [
+        (b"alpha[beta],gamma", "alphabeta,gamma"),
+        (b"alpha,[beta]gamma", "alpha,betagamma"),
+        (b"(alpha[beta]gamma)", "(alphabetagamma)"),
+        (b"alpha{beta}. gamma", "alphabeta. gamma"),
+        (b"{lead}, trail", "lead, trail"),
+        (b"lead, [trail]", "lead, trail"),
+    ];
+
+    for (input, expected_rendered) in cases {
+        let xdv = write_dvi_v2_text_page_v0(input).expect("writer should accept punctuation case");
+        let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+        let rendered =
+            rendered_text_for_first_text_line_v0(&pdf).expect("punctuation case should decode");
+        assert!(
+            rendered == expected_rendered,
+            "rendered punctuation mismatch for input {:?}: got {:?}, want {:?}",
+            String::from_utf8_lossy(input),
+            rendered,
+            expected_rendered,
+        );
+    }
+}
+
+#[test]
+fn pdf_renderer_wrapper_punctuation_segment_positions_progress_monotonically_v0() {
+    let xdv = write_dvi_v2_text_page_v0(b"A[mid],B C,[mid]D E{mid}. F")
+        .expect("writer should accept wrapper punctuation sequence");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+    let rendered = rendered_text_for_line_containing_segment_v0(&pdf, "A")
+        .expect("wrapper punctuation line should decode");
+    assert_eq!(rendered, "Amid,B C,midD Emid. F");
+
+    let a_x = tm_xs_for_segment_text_v0(&pdf, "A")[0];
+    let mid_x = tm_xs_for_segment_text_v0(&pdf, "mid")[0];
+    let trailing_x = tm_x_for_segment_substring_v0(&pdf, "(A)", "(,B C,)")
+        .expect("trailing punctuation segment x");
+    let mid_two_x = tm_xs_for_segment_text_v0(&pdf, "mid")[1];
+    assert!(a_x < mid_x && mid_x < trailing_x && trailing_x < mid_two_x);
+    let epsilon_pt = 0.02f32;
+    assert!(
+        ((mid_x - a_x) - segment_width_pt_v0(b"A")).abs() <= epsilon_pt,
+        "A->mid boundary drifted: a_x={a_x}, mid_x={mid_x}"
+    );
+    assert!(
+        ((trailing_x - mid_x) - segment_width_pt_v0(b"mid")).abs() <= epsilon_pt,
+        "mid->trail boundary drifted: mid_x={mid_x}, trailing_x={trailing_x}"
+    );
+}
+
+#[test]
+fn pdf_renderer_centers_title_block_lines_within_epsilon_v0() {
+    let demo_text = b"Centering Accuracy Title\nAlice Bob\n2026-03-05\n\nBody line.";
+    let xdv = write_dvi_v2_text_page_v0(demo_text).expect("writer should accept demo text");
+    let layout = parse_dvi_v2_text_page_to_layout_v0(&xdv, 786_432).expect("layout parse");
+    assert!(!layout.pages.is_empty(), "layout should contain a page");
+    assert!(
+        layout.pages[0].lines.len() >= 3,
+        "layout should contain title block lines"
+    );
+
+    let expected_title_x = expected_center_x_pt_v0(layout.pages[0].lines[0].width_sp);
+    let expected_author_x = expected_center_x_pt_v0(layout.pages[0].lines[1].width_sp);
+    let expected_date_x = expected_center_x_pt_v0(layout.pages[0].lines[2].width_sp);
+
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+    let title_x =
+        tm_x_for_line_containing_text_v0(&pdf, "(Centering Accuracy Title)").expect("title line x");
+    let author_x = tm_x_for_line_containing_text_v0(&pdf, "(Alice Bob)").expect("author line x");
+    let date_x = tm_x_for_line_containing_text_v0(&pdf, "(2026-03-05)").expect("date line x");
+
+    let epsilon_pt = 0.02f32;
+    assert!(
+        (title_x - expected_title_x).abs() <= epsilon_pt,
+        "title x mismatch: actual={title_x}, expected={expected_title_x}"
+    );
+    assert!(
+        (author_x - expected_author_x).abs() <= epsilon_pt,
+        "author x mismatch: actual={author_x}, expected={expected_author_x}"
+    );
+    assert!(
+        (date_x - expected_date_x).abs() <= epsilon_pt,
+        "date x mismatch: actual={date_x}, expected={expected_date_x}"
+    );
+}
+
+#[test]
+fn pdf_renderer_centers_section_headings_within_epsilon_v0() {
+    let demo_text = b"Title\nAuthor\n2026-03-05\n\nPrelude paragraph.\n\n{Centered Section Heading}\n\n~ Body after centered heading.";
+    let xdv =
+        write_dvi_v2_text_page_v0(demo_text).expect("writer should accept centered heading text");
+    let layout = parse_dvi_v2_text_page_to_layout_v0(&xdv, 786_432).expect("layout parse");
+    assert_eq!(layout.pages.len(), 1);
+    let heading_line = layout.pages[0]
+        .lines
+        .iter()
+        .find(|line| {
+            line.glyphs
+                .iter()
+                .map(|glyph| glyph.byte)
+                .collect::<Vec<_>>()
+                == b"{Centered Section Heading}"
+        })
+        .expect("heading line in layout");
+    let expected_heading_x = expected_center_x_pt_v0(heading_line.width_sp);
+
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+    let heading_x = tm_x_for_line_containing_text_v0(&pdf, "(Centered Section Heading)")
+        .expect("centered heading position");
+    assert!(
+        (heading_x - expected_heading_x).abs() <= 0.02,
+        "centered heading x mismatch: actual={heading_x}, expected={expected_heading_x}"
+    );
+    assert!(
+        (heading_x - 72.0).abs() > 0.5,
+        "heading should not be left-margin aligned: {heading_x}"
+    );
+}
+
+#[test]
+fn pdf_renderer_title_and_heading_centering_per_line_width_v0() {
+    let demo_text = b"Centered Title Line\nAlice Bob\n2026-03-05\n\nPrelude paragraph.\n\n{Heading Alpha}\n\n~ Body alpha paragraph.\n\n{Heading Beta}\n\n~ Body beta paragraph.";
+    let xdv =
+        write_dvi_v2_text_page_v0(demo_text).expect("writer should accept title+heading demo");
+    let layout = parse_dvi_v2_text_page_to_layout_v0(&xdv, 786_432).expect("layout parse");
+    let title_width = layout_line_width_for_exact_bytes_v0(&layout, b"Centered Title Line")
+        .expect("title line width");
+    let heading_alpha_width = layout_line_width_for_exact_bytes_v0(&layout, b"{Heading Alpha}")
+        .expect("heading alpha width");
+    let heading_beta_width = layout_line_width_for_exact_bytes_v0(&layout, b"{Heading Beta}")
+        .expect("heading beta width");
+
+    let expected_title_x = expected_center_x_pt_v0(title_width);
+    let expected_heading_alpha_x = expected_center_x_pt_v0(heading_alpha_width);
+    let expected_heading_beta_x = expected_center_x_pt_v0(heading_beta_width);
+
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+    let title_x = tm_x_for_line_containing_text_v0(&pdf, "(Centered Title Line)").expect("title x");
+    let heading_alpha_x =
+        tm_x_for_line_containing_text_v0(&pdf, "(Heading Alpha)").expect("heading alpha x");
+    let heading_beta_x =
+        tm_x_for_line_containing_text_v0(&pdf, "(Heading Beta)").expect("heading beta x");
+
+    let epsilon_pt = 0.02f32;
+    assert!(
+        (title_x - expected_title_x).abs() <= epsilon_pt,
+        "title centering mismatch: actual={title_x}, expected={expected_title_x}"
+    );
+    assert!(
+        (heading_alpha_x - expected_heading_alpha_x).abs() <= epsilon_pt,
+        "heading alpha centering mismatch: actual={heading_alpha_x}, expected={expected_heading_alpha_x}"
+    );
+    assert!(
+        (heading_beta_x - expected_heading_beta_x).abs() <= epsilon_pt,
+        "heading beta centering mismatch: actual={heading_beta_x}, expected={expected_heading_beta_x}"
+    );
+    assert!(
+        (heading_alpha_x - 72.0).abs() > 0.5 && (heading_beta_x - 72.0).abs() > 0.5,
+        "heading lines should not be left-margin aligned: alpha={heading_alpha_x}, beta={heading_beta_x}"
+    );
+}
+
+#[test]
+fn pdf_renderer_heading_font_hierarchy_invariants_v0() {
+    let demo_text = b"Typography Title\nAlice Bob\n2026-03-05\n\n@S {Section Heading}\n\n@s {Subsection Heading}\n\nBody paragraph text.";
+    let xdv = write_dvi_v2_text_page_v0(demo_text).expect("writer should accept heading font demo");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+
+    let title_sizes = tf_sizes_for_line_containing_text_v0(&pdf, "(Typography Title)");
+    let section_sizes = tf_sizes_for_line_containing_text_v0(&pdf, "(Section Heading)");
+    let subsection_sizes = tf_sizes_for_line_containing_text_v0(&pdf, "(Subsection Heading)");
+    let body_sizes = tf_sizes_for_line_containing_text_v0(&pdf, "(Body paragraph text.)");
+
+    assert!(!title_sizes.is_empty(), "missing title sizes");
+    assert!(!section_sizes.is_empty(), "missing section sizes");
+    assert!(!subsection_sizes.is_empty(), "missing subsection sizes");
+    assert!(!body_sizes.is_empty(), "missing body sizes");
+
+    let title_size = title_sizes[0];
+    let section_size = section_sizes[0];
+    let subsection_size = subsection_sizes[0];
+    let body_size = body_sizes[0];
+
+    assert!(
+        (title_size - 18.0).abs() <= 0.02,
+        "title font size mismatch: {title_size}"
+    );
+    assert!(
+        (section_size - 16.0).abs() <= 0.02,
+        "section font size mismatch: {section_size}"
+    );
+    assert!(
+        (subsection_size - 14.0).abs() <= 0.02,
+        "subsection font size mismatch: {subsection_size}"
+    );
+    assert!(
+        (body_size - 12.0).abs() <= 0.02,
+        "body font size mismatch: {body_size}"
+    );
+    assert!(
+        title_size > section_size && section_size > subsection_size && subsection_size > body_size,
+        "font hierarchy must be strict: title={title_size}, section={section_size}, subsection={subsection_size}, body={body_size}"
+    );
+}
+
+#[test]
+fn pdf_renderer_paragraph_rhythm_and_noindent_invariants_v0() {
+    let demo_text = b"Title\nAuthor\n2026-03-05\n\nFirst paragraph line one.\nSecond line same paragraph.\n\nSecond paragraph line.\n\n@S {Heading}\n\n~ After heading noindent line.\n\nIndented paragraph line.";
+    let xdv =
+        write_dvi_v2_text_page_v0(demo_text).expect("writer should accept paragraph rhythm demo");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+
+    let (first_x, first_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "(First paragraph line one.)")
+            .expect("first paragraph line one");
+    let (same_para_x, same_para_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "(Second line same paragraph.)")
+            .expect("same paragraph line");
+    let (second_para_x, second_para_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "(Second paragraph line.)")
+            .expect("second paragraph line");
+    let (heading_x, heading_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "(Heading)").expect("heading line");
+    let (after_heading_x, after_heading_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "(After heading noindent line.)")
+            .expect("after heading line");
+    let (indented_x, indented_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "(Indented paragraph line.)")
+            .expect("indented paragraph line");
+
+    let epsilon_pt = 0.02f32;
+    assert!(
+        (first_x - 72.0).abs() <= epsilon_pt,
+        "first paragraph x mismatch: {first_x}"
+    );
+    assert!(
+        (same_para_x - 72.0).abs() <= epsilon_pt,
+        "same paragraph line should stay non-indented: {same_para_x}"
+    );
+    assert!(
+        (second_para_x - 96.0).abs() <= epsilon_pt,
+        "second paragraph indent mismatch: {second_para_x}"
+    );
+    assert!(
+        (after_heading_x - 72.0).abs() <= epsilon_pt,
+        "first paragraph after heading should noindent: {after_heading_x}"
+    );
+    assert!(
+        (indented_x - 96.0).abs() <= epsilon_pt,
+        "paragraph after noindent should restore indent: {indented_x}"
+    );
+    assert!(
+        (first_y - same_para_y - 14.0).abs() <= epsilon_pt,
+        "line gap mismatch inside paragraph: first_y={first_y}, same_para_y={same_para_y}"
+    );
+    assert!(
+        (same_para_y - second_para_y - 28.0).abs() <= epsilon_pt,
+        "paragraph break gap mismatch: same_para_y={same_para_y}, second_para_y={second_para_y}"
+    );
+    assert!(
+        (second_para_y - heading_y - 28.0).abs() <= epsilon_pt,
+        "paragraph->heading gap mismatch: second_para_y={second_para_y}, heading_y={heading_y}"
+    );
+    assert!(
+        (heading_y - after_heading_y - 28.0).abs() <= epsilon_pt,
+        "heading->noindent gap mismatch: heading_y={heading_y}, after_heading_y={after_heading_y}"
+    );
+    assert!(
+        (after_heading_y - indented_y - 28.0).abs() <= epsilon_pt,
+        "noindent->indented paragraph gap mismatch: after_heading_y={after_heading_y}, indented_y={indented_y}"
+    );
+    assert!(
+        (heading_x - 72.0).abs() > 0.5,
+        "heading should be centered: {heading_x}"
+    );
+}
+
+#[test]
+fn pdf_renderer_list_rhythm_and_wrap_indent_invariants_v0() {
+    let demo_text = b"Paragraph before list.\n\n- ITEMONE lead words with deterministic wrapping content to force continuation line token WRAPONE after many repeated words in this same item.\n- ITEMTWO lead words with deterministic wrapping content to force continuation line token WRAPTWO after many repeated words in this same item.\n\nParagraph after list.";
+    let xdv = write_dvi_v2_text_page_v0(demo_text).expect("writer should accept list rhythm demo");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+
+    let (_, before_list_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "(Paragraph before list.)")
+            .expect("before list paragraph");
+    let (item_one_bullet_x, item_one_y) =
+        tm_position_for_segment_substring_v0(&pdf, "(-)").expect("item one bullet position");
+    let (item_one_body_x, _) =
+        tm_position_for_segment_substring_v0(&pdf, "(ITEMONE").expect("item one body position");
+    let (item_one_wrap_x, _) =
+        tm_position_for_segment_substring_v0(&pdf, "WRAPONE").expect("item one wrap position");
+    let (item_two_bullet_x, item_two_y) =
+        tm_position_for_segment_substring_v0(&pdf, "(ITEMTWO").expect("item two body position");
+    let (item_two_wrap_x, _) =
+        tm_position_for_segment_substring_v0(&pdf, "WRAPTWO").expect("item two wrap position");
+    let (_, after_list_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "(Paragraph after list.)")
+            .expect("after list paragraph");
+
+    let epsilon_pt = 0.02f32;
+    assert!(
+        (28.0 - epsilon_pt..=56.0 + epsilon_pt).contains(&(before_list_y - item_one_y)),
+        "before->list top gap out of range: before_list_y={before_list_y}, item_one_y={item_one_y}"
+    );
+    assert!(
+        (item_two_y - after_list_y).abs() >= 28.0 - epsilon_pt,
+        "list->after paragraph gap must be at least one paragraph break: item_two_y={item_two_y}, after_list_y={after_list_y}"
+    );
+    assert!(
+        (item_one_bullet_x - 72.0).abs() <= epsilon_pt,
+        "item bullet column x mismatch: {item_one_bullet_x}"
+    );
+    assert!(
+        (item_one_body_x - 96.0).abs() <= epsilon_pt,
+        "item body x mismatch: {item_one_body_x}"
+    );
+    assert!(
+        (item_one_wrap_x - item_one_body_x).abs() <= epsilon_pt,
+        "item one wrap continuation should keep hanging indent: body={item_one_body_x}, wrap={item_one_wrap_x}"
+    );
+    assert!(
+        (item_two_bullet_x - 96.0).abs() <= epsilon_pt,
+        "item two body x mismatch: {item_two_bullet_x}"
+    );
+    assert!(
+        (item_two_wrap_x - item_two_bullet_x).abs() <= epsilon_pt,
+        "item two wrap continuation should keep hanging indent: body={item_two_bullet_x}, wrap={item_two_wrap_x}"
+    );
+}
+
+#[test]
+fn pdf_renderer_paragraph_indent_and_line_gap_invariants_v0() {
+    let demo_text =
+        b"Title\nAuthor\n2026-03-05\n\nFirst body paragraph line.\n\nSecond paragraph line.";
+    let xdv = write_dvi_v2_text_page_v0(demo_text).expect("writer should accept demo text");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+
+    let (first_x, first_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "(First body paragraph line.)")
+            .expect("first body line position");
+    let (second_x, second_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "(Second paragraph line.)")
+            .expect("second paragraph line position");
+
+    assert!(
+        (first_x - 72.0).abs() <= 0.02,
+        "first paragraph x mismatch: {first_x}"
+    );
+    assert!(
+        (second_x - 96.0).abs() <= 0.02,
+        "indented paragraph x mismatch: {second_x}"
+    );
+    assert!(
+        (first_y - second_y - 28.0).abs() <= 0.02,
+        "paragraph y-gap mismatch: first_y={first_y}, second_y={second_y}"
+    );
+}
+
+#[test]
+fn pdf_renderer_section_heading_spacing_invariants_v0() {
+    let demo_text =
+        b"Title\nAuthor\n2026-03-05\n\nIntro paragraph.\n\n{Section Heading}\n\n~ Body after heading.";
+    let xdv = write_dvi_v2_text_page_v0(demo_text).expect("writer should accept heading text");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+
+    let (intro_x, intro_y) = tm_position_for_line_containing_text_v0(&pdf, "(Intro paragraph.)")
+        .expect("intro position");
+    let (_, heading_y) = tm_position_for_line_containing_text_v0(&pdf, "(Section Heading)")
+        .expect("heading position");
+    assert!(!pdf
+        .windows(b"(~ Body after heading.) Tj".len())
+        .any(|w| w == b"(~ Body after heading.) Tj"));
+    let (body_x, body_y) = tm_position_for_line_containing_text_v0(&pdf, "(Body after heading.)")
+        .expect("body position");
+
+    assert!(
+        (intro_y - heading_y - 28.0).abs() <= 0.02,
+        "intro->heading y-gap mismatch: intro_y={intro_y}, heading_y={heading_y}"
+    );
+    assert!(
+        (heading_y - body_y - 28.0).abs() <= 0.02,
+        "heading->body y-gap mismatch: heading_y={heading_y}, body_y={body_y}"
+    );
+    assert!(
+        (intro_x - 72.0).abs() <= 0.02,
+        "intro x mismatch: {intro_x}"
+    );
+    assert!(
+        (body_x - 72.0).abs() <= 0.02,
+        "first paragraph after heading should not indent: {body_x}"
+    );
+}
+
+#[test]
+fn pdf_renderer_heading_list_quote_rhythm_invariants_v0() {
+    let demo_text = b"\nPrelude paragraph.\n\n{Heading}\n\n~ After heading paragraph.\n\n- First list item\n- Second list item\n\n> Quote line one\n> Quote line two\n\nAfter quote paragraph.";
+    let xdv = write_dvi_v2_text_page_v0(demo_text).expect("writer should accept rhythm text");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+
+    let (_, prelude_y) = tm_position_for_line_containing_text_v0(&pdf, "(Prelude paragraph.)")
+        .expect("prelude position");
+    let (_, heading_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "(Heading)").expect("heading position");
+    let (_, after_heading_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "(After heading paragraph.)")
+            .expect("after heading position");
+    let (_, list_one_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "(First list item)").expect("list one");
+    let (_, list_two_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "(Second list item)").expect("list two");
+    let (quote_one_x, quote_one_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "(Quote line one)").expect("quote one");
+    let (quote_two_x, quote_two_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "(Quote line two)").expect("quote two");
+    let (_, after_quote_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "(After quote paragraph.)")
+            .expect("after quote");
+
+    let epsilon_pt = 0.02f32;
+    assert!((prelude_y - heading_y - 28.0).abs() <= epsilon_pt);
+    assert!(
+        (heading_y - after_heading_y - 28.0).abs() <= epsilon_pt,
+        "heading->first paragraph gap mismatch: heading_y={heading_y}, after_heading_y={after_heading_y}"
+    );
+    assert!(
+        (after_heading_y - list_one_y - 28.0).abs() <= epsilon_pt,
+        "paragraph->list gap mismatch: after_heading_y={after_heading_y}, list_one_y={list_one_y}"
+    );
+    assert!(
+        (list_one_y - list_two_y - 14.0).abs() <= epsilon_pt,
+        "list line gap mismatch: list_one_y={list_one_y}, list_two_y={list_two_y}"
+    );
+    assert!(
+        (list_two_y - quote_one_y - 28.0).abs() <= epsilon_pt,
+        "list->quote gap mismatch: list_two_y={list_two_y}, quote_one_y={quote_one_y}"
+    );
+    assert!(
+        (quote_one_y - quote_two_y - 14.0).abs() <= epsilon_pt,
+        "quote line gap mismatch: quote_one_y={quote_one_y}, quote_two_y={quote_two_y}"
+    );
+    assert!(
+        (quote_two_y - after_quote_y - 28.0).abs() <= epsilon_pt,
+        "quote->paragraph gap mismatch: quote_two_y={quote_two_y}, after_quote_y={after_quote_y}"
+    );
+    assert!(quote_one_x > 72.0, "quote line should be indented");
+    assert!(
+        (quote_one_x - quote_two_x).abs() <= epsilon_pt,
+        "quote x drift mismatch"
+    );
+}
+
+#[test]
+fn pdf_renderer_applies_hanging_indent_for_list_continuation_v0() {
+    let xdv =
+        write_dvi_v2_text_page_v0(b"- item\ncontinuation").expect("writer should accept text");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+
+    let pdf_text = String::from_utf8_lossy(&pdf);
+    let mut xs = Vec::<f32>::new();
+    for line in pdf_text.lines() {
+        if !line.contains(" Tm ") {
+            continue;
+        }
+        let fields = line.split_whitespace().collect::<Vec<_>>();
+        if fields.len() < 7 || fields[6] != "Tm" {
+            continue;
+        }
+        if let Ok(x_pt) = fields[4].parse::<f32>() {
+            xs.push(x_pt);
+        }
+    }
+    assert!(
+        xs.len() >= 2,
+        "expected at least two text lines, got {xs:?}"
+    );
+    assert!((xs[0] - 72.0).abs() <= 0.02, "first list line x={}", xs[0]);
+    assert!(xs[1] > xs[0], "continuation should hang-indent: {xs:?}");
+}
+
+#[test]
+fn pdf_renderer_itemize_bullet_and_body_x_offsets_invariants_v0() {
+    let xdv = write_dvi_v2_text_page_v0(b"- alpha\ncontinuation\n- beta\ncontinuationtwo")
+        .expect("writer should accept list text");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+    assert!(
+        !pdf.windows(b"(- alpha) Tj".len())
+            .any(|w| w == b"(- alpha) Tj"),
+        "prefix should be split from body"
+    );
+
+    let bullet_xs = tm_xs_for_segment_text_v0(&pdf, "-");
+    let alpha_xs = tm_xs_for_segment_text_v0(&pdf, "alpha");
+    let beta_xs = tm_xs_for_segment_text_v0(&pdf, "beta");
+    let continuation_xs = tm_xs_for_segment_text_v0(&pdf, "continuation");
+    let continuation_two_xs = tm_xs_for_segment_text_v0(&pdf, "continuationtwo");
+
+    assert_eq!(
+        bullet_xs.len(),
+        2,
+        "expected two bullet renders: {bullet_xs:?}"
+    );
+    assert_eq!(alpha_xs.len(), 1, "expected alpha render");
+    assert_eq!(beta_xs.len(), 1, "expected beta render");
+    assert_eq!(continuation_xs.len(), 1, "expected continuation render");
+    assert_eq!(
+        continuation_two_xs.len(),
+        1,
+        "expected continuationtwo render"
+    );
+
+    let epsilon_pt = 0.02f32;
+    for x in &bullet_xs {
+        assert!((*x - 72.0).abs() <= epsilon_pt, "bullet x mismatch: {x}");
+    }
+    for x in [
+        alpha_xs[0],
+        beta_xs[0],
+        continuation_xs[0],
+        continuation_two_xs[0],
+    ] {
+        assert!((x - 96.0).abs() <= epsilon_pt, "item body x mismatch: {x}");
+    }
+}
+
+#[test]
+fn pdf_renderer_enumerate_number_column_alignment_invariants_v0() {
+    let xdv = write_dvi_v2_text_page_v0(b"9. nine\n10. ten")
+        .expect("writer should accept enumerate text");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+    assert!(
+        !pdf.windows(b"(9. nine) Tj".len())
+            .any(|w| w == b"(9. nine) Tj"),
+        "prefix should be split from body"
+    );
+
+    let nine_number_x = tm_xs_for_segment_text_v0(&pdf, "9.");
+    let ten_number_x = tm_xs_for_segment_text_v0(&pdf, "10.");
+    let nine_body_x = tm_xs_for_segment_text_v0(&pdf, "nine");
+    let ten_body_x = tm_xs_for_segment_text_v0(&pdf, "ten");
+
+    assert_eq!(nine_number_x.len(), 1, "expected 9. number render");
+    assert_eq!(ten_number_x.len(), 1, "expected 10. number render");
+    assert_eq!(nine_body_x.len(), 1, "expected nine body render");
+    assert_eq!(ten_body_x.len(), 1, "expected ten body render");
+
+    let epsilon_pt = 0.02f32;
+    assert!(
+        nine_number_x[0] > ten_number_x[0],
+        "single-digit number should start further right: nine={:?}, ten={:?}",
+        nine_number_x,
+        ten_number_x
+    );
+    assert!(
+        (nine_body_x[0] - 96.0).abs() <= epsilon_pt,
+        "nine body x mismatch: {}",
+        nine_body_x[0]
+    );
+    assert!(
+        (ten_body_x[0] - 96.0).abs() <= epsilon_pt,
+        "ten body x mismatch: {}",
+        ten_body_x[0]
+    );
+}
+
+#[test]
+fn pdf_renderer_enumerate_number_column_alignment_across_wraps_v0() {
+    let xdv = write_dvi_v2_text_page_v0(b"9. [NINESTART] item with enough repeated words to force wrapping and keep deterministic body indent for continuation lines before token [WRAPNINE]\n10. [TENSTART] item with enough repeated words to force wrapping and keep deterministic body indent for continuation lines before token [WRAPTEN]")
+        .expect("writer should accept long enumerate text");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+
+    let nine_number_x = tm_xs_for_segment_text_v0(&pdf, "9.");
+    let ten_number_x = tm_xs_for_segment_text_v0(&pdf, "10.");
+    let nine_start_x = tm_xs_for_segment_text_v0(&pdf, "NINESTART");
+    let ten_start_x = tm_xs_for_segment_text_v0(&pdf, "TENSTART");
+    let nine_wrap_x = tm_line_start_xs_for_segment_text_v0(&pdf, "WRAPNINE");
+    let ten_wrap_x = tm_line_start_xs_for_segment_text_v0(&pdf, "WRAPTEN");
+
+    assert_eq!(nine_number_x.len(), 1, "expected 9. number render");
+    assert_eq!(ten_number_x.len(), 1, "expected 10. number render");
+    assert_eq!(nine_start_x.len(), 1, "expected NINESTART render");
+    assert_eq!(ten_start_x.len(), 1, "expected TENSTART render");
+    assert_eq!(nine_wrap_x.len(), 1, "expected WRAPNINE render");
+    assert_eq!(ten_wrap_x.len(), 1, "expected WRAPTEN render");
+
+    let epsilon_pt = 0.02f32;
+    assert!(
+        nine_number_x[0] > ten_number_x[0],
+        "single-digit number should start further right: nine={:?}, ten={:?}",
+        nine_number_x,
+        ten_number_x
+    );
+    assert!(
+        (nine_start_x[0] - 96.0).abs() <= epsilon_pt,
+        "start body x mismatch for 9.: {}",
+        nine_start_x[0]
+    );
+    assert!(
+        (ten_start_x[0] - 96.0).abs() <= epsilon_pt,
+        "start body x mismatch for 10.: {}",
+        ten_start_x[0]
+    );
+    assert!(
+        (nine_wrap_x[0] - nine_start_x[0]).abs() <= epsilon_pt,
+        "wrap body x mismatch for 9.: start={}, wrap={}",
+        nine_start_x[0],
+        nine_wrap_x[0]
+    );
+    assert!(
+        (ten_wrap_x[0] - ten_start_x[0]).abs() <= epsilon_pt,
+        "wrap body x mismatch for 10.: start={}, wrap={}",
+        ten_start_x[0],
+        ten_wrap_x[0]
+    );
+}
+
+#[test]
+fn pdf_renderer_nested_list_indentation_and_wrap_invariants_v0() {
+    let xdv = write_dvi_v2_text_page_v0(b"- [OUTERSTART] item with enough repeated words to force wrapping in the first list level before token [OUTERWRAPTOKEN]\n  - [NESTEDSTART] item with enough repeated words to force wrapping in the second list level before token [NESTEDWRAPTOKEN]")
+        .expect("writer should accept nested list text");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+
+    let bullet_xs = tm_xs_for_segment_text_v0(&pdf, "-");
+    let outer_start_x = tm_xs_for_segment_text_v0(&pdf, "OUTERSTART");
+    let outer_wrap_x = tm_line_start_xs_for_segment_text_v0(&pdf, "OUTERWRAPTOKEN");
+    let nested_start_x = tm_xs_for_segment_text_v0(&pdf, "NESTEDSTART");
+    let nested_wrap_x = tm_line_start_xs_for_segment_text_v0(&pdf, "NESTEDWRAPTOKEN");
+
+    assert_eq!(bullet_xs.len(), 2, "expected two bullets: {bullet_xs:?}");
+    assert_eq!(outer_start_x.len(), 1, "expected outer start render");
+    assert_eq!(outer_wrap_x.len(), 1, "expected outer wrap render");
+    assert_eq!(nested_start_x.len(), 1, "expected nested start render");
+    assert_eq!(nested_wrap_x.len(), 1, "expected nested wrap render");
+
+    let epsilon_pt = 0.02f32;
+    assert!(
+        (bullet_xs[0] - 72.0).abs() <= epsilon_pt,
+        "outer bullet x mismatch"
+    );
+    assert!(
+        bullet_xs[1] > bullet_xs[0],
+        "nested bullet should shift right: {bullet_xs:?}"
+    );
+    assert!(
+        (outer_start_x[0] - 96.0).abs() <= epsilon_pt,
+        "outer body x mismatch: {}",
+        outer_start_x[0]
+    );
+    assert!(
+        (outer_wrap_x[0] - outer_start_x[0]).abs() <= epsilon_pt,
+        "outer continuation x mismatch: outer={}, wrap={}",
+        outer_start_x[0],
+        outer_wrap_x[0]
+    );
+    assert!(
+        nested_start_x[0] > outer_start_x[0],
+        "nested body should shift right: outer={}, nested={}",
+        outer_start_x[0],
+        nested_start_x[0]
+    );
+    assert!(
+        (nested_wrap_x[0] - nested_start_x[0]).abs() <= epsilon_pt,
+        "nested continuation x mismatch: nested={}, wrap={}",
+        nested_start_x[0],
+        nested_wrap_x[0]
+    );
+}
+
+#[test]
+fn pdf_renderer_applies_quote_indent_and_hides_prefix_v0() {
+    let xdv = write_dvi_v2_text_page_v0(b"\n> quoted line\ncontinuation line")
+        .expect("writer should accept text");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+    assert!(!pdf
+        .windows(b"(> quoted line) Tj".len())
+        .any(|w| w == b"(> quoted line) Tj"));
+    assert!(pdf
+        .windows(b"(quoted line) Tj".len())
+        .any(|w| w == b"(quoted line) Tj"));
+
+    let pdf_text = String::from_utf8_lossy(&pdf);
+    let mut xs = Vec::<f32>::new();
+    for line in pdf_text.lines() {
+        if !line.contains(" Tm ") {
+            continue;
+        }
+        let fields = line.split_whitespace().collect::<Vec<_>>();
+        if fields.len() < 7 || fields[6] != "Tm" {
+            continue;
+        }
+        if let Ok(x_pt) = fields[4].parse::<f32>() {
+            xs.push(x_pt);
+        }
+    }
+    assert!(
+        xs.len() >= 2,
+        "expected at least two rendered lines, got {xs:?}"
+    );
+    assert!(xs[0] > 72.0, "quote line should be indented: {xs:?}");
+    assert!(
+        (xs[0] - xs[1]).abs() <= 0.02,
+        "quote continuation should keep indent: {xs:?}"
+    );
+}
+
+#[test]
+fn pdf_renderer_quote_indent_and_paragraph_break_invariants_v0() {
+    let xdv = write_dvi_v2_text_page_v0(
+        b"\n> quote first line\n> quote continuation\n\n> second paragraph line\n> second continuation",
+    )
+    .expect("writer should accept quote text");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+    let text = String::from_utf8_lossy(&pdf);
+    assert!(
+        !text.contains("(> quote first line) Tj"),
+        "quote prefix should be hidden"
+    );
+    let (x1, y1) =
+        tm_position_for_line_containing_text_v0(&pdf, "(quote first line)").expect("line 1");
+    let (x2, y2) =
+        tm_position_for_line_containing_text_v0(&pdf, "(quote continuation)").expect("line 2");
+    let (x3, y3) =
+        tm_position_for_line_containing_text_v0(&pdf, "(second paragraph line)").expect("line 3");
+    let (x4, y4) =
+        tm_position_for_line_containing_text_v0(&pdf, "(second continuation)").expect("line 4");
+
+    let epsilon_pt = 0.02f32;
+    assert!(
+        (x1 - x2).abs() <= epsilon_pt,
+        "quote line x drift: {x1} vs {x2}"
+    );
+    assert!(
+        (x1 - x3).abs() <= epsilon_pt,
+        "quote paragraph x drift: {x1} vs {x3}"
+    );
+    assert!(
+        (x1 - x4).abs() <= epsilon_pt,
+        "quote line x drift: {x1} vs {x4}"
+    );
+    assert!(
+        (y1 - y2 - 14.0).abs() <= epsilon_pt,
+        "quote line gap mismatch"
+    );
+    assert!(
+        (y2 - y3 - 28.0).abs() <= epsilon_pt,
+        "quote paragraph gap mismatch"
+    );
+    assert!(
+        (y3 - y4 - 14.0).abs() <= epsilon_pt,
+        "quote line gap mismatch"
+    );
+}
+
+#[test]
+fn pdf_renderer_hides_center_prefix_and_centers_line_v0() {
+    let xdv = write_dvi_v2_text_page_v0(b"\n^ centered line")
+        .expect("writer should accept centered text");
+    let layout = parse_dvi_v2_text_page_to_layout_v0(&xdv, 786_432).expect("layout parse");
+    let centered_line = layout.pages[0]
+        .lines
+        .iter()
+        .find(|line| width_sp_for_prefixed_rendered_line_v0(line, [b'^', b' ']).is_some())
+        .expect("center-prefixed line");
+    let expected_x = expected_center_x_pt_v0(
+        width_sp_for_prefixed_rendered_line_v0(centered_line, [b'^', b' '])
+            .expect("prefixed width"),
+    );
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+    assert!(!pdf
+        .windows(b"(^ centered line) Tj".len())
+        .any(|w| w == b"(^ centered line) Tj"));
+    assert!(pdf
+        .windows(b"(centered line) Tj".len())
+        .any(|w| w == b"(centered line) Tj"));
+    let x_pt =
+        tm_x_for_line_containing_text_v0(&pdf, "(centered line)").expect("centered Tm position");
+    let epsilon_pt = 0.02f32;
+    assert!(
+        (x_pt - expected_x).abs() <= epsilon_pt,
+        "center line x mismatch: actual={x_pt}, expected={expected_x}"
+    );
+}
+
+#[test]
+fn pdf_renderer_hides_right_prefix_and_right_aligns_line_v0() {
+    let xdv = write_dvi_v2_text_page_v0(b"\n| right aligned line")
+        .expect("writer should accept right text");
+    let layout = parse_dvi_v2_text_page_to_layout_v0(&xdv, 786_432).expect("layout parse");
+    let right_line = layout.pages[0]
+        .lines
+        .iter()
+        .find(|line| width_sp_for_prefixed_rendered_line_v0(line, [b'|', b' ']).is_some())
+        .expect("right-prefixed line");
+    let expected_x = expected_right_x_pt_v0(
+        width_sp_for_prefixed_rendered_line_v0(right_line, [b'|', b' ']).expect("prefixed width"),
+    );
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+    assert!(!pdf
+        .windows(b"(| right aligned line) Tj".len())
+        .any(|w| w == b"(| right aligned line) Tj"));
+    assert!(pdf
+        .windows(b"(right aligned line) Tj".len())
+        .any(|w| w == b"(right aligned line) Tj"));
+    let x_pt = tm_x_for_line_containing_text_v0(&pdf, "(right aligned line)")
+        .expect("right-aligned Tm position");
+    let epsilon_pt = 0.02f32;
+    assert!(
+        (x_pt - expected_x).abs() <= epsilon_pt,
+        "right line x mismatch: actual={x_pt}, expected={expected_x}"
+    );
+}
+
+#[test]
+fn pdf_renderer_applies_center_alignment_per_line_width_v0() {
+    let xdv = write_dvi_v2_text_page_v0(b"\n^ center one\n^ center line two")
+        .expect("writer should accept centered lines");
+    let layout = parse_dvi_v2_text_page_to_layout_v0(&xdv, 786_432).expect("layout parse");
+    let line_one = layout.pages[0]
+        .lines
+        .iter()
+        .find(|line| {
+            line.glyphs
+                .iter()
+                .map(|glyph| glyph.byte)
+                .collect::<Vec<_>>()
+                == b"^ center one"
+        })
+        .expect("center line one");
+    let line_two = layout.pages[0]
+        .lines
+        .iter()
+        .find(|line| {
+            line.glyphs
+                .iter()
+                .map(|glyph| glyph.byte)
+                .collect::<Vec<_>>()
+                == b"^ center line two"
+        })
+        .expect("center line two");
+
+    let expected_one = expected_center_x_pt_v0(
+        width_sp_for_prefixed_rendered_line_v0(line_one, [b'^', b' ']).expect("line one width"),
+    );
+    let expected_two = expected_center_x_pt_v0(
+        width_sp_for_prefixed_rendered_line_v0(line_two, [b'^', b' ']).expect("line two width"),
+    );
+
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+    let x_one = tm_x_for_line_containing_text_v0(&pdf, "(center one)").expect("center one x");
+    let x_two =
+        tm_x_for_line_containing_text_v0(&pdf, "(center line two)").expect("center line two x");
+    let epsilon_pt = 0.02f32;
+    assert!((x_one - expected_one).abs() <= epsilon_pt);
+    assert!((x_two - expected_two).abs() <= epsilon_pt);
+}
+
+#[test]
+fn pdf_renderer_applies_right_alignment_per_line_width_v0() {
+    let xdv = write_dvi_v2_text_page_v0(b"\n| right one\n| right line two")
+        .expect("writer should accept right-aligned lines");
+    let layout = parse_dvi_v2_text_page_to_layout_v0(&xdv, 786_432).expect("layout parse");
+    let line_one = layout.pages[0]
+        .lines
+        .iter()
+        .find(|line| {
+            line.glyphs
+                .iter()
+                .map(|glyph| glyph.byte)
+                .collect::<Vec<_>>()
+                == b"| right one"
+        })
+        .expect("right line one");
+    let line_two = layout.pages[0]
+        .lines
+        .iter()
+        .find(|line| {
+            line.glyphs
+                .iter()
+                .map(|glyph| glyph.byte)
+                .collect::<Vec<_>>()
+                == b"| right line two"
+        })
+        .expect("right line two");
+
+    let expected_one = expected_right_x_pt_v0(
+        width_sp_for_prefixed_rendered_line_v0(line_one, [b'|', b' ']).expect("line one width"),
+    );
+    let expected_two = expected_right_x_pt_v0(
+        width_sp_for_prefixed_rendered_line_v0(line_two, [b'|', b' ']).expect("line two width"),
+    );
+
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+    let x_one = tm_x_for_line_containing_text_v0(&pdf, "(right one)").expect("right one x");
+    let x_two =
+        tm_x_for_line_containing_text_v0(&pdf, "(right line two)").expect("right line two x");
+    let epsilon_pt = 0.02f32;
+    assert!((x_one - expected_one).abs() <= epsilon_pt);
+    assert!((x_two - expected_two).abs() <= epsilon_pt);
+}
+
+#[test]
+fn pdf_renderer_center_alignment_handles_styled_segments_without_drift_v0() {
+    let xdv = write_dvi_v2_text_page_v0(b"\n^ alpha[mid],gamma\n^ short{bold}.")
+        .expect("writer should accept styled centered lines");
+    let layout = parse_dvi_v2_text_page_to_layout_v0(&xdv, 786_432).expect("layout parse");
+    let line_one = layout.pages[0]
+        .lines
+        .iter()
+        .find(|line| {
+            line.glyphs
+                .iter()
+                .map(|glyph| glyph.byte)
+                .collect::<Vec<_>>()
+                == b"^ alpha[mid],gamma"
+        })
+        .expect("center styled line one");
+    let line_two = layout.pages[0]
+        .lines
+        .iter()
+        .find(|line| {
+            line.glyphs
+                .iter()
+                .map(|glyph| glyph.byte)
+                .collect::<Vec<_>>()
+                == b"^ short{bold}."
+        })
+        .expect("center styled line two");
+
+    let expected_one = expected_center_x_pt_v0(
+        width_sp_for_prefixed_rendered_line_v0(line_one, [b'^', b' ']).expect("line one width"),
+    );
+    let expected_two = expected_center_x_pt_v0(
+        width_sp_for_prefixed_rendered_line_v0(line_two, [b'^', b' ']).expect("line two width"),
+    );
+
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+    let line_one_x = tm_x_for_line_containing_text_v0(&pdf, "(alpha)").expect("line one x");
+    let line_two_x = tm_x_for_line_containing_text_v0(&pdf, "(short)").expect("line two x");
+    let epsilon_pt = 0.02f32;
+    assert!(
+        (line_one_x - expected_one).abs() <= epsilon_pt,
+        "line one center drift: actual={line_one_x}, expected={expected_one}"
+    );
+    assert!(
+        (line_two_x - expected_two).abs() <= epsilon_pt,
+        "line two center drift: actual={line_two_x}, expected={expected_two}"
+    );
+
+    let alpha_x = tm_xs_for_segment_text_v0(&pdf, "alpha")[0];
+    let mid_x = tm_xs_for_segment_text_v0(&pdf, "mid")[0];
+    let gamma_x =
+        tm_x_for_segment_substring_v0(&pdf, "(alpha)", "(,gamma)").expect("gamma segment x");
+    assert!(
+        ((mid_x - alpha_x) - segment_width_pt_v0(b"alpha")).abs() <= epsilon_pt,
+        "alpha->mid spacing drift: alpha_x={alpha_x}, mid_x={mid_x}"
+    );
+    assert!(
+        ((gamma_x - mid_x) - segment_width_pt_v0(b"mid")).abs() <= epsilon_pt,
+        "mid->gamma spacing drift: mid_x={mid_x}, gamma_x={gamma_x}"
+    );
+}
+
+#[test]
+fn pdf_renderer_right_alignment_handles_styled_segments_without_drift_v0() {
+    let xdv = write_dvi_v2_text_page_v0(b"\n| edge, [core] trail\n| alpha{beta}.")
+        .expect("writer should accept styled right-aligned lines");
+    let layout = parse_dvi_v2_text_page_to_layout_v0(&xdv, 786_432).expect("layout parse");
+    let line_one = layout.pages[0]
+        .lines
+        .iter()
+        .find(|line| {
+            line.glyphs
+                .iter()
+                .map(|glyph| glyph.byte)
+                .collect::<Vec<_>>()
+                == b"| edge, [core] trail"
+        })
+        .expect("right styled line one");
+    let line_two = layout.pages[0]
+        .lines
+        .iter()
+        .find(|line| {
+            line.glyphs
+                .iter()
+                .map(|glyph| glyph.byte)
+                .collect::<Vec<_>>()
+                == b"| alpha{beta}."
+        })
+        .expect("right styled line two");
+
+    let expected_one = expected_right_x_pt_v0(
+        width_sp_for_prefixed_rendered_line_v0(line_one, [b'|', b' ']).expect("line one width"),
+    );
+    let expected_two = expected_right_x_pt_v0(
+        width_sp_for_prefixed_rendered_line_v0(line_two, [b'|', b' ']).expect("line two width"),
+    );
+
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+    let line_one_x = tm_x_for_line_containing_text_v0(&pdf, "(edge, )").expect("line one x");
+    let line_two_x = tm_x_for_line_containing_text_v0(&pdf, "(alpha)").expect("line two x");
+    let epsilon_pt = 0.02f32;
+    assert!(
+        (line_one_x - expected_one).abs() <= epsilon_pt,
+        "line one right drift: actual={line_one_x}, expected={expected_one}"
+    );
+    assert!(
+        (line_two_x - expected_two).abs() <= epsilon_pt,
+        "line two right drift: actual={line_two_x}, expected={expected_two}"
+    );
+
+    let edge_x =
+        tm_x_for_segment_substring_v0(&pdf, "(edge, )", "(edge, )").expect("edge segment x");
+    let core_x = tm_xs_for_segment_text_v0(&pdf, "core")[0];
+    let trail_x =
+        tm_x_for_segment_substring_v0(&pdf, "(edge, )", "( trail)").expect("trail segment x");
+    assert!(
+        ((core_x - edge_x) - segment_width_pt_v0(b"edge, ")).abs() <= epsilon_pt,
+        "edge->core spacing drift: edge_x={edge_x}, core_x={core_x}"
+    );
+    assert!(
+        ((trail_x - core_x) - segment_width_pt_v0(b"core")).abs() <= epsilon_pt,
+        "core->trail spacing drift: core_x={core_x}, trail_x={trail_x}"
+    );
+}
+
