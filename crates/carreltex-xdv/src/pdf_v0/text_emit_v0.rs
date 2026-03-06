@@ -160,7 +160,30 @@ fn trailing_space_bounded_seam_trim_pt_v30(
         return 0.0;
     }
     if segment.superscript || segment.is_link || matches!(segment.style, PdfTextStyleV0::Regular) {
-        return 0.0;
+        if !matches!(
+            profile,
+            SegmentEmitProfileV0::WrappedIndentedV29 | SegmentEmitProfileV0::FootnoteProseV26
+        ) || segment.superscript
+            || segment.is_link
+            || !matches!(segment.style, PdfTextStyleV0::Regular)
+        {
+            return 0.0;
+        }
+        let Some(next_segment) = next_segment else {
+            return 0.0;
+        };
+        if next_segment.superscript
+            || next_segment.is_link
+            || !segment.bytes.last().is_some_and(|byte| *byte == b' ')
+        {
+            return 0.0;
+        }
+        let requested_trim_pt = match next_segment.style {
+            PdfTextStyleV0::Italic => font_size_pt * 0.12,
+            PdfTextStyleV0::Bold => font_size_pt * 0.15,
+            PdfTextStyleV0::Regular => 0.0,
+        };
+        return requested_trim_pt.min(segment.advance_pt * 0.25);
     }
     let Some(next_segment) = next_segment else {
         return 0.0;
