@@ -944,6 +944,33 @@ fn typeset_minimal_figure_stub_accepts_includegraphics_scale_option() {
 }
 
 #[test]
+fn typeset_minimal_figure_top_placement_emits_top_marker_and_page_break_v0() {
+    let main = b"\\documentclass{article}\\begin{document}Before.\\begin{figure}[t]\\caption{Top figure}\\end{figure}After.\\end{document}";
+    let body = extract_typeset_body(main);
+    let text = String::from_utf8(body).expect("body should be valid utf8");
+    assert!(
+        text.contains("Before.\x0c!gbox t\n!gcap Figure 1: Top figure\n\nAfter."),
+        "body={text:?}"
+    );
+}
+
+#[test]
+fn typeset_minimal_rejects_figure_unsupported_placement_hint_v0() {
+    let main = b"\\documentclass{article}\\begin{document}\\begin{figure}[h]\\caption{Nope}\\end{figure}\\end{document}";
+    let result = compile_typeset(main);
+    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert!(result.main_xdv_bytes.is_empty());
+}
+
+#[test]
+fn typeset_minimal_rejects_figure_duplicated_top_placement_hint_v0() {
+    let main = b"\\documentclass{article}\\begin{document}\\begin{figure}[tt]\\caption{Nope}\\end{figure}\\end{document}";
+    let result = compile_typeset(main);
+    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert!(result.main_xdv_bytes.is_empty());
+}
+
+#[test]
 fn typeset_minimal_rejects_figure_includegraphics_unknown_option_key() {
     let main = b"\\documentclass{article}\\begin{document}\\begin{figure}\\includegraphics[keepaspectratio=true]{demo.png}\\caption{Nope}\\end{figure}\\end{document}";
     let result = compile_typeset(main);
