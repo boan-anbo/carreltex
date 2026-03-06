@@ -3073,3 +3073,51 @@ fn pdf_renderer_single_line_quote_and_list_pre_style_gaps_are_tightened_v33() {
         "single-line quote pre-style seam should trim the preceding space-bounded gap: prefix_x={quote_prefix_x}, bold_x={quote_bold_x}, expected_gap={expected_quote_gap}"
     );
 }
+
+#[test]
+fn pdf_renderer_quote_and_list_continuation_pre_style_short_gaps_are_tightened_v36() {
+    let xdv = write_dvi_v2_text_page_v0(
+        b"- LISTSTART36 alpha alpha alpha alpha alpha\nwith [LISTWRAPPREV36] tail.\n\n> QUOTESTART36 beta beta beta beta beta\nwith {QUOTEWRAPPREV36} tail.",
+    )
+    .expect("writer should accept quote/list continuation v36 text");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+
+    let (list_start_x, list_start_y) =
+        tm_position_for_segment_substring_v0(&pdf, "LISTSTART36").expect("list start position");
+    let (list_style_x, list_style_y) =
+        tm_position_for_segment_substring_v0(&pdf, "LISTWRAPPREV36").expect("list style position");
+    let list_prefix_x = tm_x_for_segment_substring_v0(
+        &pdf,
+        "(LISTWRAPPREV36)",
+        "(with )",
+    )
+    .expect("list wrapped prefix x");
+
+    let (quote_start_x, quote_start_y) =
+        tm_position_for_segment_substring_v0(&pdf, "QUOTESTART36").expect("quote start position");
+    let (quote_style_x, quote_style_y) =
+        tm_position_for_segment_substring_v0(&pdf, "QUOTEWRAPPREV36").expect("quote style position");
+    let quote_prefix_x = tm_x_for_segment_substring_v0(
+        &pdf,
+        "(QUOTEWRAPPREV36)",
+        "(with )",
+    )
+    .expect("quote wrapped prefix x");
+
+    let with_gap = segment_width_pt_v0(b"with ");
+    let expected_list_gap = with_gap - (12.0f32 * 0.12f32).min(with_gap * 0.25f32);
+    let expected_quote_gap = with_gap - (12.0f32 * 0.15f32).min(with_gap * 0.25f32);
+    let epsilon_pt = 0.3f32;
+    assert!(
+        list_start_y > list_style_y && quote_start_y > quote_style_y,
+        "fixtures should continue onto a later indented line before the styled tokens: list_start_y={list_start_y}, list_style_y={list_style_y}, quote_start_y={quote_start_y}, quote_style_y={quote_style_y}"
+    );
+    assert!(
+        list_style_x >= list_start_x && ((list_style_x - list_prefix_x) - expected_list_gap).abs() <= epsilon_pt,
+        "list continuation pre-style short seam should trim the preceding gap: prefix_x={list_prefix_x}, style_x={list_style_x}, expected_gap={expected_list_gap}"
+    );
+    assert!(
+        quote_style_x >= quote_start_x && ((quote_style_x - quote_prefix_x) - expected_quote_gap).abs() <= epsilon_pt,
+        "quote continuation pre-style short seam should trim the preceding gap: prefix_x={quote_prefix_x}, style_x={quote_style_x}, expected_gap={expected_quote_gap}"
+    );
+}
