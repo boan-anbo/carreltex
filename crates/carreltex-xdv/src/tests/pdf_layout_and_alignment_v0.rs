@@ -3171,3 +3171,20 @@ fn pdf_renderer_live_nested_list_very_long_prefix_gap_is_tightened_v38() {
         "nested long-prefix pre-style seam should stay tightened: prefix_x={nested_prefix_x}, style_x={nested_style_x}"
     );
 }
+
+#[test]
+fn pdf_renderer_live_quote_very_long_prefix_gap_is_tightened_v39() {
+    let xdv = write_dvi_v2_text_page_v0(
+        b"> This quoted paragraph is intentionally long so width-based wrapping produces continuation lines in the preview while preserving a deterministic left indent for each logical quote line with [inline emphasis] and {bold emphasis}.",
+    )
+    .expect("writer should accept live quote seam text");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+
+    let quote_line_tm_gap =
+        max_tm_gap_pt_for_line_containing_v0(&pdf, "inline emphasis").expect("quote tm gap");
+
+    assert!(
+        quote_line_tm_gap <= 315.0,
+        "quote very-long-prefix pre-style seam should stay tightened: tm_gap={quote_line_tm_gap}"
+    );
+}
