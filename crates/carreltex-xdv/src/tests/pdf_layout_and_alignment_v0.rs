@@ -3581,6 +3581,40 @@ fn pdf_renderer_wrapped_centered_very_short_italic_pre_style_gap_is_tightened_v6
 }
 
 #[test]
+fn pdf_renderer_wrapped_right_very_short_bold_pre_style_gap_is_tightened_v61() {
+    let xdv = write_dvi_v2_text_page_with_layout_and_wrap_v0(
+        b"\n| GO {core words} trail words words words WRAPRIGHTVSHORTB tail.",
+        65_536,
+        786_432,
+        30,
+    )
+    .expect("writer should accept wrapped right very-short bold text");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+
+    let (_, prefix_y) =
+        tm_position_for_segment_substring_v0(&pdf, "GO").expect("right very-short bold prefix y");
+    let (_, wrap_y) = tm_position_for_segment_substring_v0(&pdf, "WRAPRIGHTVSHORTB")
+        .expect("right very-short bold wrap y");
+    let rendered = rendered_text_for_line_containing_needle_v0(&pdf, "GO")
+        .expect("right very-short bold rendered text");
+    let max_tm_gap = max_tm_gap_pt_for_line_containing_v0(&pdf, "core words")
+        .expect("right very-short bold tm gap");
+
+    assert!(
+        rendered == "GO core words trail words",
+        "wrapped right very-short bold line should preserve stable spacing: {rendered}"
+    );
+    assert!(
+        max_tm_gap <= 103.0,
+        "wrapped right very-short bold pre-style seam should stay tightened: tm_gap={max_tm_gap}"
+    );
+    assert!(
+        prefix_y > wrap_y,
+        "right very-short bold fixture should still wrap after the tightened seam: prefix_y={prefix_y}, wrap_y={wrap_y}"
+    );
+}
+
+#[test]
 fn pdf_renderer_wrapped_quote_and_list_styled_seams_use_v29_profile() {
     let xdv = write_dvi_v2_text_page_v0(
         b"\n- LISTSTART alpha alpha alpha alpha alpha alpha alpha [LISTITALICV29] beta beta beta beta beta beta LISTWRAPV29.\n\n> QUOTESTART gamma gamma gamma gamma gamma gamma gamma {QUOTEBOLDV29} delta delta delta delta delta QUOTEWRAPV29.",
