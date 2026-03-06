@@ -153,7 +153,8 @@ fn trailing_space_bounded_seam_trim_pt_v30(
 ) -> f32 {
     if !matches!(
         profile,
-        SegmentEmitProfileV0::BodyWrappedProseV27
+        SegmentEmitProfileV0::BodyProseV13
+            | SegmentEmitProfileV0::BodyWrappedProseV27
             | SegmentEmitProfileV0::WrappedIndentedV29
             | SegmentEmitProfileV0::FootnoteProseV26
     ) {
@@ -162,7 +163,8 @@ fn trailing_space_bounded_seam_trim_pt_v30(
     if segment.superscript || segment.is_link || matches!(segment.style, PdfTextStyleV0::Regular) {
         if !matches!(
             profile,
-            SegmentEmitProfileV0::BodyWrappedProseV27
+            SegmentEmitProfileV0::BodyProseV13
+                | SegmentEmitProfileV0::BodyWrappedProseV27
                 | SegmentEmitProfileV0::WrappedIndentedV29
                 | SegmentEmitProfileV0::FootnoteProseV26
         ) || segment.superscript
@@ -176,6 +178,8 @@ fn trailing_space_bounded_seam_trim_pt_v30(
         };
         if next_segment.superscript
             || next_segment.is_link
+            || segment.bytes.len() < 8
+            || !segment.bytes.iter().any(|byte| byte.is_ascii_alphabetic())
             || !segment.bytes.last().is_some_and(|byte| *byte == b' ')
         {
             return 0.0;
@@ -186,6 +190,9 @@ fn trailing_space_bounded_seam_trim_pt_v30(
             PdfTextStyleV0::Regular => 0.0,
         };
         return requested_trim_pt.min(segment.advance_pt * 0.25);
+    }
+    if matches!(profile, SegmentEmitProfileV0::BodyProseV13) {
+        return 0.0;
     }
     let Some(next_segment) = next_segment else {
         return 0.0;

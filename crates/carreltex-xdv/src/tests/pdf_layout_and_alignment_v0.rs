@@ -829,6 +829,42 @@ fn pdf_renderer_body_paragraph_applies_style_scaling_for_styled_seams_v13() {
 }
 
 #[test]
+fn pdf_renderer_body_pre_style_gap_is_tightened_v35() {
+    let demo_text = b"Title\nAuthor\n2026-03-05\n\nBody prose with [ITALICPREV35] tail and {BOLDPREV35} end.";
+    let xdv = write_dvi_v2_text_page_v0(demo_text).expect("writer should accept body prose v35 text");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+
+    let italic_prefix_x = tm_x_for_segment_substring_v0(
+        &pdf,
+        "(ITALICPREV35)",
+        "(Body prose with )",
+    )
+    .expect("body italic prefix x");
+    let italic_x = tm_x_for_segment_substring_v0(&pdf, "(ITALICPREV35)", "(ITALICPREV35)")
+        .expect("body italic x");
+    let bold_prefix_x = tm_x_for_segment_substring_v0(
+        &pdf,
+        "(BOLDPREV35)",
+        "( tail and )",
+    )
+    .expect("body bold prefix x");
+    let bold_x = tm_x_for_segment_substring_v0(&pdf, "(BOLDPREV35)", "(BOLDPREV35)")
+        .expect("body bold x");
+
+    let expected_italic_gap = segment_width_pt_v0(b"Body prose with ") - (12.0 * 0.12);
+    let expected_bold_gap = segment_width_pt_v0(b" tail and ") - (12.0 * 0.15);
+    let epsilon_pt = 0.3f32;
+    assert!(
+        ((italic_x - italic_prefix_x) - expected_italic_gap).abs() <= epsilon_pt,
+        "body prose pre-italic seam should trim the preceding space-bounded gap: prefix_x={italic_prefix_x}, italic_x={italic_x}, expected_gap={expected_italic_gap}"
+    );
+    assert!(
+        ((bold_x - bold_prefix_x) - expected_bold_gap).abs() <= epsilon_pt,
+        "body prose pre-bold seam should trim the preceding space-bounded gap: prefix_x={bold_prefix_x}, bold_x={bold_x}, expected_gap={expected_bold_gap}"
+    );
+}
+
+#[test]
 fn pdf_renderer_centered_lines_do_not_use_prose_seam_scaling_v13() {
     let demo_text = b"Title\nAuthor\n2026-03-05\n\n^ Center [ITALICCENTERV13] text.\n\n> Quote {BOLDQUOTEV13} line.";
     let xdv = write_dvi_v2_text_page_v0(demo_text).expect("writer should accept non-paragraph blocks");
