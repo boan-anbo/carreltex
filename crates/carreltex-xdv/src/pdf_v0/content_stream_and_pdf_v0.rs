@@ -3,6 +3,7 @@ enum BodyFlowKindV0 {
     Paragraph,
     List,
     Quote,
+    Table,
     Other,
 }
 
@@ -20,7 +21,10 @@ fn classify_next_flow_kind_v0(
         }
         if has_table_spec_prefix_v0(&line.glyphs)
             || has_table_row_prefix_v0(&line.glyphs)
-            || has_figure_box_marker_prefix_v0(&line.glyphs)
+        {
+            return Some(BodyFlowKindV0::Table);
+        }
+        if has_figure_box_marker_prefix_v0(&line.glyphs)
             || has_figure_image_prefix_v0(&line.glyphs)
             || has_figure_caption_prefix_v0(&line.glyphs)
             || has_toc_placeholder_line_v0(&line.glyphs)
@@ -73,6 +77,8 @@ fn should_tighten_transition_gap_v7(previous: BodyFlowKindV0, next: BodyFlowKind
             | (BodyFlowKindV0::Quote, BodyFlowKindV0::Paragraph)
             | (BodyFlowKindV0::List, BodyFlowKindV0::Quote)
             | (BodyFlowKindV0::Quote, BodyFlowKindV0::List)
+            | (BodyFlowKindV0::Paragraph, BodyFlowKindV0::Table)
+            | (BodyFlowKindV0::Table, BodyFlowKindV0::Paragraph)
     )
 }
 
@@ -80,6 +86,7 @@ fn transition_blank_advance_pt_v7(previous: BodyFlowKindV0) -> f32 {
     let previous_leading_pt = match previous {
         BodyFlowKindV0::List => LIST_ENTRY_LEADING_PT_V7,
         BodyFlowKindV0::Quote => QUOTE_ENTRY_LEADING_PT_V7,
+        BodyFlowKindV0::Table => TABLE_ROW_LEADING_PT_V10,
         BodyFlowKindV0::Paragraph | BodyFlowKindV0::Other => LEADING_PT_V0,
     };
     (BLOCK_TRANSITION_GAP_PT_V7 - previous_leading_pt).max(0.0)
@@ -225,7 +232,7 @@ fn build_page_content_stream_v0(
             active_quote_indent_pt = 0.0;
             active_inline_alignment = None;
             previous_line_was_bibliography_heading = false;
-            last_non_empty_flow_kind = Some(BodyFlowKindV0::Other);
+            last_non_empty_flow_kind = Some(BodyFlowKindV0::Table);
             line_index = table_end;
             continue;
         }
