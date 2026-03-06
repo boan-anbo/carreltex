@@ -46,6 +46,7 @@ const REF_ANCHOR_LINK_LINE_PREFIX_MARKER_V0: &[u8] = b"!ra ";
 const EQUATION_LINE_PREFIX_MARKER_V0: &[u8] = b"!eq ";
 const BIBITEM_LINE_PREFIX_MARKER_V0: &[u8] = b"!b ";
 const CITE_LINE_PREFIX_MARKER_V0: &[u8] = b"!c ";
+const TABLE_SPEC_PREFIX_MARKER_V0: &[u8] = b"!ts ";
 const TABLE_ROW_PREFIX_MARKER_V0: &[u8] = b"!t ";
 const FIGURE_BOX_PREFIX_MARKER_V0: &[u8] = b"!gbox";
 const FIGURE_IMAGE_PREFIX_MARKER_V0: &[u8] = b"!gimg ";
@@ -77,6 +78,7 @@ const SUBSECTION_CONTROL_V0: &[u8] = b"subsection";
 const SUBSUBSECTION_CONTROL_V0: &[u8] = b"subsubsection";
 const PARAGRAPH_CONTROL_V0: &[u8] = b"paragraph";
 const SUBPARAGRAPH_CONTROL_V0: &[u8] = b"subparagraph";
+const MAX_TABULAR_COLUMNS_V0: usize = 16;
 
 #[derive(Clone)]
 struct TocEntryMetaV0 {
@@ -1380,8 +1382,14 @@ fn consume_tabular_environment_v0(
     }
 
     let (align_start, align_end, next_after_align) = consume_group_bounds(tokens, cursor)?;
-    let align_spec = parse_char_space_group_trimmed_v0(tokens, align_start, align_end)?;
-    if align_spec.as_slice() != b"lcr" {
+    let mut align_spec = Vec::<u8>::new();
+    for token in &tokens[align_start..align_end] {
+        match token {
+            TokenV0::Char(byte) if matches!(byte, b'l' | b'c' | b'r') => align_spec.push(*byte),
+            _ => return None,
+        }
+    }
+    if align_spec.is_empty() || align_spec.len() > MAX_TABULAR_COLUMNS_V0 {
         return None;
     }
     cursor = next_after_align;
@@ -1398,6 +1406,9 @@ fn consume_tabular_environment_v0(
                 return None;
             }
             push_paragraph_break(out);
+            out.extend_from_slice(TABLE_SPEC_PREFIX_MARKER_V0);
+            out.extend_from_slice(&align_spec);
+            push_newline(out);
             for row in &rows {
                 out.extend_from_slice(TABLE_ROW_PREFIX_MARKER_V0);
                 for (cell_index, cell) in row.iter().enumerate() {
@@ -1447,7 +1458,7 @@ fn consume_tabular_environment_v0(
                 None => return None,
             }
         }
-        if row.len() != 3 {
+        if row.len() != align_spec.len() {
             return None;
         }
         rows.push(row);

@@ -8,6 +8,18 @@
       "purpose": "Minimal supported typeset slice with title block and core typography."
     },
     {
+      "id": "typeset_demo_table_mixed_probe_v0",
+      "tags": ["typeset", "table", "tabular", "probe", "ok"],
+      "expected_status": "OK",
+      "purpose": "Exercises tabular v2 mixed l/c/r alignment so deterministic table rendering stays stable with varying cell widths."
+    },
+    {
+      "id": "typeset_demo_table_overflow_probe_v0",
+      "tags": ["typeset", "table", "tabular", "overflow", "probe", "fail"],
+      "expected_status": "FAIL",
+      "purpose": "Proves fail-closed table rendering by forcing a deterministic width overflow that must reject PDF emission."
+    },
+    {
       "id": "typeset_demo_capabilities_v0",
       "tags": ["typeset", "capabilities", "negative", "ni"],
       "expected_status": "NI",

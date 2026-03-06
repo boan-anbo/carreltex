@@ -38,13 +38,13 @@ const LINK_END_MARKER_V0: u8 = b'>';
 const FOOTNOTE_MARKER_PREFIX_V0: u8 = b'^';
 const FOOTNOTE_MARKER_FONT_SIZE_PT_V0: f32 = 8.0;
 const FOOTNOTE_MARKER_RISE_PT_V0: f32 = 4.0;
+const TABLE_SPEC_PREFIX_MARKER_V0: &[u8] = b"!ts ";
 const TABLE_ROW_PREFIX_MARKER_V0: &[u8] = b"!t ";
 const FIGURE_BOX_PREFIX_MARKER_V0: &[u8] = b"!gbox";
 const FIGURE_IMAGE_PREFIX_MARKER_V0: &[u8] = b"!gimg ";
 const FIGURE_CAPTION_PREFIX_MARKER_V0: &[u8] = b"!gcap ";
 const TOC_PLACEHOLDER_MARKER_V0: &[u8] = b"!toc";
 const TOC_ENTRY_LINE_PREFIX_MARKER_V0: &[u8] = b"!toc ";
-const TABLE_COLUMN_COUNT_V0: usize = 3;
 const TABLE_CELL_PADDING_PT_V0: f32 = 6.0;
 const TABLE_BORDER_LINE_WIDTH_PT_V0: f32 = 0.5;
 const TABLE_BORDER_TOP_OFFSET_PT_V0: f32 = 4.0;
@@ -364,6 +364,7 @@ fn is_structured_non_title_line_v0(glyphs: &[GlyphPlanV0]) -> bool {
         || has_center_prefix_v0(glyphs)
         || has_right_prefix_v0(glyphs)
         || has_noindent_prefix_v0(glyphs)
+        || has_table_spec_prefix_v0(glyphs)
         || has_table_row_prefix_v0(glyphs)
         || has_figure_box_prefix_v0(glyphs)
         || has_figure_caption_prefix_v0(glyphs)
@@ -529,6 +530,14 @@ fn has_table_row_prefix_v0(glyphs: &[GlyphPlanV0]) -> bool {
             .eq(TABLE_ROW_PREFIX_MARKER_V0.iter().copied())
 }
 
+fn has_table_spec_prefix_v0(glyphs: &[GlyphPlanV0]) -> bool {
+    glyphs.len() >= TABLE_SPEC_PREFIX_MARKER_V0.len()
+        && glyphs[..TABLE_SPEC_PREFIX_MARKER_V0.len()]
+            .iter()
+            .map(|glyph| glyph.byte)
+            .eq(TABLE_SPEC_PREFIX_MARKER_V0.iter().copied())
+}
+
 fn has_figure_box_prefix_v0(glyphs: &[GlyphPlanV0]) -> bool {
     glyphs.len() == FIGURE_BOX_PREFIX_MARKER_V0.len()
         && glyphs
@@ -600,10 +609,27 @@ fn parse_table_row_cells_v0(glyphs: &[GlyphPlanV0]) -> Option<Vec<Vec<GlyphPlanV
         index += 1;
     }
     cells.push(trim_space_glyph_edges_v0(&current));
-    if cells.len() != TABLE_COLUMN_COUNT_V0 {
+    if cells.is_empty() || cells.iter().any(|cell| cell.is_empty()) {
         return None;
     }
     Some(cells)
+}
+
+fn parse_table_align_spec_line_v0(glyphs: &[GlyphPlanV0]) -> Option<Vec<u8>> {
+    if !has_table_spec_prefix_v0(glyphs) {
+        return None;
+    }
+    let mut spec = Vec::<u8>::new();
+    for glyph in &glyphs[TABLE_SPEC_PREFIX_MARKER_V0.len()..] {
+        if !matches!(glyph.byte, b'l' | b'c' | b'r') {
+            return None;
+        }
+        spec.push(glyph.byte);
+    }
+    if spec.is_empty() {
+        return None;
+    }
+    Some(spec)
 }
 
 fn parse_figure_caption_line_v0(glyphs: &[GlyphPlanV0]) -> Option<Vec<GlyphPlanV0>> {
@@ -758,6 +784,7 @@ fn placeholder_segments_v0(image_path: Option<&[u8]>) -> Vec<PdfStyledSegmentV0>
 
 fn emit_table_block_v0(
     out: &mut Vec<u8>,
+    align_spec: &[u8],
     rows: &[LinePlanV0],
     y: &mut f32,
     min_body_y_pt: f32,
@@ -765,11 +792,18 @@ fn emit_table_block_v0(
     if rows.is_empty() {
         return None;
     }
+    if align_spec.is_empty() {
+        return None;
+    }
+    let col_count = align_spec.len();
     let mut parsed_rows = Vec::<Vec<Vec<PdfRenderSegmentV0>>>::new();
-    let mut col_max_width_pt = [0.0f32; TABLE_COLUMN_COUNT_V0];
+    let mut col_max_width_pt = vec![0.0f32; col_count];
 
     for row in rows {
         let cells = parse_table_row_cells_v0(&row.glyphs)?;
+        if cells.len() != col_count {
+            return None;
+        }
         let mut parsed_cells = Vec::<Vec<PdfRenderSegmentV0>>::new();
         for (col_index, cell_glyphs) in cells.iter().enumerate() {
             let segments = parse_styled_segments_v0(cell_glyphs)?;
@@ -801,9 +835,9 @@ fn emit_table_block_v0(
         return None;
     }
 
-    let mut col_left_edges_pt = [0.0f32; TABLE_COLUMN_COUNT_V0];
+    let mut col_left_edges_pt = vec![0.0f32; col_count];
     let mut col_cursor_x_pt = MARGIN_PT_V0;
-    for col_index in 0..TABLE_COLUMN_COUNT_V0 {
+    for col_index in 0..col_count {
         col_left_edges_pt[col_index] = col_cursor_x_pt;
         col_cursor_x_pt += col_max_width_pt[col_index] + (TABLE_CELL_PADDING_PT_V0 * 2.0);
     }
@@ -816,16 +850,17 @@ fn emit_table_block_v0(
             return None;
         }
         let mut col_left_x = MARGIN_PT_V0;
-        for col_index in 0..TABLE_COLUMN_COUNT_V0 {
+        for col_index in 0..col_count {
             let cell_width_pt = row[col_index]
                 .iter()
                 .map(|segment| segment.advance_pt)
                 .sum::<f32>();
             let col_content_width_pt = col_max_width_pt[col_index];
-            let align_offset_pt = match col_index {
-                0 => 0.0,
-                1 => (col_content_width_pt - cell_width_pt) * 0.5,
-                _ => col_content_width_pt - cell_width_pt,
+            let align_offset_pt = match align_spec[col_index] {
+                b'l' => 0.0,
+                b'c' => (col_content_width_pt - cell_width_pt) * 0.5,
+                b'r' => col_content_width_pt - cell_width_pt,
+                _ => return None,
             };
             let x_pt = col_left_x + TABLE_CELL_PADDING_PT_V0 + align_offset_pt.max(0.0);
             emit_render_segments_with_superscript_v0(
@@ -872,7 +907,7 @@ fn emit_table_block_v0(
             .as_bytes(),
         );
     }
-    for col_index in 1..TABLE_COLUMN_COUNT_V0 {
+    for col_index in 1..col_count {
         let x_pt = col_left_edges_pt[col_index];
         out.extend_from_slice(
             format!(
@@ -1955,14 +1990,26 @@ fn build_page_content_stream_v0(
         if y < min_body_y_pt {
             return None;
         }
-        if line_index >= title_block_len && has_table_row_prefix_v0(&line.glyphs) {
-            let mut table_end = line_index;
+        if line_index >= title_block_len
+            && (has_table_spec_prefix_v0(&line.glyphs) || has_table_row_prefix_v0(&line.glyphs))
+        {
+            let mut cursor = line_index;
+            if !has_table_spec_prefix_v0(&lines[cursor].glyphs) {
+                return None;
+            }
+            let align_spec = parse_table_align_spec_line_v0(&lines[cursor].glyphs)?;
+            cursor += 1;
+            let mut table_end = cursor;
             while table_end < lines.len() && has_table_row_prefix_v0(&lines[table_end].glyphs) {
                 table_end += 1;
             }
+            if cursor == table_end {
+                return None;
+            }
             emit_table_block_v0(
                 &mut out,
-                &lines[line_index..table_end],
+                &align_spec,
+                &lines[cursor..table_end],
                 &mut y,
                 min_body_y_pt,
             )?;

@@ -634,9 +634,9 @@ if (tableSummary?.typed_artifacts?.table?.present !== true) {
   console.error('FAIL: expected table typed artifact present for minimal demo after first run');
   process.exit(1);
 }
-const tablePath = path.join(outDir, 'typeset_demo_minimal_v0', 'table_v1.json');
+const tablePath = path.join(outDir, 'typeset_demo_minimal_v0', 'table_v2.json');
 if (!fs.existsSync(tablePath)) {
-  console.error('FAIL: expected table_v1.json artifact after first run');
+  console.error('FAIL: expected table_v2.json artifact after first run');
   process.exit(1);
 }
 const tableShaFirst = tableSummary.typed_artifacts.table.artifact_sha256;
@@ -646,41 +646,59 @@ if (typeof tableShaFirst !== 'string' || !/^[0-9a-f]{64}$/.test(tableShaFirst)) 
 }
 const tableArtifactFirst = JSON.parse(fs.readFileSync(tablePath, 'utf8'));
 if (!Array.isArray(tableArtifactFirst?.entries)) {
-  console.error('FAIL: expected table_v1.entries array in first-run artifact');
+  console.error('FAIL: expected table_v2.entries array in first-run artifact');
   process.exit(1);
 }
-if (tableArtifactFirst?.schema !== 'table_v1') {
-  console.error('FAIL: expected table_v1 schema in first-run artifact');
+if (tableArtifactFirst?.schema !== 'table_v2') {
+  console.error('FAIL: expected table_v2 schema in first-run artifact');
   process.exit(1);
 }
 if (tableArtifactFirst.entries.length <= 0) {
-  console.error('FAIL: expected non-empty table_v1.entries for minimal demo');
+  console.error('FAIL: expected non-empty table_v2.entries for minimal demo');
   process.exit(1);
 }
 for (const [index, entry] of tableArtifactFirst.entries.entries()) {
   if (typeof entry?.anchor_id !== 'string' || !/^tbl[1-9]\d*$/.test(entry.anchor_id)) {
-    console.error(`FAIL: table_v1.entries[${index}] invalid anchor_id`);
+    console.error(`FAIL: table_v2.entries[${index}] invalid anchor_id`);
     process.exit(1);
   }
   if (!Number.isInteger(entry?.row_count) || entry.row_count <= 0) {
-    console.error(`FAIL: table_v1.entries[${index}] invalid row_count`);
+    console.error(`FAIL: table_v2.entries[${index}] invalid row_count`);
     process.exit(1);
   }
   if (!Number.isInteger(entry?.column_count) || entry.column_count <= 0) {
-    console.error(`FAIL: table_v1.entries[${index}] invalid column_count`);
+    console.error(`FAIL: table_v2.entries[${index}] invalid column_count`);
+    process.exit(1);
+  }
+  if (typeof entry?.align_spec !== 'string' || !/^[lcr]+$/.test(entry.align_spec)) {
+    console.error(`FAIL: table_v2.entries[${index}] invalid align_spec`);
+    process.exit(1);
+  }
+  if (entry.align_spec.length !== entry.column_count) {
+    console.error(`FAIL: table_v2.entries[${index}] align_spec length mismatch column_count`);
     process.exit(1);
   }
   if (!Array.isArray(entry?.rows) || entry.rows.length !== entry.row_count) {
-    console.error(`FAIL: table_v1.entries[${index}] rows mismatch row_count`);
+    console.error(`FAIL: table_v2.entries[${index}] rows mismatch row_count`);
     process.exit(1);
   }
+  for (const [rowIndex, row] of entry.rows.entries()) {
+    if (!Array.isArray(row) || row.length !== entry.column_count || row.some((cell) => typeof cell !== 'string' || cell.length === 0)) {
+      console.error(`FAIL: table_v2.entries[${index}].rows[${rowIndex}] invalid row payload`);
+      process.exit(1);
+    }
+  }
   if (!Array.isArray(entry?.column_widths_pt) || entry.column_widths_pt.length !== entry.column_count) {
-    console.error(`FAIL: table_v1.entries[${index}] column_widths_pt mismatch column_count`);
+    console.error(`FAIL: table_v2.entries[${index}] column_widths_pt mismatch column_count`);
+    process.exit(1);
+  }
+  if (!entry.column_widths_pt.every((value) => Number.isFinite(value) && value >= 0)) {
+    console.error(`FAIL: table_v2.entries[${index}] column_widths_pt contains invalid width`);
     process.exit(1);
   }
 }
-assertEntrySourceSpans('typeset_demo_minimal_v0', 'table_v1', tableArtifactFirst.entries);
-fs.writeFileSync(firstRunShaPath('table_v1'), `${tableShaFirst}\n`);
+assertEntrySourceSpans('typeset_demo_minimal_v0', 'table_v2', tableArtifactFirst.entries);
+fs.writeFileSync(firstRunShaPath('table_v2'), `${tableShaFirst}\n`);
 
 const report = JSON.parse(fs.readFileSync(path.join(outDir, 'report.json'), 'utf8'));
 if (report?.typed_artifacts_version !== 1) {
