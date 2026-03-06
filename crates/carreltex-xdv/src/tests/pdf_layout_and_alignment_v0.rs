@@ -3819,6 +3819,25 @@ fn pdf_renderer_wrapped_right_very_short_italic_pre_style_gap_is_tightened_v67()
 }
 
 #[test]
+fn pdf_renderer_wrapped_right_very_short_italic_low_tier_gap_is_tightened_v68() {
+    let xdv = write_dvi_v2_text_page_with_layout_and_wrap_v0(
+        b"\n| GO [core words] trail words words words WRAPRIGHTVSHORTITALIC tail.",
+        65_536,
+        786_432,
+        30,
+    )
+    .expect("writer should accept wrapped right very-short italic text");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+
+    let actual_gap = max_tm_gap_pt_for_line_containing_v0(&pdf, "core words")
+        .expect("right italic low-tier tm gap");
+    assert!(
+        actual_gap <= 103.5,
+        "wrapped right very-short italic low-tier seam should stay slightly tighter after v68: actual_gap={actual_gap}"
+    );
+}
+
+#[test]
 fn pdf_renderer_wrapped_quote_and_list_styled_seams_use_v29_profile() {
     let xdv = write_dvi_v2_text_page_v0(
         b"\n- LISTSTART alpha alpha alpha alpha alpha alpha alpha [LISTITALICV29] beta beta beta beta beta beta LISTWRAPV29.\n\n> QUOTESTART gamma gamma gamma gamma gamma gamma gamma {QUOTEBOLDV29} delta delta delta delta delta QUOTEWRAPV29.",
