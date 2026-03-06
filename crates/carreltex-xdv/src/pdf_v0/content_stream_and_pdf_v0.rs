@@ -281,7 +281,8 @@ fn build_page_content_stream_v0(
                 active_hang_indent_pt = 0.0;
                 (PAGE_WIDTH_PT_V0 - MARGIN_PT_V0 - line_width_pt).max(MARGIN_PT_V0)
             } else if let Some(prefix_advance_pt) = quote_prefix_advance_pt {
-                active_quote_indent_pt = (FONT_SIZE_PT_V0 * 2.0).max(prefix_advance_pt);
+                active_quote_indent_pt =
+                    QUOTE_BODY_INDENT_PT_V0.max(prefix_advance_pt + QUOTE_PREFIX_GAP_PT_V0);
                 active_hang_indent_pt = 0.0;
                 MARGIN_PT_V0 + active_quote_indent_pt
             } else if let Some(prefix) = list_prefix {
