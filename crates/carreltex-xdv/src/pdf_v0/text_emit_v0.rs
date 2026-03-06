@@ -38,14 +38,15 @@ fn emit_render_segments_with_superscript_v0(
     if segments.is_empty() {
         return;
     }
-    let mut cursor_x = x_pt;
+    let mut cursor_x = f64::from(x_pt);
+    let y_pt_f64 = f64::from(y_pt);
     for segment in segments {
         if segment.bytes.is_empty() {
-            cursor_x += segment.advance_pt;
+            cursor_x += f64::from(segment.advance_pt);
             continue;
         }
         out.extend_from_slice(b"1 0 0 1 ");
-        out.extend_from_slice(format!("{:.2} {:.2} Tm ", cursor_x, y_pt).as_bytes());
+        out.extend_from_slice(format!("{cursor_x:.3} {y_pt_f64:.3} Tm ").as_bytes());
         let escaped = escape_pdf_string_bytes(&segment.bytes);
         let segment_font_size_pt = if segment.superscript {
             FOOTNOTE_MARKER_FONT_SIZE_PT_V0
@@ -65,8 +66,7 @@ fn emit_render_segments_with_superscript_v0(
         out.extend_from_slice(b" Tf (");
         out.extend_from_slice(&escaped);
         out.extend_from_slice(b") Tj ");
-        cursor_x += segment.advance_pt;
+        cursor_x += f64::from(segment.advance_pt);
     }
     out.extend_from_slice(b"0 Ts ");
 }
-
