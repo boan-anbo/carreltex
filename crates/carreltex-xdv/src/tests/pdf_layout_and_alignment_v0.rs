@@ -1139,11 +1139,11 @@ fn pdf_renderer_paragraph_rhythm_and_noindent_invariants_v0() {
         "paragraph break gap mismatch: same_para_y={same_para_y}, second_para_y={second_para_y}"
     );
     assert!(
-        (second_para_y - heading_y - 28.0).abs() <= epsilon_pt,
+        (second_para_y - heading_y - 24.0).abs() <= epsilon_pt,
         "paragraph->heading gap mismatch: second_para_y={second_para_y}, heading_y={heading_y}"
     );
     assert!(
-        (heading_y - after_heading_y - 28.0).abs() <= epsilon_pt,
+        (heading_y - after_heading_y - 24.0).abs() <= epsilon_pt,
         "heading->noindent gap mismatch: heading_y={heading_y}, after_heading_y={after_heading_y}"
     );
     assert!(
@@ -1339,11 +1339,11 @@ fn pdf_renderer_section_heading_spacing_invariants_v0() {
         .expect("body position");
 
     assert!(
-        (intro_y - heading_y - 28.0).abs() <= 0.02,
+        (intro_y - heading_y - 24.0).abs() <= 0.02,
         "intro->heading y-gap mismatch: intro_y={intro_y}, heading_y={heading_y}"
     );
     assert!(
-        (heading_y - body_y - 28.0).abs() <= 0.02,
+        (heading_y - body_y - 24.0).abs() <= 0.02,
         "heading->body y-gap mismatch: heading_y={heading_y}, body_y={body_y}"
     );
     assert!(
@@ -1353,6 +1353,88 @@ fn pdf_renderer_section_heading_spacing_invariants_v0() {
     assert!(
         (body_x - 72.0).abs() <= 0.02,
         "first paragraph after heading should not indent: {body_x}"
+    );
+}
+
+#[test]
+fn pdf_renderer_front_matter_heading_opening_rhythm_polish_v22() {
+    let demo_text = b"Title\nAuthor\n2026-03-05\n\n@S {Front Heading}\n\n~ Body after front heading.";
+    let xdv = write_dvi_v2_text_page_v0(demo_text).expect("writer should accept front-matter heading text");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+
+    let (_, date_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "(2026-03-05)").expect("date position");
+    let (_, heading_y) = tm_position_for_line_containing_text_v0(&pdf, "(Front Heading)")
+        .expect("heading position");
+    let (_, body_y) = tm_position_for_line_containing_text_v0(&pdf, "(Body after front heading.)")
+        .expect("body position");
+
+    let epsilon_pt = 0.02f32;
+    assert!(
+        (date_y - heading_y - 38.0).abs() <= epsilon_pt,
+        "front-matter->heading opening gap mismatch: date_y={date_y}, heading_y={heading_y}"
+    );
+    assert!(
+        (heading_y - body_y - 24.0).abs() <= epsilon_pt,
+        "heading->first-body gap mismatch: heading_y={heading_y}, body_y={body_y}"
+    );
+}
+
+#[test]
+fn pdf_renderer_heading_transitions_across_list_quote_table_polish_v22() {
+    let demo_text = b"\nPrelude paragraph.\n\n- List line one.\n- List line two.\n\n@S {After List Heading}\n\n~ Body after list heading.\n\n> Quote line one.\n> Quote line two.\n\n@S {After Quote Heading}\n\n~ Body after quote heading.\n\n!ts ll\n!t TROWONEA||TROWONEB\n!t TROWTWOA||TROWTWOB\n\n@S {After Table Heading}\n\n~ Body after table heading.";
+    let xdv = write_dvi_v2_text_page_v0(demo_text).expect("writer should accept mixed heading transition text");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+
+    let (_, list_two_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "(List line two.)").expect("list line two");
+    let (_, after_list_heading_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "(After List Heading)")
+            .expect("after-list heading");
+    let (_, after_list_body_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "(Body after list heading.)")
+            .expect("after-list body");
+    let (_, quote_two_y) = tm_position_for_line_containing_text_v0(&pdf, "(Quote line two.)")
+        .expect("quote line two");
+    let (_, after_quote_heading_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "(After Quote Heading)")
+            .expect("after-quote heading");
+    let (_, after_quote_body_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "(Body after quote heading.)")
+            .expect("after-quote body");
+    let (_, table_row_two_y) =
+        tm_position_for_segment_substring_v0(&pdf, "TROWTWOA").expect("table row two");
+    let (_, after_table_heading_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "(After Table Heading)")
+            .expect("after-table heading");
+    let (_, after_table_body_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "(Body after table heading.)")
+            .expect("after-table body");
+
+    let epsilon_pt = 0.2f32;
+    assert!(
+        (list_two_y - after_list_heading_y - 24.0).abs() <= epsilon_pt,
+        "list->heading gap mismatch: list_two_y={list_two_y}, after_list_heading_y={after_list_heading_y}"
+    );
+    assert!(
+        (after_list_heading_y - after_list_body_y - 24.0).abs() <= epsilon_pt,
+        "heading->paragraph gap mismatch after list: after_list_heading_y={after_list_heading_y}, after_list_body_y={after_list_body_y}"
+    );
+    assert!(
+        (quote_two_y - after_quote_heading_y - 23.0).abs() <= epsilon_pt,
+        "quote->heading gap mismatch: quote_two_y={quote_two_y}, after_quote_heading_y={after_quote_heading_y}"
+    );
+    assert!(
+        (after_quote_heading_y - after_quote_body_y - 24.0).abs() <= epsilon_pt,
+        "heading->paragraph gap mismatch after quote: after_quote_heading_y={after_quote_heading_y}, after_quote_body_y={after_quote_body_y}"
+    );
+    assert!(
+        (table_row_two_y - after_table_heading_y - 24.0).abs() <= epsilon_pt,
+        "table->heading gap mismatch: table_row_two_y={table_row_two_y}, after_table_heading_y={after_table_heading_y}"
+    );
+    assert!(
+        (after_table_heading_y - after_table_body_y - 24.0).abs() <= epsilon_pt,
+        "heading->paragraph gap mismatch after table: after_table_heading_y={after_table_heading_y}, after_table_body_y={after_table_body_y}"
     );
 }
 
@@ -1382,9 +1464,9 @@ fn pdf_renderer_heading_list_quote_rhythm_invariants_v0() {
             .expect("after quote");
 
     let epsilon_pt = 0.02f32;
-    assert!((prelude_y - heading_y - 28.0).abs() <= epsilon_pt);
+    assert!((prelude_y - heading_y - 24.0).abs() <= epsilon_pt);
     assert!(
-        (heading_y - after_heading_y - 28.0).abs() <= epsilon_pt,
+        (heading_y - after_heading_y - 24.0).abs() <= epsilon_pt,
         "heading->first paragraph gap mismatch: heading_y={heading_y}, after_heading_y={after_heading_y}"
     );
     assert!(
