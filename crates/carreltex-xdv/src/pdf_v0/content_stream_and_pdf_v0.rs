@@ -232,6 +232,11 @@ fn build_page_content_stream_v0(
         };
         let render_segments = split_superscript_segments_v0(&segments);
         let line_is_empty = render_segments.is_empty();
+        // Collapse consecutive blank lines to a single rhythm gap so vertical spacing stays stable.
+        if line_is_empty && previous_rendered_line_was_empty {
+            line_index += 1;
+            continue;
+        }
         let in_title_block = title_block_len > 0 && line_index < title_block_len;
         let font_size_pt = if in_title_block && line_index == 0 {
             TITLE_FONT_SIZE_PT_V0
