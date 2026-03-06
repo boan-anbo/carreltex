@@ -776,7 +776,7 @@ fn build_page_content_stream_v0(
                 } else {
                     SegmentEmitProfileV0::BodyProseV13
                 }
-            } else if indented_quote_or_list_v31 {
+            } else if bibliography_line || indented_quote_or_list_v31 {
                 SegmentEmitProfileV0::WrappedIndentedV29
             } else if wrapped_centered_alignment_v28 || wrapped_right_alignment_v28 {
                 SegmentEmitProfileV0::WrappedAlignedV28

@@ -2118,6 +2118,33 @@ fn pdf_renderer_bibliography_entries_use_hanging_indent_and_stable_rhythm_v14() 
 }
 
 #[test]
+fn pdf_renderer_bibliography_styled_seams_use_indented_profile_v32() {
+    let xdv = write_dvi_v2_text_page_v0(
+        b"@S {References}\n\n[1] BIBSTART [ITALICBIBV32] with {BOLDBIBV32} tail.",
+    )
+    .expect("writer should accept bibliography seam text");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+    let pdf_text = String::from_utf8_lossy(&pdf);
+    let italic_line = pdf_text
+        .lines()
+        .find(|line| line.contains("(ITALICBIBV32) Tj"))
+        .expect("bibliography italic line should render");
+    let bold_line = pdf_text
+        .lines()
+        .find(|line| line.contains("(BOLDBIBV32) Tj"))
+        .expect("bibliography bold line should render");
+
+    assert!(
+        italic_line.contains("97 Tz") && italic_line.contains("(ITALICBIBV32) Tj 100 Tz"),
+        "bibliography italic seam should use indented seam compensation"
+    );
+    assert!(
+        bold_line.contains("95 Tz") && bold_line.contains("(BOLDBIBV32) Tj 100 Tz"),
+        "bibliography bold seam should use indented seam compensation"
+    );
+}
+
+#[test]
 fn pdf_renderer_body_to_bibliography_opening_gap_is_tightened_v17() {
     let xdv = write_dvi_v2_text_page_v0(
         b"~ Body before references.\n\n@S {References}\n\n[1] ALPHASTART alpha source text.",
