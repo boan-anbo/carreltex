@@ -182,6 +182,24 @@
       "purpose": "Exercises deterministic ref target mapping across include page boundaries for heading/figure/equation anchors."
     },
     {
+      "id": "typeset_demo_pageref_probe_v2",
+      "tags": ["typeset", "hyperref", "pageref", "labels", "refs", "probe", "ok"],
+      "expected_status": "OK",
+      "purpose": "Exercises pageref resolution to deterministic page numbers with one resolved and one unresolved target."
+    },
+    {
+      "id": "typeset_demo_pageref_include_probe_v2",
+      "tags": ["typeset", "hyperref", "pageref", "include", "labels", "probe", "ok"],
+      "expected_status": "OK",
+      "purpose": "Exercises pageref target-page resolution when the label is defined in include-expanded content."
+    },
+    {
+      "id": "typeset_demo_pageref_unresolved_probe_v2",
+      "tags": ["typeset", "hyperref", "pageref", "unresolved", "probe", "ok"],
+      "expected_status": "OK",
+      "purpose": "Exercises unresolved pageref rendering to ?? with deterministic unresolved typed-artifact entries."
+    },
+    {
       "id": "typeset_demo_hyperref_toc_input_probe_v0",
       "tags": ["typeset", "hyperref", "toc", "input", "probe", "ok"],
       "expected_status": "OK",

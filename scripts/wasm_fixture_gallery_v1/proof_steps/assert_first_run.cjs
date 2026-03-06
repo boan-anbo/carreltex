@@ -82,6 +82,106 @@ if (refsArtifactFirst.entries.length <= 0) {
 assertEntrySourceSpans('typeset_demo_labels_probe_v0', 'refs_v1', refsArtifactFirst.entries);
 fs.writeFileSync(firstRunShaPath('refs_v1'), `${refsShaFirst}\n`);
 
+const pagerefProbeSummary = JSON.parse(
+  fs.readFileSync(path.join(outDir, 'typeset_demo_pageref_probe_v2', 'summary.json'), 'utf8'),
+);
+if (pagerefProbeSummary?.typed_artifacts?.pageref?.present !== true) {
+  console.error('FAIL: expected pageref typed artifact present for pageref probe after first run');
+  process.exit(1);
+}
+const pagerefIncludeSummary = JSON.parse(
+  fs.readFileSync(path.join(outDir, 'typeset_demo_pageref_include_probe_v2', 'summary.json'), 'utf8'),
+);
+if (pagerefIncludeSummary?.typed_artifacts?.pageref?.present !== true) {
+  console.error('FAIL: expected pageref typed artifact present for pageref include probe after first run');
+  process.exit(1);
+}
+const pagerefUnresolvedSummary = JSON.parse(
+  fs.readFileSync(path.join(outDir, 'typeset_demo_pageref_unresolved_probe_v2', 'summary.json'), 'utf8'),
+);
+if (pagerefUnresolvedSummary?.typed_artifacts?.pageref?.present !== true) {
+  console.error('FAIL: expected pageref typed artifact present for pageref unresolved probe after first run');
+  process.exit(1);
+}
+const pagerefPath = path.join(outDir, 'typeset_demo_pageref_probe_v2', 'pageref_v2.json');
+if (!fs.existsSync(pagerefPath)) {
+  console.error('FAIL: expected pageref_v2.json artifact after first run');
+  process.exit(1);
+}
+const pagerefShaFirst = pagerefProbeSummary.typed_artifacts.pageref.artifact_sha256;
+if (typeof pagerefShaFirst !== 'string' || !/^[0-9a-f]{64}$/.test(pagerefShaFirst)) {
+  console.error('FAIL: expected pageref artifact sha256 in first summary');
+  process.exit(1);
+}
+const pagerefArtifactFirst = JSON.parse(fs.readFileSync(pagerefPath, 'utf8'));
+if (!Array.isArray(pagerefArtifactFirst?.entries)) {
+  console.error('FAIL: expected pageref_v2.entries array in first-run artifact');
+  process.exit(1);
+}
+if (pagerefArtifactFirst?.schema !== 'pageref_v2') {
+  console.error('FAIL: expected pageref_v2 schema in first-run artifact');
+  process.exit(1);
+}
+if (pagerefArtifactFirst.entries.length <= 0) {
+  console.error('FAIL: expected non-empty pageref_v2.entries for pageref probe');
+  process.exit(1);
+}
+for (const [index, entry] of pagerefArtifactFirst.entries.entries()) {
+  if (typeof entry?.key !== 'string' || entry.key.length === 0) {
+    console.error(`FAIL: pageref_v2.entries[${index}] missing key`);
+    process.exit(1);
+  }
+  if (typeof entry?.resolved !== 'boolean') {
+    console.error(`FAIL: pageref_v2.entries[${index}] missing resolved boolean`);
+    process.exit(1);
+  }
+  if (!(entry.anchor_id === null || (Number.isInteger(entry.anchor_id) && entry.anchor_id > 0))) {
+    console.error(`FAIL: pageref_v2.entries[${index}] invalid anchor_id`);
+    process.exit(1);
+  }
+  if (!(entry.page_no === null || (Number.isInteger(entry.page_no) && entry.page_no > 0))) {
+    console.error(`FAIL: pageref_v2.entries[${index}] invalid page_no`);
+    process.exit(1);
+  }
+  if (!Array.isArray(entry?.occurrences) || entry.occurrences.length <= 0) {
+    console.error(`FAIL: pageref_v2.entries[${index}] missing occurrences`);
+    process.exit(1);
+  }
+}
+assertEntrySourceSpans('typeset_demo_pageref_probe_v2', 'pageref_v2', pagerefArtifactFirst.entries);
+const pagerefIncludeArtifactFirst = JSON.parse(
+  fs.readFileSync(path.join(outDir, 'typeset_demo_pageref_include_probe_v2', 'pageref_v2.json'), 'utf8'),
+);
+if (!Array.isArray(pagerefIncludeArtifactFirst?.entries) || pagerefIncludeArtifactFirst.entries.length <= 0) {
+  console.error('FAIL: expected non-empty pageref_v2.entries for pageref include probe');
+  process.exit(1);
+}
+const pagerefIncludeEntryFirst = pagerefIncludeArtifactFirst.entries.find((entry) => entry.key === 'sec:two');
+if (!pagerefIncludeEntryFirst) {
+  console.error('FAIL: expected pageref include probe to include key sec:two');
+  process.exit(1);
+}
+if (pagerefIncludeEntryFirst.resolved === false) {
+  if (pagerefIncludeEntryFirst.page_no !== null || pagerefIncludeEntryFirst.anchor_id !== null) {
+    console.error('FAIL: unresolved first-run pageref include entry must keep null page_no/anchor_id');
+    process.exit(1);
+  }
+}
+assertEntrySourceSpans('typeset_demo_pageref_include_probe_v2', 'pageref_v2', pagerefIncludeArtifactFirst.entries);
+const pagerefUnresolvedArtifactFirst = JSON.parse(
+  fs.readFileSync(path.join(outDir, 'typeset_demo_pageref_unresolved_probe_v2', 'pageref_v2.json'), 'utf8'),
+);
+if (!Array.isArray(pagerefUnresolvedArtifactFirst?.entries) || pagerefUnresolvedArtifactFirst.entries.length <= 0) {
+  console.error('FAIL: expected non-empty pageref_v2.entries for pageref unresolved probe');
+  process.exit(1);
+}
+if (!pagerefUnresolvedArtifactFirst.entries.some((entry) => entry.resolved === false && entry.page_no === null)) {
+  console.error('FAIL: expected pageref unresolved probe to include unresolved entry');
+  process.exit(1);
+}
+assertEntrySourceSpans('typeset_demo_pageref_unresolved_probe_v2', 'pageref_v2', pagerefUnresolvedArtifactFirst.entries);
+fs.writeFileSync(firstRunShaPath('pageref_v2'), `${pagerefShaFirst}\n`);
+
 const tocSummary = JSON.parse(
   fs.readFileSync(path.join(outDir, 'typeset_demo_toc_probe_v0', 'summary.json'), 'utf8'),
 );
@@ -792,7 +892,7 @@ if (!typedArtifactShaMap || typeof typedArtifactShaMap !== 'object') {
   console.error('FAIL: expected report.typed_artifact_sha256 map after first run');
   process.exit(1);
 }
-const typedKeys = ['toc', 'labels', 'bib', 'cite', 'hyperref', 'pkgopt', 'packages', 'graphics', 'input', 'math', 'table'];
+const typedKeys = ['toc', 'labels', 'bib', 'cite', 'pageref', 'hyperref', 'pkgopt', 'packages', 'graphics', 'input', 'math', 'table'];
 for (const key of typedKeys) {
   const value = typedArtifactShaMap[key];
   if (typeof value !== 'string' || !/^[0-9a-f]{64}$/.test(value)) {

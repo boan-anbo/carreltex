@@ -1,6 +1,6 @@
 use crate::{
-    parse_dvi_v2_text_page_to_layout_v0, GlyphPlanV0, LinePlanV0, PagePlanV0,
-    DEFAULT_LINE_ADVANCE_SP_V0,
+    layout_v0::glyph_width_sp_v0, parse_dvi_v2_text_page_to_layout_v0, GlyphPlanV0, LinePlanV0,
+    PagePlanV0, DEFAULT_LINE_ADVANCE_SP_V0,
 };
 use std::collections::BTreeMap;
 
@@ -28,7 +28,9 @@ const FOOTNOTE_LINE_PREFIX_MARKER_V0: &[u8] = b"!f ";
 const HREF_URL_LINE_PREFIX_MARKER_V0: &[u8] = b"!u ";
 const LABEL_LINE_PREFIX_MARKER_V0: &[u8] = b"!l ";
 const REF_LINE_PREFIX_MARKER_V0: &[u8] = b"!r ";
+const PAGEREF_LINE_PREFIX_MARKER_V0: &[u8] = b"!pr ";
 const REF_ANCHOR_LINK_LINE_PREFIX_MARKER_V0: &[u8] = b"!ra ";
+const PAGEREF_PAGE_LINK_LINE_PREFIX_MARKER_V0: &[u8] = b"!rp ";
 const EQUATION_LINE_PREFIX_MARKER_V0: &[u8] = b"!eq ";
 const BIBITEM_LINE_PREFIX_MARKER_V0: &[u8] = b"!b ";
 const CITE_LINE_PREFIX_MARKER_V0: &[u8] = b"!c ";
@@ -65,6 +67,8 @@ const SUBSECTION_HEADING_PREFIX_MARKER_V0: &[u8] = b"@s ";
 const DISPLAY_MATH_PLACEHOLDER_SHORT_V0: &[u8] = b"MATH DISPLAY";
 const DISPLAY_MATH_PLACEHOLDER_MEDIUM_V0: &[u8] = b"MATH DISPLAY MEDIUM";
 const DISPLAY_MATH_PLACEHOLDER_LONG_V0: &[u8] = b"MATH DISPLAY LONG FORM";
+const PAGEREF_RENDER_MARKER_PREFIX_V0: &[u8] = b"@@PG:";
+const PAGEREF_RENDER_MARKER_SUFFIX_V0: &[u8] = b"@@";
 const ITALIC_START_MARKER_V0: u8 = b'[';
 const ITALIC_END_MARKER_V0: u8 = b']';
 const BOLD_START_MARKER_V0: u8 = b'{';
@@ -175,6 +179,7 @@ struct PdfLinkAnnotationV0 {
 enum PdfLinkTargetV0 {
     Uri(Vec<u8>),
     Anchor(u32),
+    AnchorPage(u32),
 }
 
 #[derive(Clone)]
@@ -198,6 +203,12 @@ struct EquationMetadataV0 {
 
 #[derive(Clone)]
 struct RefAnchorLinkMetadataV0 {
+    link_id: u32,
+    anchor_id: u32,
+}
+
+#[derive(Clone)]
+struct PagerefPageLinkMetadataV0 {
     link_id: u32,
     anchor_id: u32,
 }
@@ -377,7 +388,9 @@ fn is_structured_non_title_line_v0(glyphs: &[GlyphPlanV0]) -> bool {
         || has_href_url_line_prefix_v0(glyphs)
         || has_label_line_prefix_v0(glyphs)
         || has_ref_line_prefix_v0(glyphs)
+        || has_pageref_line_prefix_v0(glyphs)
         || has_ref_anchor_link_line_prefix_v0(glyphs)
+        || has_pageref_page_link_line_prefix_v0(glyphs)
         || has_equation_line_prefix_v0(glyphs)
         || has_bibitem_line_prefix_v0(glyphs)
         || has_cite_line_prefix_v0(glyphs)
@@ -477,7 +490,10 @@ fn is_display_math_placeholder_line_v0(glyphs: &[GlyphPlanV0]) -> bool {
     if !has_center_prefix_v0(glyphs) {
         return false;
     }
-    let payload = glyphs[2..].iter().map(|glyph| glyph.byte).collect::<Vec<u8>>();
+    let payload = glyphs[2..]
+        .iter()
+        .map(|glyph| glyph.byte)
+        .collect::<Vec<u8>>();
     payload.as_slice() == DISPLAY_MATH_PLACEHOLDER_SHORT_V0
         || payload.as_slice() == DISPLAY_MATH_PLACEHOLDER_MEDIUM_V0
         || payload.as_slice() == DISPLAY_MATH_PLACEHOLDER_LONG_V0
@@ -937,7 +953,8 @@ fn emit_figure_block_v0(
         return None;
     }
 
-    let placeholder_segments = placeholder_segments_v0(image_metadata.map(|meta| meta.image_path.as_slice()));
+    let placeholder_segments =
+        placeholder_segments_v0(image_metadata.map(|meta| meta.image_path.as_slice()));
     let placeholder_render_segments = split_superscript_segments_v0(&placeholder_segments);
     let placeholder_text_width_pt = placeholder_render_segments
         .iter()
@@ -949,9 +966,8 @@ fn emit_figure_block_v0(
     let placeholder_box_height_pt = image_metadata
         .map(|meta| meta.height_pt)
         .unwrap_or(DEFAULT_FIGURE_PLACEHOLDER_HEIGHT_PT_V0);
-    let placeholder_width_pt = placeholder_box_width_pt.max(
-        placeholder_text_width_pt + (FIGURE_PLACEHOLDER_LABEL_INSET_PT_V0 * 2.0),
-    );
+    let placeholder_width_pt = placeholder_box_width_pt
+        .max(placeholder_text_width_pt + (FIGURE_PLACEHOLDER_LABEL_INSET_PT_V0 * 2.0));
     if placeholder_width_pt > MAX_FIGURE_PLACEHOLDER_WIDTH_PT_V0 {
         return None;
     }
@@ -1259,12 +1275,28 @@ fn has_ref_line_prefix_v0(glyphs: &[GlyphPlanV0]) -> bool {
             .eq(REF_LINE_PREFIX_MARKER_V0.iter().copied())
 }
 
+fn has_pageref_line_prefix_v0(glyphs: &[GlyphPlanV0]) -> bool {
+    glyphs.len() >= PAGEREF_LINE_PREFIX_MARKER_V0.len()
+        && glyphs[..PAGEREF_LINE_PREFIX_MARKER_V0.len()]
+            .iter()
+            .map(|glyph| glyph.byte)
+            .eq(PAGEREF_LINE_PREFIX_MARKER_V0.iter().copied())
+}
+
 fn has_ref_anchor_link_line_prefix_v0(glyphs: &[GlyphPlanV0]) -> bool {
     glyphs.len() >= REF_ANCHOR_LINK_LINE_PREFIX_MARKER_V0.len()
         && glyphs[..REF_ANCHOR_LINK_LINE_PREFIX_MARKER_V0.len()]
             .iter()
             .map(|glyph| glyph.byte)
             .eq(REF_ANCHOR_LINK_LINE_PREFIX_MARKER_V0.iter().copied())
+}
+
+fn has_pageref_page_link_line_prefix_v0(glyphs: &[GlyphPlanV0]) -> bool {
+    glyphs.len() >= PAGEREF_PAGE_LINK_LINE_PREFIX_MARKER_V0.len()
+        && glyphs[..PAGEREF_PAGE_LINK_LINE_PREFIX_MARKER_V0.len()]
+            .iter()
+            .map(|glyph| glyph.byte)
+            .eq(PAGEREF_PAGE_LINK_LINE_PREFIX_MARKER_V0.iter().copied())
 }
 
 fn has_equation_line_prefix_v0(glyphs: &[GlyphPlanV0]) -> bool {
@@ -1422,6 +1454,32 @@ fn parse_ref_line_v0(glyphs: &[GlyphPlanV0]) -> Option<()> {
     Some(())
 }
 
+fn parse_pageref_line_v0(glyphs: &[GlyphPlanV0]) -> Option<()> {
+    if glyphs.len() < PAGEREF_LINE_PREFIX_MARKER_V0.len() {
+        return None;
+    }
+    let bytes: Vec<u8> = glyphs.iter().map(|glyph| glyph.byte).collect();
+    if !bytes.starts_with(PAGEREF_LINE_PREFIX_MARKER_V0) {
+        return None;
+    }
+    let line = String::from_utf8(bytes).ok()?;
+    let mut parts = line.splitn(4, ' ');
+    let prefix = parts.next()?;
+    if prefix != "!pr" {
+        return None;
+    }
+    let key = parts.next()?.trim();
+    let line_index = parts.next()?.trim().parse::<u32>().ok()?;
+    let resolved_anchor_id = parts.next()?.trim().parse::<u32>().ok()?;
+    if key.is_empty() || line_index == 0 {
+        return None;
+    }
+    if resolved_anchor_id == 0 {
+        return Some(());
+    }
+    Some(())
+}
+
 fn parse_ref_anchor_link_line_v0(glyphs: &[GlyphPlanV0]) -> Option<RefAnchorLinkMetadataV0> {
     if glyphs.len() < REF_ANCHOR_LINK_LINE_PREFIX_MARKER_V0.len() {
         return None;
@@ -1442,6 +1500,111 @@ fn parse_ref_anchor_link_line_v0(glyphs: &[GlyphPlanV0]) -> Option<RefAnchorLink
         return None;
     }
     Some(RefAnchorLinkMetadataV0 { link_id, anchor_id })
+}
+
+fn parse_pageref_page_link_line_v0(glyphs: &[GlyphPlanV0]) -> Option<PagerefPageLinkMetadataV0> {
+    if glyphs.len() < PAGEREF_PAGE_LINK_LINE_PREFIX_MARKER_V0.len() {
+        return None;
+    }
+    let bytes: Vec<u8> = glyphs.iter().map(|glyph| glyph.byte).collect();
+    if !bytes.starts_with(PAGEREF_PAGE_LINK_LINE_PREFIX_MARKER_V0) {
+        return None;
+    }
+    let line = String::from_utf8(bytes).ok()?;
+    let mut parts = line.splitn(3, ' ');
+    let prefix = parts.next()?;
+    if prefix != "!rp" {
+        return None;
+    }
+    let link_id = parts.next()?.trim().parse::<u32>().ok()?;
+    let anchor_id = parts.next()?.trim().parse::<u32>().ok()?;
+    if link_id == 0 || anchor_id == 0 {
+        return None;
+    }
+    Some(PagerefPageLinkMetadataV0 { link_id, anchor_id })
+}
+
+fn infer_line_glyph_advance_sp_v0(glyphs: &[GlyphPlanV0]) -> Option<i32> {
+    for glyph in glyphs {
+        if glyph.advance_sp <= 0 {
+            continue;
+        }
+        if !matches!(
+            glyph.byte,
+            b' ' | b'.'
+                | b','
+                | b';'
+                | b':'
+                | b'!'
+                | b'?'
+                | b'\''
+                | b'"'
+                | b'i'
+                | b'l'
+                | b'I'
+                | b'|'
+                | b'm'
+                | b'w'
+                | b'M'
+                | b'W'
+        ) {
+            return Some(glyph.advance_sp);
+        }
+    }
+    glyphs
+        .iter()
+        .find(|glyph| glyph.advance_sp > 0)
+        .map(|glyph| glyph.advance_sp)
+}
+
+fn parse_pageref_render_marker_v0(bytes: &[u8], index: usize) -> Option<(u32, usize)> {
+    if index + PAGEREF_RENDER_MARKER_PREFIX_V0.len() >= bytes.len()
+        || !bytes[index..].starts_with(PAGEREF_RENDER_MARKER_PREFIX_V0)
+    {
+        return None;
+    }
+    let mut cursor = index + PAGEREF_RENDER_MARKER_PREFIX_V0.len();
+    let mut anchor_id = 0u32;
+    let mut saw_digit = false;
+    while cursor < bytes.len() && bytes[cursor].is_ascii_digit() {
+        saw_digit = true;
+        anchor_id = anchor_id
+            .checked_mul(10)?
+            .checked_add(u32::from(bytes[cursor] - b'0'))?;
+        cursor += 1;
+    }
+    if !saw_digit
+        || anchor_id == 0
+        || cursor + PAGEREF_RENDER_MARKER_SUFFIX_V0.len() > bytes.len()
+        || !bytes[cursor..].starts_with(PAGEREF_RENDER_MARKER_SUFFIX_V0)
+    {
+        return None;
+    }
+    Some((anchor_id, cursor + PAGEREF_RENDER_MARKER_SUFFIX_V0.len()))
+}
+
+fn replace_pageref_render_markers_v0(
+    glyphs: &[GlyphPlanV0],
+    page_numbers_by_anchor_id: &BTreeMap<u32, u32>,
+) -> Option<Vec<GlyphPlanV0>> {
+    let bytes = bytes_from_glyphs_v0(glyphs);
+    let mut out = Vec::<GlyphPlanV0>::with_capacity(glyphs.len());
+    let glyph_advance_sp = infer_line_glyph_advance_sp_v0(glyphs).unwrap_or(65_536);
+    let mut index = 0usize;
+    while index < glyphs.len() {
+        if let Some((anchor_id, next_index)) = parse_pageref_render_marker_v0(&bytes, index) {
+            let page_no = page_numbers_by_anchor_id.get(&anchor_id).copied()?;
+            for byte in page_no.to_string().bytes() {
+                let advance_sp = glyph_width_sp_v0(byte, glyph_advance_sp)?;
+                out.push(GlyphPlanV0 { byte, advance_sp });
+            }
+            index = next_index;
+            continue;
+        }
+        out.push(glyphs[index].clone());
+        index += 1;
+    }
+    Some(out)
 }
 
 fn parse_bibitem_line_v0(glyphs: &[GlyphPlanV0]) -> Option<()> {
@@ -1737,7 +1900,9 @@ fn split_body_and_metadata_lines_v0(
                 || has_toc_entry_line_prefix_v0(&line.glyphs)
                 || has_label_line_prefix_v0(&line.glyphs)
                 || has_ref_line_prefix_v0(&line.glyphs)
+                || has_pageref_line_prefix_v0(&line.glyphs)
                 || has_ref_anchor_link_line_prefix_v0(&line.glyphs)
+                || has_pageref_page_link_line_prefix_v0(&line.glyphs)
                 || has_equation_line_prefix_v0(&line.glyphs)
                 || has_bibitem_line_prefix_v0(&line.glyphs)
                 || has_cite_line_prefix_v0(&line.glyphs)
@@ -1879,6 +2044,19 @@ fn parse_metadata_lines_v0(
             current_footnote_id = None;
             continue;
         }
+        if let Some(pageref_link) = parse_pageref_page_link_line_v0(&line.glyphs) {
+            if link_targets_by_id
+                .insert(
+                    pageref_link.link_id,
+                    PdfLinkTargetV0::AnchorPage(pageref_link.anchor_id),
+                )
+                .is_some()
+            {
+                return None;
+            }
+            current_footnote_id = None;
+            continue;
+        }
         if let Some(equation) = parse_equation_line_v0(&line.glyphs) {
             if equation_ordinals_by_anchor_id
                 .insert(equation.anchor_id, equation.ordinal)
@@ -1905,6 +2083,10 @@ fn parse_metadata_lines_v0(
             continue;
         }
         if parse_ref_line_v0(&line.glyphs).is_some() {
+            current_footnote_id = None;
+            continue;
+        }
+        if parse_pageref_line_v0(&line.glyphs).is_some() {
             current_footnote_id = None;
             continue;
         }
@@ -1940,6 +2122,7 @@ fn build_page_content_stream_v0(
     lines: &[LinePlanV0],
     footnote_defs_by_id: &BTreeMap<u32, Vec<Vec<GlyphPlanV0>>>,
     link_targets_by_id: &BTreeMap<u32, PdfLinkTargetV0>,
+    page_numbers_by_anchor_id: &BTreeMap<u32, u32>,
     toc_entries: &[TocEntryMetadataV0],
     equation_ordinals_by_anchor_id: &BTreeMap<u32, u32>,
     next_link_id: &mut u32,
@@ -1988,6 +2171,8 @@ fn build_page_content_stream_v0(
     let mut line_index = 0usize;
     while line_index < lines.len() {
         let line = &lines[line_index];
+        let resolved_line_glyphs =
+            replace_pageref_render_markers_v0(&line.glyphs, page_numbers_by_anchor_id)?;
         if y < MARGIN_PT_V0 {
             break;
         }
@@ -1995,13 +2180,14 @@ fn build_page_content_stream_v0(
             return None;
         }
         if line_index >= title_block_len
-            && (has_table_spec_prefix_v0(&line.glyphs) || has_table_row_prefix_v0(&line.glyphs))
+            && (has_table_spec_prefix_v0(&resolved_line_glyphs)
+                || has_table_row_prefix_v0(&resolved_line_glyphs))
         {
             let mut cursor = line_index;
-            if !has_table_spec_prefix_v0(&lines[cursor].glyphs) {
+            if !has_table_spec_prefix_v0(&resolved_line_glyphs) {
                 return None;
             }
-            let align_spec = parse_table_align_spec_line_v0(&lines[cursor].glyphs)?;
+            let align_spec = parse_table_align_spec_line_v0(&resolved_line_glyphs)?;
             cursor += 1;
             let mut table_end = cursor;
             while table_end < lines.len() && has_table_row_prefix_v0(&lines[table_end].glyphs) {
@@ -2024,7 +2210,7 @@ fn build_page_content_stream_v0(
             line_index = table_end;
             continue;
         }
-        if line_index >= title_block_len && has_figure_box_prefix_v0(&line.glyphs) {
+        if line_index >= title_block_len && has_figure_box_prefix_v0(&resolved_line_glyphs) {
             let figure_anchor_id = *next_anchor_id;
             *next_anchor_id = next_anchor_id.checked_add(1)?;
             if anchor_destinations
@@ -2064,13 +2250,13 @@ fn build_page_content_stream_v0(
             line_index = cursor + 1;
             continue;
         }
-        if line_index >= title_block_len && has_figure_image_prefix_v0(&line.glyphs) {
+        if line_index >= title_block_len && has_figure_image_prefix_v0(&resolved_line_glyphs) {
             return None;
         }
-        if line_index >= title_block_len && has_figure_caption_prefix_v0(&line.glyphs) {
+        if line_index >= title_block_len && has_figure_caption_prefix_v0(&resolved_line_glyphs) {
             return None;
         }
-        if line_index >= title_block_len && has_toc_placeholder_line_v0(&line.glyphs) {
+        if line_index >= title_block_len && has_toc_placeholder_line_v0(&resolved_line_glyphs) {
             emit_toc_block_v0(
                 &mut out,
                 toc_entries,
@@ -2085,52 +2271,52 @@ fn build_page_content_stream_v0(
             line_index += 1;
             continue;
         }
-        if line_index >= title_block_len && has_toc_entry_line_prefix_v0(&line.glyphs) {
+        if line_index >= title_block_len && has_toc_entry_line_prefix_v0(&resolved_line_glyphs) {
             return None;
         }
         let quote_prefix_advance_pt = if line_index >= title_block_len {
-            detect_quote_prefix_advance_pt_v0(&line.glyphs)
+            detect_quote_prefix_advance_pt_v0(&resolved_line_glyphs)
         } else {
             None
         };
         let center_prefixed = line_index >= title_block_len
             && quote_prefix_advance_pt.is_none()
-            && has_center_prefix_v0(&line.glyphs);
+            && has_center_prefix_v0(&resolved_line_glyphs);
         let right_prefixed = line_index >= title_block_len
             && quote_prefix_advance_pt.is_none()
             && !center_prefixed
-            && has_right_prefix_v0(&line.glyphs);
+            && has_right_prefix_v0(&resolved_line_glyphs);
         let noindent_prefixed = line_index >= title_block_len
             && quote_prefix_advance_pt.is_none()
             && !center_prefixed
             && !right_prefixed
-            && has_noindent_prefix_v0(&line.glyphs);
+            && has_noindent_prefix_v0(&resolved_line_glyphs);
         let heading_kind = if line_index >= title_block_len
             && quote_prefix_advance_pt.is_none()
             && !center_prefixed
             && !right_prefixed
             && !noindent_prefixed
         {
-            detect_heading_prefix_v0(&line.glyphs)
+            detect_heading_prefix_v0(&resolved_line_glyphs)
         } else {
             None
         };
         let display_math_line = line_index >= title_block_len
             && quote_prefix_advance_pt.is_none()
             && center_prefixed
-            && is_display_math_placeholder_line_v0(&line.glyphs);
+            && is_display_math_placeholder_line_v0(&resolved_line_glyphs);
         let render_glyphs_base: &[GlyphPlanV0] = if quote_prefix_advance_pt.is_some() {
-            &line.glyphs[2..]
+            &resolved_line_glyphs[2..]
         } else if center_prefixed {
-            &line.glyphs[2..]
+            &resolved_line_glyphs[2..]
         } else if right_prefixed {
-            &line.glyphs[2..]
+            &resolved_line_glyphs[2..]
         } else if noindent_prefixed {
-            &line.glyphs[2..]
+            &resolved_line_glyphs[2..]
         } else if let Some(kind) = heading_kind {
-            &line.glyphs[heading_prefix_len_v0(kind)..]
+            &resolved_line_glyphs[heading_prefix_len_v0(kind)..]
         } else {
-            &line.glyphs
+            &resolved_line_glyphs
         };
         let list_prefix = if line_index >= title_block_len
             && quote_prefix_advance_pt.is_none()
@@ -2292,7 +2478,8 @@ fn build_page_content_stream_v0(
             }
             if let Some(ordinal) = equation_ordinal {
                 let equation_number = format!("({ordinal})").into_bytes();
-                let equation_number_width_pt = (equation_number.len() as f32) * (FONT_SIZE_PT_V0 * 0.6);
+                let equation_number_width_pt =
+                    (equation_number.len() as f32) * (FONT_SIZE_PT_V0 * 0.6);
                 let equation_number_x =
                     (PAGE_WIDTH_PT_V0 - MARGIN_PT_V0 - equation_number_width_pt).max(MARGIN_PT_V0);
                 let equation_segments = [PdfRenderSegmentV0 {
@@ -2378,12 +2565,21 @@ fn build_page_content_stream_v0(
 
 fn build_pdf_for_pages_v0(pages: &[PagePlanV0]) -> Vec<u8> {
     let (body_pages, metadata_lines) = split_body_and_metadata_lines_v0(pages);
-    let Some((footnote_defs_by_id, link_targets_by_id, toc_entries, equation_ordinals_by_anchor_id)) =
-        parse_metadata_lines_v0(&metadata_lines)
+    let Some((
+        footnote_defs_by_id,
+        link_targets_by_id,
+        toc_entries,
+        equation_ordinals_by_anchor_id,
+    )) = parse_metadata_lines_v0(&metadata_lines)
     else {
         return Vec::new();
     };
     let Some(nominal_anchor_destinations) = collect_nominal_anchor_destinations_v0(&body_pages)
+    else {
+        return Vec::new();
+    };
+    let Some(page_numbers_by_anchor_id) =
+        build_page_numbers_by_anchor_id_v0(&nominal_anchor_destinations)
     else {
         return Vec::new();
     };
@@ -2397,6 +2593,7 @@ fn build_pdf_for_pages_v0(pages: &[PagePlanV0]) -> Vec<u8> {
             body_lines,
             &footnote_defs_by_id,
             &link_targets_by_id,
+            &page_numbers_by_anchor_id,
             &toc_entries,
             &equation_ordinals_by_anchor_id,
             &mut next_link_id,
@@ -2416,10 +2613,13 @@ fn build_pdf_for_pages_v0(pages: &[PagePlanV0]) -> Vec<u8> {
         return Vec::new();
     }
     for target in link_targets_by_id.values() {
-        if let PdfLinkTargetV0::Anchor(anchor_id) = target {
-            if !anchor_destinations.contains_key(anchor_id) {
-                return Vec::new();
+        match target {
+            PdfLinkTargetV0::Anchor(anchor_id) | PdfLinkTargetV0::AnchorPage(anchor_id) => {
+                if !anchor_destinations.contains_key(anchor_id) {
+                    return Vec::new();
+                }
             }
+            PdfLinkTargetV0::Uri(_) => {}
         }
     }
 
@@ -2569,6 +2769,28 @@ fn build_pdf_for_pages_v0(pages: &[PagePlanV0]) -> Vec<u8> {
                         annot_body.as_bytes(),
                     ));
                 }
+                PdfLinkTargetV0::AnchorPage(anchor_id) => {
+                    let Some(destination) = anchor_destinations.get(anchor_id).copied() else {
+                        return Vec::new();
+                    };
+                    let destination_page_id =
+                        first_page_id + u32::try_from(destination.page_index).unwrap_or(0);
+                    if destination_page_id >= first_stream_id {
+                        return Vec::new();
+                    }
+                    let annot_body = format!(
+                        "<< /Type /Annot /Subtype /Link /Rect [{:.2} {:.2} {:.2} {:.2}] /Border [0 0 0] /Dest [{destination_page_id} 0 R /Fit] >>",
+                        annotation.rect[0],
+                        annotation.rect[1],
+                        annotation.rect[2],
+                        annotation.rect[3],
+                    );
+                    offsets.push(write_pdf_obj(
+                        &mut out,
+                        annotation_id,
+                        annot_body.as_bytes(),
+                    ));
+                }
             }
             annotation_counter += 1;
         }
@@ -2610,6 +2832,19 @@ fn build_pdf_for_pages_v0(pages: &[PagePlanV0]) -> Vec<u8> {
     out.extend_from_slice(b"\n");
     out.extend_from_slice(PDF_EOF);
     out
+}
+
+fn build_page_numbers_by_anchor_id_v0(
+    anchor_destinations: &BTreeMap<u32, AnchorDestinationV0>,
+) -> Option<BTreeMap<u32, u32>> {
+    let mut out = BTreeMap::<u32, u32>::new();
+    for (anchor_id, destination) in anchor_destinations {
+        let page_no = u32::try_from(destination.page_index).ok()?.checked_add(1)?;
+        if out.insert(*anchor_id, page_no).is_some() {
+            return None;
+        }
+    }
+    Some(out)
 }
 
 /// Render a deterministic, single-font PDF preview for a v0 DVI-v2 text page.

@@ -63,9 +63,10 @@ if (resourceHintsShaSecond !== resourceHintsShaFirst) {
   console.error('FAIL: report.resource_hints_v0 must be stable across reruns');
   process.exit(1);
 }
-const requiredTypedKeys = ['toc', 'labels', 'refs', 'bib', 'cite', 'hyperref', 'pkgopt', 'packages', 'graphics', 'input', 'math', 'table'];
+const requiredTypedKeys = ['toc', 'labels', 'refs', 'pageref', 'bib', 'cite', 'hyperref', 'pkgopt', 'packages', 'graphics', 'input', 'math', 'table'];
 const labelsShaFirst = fs.readFileSync(path.join(`${outDir}_baseline`, 'labels_v1_first.sha256'), 'utf8').trim();
 const refsShaFirst = fs.readFileSync(path.join(`${outDir}_baseline`, 'refs_v1_first.sha256'), 'utf8').trim();
+const pagerefShaFirst = fs.readFileSync(path.join(`${outDir}_baseline`, 'pageref_v2_first.sha256'), 'utf8').trim();
 const tocShaFirst = fs.readFileSync(path.join(`${outDir}_baseline`, 'toc_v1_first.sha256'), 'utf8').trim();
 const bibShaFirst = fs.readFileSync(path.join(`${outDir}_baseline`, 'bib_v1_first.sha256'), 'utf8').trim();
 const citeShaFirst = fs.readFileSync(path.join(`${outDir}_baseline`, 'cite_v1_first.sha256'), 'utf8').trim();
@@ -158,6 +159,21 @@ if (!mathLongStatus || mathLongStatus.status !== 'OK') {
 const mathInvalidStatus = statuses.find((entry) => entry.case_id === 'typeset_demo_math_invalid_payload_probe_v0');
 if (!mathInvalidStatus || mathInvalidStatus.status !== 'NI') {
   console.error('FAIL: expected typeset_demo_math_invalid_payload_probe_v0 status NI');
+  process.exit(1);
+}
+const pagerefStatus = statuses.find((entry) => entry.case_id === 'typeset_demo_pageref_probe_v2');
+if (!pagerefStatus || pagerefStatus.status !== 'OK') {
+  console.error('FAIL: expected typeset_demo_pageref_probe_v2 status OK');
+  process.exit(1);
+}
+const pagerefIncludeStatus = statuses.find((entry) => entry.case_id === 'typeset_demo_pageref_include_probe_v2');
+if (!pagerefIncludeStatus || pagerefIncludeStatus.status !== 'OK') {
+  console.error('FAIL: expected typeset_demo_pageref_include_probe_v2 status OK');
+  process.exit(1);
+}
+const pagerefUnresolvedStatus = statuses.find((entry) => entry.case_id === 'typeset_demo_pageref_unresolved_probe_v2');
+if (!pagerefUnresolvedStatus || pagerefUnresolvedStatus.status !== 'OK') {
+  console.error('FAIL: expected typeset_demo_pageref_unresolved_probe_v2 status OK');
   process.exit(1);
 }
 for (const status of okStatuses) {
@@ -324,6 +340,52 @@ const refsArtifactSecond = JSON.parse(
 );
 if (!Array.isArray(refsArtifactSecond?.entries) || refsArtifactSecond.entries.length <= 0) {
   console.error('FAIL: expected non-empty refs_v1.entries after rerun');
+  process.exit(1);
+}
+const pagerefSummary = JSON.parse(
+  fs.readFileSync(path.join(outDir, 'typeset_demo_pageref_probe_v2', 'summary.json'), 'utf8'),
+);
+const pagerefArtifact = pagerefSummary?.typed_artifacts?.pageref;
+if (!pagerefArtifact || pagerefArtifact.present !== true) {
+  console.error('FAIL: expected pageref typed artifact present after second run');
+  process.exit(1);
+}
+const pagerefShaSecond = pagerefArtifact.artifact_sha256;
+if (pagerefShaSecond !== pagerefShaFirst) {
+  console.error('FAIL: pageref_v2 artifact sha256 must be stable across reruns');
+  process.exit(1);
+}
+const pagerefArtifactSecond = JSON.parse(
+  fs.readFileSync(path.join(outDir, 'typeset_demo_pageref_probe_v2', 'pageref_v2.json'), 'utf8'),
+);
+if (!Array.isArray(pagerefArtifactSecond?.entries) || pagerefArtifactSecond.entries.length <= 0) {
+  console.error('FAIL: expected non-empty pageref_v2.entries after rerun');
+  process.exit(1);
+}
+if (pagerefArtifactSecond?.schema !== 'pageref_v2') {
+  console.error('FAIL: expected pageref_v2 schema after rerun');
+  process.exit(1);
+}
+const pagerefIncludeArtifactSecond = JSON.parse(
+  fs.readFileSync(path.join(outDir, 'typeset_demo_pageref_include_probe_v2', 'pageref_v2.json'), 'utf8'),
+);
+if (!Array.isArray(pagerefIncludeArtifactSecond?.entries) || pagerefIncludeArtifactSecond.entries.length <= 0) {
+  console.error('FAIL: expected non-empty pageref_v2 entries for include probe after rerun');
+  process.exit(1);
+}
+if (!pagerefIncludeArtifactSecond.entries.some((entry) => entry.key === 'sec:two' && entry.resolved === true)) {
+  console.error('FAIL: expected pageref include probe to keep resolved sec:two entry after rerun');
+  process.exit(1);
+}
+const pagerefUnresolvedArtifactSecond = JSON.parse(
+  fs.readFileSync(path.join(outDir, 'typeset_demo_pageref_unresolved_probe_v2', 'pageref_v2.json'), 'utf8'),
+);
+if (!Array.isArray(pagerefUnresolvedArtifactSecond?.entries) || pagerefUnresolvedArtifactSecond.entries.length <= 0) {
+  console.error('FAIL: expected non-empty pageref_v2 entries for unresolved probe after rerun');
+  process.exit(1);
+}
+if (!pagerefUnresolvedArtifactSecond.entries.some((entry) => entry.resolved === false && entry.page_no === null)) {
+  console.error('FAIL: expected unresolved pageref entry to remain unresolved after rerun');
   process.exit(1);
 }
 
@@ -621,6 +683,7 @@ console.log(`PASS: resource_hints_v0 sha stable ${resourceHintsShaSecond}`);
 console.log('PASS: resource_hints_v0 excludes ok_demo_v0');
 console.log(`PASS: labels_v1 sha stable ${labelsShaSecond}`);
 console.log(`PASS: refs_v1 sha stable ${refsShaSecond}`);
+console.log(`PASS: pageref_v2 sha stable ${pagerefShaSecond}`);
 console.log(`PASS: toc_v1 sha stable ${tocShaSecond}`);
 console.log(`PASS: bib_v1 sha stable ${bibShaSecond}`);
 console.log(`PASS: cite_v1 sha stable ${citeShaSecond}`);

@@ -38,11 +38,14 @@ const FOOTNOTE_CONTROL_V0: &[u8] = b"footnote";
 const HREF_CONTROL_V0: &[u8] = b"href";
 const LABEL_CONTROL_V0: &[u8] = b"label";
 const REF_CONTROL_V0: &[u8] = b"ref";
+const PAGEREF_CONTROL_V0: &[u8] = b"pageref";
 const FOOTNOTE_LINE_PREFIX_MARKER_V0: &[u8] = b"!f ";
 const HREF_URL_LINE_PREFIX_MARKER_V0: &[u8] = b"!u ";
 const LABEL_LINE_PREFIX_MARKER_V0: &[u8] = b"!l ";
 const REF_LINE_PREFIX_MARKER_V0: &[u8] = b"!r ";
+const PAGEREF_LINE_PREFIX_MARKER_V0: &[u8] = b"!pr ";
 const REF_ANCHOR_LINK_LINE_PREFIX_MARKER_V0: &[u8] = b"!ra ";
+const PAGEREF_PAGE_LINK_LINE_PREFIX_MARKER_V0: &[u8] = b"!rp ";
 const EQUATION_LINE_PREFIX_MARKER_V0: &[u8] = b"!eq ";
 const BIBITEM_LINE_PREFIX_MARKER_V0: &[u8] = b"!b ";
 const CITE_LINE_PREFIX_MARKER_V0: &[u8] = b"!c ";
@@ -59,7 +62,10 @@ const INCLUDEGRAPHICS_ALLOWED_WIDTH_UNITS_V0: [&[u8]; 4] = [b"pt", b"mm", b"cm",
 const TOC_PLACEHOLDER_MARKER_V0: &[u8] = b"!toc";
 const TOC_ENTRY_LINE_PREFIX_MARKER_V0: &[u8] = b"!toc ";
 const REF_MARKER_PREFIX_V0: &[u8] = b"@@REF:";
+const PAGEREF_MARKER_PREFIX_V0: &[u8] = b"@@PAGEREF:";
 const REF_MARKER_SUFFIX_V0: &[u8] = b"@@";
+const PAGEREF_RENDER_MARKER_PREFIX_V0: &[u8] = b"@@PG:";
+const PAGEREF_RENDER_MARKER_SUFFIX_V0: &[u8] = b"@@";
 const CITE_MARKER_PREFIX_V0: &[u8] = b"@@CITE:";
 const CITE_MARKER_SUFFIX_V0: &[u8] = b"@@";
 const INLINE_MATH_PLACEHOLDER_V0: &[u8] = b"MATH";
@@ -120,9 +126,16 @@ struct PendingLabelTargetV0 {
 
 #[derive(Clone)]
 struct RefOccurrenceMetaV0 {
+    kind: RefKindV0,
     key: Vec<u8>,
     line_index: u32,
     resolved_anchor_id: Option<u32>,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum RefKindV0 {
+    Ref,
+    Pageref,
 }
 
 #[derive(Clone)]
@@ -133,6 +146,12 @@ struct HrefLinkMetaV0 {
 
 #[derive(Clone)]
 struct RefAnchorLinkMetaV0 {
+    link_id: u32,
+    anchor_id: u32,
+}
+
+#[derive(Clone)]
+struct PagerefPageLinkMetaV0 {
     link_id: u32,
     anchor_id: u32,
 }
@@ -924,6 +943,13 @@ fn consume_fragment_token_v0(
             out.extend_from_slice(REF_MARKER_SUFFIX_V0);
             Some(next)
         }
+        TokenV0::ControlSeq(name) if name.as_slice() == PAGEREF_CONTROL_V0 => {
+            let (key, next) = parse_label_or_ref_key_group_v0(tokens, index)?;
+            out.extend_from_slice(PAGEREF_MARKER_PREFIX_V0);
+            out.extend_from_slice(&key);
+            out.extend_from_slice(REF_MARKER_SUFFIX_V0);
+            Some(next)
+        }
         TokenV0::ControlSeq(name)
             if name.as_slice() == b"protect" || name.as_slice() == b"relax" =>
         {
@@ -1094,7 +1120,10 @@ fn parse_decimal_milli_v0(value: &[u8]) -> Option<u32> {
     if value.is_empty() {
         return None;
     }
-    if value.iter().any(|byte| matches!(byte, b'+' | b'-' | b'e' | b'E')) {
+    if value
+        .iter()
+        .any(|byte| matches!(byte, b'+' | b'-' | b'e' | b'E'))
+    {
         return None;
     }
     let mut dot_index = None::<usize>;
@@ -2449,14 +2478,27 @@ fn apply_crossref_pass_v1(
     artifacts: &CrossRefArtifactsV1,
     ref_occurrences: &mut Vec<RefOccurrenceMetaV0>,
     ref_link_anchor_ids: &mut Vec<u32>,
+    pageref_page_link_anchor_ids: &mut Vec<u32>,
 ) -> Option<Vec<u8>> {
     let mut out = Vec::<u8>::with_capacity(body.len());
     let mut index = 0usize;
     let mut line_index = 1u32;
 
     while index < body.len() {
-        if body[index..].starts_with(REF_MARKER_PREFIX_V0) {
-            let key_start = index + REF_MARKER_PREFIX_V0.len();
+        let (ref_kind, key_start) = if body[index..].starts_with(REF_MARKER_PREFIX_V0) {
+            (RefKindV0::Ref, index + REF_MARKER_PREFIX_V0.len())
+        } else if body[index..].starts_with(PAGEREF_MARKER_PREFIX_V0) {
+            (RefKindV0::Pageref, index + PAGEREF_MARKER_PREFIX_V0.len())
+        } else {
+            let byte = body[index];
+            out.push(byte);
+            if byte == NEWLINE_MARKER_V0 {
+                line_index = line_index.checked_add(1)?;
+            }
+            index += 1;
+            continue;
+        };
+        {
             let mut key_end = key_start;
             while key_end < body.len() {
                 if body[key_end..].starts_with(REF_MARKER_SUFFIX_V0) {
@@ -2473,12 +2515,18 @@ fn apply_crossref_pass_v1(
             let key = body[key_start..key_end].to_vec();
             let resolved_label = artifacts.labels_by_key.get(&key);
             let resolved_anchor_id = resolved_label.map(|entry| entry.anchor_id);
-            let resolved_value = resolved_label.and_then(|entry| match entry.kind {
-                LabelKindV0::Heading => Some(entry.anchor_id),
-                LabelKindV0::Figure => entry.figure_ordinal,
-                LabelKindV0::Equation => entry.equation_ordinal,
-            });
-            if resolved_anchor_id.is_some() != resolved_value.is_some() {
+            let resolved_value = if matches!(ref_kind, RefKindV0::Ref) {
+                resolved_label.and_then(|entry| match entry.kind {
+                    LabelKindV0::Heading => Some(entry.anchor_id),
+                    LabelKindV0::Figure => entry.figure_ordinal,
+                    LabelKindV0::Equation => entry.equation_ordinal,
+                })
+            } else {
+                None
+            };
+            if matches!(ref_kind, RefKindV0::Ref)
+                && resolved_anchor_id.is_some() != resolved_value.is_some()
+            {
                 return None;
             }
             if let Some(anchor_id) = resolved_anchor_id {
@@ -2495,20 +2543,43 @@ fn apply_crossref_pass_v1(
                     return None;
                 }
             }
-            if let Some(value) = resolved_value {
-                if artifacts.hyperref_enabled {
-                    out.push(LINK_START_MARKER_V0);
-                    out.extend_from_slice(value.to_string().as_bytes());
-                    out.push(LINK_END_MARKER_V0);
-                    let anchor_id = resolved_anchor_id?;
-                    ref_link_anchor_ids.push(anchor_id);
-                } else {
-                    out.extend_from_slice(value.to_string().as_bytes());
+            match ref_kind {
+                RefKindV0::Ref => {
+                    if let Some(value) = resolved_value {
+                        if artifacts.hyperref_enabled {
+                            out.push(LINK_START_MARKER_V0);
+                            out.extend_from_slice(value.to_string().as_bytes());
+                            out.push(LINK_END_MARKER_V0);
+                            let anchor_id = resolved_anchor_id?;
+                            ref_link_anchor_ids.push(anchor_id);
+                        } else {
+                            out.extend_from_slice(value.to_string().as_bytes());
+                        }
+                    } else {
+                        out.extend_from_slice(b"??");
+                    }
                 }
-            } else {
-                out.extend_from_slice(b"??");
+                RefKindV0::Pageref => {
+                    if let Some(anchor_id) = resolved_anchor_id {
+                        let mut marker = Vec::<u8>::new();
+                        marker.extend_from_slice(PAGEREF_RENDER_MARKER_PREFIX_V0);
+                        marker.extend_from_slice(anchor_id.to_string().as_bytes());
+                        marker.extend_from_slice(PAGEREF_RENDER_MARKER_SUFFIX_V0);
+                        if artifacts.hyperref_enabled {
+                            out.push(LINK_START_MARKER_V0);
+                            out.extend_from_slice(&marker);
+                            out.push(LINK_END_MARKER_V0);
+                            pageref_page_link_anchor_ids.push(anchor_id);
+                        } else {
+                            out.extend_from_slice(&marker);
+                        }
+                    } else {
+                        out.extend_from_slice(b"??");
+                    }
+                }
             }
             ref_occurrences.push(RefOccurrenceMetaV0 {
+                kind: ref_kind,
                 key,
                 line_index,
                 resolved_anchor_id,
@@ -2516,13 +2587,6 @@ fn apply_crossref_pass_v1(
             index = key_end + REF_MARKER_SUFFIX_V0.len();
             continue;
         }
-
-        let byte = body[index];
-        out.push(byte);
-        if byte == NEWLINE_MARKER_V0 {
-            line_index = line_index.checked_add(1)?;
-        }
-        index += 1;
     }
     Some(out)
 }
@@ -2531,11 +2595,18 @@ fn assign_link_metadata_v1(
     body: &[u8],
     href_urls: &[Vec<u8>],
     ref_link_anchor_ids: &[u32],
-) -> Option<(Vec<HrefLinkMetaV0>, Vec<RefAnchorLinkMetaV0>)> {
+    pageref_page_link_anchor_ids: &[u32],
+) -> Option<(
+    Vec<HrefLinkMetaV0>,
+    Vec<RefAnchorLinkMetaV0>,
+    Vec<PagerefPageLinkMetaV0>,
+)> {
     let mut href_links = Vec::<HrefLinkMetaV0>::new();
     let mut ref_links = Vec::<RefAnchorLinkMetaV0>::new();
+    let mut pageref_links = Vec::<PagerefPageLinkMetaV0>::new();
     let mut href_cursor = 0usize;
     let mut ref_cursor = 0usize;
+    let mut pageref_cursor = 0usize;
     let mut next_link_id = 1u32;
     let mut index = 0usize;
 
@@ -2560,6 +2631,15 @@ fn assign_link_metadata_v1(
                 url: href_url,
             });
             href_cursor += 1;
+        } else if segment.starts_with(PAGEREF_RENDER_MARKER_PREFIX_V0)
+            && segment.ends_with(PAGEREF_RENDER_MARKER_SUFFIX_V0)
+        {
+            let anchor_id = *pageref_page_link_anchor_ids.get(pageref_cursor)?;
+            pageref_links.push(PagerefPageLinkMetaV0 {
+                link_id: next_link_id,
+                anchor_id,
+            });
+            pageref_cursor += 1;
         } else {
             let anchor_id = *ref_link_anchor_ids.get(ref_cursor)?;
             ref_links.push(RefAnchorLinkMetaV0 {
@@ -2572,10 +2652,13 @@ fn assign_link_metadata_v1(
         index = segment_end + 1;
     }
 
-    if href_cursor != href_urls.len() || ref_cursor != ref_link_anchor_ids.len() {
+    if href_cursor != href_urls.len()
+        || ref_cursor != ref_link_anchor_ids.len()
+        || pageref_cursor != pageref_page_link_anchor_ids.len()
+    {
         return None;
     }
-    Some((href_links, ref_links))
+    Some((href_links, ref_links, pageref_links))
 }
 
 fn resolve_cite_markers_fixedpoint_v0(
@@ -2596,11 +2679,12 @@ fn resolve_cite_markers_fixedpoint_v0(
             while key_end < body.len() {
                 if body[key_end..].starts_with(CITE_MARKER_SUFFIX_V0) {
                     break;
+                } else {
+                    if !is_safe_label_key_byte_v0(body[key_end]) {
+                        return None;
+                    }
+                    key_end += 1;
                 }
-                if !is_safe_label_key_byte_v0(body[key_end]) {
-                    return None;
-                }
-                key_end += 1;
             }
             if key_end == key_start || key_end >= body.len() {
                 return None;
@@ -2688,14 +2772,38 @@ fn consume_label_command_v0(
 }
 
 fn consume_ref_command_v0(tokens: &[TokenV0], index: usize, out: &mut Vec<u8>) -> Option<usize> {
+    consume_ref_like_command_v0(tokens, index, out, REF_CONTROL_V0, REF_MARKER_PREFIX_V0)
+}
+
+fn consume_pageref_command_v0(
+    tokens: &[TokenV0],
+    index: usize,
+    out: &mut Vec<u8>,
+) -> Option<usize> {
+    consume_ref_like_command_v0(
+        tokens,
+        index,
+        out,
+        PAGEREF_CONTROL_V0,
+        PAGEREF_MARKER_PREFIX_V0,
+    )
+}
+
+fn consume_ref_like_command_v0(
+    tokens: &[TokenV0],
+    index: usize,
+    out: &mut Vec<u8>,
+    control: &[u8],
+    marker_prefix: &[u8],
+) -> Option<usize> {
     if !matches!(
         tokens.get(index),
-        Some(TokenV0::ControlSeq(name)) if name.as_slice() == REF_CONTROL_V0
+        Some(TokenV0::ControlSeq(name)) if name.as_slice() == control
     ) {
         return None;
     }
     let (key, next) = parse_label_or_ref_key_group_v0(tokens, index)?;
-    out.extend_from_slice(REF_MARKER_PREFIX_V0);
+    out.extend_from_slice(marker_prefix);
     out.extend_from_slice(&key);
     out.extend_from_slice(REF_MARKER_SUFFIX_V0);
     Some(next)
@@ -2969,6 +3077,7 @@ pub(crate) fn extract_typeset_minimal_text_body_with_external_bib_v0(
     let mut labels_by_key = BTreeMap::<Vec<u8>, LabelEntryMetaV0>::new();
     let mut ref_occurrences = Vec::<RefOccurrenceMetaV0>::new();
     let mut ref_link_anchor_ids = Vec::<u32>::new();
+    let mut pageref_page_link_anchor_ids = Vec::<u32>::new();
     let mut cite_occurrences = Vec::<CiteOccurrenceMetaV0>::new();
     let mut next_anchor_id = 1u32;
     let mut next_figure_ordinal = 1u32;
@@ -3118,6 +3227,15 @@ pub(crate) fn extract_typeset_minimal_text_body_with_external_bib_v0(
                 pending_label_target = None;
                 index = consume_ref_command_v0(tokens, index, &mut body)?;
             }
+            Some(TokenV0::ControlSeq(name)) if name.as_slice() == PAGEREF_CONTROL_V0 => {
+                saw_body_content_after_maketitle = true;
+                maybe_emit_pending_noindent_prefix_v0(
+                    &mut body,
+                    &mut pending_noindent_after_heading,
+                );
+                pending_label_target = None;
+                index = consume_pageref_command_v0(tokens, index, &mut body)?;
+            }
             Some(TokenV0::ControlSeq(name)) if name.as_slice() == CITE_CONTROL_V0 => {
                 saw_body_content_after_maketitle = true;
                 maybe_emit_pending_noindent_prefix_v0(
@@ -3220,9 +3338,14 @@ pub(crate) fn extract_typeset_minimal_text_body_with_external_bib_v0(
         &crossref_artifacts,
         &mut ref_occurrences,
         &mut ref_link_anchor_ids,
+        &mut pageref_page_link_anchor_ids,
     )?;
-    let (href_links, ref_anchor_links) =
-        assign_link_metadata_v1(&body, &href_urls, &ref_link_anchor_ids)?;
+    let (href_links, ref_anchor_links, pageref_page_links) = assign_link_metadata_v1(
+        &body,
+        &href_urls,
+        &ref_link_anchor_ids,
+        &pageref_page_link_anchor_ids,
+    )?;
     if saw_thebibliography_env && bibliography_render_requested {
         return None;
     }
@@ -3352,7 +3475,34 @@ pub(crate) fn extract_typeset_minimal_text_body_with_external_bib_v0(
     if !ref_occurrences.is_empty() {
         push_paragraph_break(&mut body);
         for occurrence in &ref_occurrences {
+            if matches!(occurrence.kind, RefKindV0::Pageref) {
+                continue;
+            }
             body.extend_from_slice(REF_LINE_PREFIX_MARKER_V0);
+            body.extend_from_slice(&occurrence.key);
+            body.push(b' ');
+            body.extend_from_slice(occurrence.line_index.to_string().as_bytes());
+            body.push(b' ');
+            body.extend_from_slice(
+                occurrence
+                    .resolved_anchor_id
+                    .unwrap_or(0)
+                    .to_string()
+                    .as_bytes(),
+            );
+            push_newline(&mut body);
+        }
+    }
+    if ref_occurrences
+        .iter()
+        .any(|occurrence| matches!(occurrence.kind, RefKindV0::Pageref))
+    {
+        push_paragraph_break(&mut body);
+        for occurrence in &ref_occurrences {
+            if !matches!(occurrence.kind, RefKindV0::Pageref) {
+                continue;
+            }
+            body.extend_from_slice(PAGEREF_LINE_PREFIX_MARKER_V0);
             body.extend_from_slice(&occurrence.key);
             body.push(b' ');
             body.extend_from_slice(occurrence.line_index.to_string().as_bytes());
@@ -3371,6 +3521,16 @@ pub(crate) fn extract_typeset_minimal_text_body_with_external_bib_v0(
         push_paragraph_break(&mut body);
         for link in &ref_anchor_links {
             body.extend_from_slice(REF_ANCHOR_LINK_LINE_PREFIX_MARKER_V0);
+            body.extend_from_slice(link.link_id.to_string().as_bytes());
+            body.push(b' ');
+            body.extend_from_slice(link.anchor_id.to_string().as_bytes());
+            push_newline(&mut body);
+        }
+    }
+    if !pageref_page_links.is_empty() {
+        push_paragraph_break(&mut body);
+        for link in &pageref_page_links {
+            body.extend_from_slice(PAGEREF_PAGE_LINK_LINE_PREFIX_MARKER_V0);
             body.extend_from_slice(link.link_id.to_string().as_bytes());
             body.push(b' ');
             body.extend_from_slice(link.anchor_id.to_string().as_bytes());
