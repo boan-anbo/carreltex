@@ -2883,3 +2883,30 @@ fn pdf_renderer_wrapped_quote_and_list_styled_seams_use_v29_profile() {
         "quote fixture should wrap onto a later line: quote_start_y={quote_start_y}, quote_wrap_y={quote_wrap_y}"
     );
 }
+
+#[test]
+fn pdf_renderer_single_line_quote_and_list_styled_seams_use_v31_profile() {
+    let xdv = write_dvi_v2_text_page_v0(
+        b"\n- LISTLINEV31 alpha [LISTITALICV31] tail.\n\n> QUOTELINEV31 beta {QUOTEBOLDV31} tail.",
+    )
+    .expect("writer should accept single-line quote/list text");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+    let pdf_text = String::from_utf8_lossy(&pdf);
+    let list_line = pdf_text
+        .lines()
+        .find(|line| line.contains("(LISTITALICV31) Tj"))
+        .expect("single-line list styled segment should render");
+    let quote_line = pdf_text
+        .lines()
+        .find(|line| line.contains("(QUOTEBOLDV31) Tj"))
+        .expect("single-line quote styled segment should render");
+
+    assert!(
+        list_line.contains("97 Tz") && list_line.contains("(LISTITALICV31) Tj 100 Tz"),
+        "single-line list styled segment should use indented seam compensation"
+    );
+    assert!(
+        quote_line.contains("95 Tz") && quote_line.contains("(QUOTEBOLDV31) Tj 100 Tz"),
+        "single-line quote styled segment should use indented seam compensation"
+    );
+}
