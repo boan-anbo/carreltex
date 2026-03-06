@@ -1,12 +1,6 @@
 #[cfg(test)]
 mod count_v0_tests;
 #[cfg(test)]
-mod ok_v0_cite_tests;
-#[cfg(test)]
-mod ok_v0_dollar_math_tests;
-#[cfg(test)]
-mod ok_v0_inline_dollar_math_tests;
-#[cfg(test)]
 mod edef_v0_tests;
 mod ifnum_v0;
 #[cfg(test)]
@@ -26,141 +20,19 @@ mod meaning_v0_tests_input_guards;
 mod newcommand_v0_tests;
 mod ok_v0;
 #[cfg(test)]
-mod ok_v0_color_tests;
-#[cfg(test)]
 mod ok_v0_bib_tests;
 #[cfg(test)]
-mod ok_v0_noop_tests;
+mod ok_v0_box_wrappers_tests;
 #[cfg(test)]
-mod ok_v0_noop_spacing_tests;
+mod ok_v0_cite_in_env_tests;
 #[cfg(test)]
-mod ok_v0_noop_break_tests;
+mod ok_v0_cite_tests;
 #[cfg(test)]
-mod ok_v0_noop_font_size_tests;
+mod ok_v0_color_tests;
 #[cfg(test)]
-mod ok_v0_noop_state_set_tests;
+mod ok_v0_dollar_math_tests;
 #[cfg(test)]
-mod ok_v0_noop_break_args_tests;
-#[cfg(test)]
-mod ok_v0_preamble_noops_tests;
-#[cfg(test)]
-mod ok_v0_preamble_config_tests;
-#[cfg(test)]
-mod ok_v0_preamble_color_decls_tests;
-#[cfg(test)]
-mod ok_v0_preamble_cite_decls_tests;
-#[cfg(test)]
-mod ok_v0_preamble_doc_hooks_tests;
-#[cfg(test)]
-mod ok_v0_preamble_mathcode_delcode_tests;
-#[cfg(test)]
-mod ok_v0_preamble_math_version_sizes_tests;
-#[cfg(test)]
-mod ok_v0_preamble_package_option_plumbing_tests;
-#[cfg(test)]
-mod ok_v0_preamble_biblatex_resources_tests;
-#[cfg(test)]
-mod ok_v0_preamble_biblatex_alias_decls_tests;
-#[cfg(test)]
-mod ok_v0_preamble_biblatex_formats_tests;
-#[cfg(test)]
-mod ok_v0_preamble_language_decls_tests;
-#[cfg(test)]
-mod ok_v0_preamble_tikz_pgf_tests;
-#[cfg(test)]
-mod ok_v0_preamble_fontspec_config_tests;
-#[cfg(test)]
-mod ok_v0_preamble_listings_algo_table_tests;
-#[cfg(test)]
-mod ok_v0_preamble_meta_extras_tests;
-#[cfg(test)]
-mod ok_v0_preamble_meta_extras2_tests;
-#[cfg(test)]
-mod ok_v0_preamble_metadata_decls_tests;
-#[cfg(test)]
-mod ok_v0_preamble_legacy_baseline_tests;
-#[cfg(test)]
-mod ok_v0_preamble_noarg_toggles_tests;
-#[cfg(test)]
-mod ok_v0_preamble_noarg_page_style_tests;
-#[cfg(test)]
-mod ok_v0_index_plumbing_tests;
-#[cfg(test)]
-mod ok_v0_preamble_label_aux_tests;
-#[cfg(test)]
-mod ok_v0_preamble_length_counter_tests;
-#[cfg(test)]
-mod ok_v0_preamble_marks_tests;
-#[cfg(test)]
-mod ok_v0_preamble_hyperref_noops_tests;
-#[cfg(test)]
-mod ok_v0_preamble_float_listof_tests;
-#[cfg(test)]
-mod ok_v0_preamble_toc_noops_tests;
-#[cfg(test)]
-mod ok_v0_preamble_koma_meta_bundle_tests;
-#[cfg(test)]
-mod ok_v0_preamble_koma_config_bundle_tests;
-#[cfg(test)]
-mod ok_v0_preamble_upstream_audit_tests;
-#[cfg(test)]
-mod ok_v0_preamble_fancyhdr_tests;
-#[cfg(test)]
-mod ok_v0_preamble_fancyhdr_glue_tests;
-#[cfg(test)]
-mod ok_v0_preamble_sectioning_toc_tests;
-#[cfg(test)]
-mod ok_v0_preamble_caption_footnote_tests;
-#[cfg(test)]
-mod ok_v0_preamble_caption_decls_tests;
-#[cfg(test)]
-mod ok_v0_preamble_math_operator_decls_tests;
-#[cfg(test)]
-mod ok_v0_preamble_amsthm_decls_tests;
-#[cfg(test)]
-mod ok_v0_preamble_math_alphabet_decls_tests;
-#[cfg(test)]
-mod ok_v0_preamble_math_symbol_decls_tests;
-#[cfg(test)]
-mod ok_v0_preamble_symbol_font_setters_tests;
-#[cfg(test)]
-mod ok_v0_preamble_math_accent_radical_decls_tests;
-#[cfg(test)]
-mod ok_v0_preamble_fontenc_decls_tests;
-#[cfg(test)]
-mod ok_v0_preamble_font_decl_bundle_tests;
-#[cfg(test)]
-mod ok_v0_preamble_font_decl_bundle2_tests;
-#[cfg(test)]
-mod ok_v0_preamble_declare_robust_command_tests;
-#[cfg(test)]
-mod ok_v0_preamble_declare_text_font_command_tests;
-#[cfg(test)]
-mod ok_v0_preamble_declare_text_command_tests;
-#[cfg(test)]
-mod ok_v0_preamble_provide_text_command_tests;
-#[cfg(test)]
-mod ok_v0_preamble_provide_text_command_default_tests;
-#[cfg(test)]
-mod ok_v0_preamble_declare_text_command_default_tests;
-#[cfg(test)]
-mod ok_v0_preamble_declare_text_accent_default_tests;
-#[cfg(test)]
-mod ok_v0_preamble_declare_text_symbol_default_tests;
-#[cfg(test)]
-mod ok_v0_preamble_declare_text_composite_default_tests;
-#[cfg(test)]
-mod ok_v0_preamble_text_decl_bundle_tests;
-#[cfg(test)]
-mod ok_v0_preamble_textcmd_bundle_tests;
-#[cfg(test)]
-mod ok_v0_preamble_text_symbol_accent_decls_tests;
-#[cfg(test)]
-mod ok_v0_preamble_text_composite_command_tests;
-#[cfg(test)]
-mod ok_v0_preamble_text_composite_tests;
-#[cfg(test)]
-mod ok_v0_protect_relax_tests;
+mod ok_v0_ensuremath_tests;
 #[cfg(test)]
 mod ok_v0_env_tests;
 #[cfg(test)]
@@ -168,62 +40,185 @@ mod ok_v0_float_tests;
 #[cfg(test)]
 mod ok_v0_footnote_tests;
 #[cfg(test)]
-mod ok_v0_ensuremath_tests;
-#[cfg(test)]
-mod ok_v0_text_math_tests;
-#[cfg(test)]
 mod ok_v0_heading_optional_args_tests;
+#[cfg(test)]
+mod ok_v0_index_plumbing_tests;
+#[cfg(test)]
+mod ok_v0_inline_dollar_math_tests;
+#[cfg(test)]
+mod ok_v0_item_label_tests;
+#[cfg(test)]
+mod ok_v0_label_in_env_tests;
 #[cfg(test)]
 mod ok_v0_linebreak_tests;
 #[cfg(test)]
+mod ok_v0_list_nesting_tests;
+#[cfg(test)]
+mod ok_v0_maketitle_emit_tests;
+#[cfg(test)]
 mod ok_v0_math_env_tests;
+#[cfg(test)]
+mod ok_v0_math_font_wrappers_tests;
 #[cfg(test)]
 mod ok_v0_math_tests;
 #[cfg(test)]
 mod ok_v0_math_text_wrappers_tests;
 #[cfg(test)]
-mod ok_v0_math_font_wrappers_tests;
+mod ok_v0_noop_break_args_tests;
 #[cfg(test)]
-mod ok_v0_quote_tests;
+mod ok_v0_noop_break_tests;
 #[cfg(test)]
-mod ok_v0_ref_tests;
+mod ok_v0_noop_font_size_tests;
 #[cfg(test)]
-mod ok_v0_maketitle_emit_tests;
+mod ok_v0_noop_spacing_tests;
 #[cfg(test)]
-mod ok_v0_title_fragment_compat_tests;
+mod ok_v0_noop_state_set_tests;
 #[cfg(test)]
-mod ok_v0_scripts_tests;
-#[cfg(test)]
-mod ok_v0_box_wrappers_tests;
-#[cfg(test)]
-mod ok_v0_table_env_tests;
-#[cfg(test)]
-mod ok_v0_thm_env_tests;
-#[cfg(test)]
-mod ok_v0_verb_tests;
-#[cfg(test)]
-mod ok_v0_label_in_env_tests;
-#[cfg(test)]
-mod ok_v0_ref_in_env_tests;
-#[cfg(test)]
-mod ok_v0_cite_in_env_tests;
-#[cfg(test)]
-mod ok_v0_list_nesting_tests;
-#[cfg(test)]
-mod ok_v0_item_label_tests;
-#[cfg(test)]
-mod ok_v0_tests;
+mod ok_v0_noop_tests;
 #[cfg(test)]
 mod ok_v0_optional_bracket_args_tests;
 #[cfg(test)]
-mod typeset_minimal_v0_tests;
+mod ok_v0_preamble_amsthm_decls_tests;
+#[cfg(test)]
+mod ok_v0_preamble_biblatex_alias_decls_tests;
+#[cfg(test)]
+mod ok_v0_preamble_biblatex_formats_tests;
+#[cfg(test)]
+mod ok_v0_preamble_biblatex_resources_tests;
+#[cfg(test)]
+mod ok_v0_preamble_caption_decls_tests;
+#[cfg(test)]
+mod ok_v0_preamble_caption_footnote_tests;
+#[cfg(test)]
+mod ok_v0_preamble_cite_decls_tests;
+#[cfg(test)]
+mod ok_v0_preamble_color_decls_tests;
+#[cfg(test)]
+mod ok_v0_preamble_config_tests;
+#[cfg(test)]
+mod ok_v0_preamble_declare_robust_command_tests;
+#[cfg(test)]
+mod ok_v0_preamble_declare_text_accent_default_tests;
+#[cfg(test)]
+mod ok_v0_preamble_declare_text_command_default_tests;
+#[cfg(test)]
+mod ok_v0_preamble_declare_text_command_tests;
+#[cfg(test)]
+mod ok_v0_preamble_declare_text_composite_default_tests;
+#[cfg(test)]
+mod ok_v0_preamble_declare_text_font_command_tests;
+#[cfg(test)]
+mod ok_v0_preamble_declare_text_symbol_default_tests;
+#[cfg(test)]
+mod ok_v0_preamble_doc_hooks_tests;
+#[cfg(test)]
+mod ok_v0_preamble_fancyhdr_glue_tests;
+#[cfg(test)]
+mod ok_v0_preamble_fancyhdr_tests;
+#[cfg(test)]
+mod ok_v0_preamble_float_listof_tests;
+#[cfg(test)]
+mod ok_v0_preamble_font_decl_bundle2_tests;
+#[cfg(test)]
+mod ok_v0_preamble_font_decl_bundle_tests;
+#[cfg(test)]
+mod ok_v0_preamble_fontenc_decls_tests;
+#[cfg(test)]
+mod ok_v0_preamble_fontspec_config_tests;
+#[cfg(test)]
+mod ok_v0_preamble_hyperref_noops_tests;
+#[cfg(test)]
+mod ok_v0_preamble_koma_config_bundle_tests;
+#[cfg(test)]
+mod ok_v0_preamble_koma_meta_bundle_tests;
+#[cfg(test)]
+mod ok_v0_preamble_label_aux_tests;
+#[cfg(test)]
+mod ok_v0_preamble_language_decls_tests;
+#[cfg(test)]
+mod ok_v0_preamble_legacy_baseline_tests;
+#[cfg(test)]
+mod ok_v0_preamble_length_counter_tests;
+#[cfg(test)]
+mod ok_v0_preamble_listings_algo_table_tests;
+#[cfg(test)]
+mod ok_v0_preamble_marks_tests;
+#[cfg(test)]
+mod ok_v0_preamble_math_accent_radical_decls_tests;
+#[cfg(test)]
+mod ok_v0_preamble_math_alphabet_decls_tests;
+#[cfg(test)]
+mod ok_v0_preamble_math_operator_decls_tests;
+#[cfg(test)]
+mod ok_v0_preamble_math_symbol_decls_tests;
+#[cfg(test)]
+mod ok_v0_preamble_math_version_sizes_tests;
+#[cfg(test)]
+mod ok_v0_preamble_mathcode_delcode_tests;
+#[cfg(test)]
+mod ok_v0_preamble_meta_extras2_tests;
+#[cfg(test)]
+mod ok_v0_preamble_meta_extras_tests;
+#[cfg(test)]
+mod ok_v0_preamble_metadata_decls_tests;
+#[cfg(test)]
+mod ok_v0_preamble_noarg_page_style_tests;
+#[cfg(test)]
+mod ok_v0_preamble_noarg_toggles_tests;
+#[cfg(test)]
+mod ok_v0_preamble_noops_tests;
+#[cfg(test)]
+mod ok_v0_preamble_package_option_plumbing_tests;
+#[cfg(test)]
+mod ok_v0_preamble_provide_text_command_default_tests;
+#[cfg(test)]
+mod ok_v0_preamble_provide_text_command_tests;
+#[cfg(test)]
+mod ok_v0_preamble_sectioning_toc_tests;
+#[cfg(test)]
+mod ok_v0_preamble_symbol_font_setters_tests;
+#[cfg(test)]
+mod ok_v0_preamble_text_composite_command_tests;
+#[cfg(test)]
+mod ok_v0_preamble_text_composite_tests;
+#[cfg(test)]
+mod ok_v0_preamble_text_decl_bundle_tests;
+#[cfg(test)]
+mod ok_v0_preamble_text_symbol_accent_decls_tests;
+#[cfg(test)]
+mod ok_v0_preamble_textcmd_bundle_tests;
+#[cfg(test)]
+mod ok_v0_preamble_tikz_pgf_tests;
+#[cfg(test)]
+mod ok_v0_preamble_toc_noops_tests;
+#[cfg(test)]
+mod ok_v0_preamble_upstream_audit_tests;
+#[cfg(test)]
+mod ok_v0_protect_relax_tests;
+#[cfg(test)]
+mod ok_v0_quote_tests;
+#[cfg(test)]
+mod ok_v0_ref_in_env_tests;
+#[cfg(test)]
+mod ok_v0_ref_tests;
+#[cfg(test)]
+mod ok_v0_scripts_tests;
+#[cfg(test)]
+mod ok_v0_table_env_tests;
+#[cfg(test)]
+mod ok_v0_tests;
+#[cfg(test)]
+mod ok_v0_text_math_tests;
+#[cfg(test)]
+mod ok_v0_thm_env_tests;
+#[cfg(test)]
+mod ok_v0_title_fragment_compat_tests;
+#[cfg(test)]
+mod ok_v0_verb_tests;
 #[cfg(test)]
 mod providecommand_v0_tests;
 mod stats_v0;
 mod tokenize_reason_v0;
-mod typeset_minimal_v0;
-#[cfg(test)]
-mod tokenizer_verb_tests;
 #[cfg(test)]
 mod tokenizer_textword_139_tests;
 #[cfg(test)]
@@ -242,7 +237,13 @@ mod tokenizer_textword_145_tests;
 mod tokenizer_textword_147_tests;
 #[cfg(test)]
 mod tokenizer_textword_148_tests;
+#[cfg(test)]
+mod tokenizer_verb_tests;
 mod trace_v0;
+mod typeset_minimal_v0;
+#[cfg(test)]
+mod typeset_minimal_v0_tests;
+mod typeset_v0;
 #[cfg(test)]
 mod xdef_noexpand_v0_tests;
 use crate::reasons_v0::{invalid_log_bytes_v0, InvalidInputReasonV0};
@@ -251,7 +252,6 @@ use carreltex_core::{
     build_compile_result_v0, truncate_log_bytes_v0, CompileRequestV0, CompileResultV0,
     CompileStatus, Mount, DEFAULT_COMPILE_MAIN_MAX_LOG_BYTES_V0, MAX_LOG_BYTES_V0,
 };
-use std::collections::BTreeMap;
 use carreltex_xdv::{
     plan_layout_v0, plan_layout_width_v0, validate_dvi_v2_text_page_matches_layout_v0,
     validate_dvi_v2_text_page_with_layout_v0, write_dvi_v2_text_page_from_layout_v0,
@@ -264,8 +264,9 @@ use ok_v0::{
     OK_LINE_ADVANCE_SP_V0,
 };
 use stats_v0::build_tex_stats_from_tokens_v0;
+use std::collections::BTreeMap;
 use trace_v0::build_not_implemented_log_v0;
-use typeset_minimal_v0::{
+use typeset_v0::{
     collect_bibliography_resource_names_v0, extract_typeset_minimal_text_body_v0,
     extract_typeset_minimal_text_body_with_external_bib_v0, normalize_typeset_minimal_tokens_v0,
     parse_minimal_bib_entries_v0, preprocess_typeset_minimal_source_v0,
@@ -276,7 +277,7 @@ const TYPESET_MINIMAL_GLYPH_ADVANCE_SP_V0: i32 = 471_859;
 const TYPESET_MINIMAL_LINE_ADVANCE_SP_V0: i32 = 917_504;
 const TYPESET_MINIMAL_MAX_LINE_WIDTH_SP_V0: u32 = 30_670_848;
 
-fn build_typeset_minimal_external_bib_entries_v0(
+fn build_typeset_external_bib_entries_v0(
     mount: &Mount,
     normalized_typeset_tokens: &[TokenV0],
 ) -> Option<BTreeMap<Vec<u8>, Vec<u8>>> {
@@ -319,7 +320,7 @@ pub fn compile_main_v0(mount: &mut Mount) -> CompileResultV0 {
     compile_request_v0(mount, &request)
 }
 
-pub fn compile_main_typeset_minimal_v0(mount: &mut Mount) -> CompileResultV0 {
+pub fn compile_main_typeset_v0(mount: &mut Mount) -> CompileResultV0 {
     let request = CompileRequestV0 {
         entrypoint: "main.tex".to_owned(),
         source_date_epoch: 1,
@@ -331,11 +332,19 @@ pub fn compile_main_typeset_minimal_v0(mount: &mut Mount) -> CompileResultV0 {
     };
 
     if mount.finalize().is_err() {
-        return invalid_result_v0(request.max_log_bytes, InvalidInputReasonV0::MountFinalizeFailed);
+        return invalid_result_v0(
+            request.max_log_bytes,
+            InvalidInputReasonV0::MountFinalizeFailed,
+        );
     }
     let entry_bytes = match mount.read_file_by_bytes_v0(request.entrypoint.as_bytes()) {
         Ok(Some(bytes)) => bytes.to_vec(),
-        _ => return invalid_result_v0(request.max_log_bytes, InvalidInputReasonV0::EntrypointMissing),
+        _ => {
+            return invalid_result_v0(
+                request.max_log_bytes,
+                InvalidInputReasonV0::EntrypointMissing,
+            )
+        }
     };
     let preprocessed_entry_bytes = preprocess_typeset_minimal_source_v0(&entry_bytes);
     let tokens = match tokenize_v0(&preprocessed_entry_bytes) {
@@ -357,16 +366,13 @@ pub fn compile_main_typeset_minimal_v0(mount: &mut Mount) -> CompileResultV0 {
             InvalidInputReasonV0::InputValidationFailed,
         );
     }
-    if expanded_tokens
-        .iter()
-        .any(|token| {
-            matches!(
-                token,
-                TokenV0::ControlSeq(name)
-                    if name.as_slice() == b"input" || name.as_slice() == b"include"
-            )
-        })
-    {
+    if expanded_tokens.iter().any(|token| {
+        matches!(
+            token,
+            TokenV0::ControlSeq(name)
+                if name.as_slice() == b"input" || name.as_slice() == b"include"
+        )
+    }) {
         return invalid_result_v0(
             request.max_log_bytes,
             InvalidInputReasonV0::InputValidationFailed,
@@ -379,14 +385,20 @@ pub fn compile_main_typeset_minimal_v0(mount: &mut Mount) -> CompileResultV0 {
     let tex_stats_json = match build_tex_stats_from_tokens_v0(&macro_expanded_tokens) {
         Ok(json) => json,
         Err(_) => {
-            return invalid_result_v0(request.max_log_bytes, InvalidInputReasonV0::StatsBuildFailed);
+            return invalid_result_v0(
+                request.max_log_bytes,
+                InvalidInputReasonV0::StatsBuildFailed,
+            );
         }
     };
     if tex_stats_json.is_empty() {
-        return invalid_result_v0(request.max_log_bytes, InvalidInputReasonV0::StatsBuildFailed);
+        return invalid_result_v0(
+            request.max_log_bytes,
+            InvalidInputReasonV0::StatsBuildFailed,
+        );
     }
     let normalized_typeset_tokens = normalize_typeset_minimal_tokens_v0(&macro_expanded_tokens);
-    let ok_text_bytes = build_typeset_minimal_external_bib_entries_v0(mount, &normalized_typeset_tokens)
+    let ok_text_bytes = build_typeset_external_bib_entries_v0(mount, &normalized_typeset_tokens)
         .and_then(|external_bib_entries| {
             if external_bib_entries.is_empty() {
                 extract_typeset_minimal_text_body_v0(&normalized_typeset_tokens)
@@ -416,22 +428,31 @@ pub fn compile_main_typeset_minimal_v0(mount: &mut Mount) -> CompileResultV0 {
                     )
                 }
             };
-            let xdv_bytes = match write_dvi_v2_text_page_from_layout_v0(&layout_plan, line_advance_sp) {
-                Some(bytes) => bytes,
-                None => {
-                    return invalid_result_v0(
-                        request.max_log_bytes,
-                        InvalidInputReasonV0::StatsBuildFailed,
-                    )
-                }
-            };
-            if !validate_dvi_v2_text_page_with_layout_v0(&xdv_bytes, glyph_advance_sp, line_advance_sp) {
+            let xdv_bytes =
+                match write_dvi_v2_text_page_from_layout_v0(&layout_plan, line_advance_sp) {
+                    Some(bytes) => bytes,
+                    None => {
+                        return invalid_result_v0(
+                            request.max_log_bytes,
+                            InvalidInputReasonV0::StatsBuildFailed,
+                        )
+                    }
+                };
+            if !validate_dvi_v2_text_page_with_layout_v0(
+                &xdv_bytes,
+                glyph_advance_sp,
+                line_advance_sp,
+            ) {
                 return invalid_result_v0(
                     request.max_log_bytes,
                     InvalidInputReasonV0::StatsBuildFailed,
                 );
             }
-            if !validate_dvi_v2_text_page_matches_layout_v0(&xdv_bytes, &layout_plan, line_advance_sp) {
+            if !validate_dvi_v2_text_page_matches_layout_v0(
+                &xdv_bytes,
+                &layout_plan,
+                line_advance_sp,
+            ) {
                 return invalid_result_v0(
                     request.max_log_bytes,
                     InvalidInputReasonV0::StatsBuildFailed,
@@ -450,7 +471,10 @@ pub fn compile_main_typeset_minimal_v0(mount: &mut Mount) -> CompileResultV0 {
         match build_not_implemented_log_v0(request.max_log_bytes as usize, &input_trace) {
             Some(log) => log,
             None => {
-                return invalid_result_v0(request.max_log_bytes, InvalidInputReasonV0::StatsBuildFailed)
+                return invalid_result_v0(
+                    request.max_log_bytes,
+                    InvalidInputReasonV0::StatsBuildFailed,
+                )
             }
         };
     build_compile_result_v0(
@@ -460,6 +484,11 @@ pub fn compile_main_typeset_minimal_v0(mount: &mut Mount) -> CompileResultV0 {
         vec![],
         tex_stats_json,
     )
+}
+
+// Transitional compatibility shim while downstream callers migrate to compile_main_typeset_v0.
+pub fn compile_main_typeset_minimal_v0(mount: &mut Mount) -> CompileResultV0 {
+    compile_main_typeset_v0(mount)
 }
 
 pub fn compile_request_v0(mount: &mut Mount, req: &CompileRequestV0) -> CompileResultV0 {
@@ -517,16 +546,13 @@ pub fn compile_request_v0(mount: &mut Mount, req: &CompileRequestV0) -> CompileR
             InvalidInputReasonV0::InputValidationFailed,
         );
     }
-    if expanded_tokens
-        .iter()
-        .any(|token| {
-            matches!(
-                token,
-                TokenV0::ControlSeq(name)
-                    if name.as_slice() == b"input" || name.as_slice() == b"include"
-            )
-        })
-    {
+    if expanded_tokens.iter().any(|token| {
+        matches!(
+            token,
+            TokenV0::ControlSeq(name)
+                if name.as_slice() == b"input" || name.as_slice() == b"include"
+        )
+    }) {
         return invalid_result_v0(
             req.max_log_bytes,
             InvalidInputReasonV0::InputValidationFailed,
@@ -574,18 +600,16 @@ pub fn compile_request_v0(mount: &mut Mount, req: &CompileRequestV0) -> CompileR
                     )
                 }
             };
-            let xdv_bytes = match write_dvi_v2_text_page_from_layout_v0(
-                &layout_plan,
-                line_advance_sp,
-            ) {
-                Some(bytes) => bytes,
-                None => {
-                    return invalid_result_v0(
-                        req.max_log_bytes,
-                        InvalidInputReasonV0::StatsBuildFailed,
-                    )
-                }
-            };
+            let xdv_bytes =
+                match write_dvi_v2_text_page_from_layout_v0(&layout_plan, line_advance_sp) {
+                    Some(bytes) => bytes,
+                    None => {
+                        return invalid_result_v0(
+                            req.max_log_bytes,
+                            InvalidInputReasonV0::StatsBuildFailed,
+                        )
+                    }
+                };
             if !validate_dvi_v2_text_page_with_layout_v0(
                 &xdv_bytes,
                 glyph_advance_sp,

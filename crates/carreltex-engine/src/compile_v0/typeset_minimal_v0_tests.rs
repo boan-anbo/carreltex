@@ -1,5 +1,5 @@
-use super::compile_main_typeset_minimal_v0;
-use super::typeset_minimal_v0::{
+use super::compile_main_typeset_v0;
+use super::typeset_v0::{
     extract_typeset_minimal_text_body_v0, normalize_typeset_minimal_tokens_v0,
     preprocess_typeset_minimal_source_v0,
 };
@@ -24,7 +24,7 @@ fn compile_typeset_with_files(
             .add_file(path, bytes)
             .expect("extra file should mount");
     }
-    compile_main_typeset_minimal_v0(&mut mount)
+    compile_main_typeset_v0(&mut mount)
 }
 
 fn extract_typeset_body(main: &[u8]) -> Vec<u8> {
