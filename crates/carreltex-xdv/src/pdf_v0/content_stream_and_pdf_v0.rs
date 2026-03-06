@@ -723,16 +723,29 @@ fn build_page_content_stream_v0(
             )?;
             annotations.append(&mut line_annotations);
             let has_superscript = render_segments.iter().any(|segment| segment.superscript);
+            let emit_profile = if current_flow_kind == BodyFlowKindV0::Paragraph {
+                SegmentEmitProfileV0::BodyProseV13
+            } else {
+                SegmentEmitProfileV0::Default
+            };
             if has_superscript {
-                emit_render_segments_with_superscript_v0(
+                emit_render_segments_with_superscript_with_profile_v0(
                     &mut out,
                     &render_segments,
                     line_x,
                     y,
                     font_size_pt,
+                    emit_profile,
                 );
             } else {
-                emit_styled_segments_v0(&mut out, &segments, line_x, y, font_size_pt);
+                emit_styled_segments_with_profile_v0(
+                    &mut out,
+                    &segments,
+                    line_x,
+                    y,
+                    font_size_pt,
+                    emit_profile,
+                );
             }
             if let Some(ordinal) = equation_ordinal {
                 let equation_number = format!("({ordinal})").into_bytes();
@@ -743,6 +756,7 @@ fn build_page_content_stream_v0(
                 let equation_segments = [PdfRenderSegmentV0 {
                     style: PdfTextStyleV0::Regular,
                     bytes: equation_number,
+                    advance_sp: (equation_number_width_pt * 65_536.0).round() as i32,
                     advance_pt: equation_number_width_pt,
                     is_link: false,
                     superscript: false,

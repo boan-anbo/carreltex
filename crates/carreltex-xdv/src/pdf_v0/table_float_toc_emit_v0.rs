@@ -251,6 +251,7 @@ fn emit_toc_block_v0(
         .collect();
     let title_segments = vec![PdfStyledSegmentV0 {
         style: PdfTextStyleV0::Bold,
+        advance_sp: title_glyphs.iter().map(|glyph| glyph.advance_sp).sum(),
         advance_pt: title_glyphs
             .iter()
             .map(|glyph| (glyph.advance_sp as f32) / 65_536.0)
@@ -324,6 +325,7 @@ fn emit_toc_block_v0(
         let page_no_segments = vec![PdfRenderSegmentV0 {
             style: PdfTextStyleV0::Regular,
             bytes: bytes_from_glyphs_v0(&page_no_glyphs),
+            advance_sp: page_no_glyphs.iter().map(|glyph| glyph.advance_sp).sum(),
             advance_pt: page_no_width_pt,
             is_link: title_links_enabled,
             superscript: false,
