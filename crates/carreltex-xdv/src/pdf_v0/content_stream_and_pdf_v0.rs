@@ -145,6 +145,32 @@ fn transition_blank_advance_pt_v7(previous: BodyFlowKindV0) -> f32 {
     (BLOCK_TRANSITION_GAP_PT_V7 - previous_leading_pt).max(0.0)
 }
 
+fn line_starts_bibliography_entry_v14(
+    lines: &[LinePlanV0],
+    line_index: usize,
+    title_block_len: usize,
+) -> bool {
+    if line_index < title_block_len {
+        return false;
+    }
+    let Some(line) = lines.get(line_index) else {
+        return false;
+    };
+    if line.glyphs.is_empty()
+        || has_center_prefix_v0(&line.glyphs)
+        || has_right_prefix_v0(&line.glyphs)
+        || has_noindent_prefix_v0(&line.glyphs)
+        || detect_heading_prefix_v0(&line.glyphs).is_some()
+        || detect_quote_prefix_advance_pt_v0(&line.glyphs).is_some()
+    {
+        return false;
+    }
+    matches!(
+        detect_list_prefix_v0(&line.glyphs).map(|prefix| prefix.kind),
+        Some(ListPrefixKindV0::Bibliography)
+    )
+}
+
 #[derive(Clone)]
 struct PageContinuationStateV0 {
     previous_rendered_line_was_empty: bool,
@@ -703,7 +729,18 @@ fn build_page_content_stream_v0(
             if bibliography_heading_line && next_raw_line_is_empty {
                 line_advance_pt = BIBLIOGRAPHY_HEADING_TO_FIRST_ENTRY_GAP_PT_V6;
             } else if bibliography_line {
-                line_advance_pt = BIBLIOGRAPHY_ENTRY_LEADING_PT_V6;
+                let next_line_starts_bibliography_entry =
+                    line_starts_bibliography_entry_v14(lines, line_index + 1, title_block_len);
+                let bibliography_entry_boundary_gap = (bibliography_continuation
+                    || matches!(
+                        list_prefix.map(|prefix| prefix.kind),
+                        Some(ListPrefixKindV0::Bibliography)
+                    )) && next_line_starts_bibliography_entry;
+                line_advance_pt = if bibliography_entry_boundary_gap {
+                    BIBLIOGRAPHY_ENTRY_BLOCK_GAP_PT_V14
+                } else {
+                    BIBLIOGRAPHY_ENTRY_LEADING_PT_V14
+                };
             } else if list_line {
                 line_advance_pt = LIST_ENTRY_LEADING_PT_V7;
             } else if quote_line {
@@ -711,11 +748,17 @@ fn build_page_content_stream_v0(
             } else if paragraph_continues_next_line {
                 line_advance_pt = BODY_PARAGRAPH_CONTINUATION_LEADING_PT_V12;
             }
+            let annotation_profile = if bibliography_line {
+                AnnotationRectProfileV0::BibliographyV14
+            } else {
+                AnnotationRectProfileV0::DefaultV9
+            };
             let mut line_annotations = collect_link_annotations_for_line_v0(
                 &render_segments,
                 line_x,
                 y,
                 font_size_pt,
+                annotation_profile,
                 link_targets_by_id,
                 next_link_id,
                 &mut active_link_target,

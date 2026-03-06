@@ -431,7 +431,7 @@ fn pdf_renderer_emits_link_annotation_with_in_bounds_rect_v0() {
 }
 
 #[test]
-fn pdf_renderer_bibliography_wrapped_link_annotations_follow_hanging_indent_v6() {
+fn pdf_renderer_bibliography_wrapped_link_annotations_follow_hanging_indent_v14() {
     let xdv = write_dvi_v2_text_page_v0(
         b"@S {References}\n\n[1] ALPHASTART <{linked phrase begins on bibliography line\nand LINKCONT closes here}> tail.\n\n!u 1 https://example.com/bib",
     )
@@ -439,8 +439,20 @@ fn pdf_renderer_bibliography_wrapped_link_annotations_follow_hanging_indent_v6()
     let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
     let (alpha_start_x, _) =
         tm_position_for_segment_substring_v0(&pdf, "ALPHASTART").expect("alpha start x");
+    let first_line_link_x = tm_x_for_segment_substring_v0(
+        &pdf,
+        "ALPHASTART",
+        "(linked phrase begins on bibliography line)",
+    )
+    .expect("first bibliography link segment x");
     let (link_cont_x, _) =
         tm_position_for_segment_substring_v0(&pdf, "LINKCONT").expect("continuation line x");
+    let second_line_link_x =
+        tm_x_for_segment_substring_v0(&pdf, "LINKCONT", "(and LINKCONT closes here)")
+            .expect("second bibliography link segment x");
+    let first_line_link_width =
+        segment_width_pt_v0(b"linked phrase begins on bibliography line");
+    let second_line_link_width = segment_width_pt_v0(b"and LINKCONT closes here");
     let epsilon_pt = 0.2f32;
     assert!(
         (alpha_start_x - link_cont_x).abs() <= epsilon_pt,
@@ -454,8 +466,9 @@ fn pdf_renderer_bibliography_wrapped_link_annotations_follow_hanging_indent_v6()
         2,
         "wrapped bibliography link should emit one annotation rect per wrapped line"
     );
-    for annotation_id in annots {
-        let annotation = parse_pdf_object_body_v0(&pdf, annotation_id).expect("annotation body");
+    for annotation_id in &annots {
+        let annotation =
+            parse_pdf_object_body_v0(&pdf, *annotation_id).expect("annotation body");
         let rect = parse_pdf_annotation_rect_v0(&annotation).expect("annotation rect");
         assert!(
             rect[0] >= alpha_start_x - epsilon_pt,
@@ -465,6 +478,11 @@ fn pdf_renderer_bibliography_wrapped_link_annotations_follow_hanging_indent_v6()
             rect[2] > rect[0] && rect[3] > rect[1],
             "annotation rect must stay positive: {rect:?}"
         );
+        let rect_height = rect[3] - rect[1];
+        assert!(
+            (8.0..=11.2).contains(&rect_height),
+            "bibliography wrapped link annotation height should stay tightly bounded: rect={rect:?}, height={rect_height}"
+        );
         let action_id = parse_pdf_annotation_action_id_v0(&annotation).expect("annotation action");
         let action_body = parse_pdf_object_body_v0(&pdf, action_id).expect("action body");
         assert_eq!(
@@ -473,6 +491,28 @@ fn pdf_renderer_bibliography_wrapped_link_annotations_follow_hanging_indent_v6()
             "wrapped bibliography link annotation should keep href target"
         );
     }
+    let first_rect =
+        parse_pdf_annotation_rect_v0(&parse_pdf_object_body_v0(&pdf, annots[0]).expect("first annotation body"))
+            .expect("first annotation rect");
+    let second_rect =
+        parse_pdf_annotation_rect_v0(&parse_pdf_object_body_v0(&pdf, annots[1]).expect("second annotation body"))
+            .expect("second annotation rect");
+    assert!(
+        (first_rect[0] - first_line_link_x).abs() <= 0.2,
+        "first bibliography annotation x should align with first rendered link line: rect={first_rect:?}, line_x={first_line_link_x}"
+    );
+    assert!(
+        (second_rect[0] - second_line_link_x).abs() <= 0.2,
+        "second bibliography annotation x should align with wrapped link continuation: rect={second_rect:?}, line_x={second_line_link_x}"
+    );
+    assert!(
+        ((first_rect[2] - first_rect[0]) - first_line_link_width).abs() <= 1.2,
+        "first bibliography annotation width should track rendered link width: rect={first_rect:?}, expected_width={first_line_link_width}"
+    );
+    assert!(
+        ((second_rect[2] - second_rect[0]) - second_line_link_width).abs() <= 1.2,
+        "second bibliography annotation width should track wrapped link width: rect={second_rect:?}, expected_width={second_line_link_width}"
+    );
 }
 
 #[test]
