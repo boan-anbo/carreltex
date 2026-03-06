@@ -1085,6 +1085,28 @@ fn pdf_renderer_live_footnote_medium_inline_prefix_gap_is_tightened_v88() {
 }
 
 #[test]
+fn pdf_renderer_live_footnote_medium_bold_prefix_gap_is_tightened_v91() {
+    let demo_text = b"Title\nAuthor\n2026-03-05\n\nBody prose through punctuation.^1^2\n\n!f 1 Demo footnote prefix with [inline words].\n!f 2 Second footnote prefix with {bold words}.";
+    let xdv = write_dvi_v2_text_page_v0(demo_text).expect("writer should accept medium footnote seam text");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+
+    let footnote_bold_prefix_x = tm_x_for_segment_substring_v0(
+        &pdf,
+        "(bold words)",
+        "(2 Second footnote prefix with )",
+    )
+    .expect("medium bold footnote prefix x");
+    let footnote_bold_x =
+        tm_x_for_segment_substring_v0(&pdf, "(bold words)", "(bold words)")
+            .expect("medium bold footnote style x");
+
+    assert!(
+        footnote_bold_x - footnote_bold_prefix_x <= 148.0,
+        "live bold footnote medium-prefix seam should stay slightly tighter after v91: prefix_x={footnote_bold_prefix_x}, style_x={footnote_bold_x}"
+    );
+}
+
+#[test]
 fn pdf_renderer_wrapped_body_paragraph_styled_seams_track_scaled_advances_v27() {
     let demo_text = b"Title\nAuthor\n2026-03-05\n\nWRAPSTART alpha alpha alpha alpha alpha alpha alpha alpha <{BODYLINKWRAPV27}> and [ITALICWRAPV27],right beside punctuation with {BOLDWRAPV27} seam before WRAPTOKENV27.\n\n!u 1 https://example.com/v27";
     let xdv = write_dvi_v2_text_page_v0(demo_text).expect("writer should accept wrapped v27 seam text");
