@@ -1125,6 +1125,28 @@ fn pdf_renderer_paragraph_indent_and_line_gap_invariants_v0() {
 }
 
 #[test]
+fn pdf_renderer_front_matter_title_to_first_body_rhythm_is_tightened_v11() {
+    let demo_text = b"Front Matter Title\nAuthor Name\n2026-03-05\n\nFirst body paragraph line.";
+    let xdv = write_dvi_v2_text_page_v0(demo_text).expect("writer should accept demo text");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+
+    let (_, date_y) = tm_position_for_line_containing_text_v0(&pdf, "(2026-03-05)")
+        .expect("date line position");
+    let (body_x, body_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "(First body paragraph line.)")
+            .expect("first body line position");
+    let epsilon_pt = 0.05f32;
+    assert!(
+        (date_y - body_y - 38.0).abs() <= epsilon_pt,
+        "front-matter date->first-body rhythm should stay tightened and deterministic: date_y={date_y}, body_y={body_y}"
+    );
+    assert!(
+        (body_x - 72.0).abs() <= 0.02,
+        "first body line after front matter should remain unindented: body_x={body_x}"
+    );
+}
+
+#[test]
 fn pdf_renderer_section_heading_spacing_invariants_v0() {
     let demo_text =
         b"Title\nAuthor\n2026-03-05\n\nIntro paragraph.\n\n{Section Heading}\n\n~ Body after heading.";
