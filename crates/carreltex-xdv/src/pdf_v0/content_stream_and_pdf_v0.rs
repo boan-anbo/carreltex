@@ -1,10 +1,15 @@
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum BodyFlowKindV0 {
+    FrontMatter,
     Paragraph,
     List,
     Quote,
     Table,
     Other,
+}
+
+fn has_front_matter_title_block_v11(title_block_len: usize) -> bool {
+    title_block_len >= 3
 }
 
 fn classify_next_flow_kind_v0(
@@ -17,6 +22,9 @@ fn classify_next_flow_kind_v0(
             continue;
         }
         if line_index < title_block_len {
+            if has_front_matter_title_block_v11(title_block_len) {
+                return Some(BodyFlowKindV0::FrontMatter);
+            }
             return Some(BodyFlowKindV0::Other);
         }
         if has_table_spec_prefix_v0(&line.glyphs)
@@ -79,11 +87,14 @@ fn should_tighten_transition_gap_v7(previous: BodyFlowKindV0, next: BodyFlowKind
             | (BodyFlowKindV0::Quote, BodyFlowKindV0::List)
             | (BodyFlowKindV0::Paragraph, BodyFlowKindV0::Table)
             | (BodyFlowKindV0::Table, BodyFlowKindV0::Paragraph)
+            | (BodyFlowKindV0::FrontMatter, BodyFlowKindV0::Paragraph)
+            | (BodyFlowKindV0::FrontMatter, BodyFlowKindV0::Other)
     )
 }
 
 fn transition_blank_advance_pt_v7(previous: BodyFlowKindV0) -> f32 {
     let previous_leading_pt = match previous {
+        BodyFlowKindV0::FrontMatter => LEADING_PT_V0,
         BodyFlowKindV0::List => LIST_ENTRY_LEADING_PT_V7,
         BodyFlowKindV0::Quote => QUOTE_ENTRY_LEADING_PT_V7,
         BodyFlowKindV0::Table => TABLE_ROW_LEADING_PT_V10,
@@ -289,6 +300,11 @@ fn build_page_content_stream_v0(
             return None;
         }
         if line_index >= title_block_len && has_toc_placeholder_line_v0(&resolved_line_glyphs) {
+            let toc_front_matter = matches!(
+                last_non_empty_flow_kind,
+                Some(BodyFlowKindV0::FrontMatter)
+            ) || (has_front_matter_title_block_v11(title_block_len)
+                && line_index <= title_block_len + 1);
             emit_toc_block_v0(
                 &mut out,
                 toc_entries,
@@ -305,7 +321,11 @@ fn build_page_content_stream_v0(
             active_quote_indent_pt = 0.0;
             active_inline_alignment = None;
             previous_line_was_bibliography_heading = false;
-            last_non_empty_flow_kind = Some(BodyFlowKindV0::Other);
+            last_non_empty_flow_kind = Some(if toc_front_matter {
+                BodyFlowKindV0::FrontMatter
+            } else {
+                BodyFlowKindV0::Other
+            });
             line_index += 1;
             continue;
         }
@@ -494,7 +514,10 @@ fn build_page_content_stream_v0(
                     .iter()
                     .flat_map(|segment| segment.bytes.iter().copied())
                     .eq(BIBLIOGRAPHY_HEADING_TEXT_V0.iter().copied());
-            current_flow_kind = if bibliography_line {
+            current_flow_kind = if in_title_block && has_front_matter_title_block_v11(title_block_len)
+            {
+                BodyFlowKindV0::FrontMatter
+            } else if bibliography_line {
                 BodyFlowKindV0::Other
             } else if quote_line {
                 BodyFlowKindV0::Quote
