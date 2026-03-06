@@ -612,7 +612,7 @@ fn pdf_renderer_caps_segment_tm_gap_for_styled_line_v0() {
     let max_tm_gap = max_tm_gap_pt_for_line_containing_v0(&pdf, "Styled")
         .expect("pdf should include styled line");
     assert!(
-        max_tm_gap <= 24.0,
+        max_tm_gap <= 12.0,
         "styled line tm gap should be capped, got {max_tm_gap}"
     );
 }
@@ -635,7 +635,7 @@ fn pdf_renderer_inline_wrapper_spacing_invariants_v0() {
         tm_x_for_segment_substring_v0(&pdf, "(word)", "( trail,)").expect("trail segment x");
     let bold_x = tm_xs_for_segment_text_v0(&pdf, "bold")[0];
 
-    let epsilon_pt = 0.02f32;
+    let epsilon_pt = 0.01f32;
     assert!(
         ((mid_x - word_x) - segment_width_pt_v0(b"word")).abs() <= epsilon_pt,
         "word->mid advance mismatch: word_x={word_x}, mid_x={mid_x}"
@@ -795,7 +795,7 @@ fn pdf_renderer_centers_section_headings_within_epsilon_v0() {
     let heading_x = tm_x_for_line_containing_text_v0(&pdf, "(Centered Section Heading)")
         .expect("centered heading position");
     assert!(
-        (heading_x - expected_heading_x).abs() <= 0.02,
+        (heading_x - expected_heading_x).abs() <= 0.01,
         "centered heading x mismatch: actual={heading_x}, expected={expected_heading_x}"
     );
     assert!(
@@ -828,7 +828,7 @@ fn pdf_renderer_title_and_heading_centering_per_line_width_v0() {
     let heading_beta_x =
         tm_x_for_line_containing_text_v0(&pdf, "(Heading Beta)").expect("heading beta x");
 
-    let epsilon_pt = 0.02f32;
+    let epsilon_pt = 0.01f32;
     assert!(
         (title_x - expected_title_x).abs() <= epsilon_pt,
         "title centering mismatch: actual={title_x}, expected={expected_title_x}"
@@ -844,6 +844,25 @@ fn pdf_renderer_title_and_heading_centering_per_line_width_v0() {
     assert!(
         (heading_alpha_x - 72.0).abs() > 0.5 && (heading_beta_x - 72.0).abs() > 0.5,
         "heading lines should not be left-margin aligned: alpha={heading_alpha_x}, beta={heading_beta_x}"
+    );
+}
+
+#[test]
+fn pdf_renderer_title_centering_stays_stable_with_inline_style_segments_v1() {
+    let demo_text =
+        b"Center [Accurate] {Title}\nAlice Bob\n2026-03-05\n\nBody line after styled title.";
+    let xdv = write_dvi_v2_text_page_v0(demo_text).expect("writer should accept styled title demo");
+    let layout = parse_dvi_v2_text_page_to_layout_v0(&xdv, 786_432).expect("layout parse");
+    let title_width = layout_line_width_for_exact_bytes_v0(&layout, b"Center [Accurate] {Title}")
+        .expect("styled title width");
+    let expected_title_x = expected_center_x_pt_v0(title_width);
+
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+    let title_x = tm_x_for_line_containing_text_v0(&pdf, "Center")
+        .expect("styled title first segment x");
+    assert!(
+        (title_x - expected_title_x).abs() <= 0.01,
+        "styled title centering mismatch: actual={title_x}, expected={expected_title_x}"
     );
 }
 
@@ -959,6 +978,34 @@ fn pdf_renderer_paragraph_rhythm_and_noindent_invariants_v0() {
     assert!(
         (heading_x - 72.0).abs() > 0.5,
         "heading should be centered: {heading_x}"
+    );
+}
+
+#[test]
+fn pdf_renderer_consecutive_blank_lines_collapse_to_single_rhythm_gap_v1() {
+    let demo_text = b"Title\nAuthor\n2026-03-05\n\nFirst paragraph line.\n\n\nSecond paragraph line.";
+    let xdv = write_dvi_v2_text_page_v0(demo_text).expect("writer should accept blank-line rhythm demo");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+
+    let (first_x, first_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "(First paragraph line.)")
+            .expect("first paragraph line");
+    let (second_x, second_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "(Second paragraph line.)")
+            .expect("second paragraph line");
+
+    let epsilon_pt = 0.02f32;
+    assert!(
+        (first_x - 72.0).abs() <= epsilon_pt,
+        "first paragraph should start at body margin: {first_x}"
+    );
+    assert!(
+        (second_x - 96.0).abs() <= epsilon_pt,
+        "second paragraph should keep paragraph indent: {second_x}"
+    );
+    assert!(
+        (first_y - second_y - 28.0).abs() <= epsilon_pt,
+        "consecutive blank lines should collapse to a single paragraph gap: first_y={first_y}, second_y={second_y}"
     );
 }
 
@@ -1709,4 +1756,3 @@ fn pdf_renderer_right_alignment_handles_styled_segments_without_drift_v0() {
         "core->trail spacing drift: core_x={core_x}, trail_x={trail_x}"
     );
 }
-
