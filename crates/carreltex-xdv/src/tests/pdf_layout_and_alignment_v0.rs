@@ -1551,7 +1551,7 @@ fn pdf_renderer_enumerate_number_column_alignment_across_wraps_v0() {
 }
 
 #[test]
-fn pdf_renderer_bibliography_entries_use_hanging_indent_and_stable_rhythm_v6() {
+fn pdf_renderer_bibliography_entries_use_hanging_indent_and_stable_rhythm_v14() {
     let xdv = write_dvi_v2_text_page_v0(
         b"@S {References}\n\n[1] ALPHASTART alpha alpha alpha alpha alpha alpha alpha alpha alpha alpha ALPHAWRAP\n[12] BETASTART beta beta beta beta beta beta beta beta beta beta beta beta beta beta beta beta BETAWRAP",
     )
@@ -1584,15 +1584,15 @@ fn pdf_renderer_bibliography_entries_use_hanging_indent_and_stable_rhythm_v6() {
         "references heading -> first bibliography entry gap should be tightened and stable: references_y={references_y}, alpha_start_y={alpha_start_y}"
     );
     assert!(
-        (alpha_start_y - alpha_wrap_y - 13.0).abs() <= epsilon_pt,
+        (alpha_start_y - alpha_wrap_y - 12.5).abs() <= epsilon_pt,
         "bibliography wrapped line rhythm should be stable: alpha_start_y={alpha_start_y}, alpha_wrap_y={alpha_wrap_y}"
     );
     assert!(
-        (alpha_wrap_y - beta_start_y - 13.0).abs() <= epsilon_pt,
+        (alpha_wrap_y - beta_start_y - 12.0).abs() <= epsilon_pt,
         "bibliography entry-to-entry rhythm should be stable: alpha_wrap_y={alpha_wrap_y}, beta_start_y={beta_start_y}"
     );
     assert!(
-        (beta_start_y - beta_wrap_y - 13.0).abs() <= epsilon_pt,
+        (beta_start_y - beta_wrap_y - 12.5).abs() <= epsilon_pt,
         "bibliography wrapped line rhythm should be stable for later entries: beta_start_y={beta_start_y}, beta_wrap_y={beta_wrap_y}"
     );
     assert!(
