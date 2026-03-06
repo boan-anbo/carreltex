@@ -496,7 +496,7 @@ fn pdf_renderer_front_matter_toc_heading_rhythm_is_stable_v11() {
         "front-matter toc->first-heading transition should stay tightened and deterministic: toc_entry_y={toc_entry_y}, heading_y={heading_y}"
     );
     assert!(
-        (heading_y - body_y - 28.0).abs() <= epsilon_pt,
+        (heading_y - body_y - 24.0).abs() <= epsilon_pt,
         "heading->first-body rhythm should remain stable: heading_y={heading_y}, body_y={body_y}"
     );
     assert!(
@@ -542,7 +542,7 @@ fn pdf_renderer_front_matter_toc_body_bibliography_flow_rhythm_is_stable_v17() {
         "toc->first heading transition should stay tightened: toc_entry_y={toc_entry_y}, heading_y={heading_y}"
     );
     assert!(
-        (heading_y - body_y - 28.0).abs() <= epsilon_pt,
+        (heading_y - body_y - 24.0).abs() <= epsilon_pt,
         "heading->body transition should remain stable: heading_y={heading_y}, body_y={body_y}"
     );
     assert!(

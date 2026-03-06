@@ -1,6 +1,7 @@
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum BodyFlowKindV0 {
     FrontMatter,
+    Heading,
     Paragraph,
     DisplayMath,
     BibliographyHeading,
@@ -74,7 +75,7 @@ fn classify_next_flow_kind_v0(
             return Some(BodyFlowKindV0::Table);
         }
         if is_centered_heading_candidate_line_v12(lines, line_index, title_block_len) {
-            return Some(BodyFlowKindV0::Other);
+            return Some(BodyFlowKindV0::Heading);
         }
         if has_figure_box_marker_prefix_v0(&line.glyphs)
             || has_figure_image_prefix_v0(&line.glyphs)
@@ -107,7 +108,7 @@ fn classify_next_flow_kind_v0(
             if line_is_bibliography_heading_v17(&line.glyphs) {
                 return Some(BodyFlowKindV0::BibliographyHeading);
             }
-            return Some(BodyFlowKindV0::Other);
+            return Some(BodyFlowKindV0::Heading);
         }
         let render_glyphs = if noindent_prefixed {
             &line.glyphs[2..]
@@ -149,7 +150,17 @@ fn should_tighten_transition_gap_v7(previous: BodyFlowKindV0, next: BodyFlowKind
             | (BodyFlowKindV0::Paragraph, BodyFlowKindV0::Table)
             | (BodyFlowKindV0::Table, BodyFlowKindV0::Paragraph)
             | (BodyFlowKindV0::Table, BodyFlowKindV0::Table)
+            | (BodyFlowKindV0::Paragraph, BodyFlowKindV0::Heading)
+            | (BodyFlowKindV0::Heading, BodyFlowKindV0::Paragraph)
+            | (BodyFlowKindV0::List, BodyFlowKindV0::Heading)
+            | (BodyFlowKindV0::Heading, BodyFlowKindV0::List)
+            | (BodyFlowKindV0::Quote, BodyFlowKindV0::Heading)
+            | (BodyFlowKindV0::Heading, BodyFlowKindV0::Quote)
+            | (BodyFlowKindV0::Table, BodyFlowKindV0::Heading)
+            | (BodyFlowKindV0::Heading, BodyFlowKindV0::Table)
+            | (BodyFlowKindV0::Heading, BodyFlowKindV0::Heading)
             | (BodyFlowKindV0::FrontMatter, BodyFlowKindV0::Paragraph)
+            | (BodyFlowKindV0::FrontMatter, BodyFlowKindV0::Heading)
             | (BodyFlowKindV0::FrontMatter, BodyFlowKindV0::Other)
     )
 }
@@ -161,6 +172,7 @@ fn is_quote_transition_v19(previous: BodyFlowKindV0, next: BodyFlowKindV0) -> bo
 fn transition_blank_advance_pt_v7(previous: BodyFlowKindV0, next: BodyFlowKindV0) -> f32 {
     let previous_leading_pt = match previous {
         BodyFlowKindV0::FrontMatter => LEADING_PT_V0,
+        BodyFlowKindV0::Heading => LEADING_PT_V0,
         BodyFlowKindV0::DisplayMath => LEADING_PT_V0,
         BodyFlowKindV0::BibliographyHeading => LEADING_PT_V0,
         BodyFlowKindV0::List => LIST_ENTRY_LEADING_PT_V7,
@@ -704,7 +716,7 @@ fn build_page_content_stream_v0(
                 || right_continuation
                 || centered_continuation
             {
-                BodyFlowKindV0::Other
+                BodyFlowKindV0::Heading
             } else {
                 BodyFlowKindV0::Paragraph
             };
