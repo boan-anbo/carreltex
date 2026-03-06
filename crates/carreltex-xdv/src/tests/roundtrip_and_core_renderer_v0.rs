@@ -253,8 +253,106 @@ fn pdf_renderer_footnote_internal_rhythm_is_stable_v1() {
             .expect("second footnote line");
     let delta = first_footnote_y - second_footnote_y;
     assert!(
-        (delta - 13.0).abs() <= 0.05,
-        "footnote line rhythm should remain stable at FOOTNOTE_LEADING_PT_V0: delta={delta}"
+        (delta - 12.5).abs() <= 0.05,
+        "footnote entry rhythm should remain stable after v18 polish: delta={delta}"
+    );
+}
+
+#[test]
+fn pdf_renderer_footnote_continuation_indent_and_rhythm_are_stable_v18() {
+    let xdv = write_dvi_v2_text_page_v0(
+        b"Body markers^1 and^2.\n\n!f 1 First entry lead line.\nContinuation for first entry.\n!f 2 Second entry lead line.",
+    )
+    .expect("writer should accept wrapped footnote entries");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+
+    let (_, first_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "(1 First entry lead line.)")
+            .expect("first footnote entry");
+    let (cont_x, cont_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "(Continuation for first entry.)")
+            .expect("footnote continuation");
+    let (_, second_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "(2 Second entry lead line.)")
+            .expect("second footnote entry");
+
+    assert!(
+        cont_x > 72.0 + 6.0,
+        "footnote continuation should keep readable hanging indent from margin: cont_x={cont_x}"
+    );
+    assert!(
+        (first_y - cont_y - 12.0).abs() <= 0.05,
+        "footnote continuation rhythm should stay compact and stable: first_y={first_y}, cont_y={cont_y}"
+    );
+    assert!(
+        (cont_y - second_y - 12.5).abs() <= 0.05,
+        "footnote entry-to-entry rhythm should stay stable: cont_y={cont_y}, second_y={second_y}"
+    );
+}
+
+#[test]
+fn pdf_renderer_footnote_wrapped_links_keep_annotation_alignment_v18() {
+    let xdv = write_dvi_v2_text_page_v0(
+        b"Body line with <{BODYLINK}> and marker^1.\n\n!f 1 <{FOOTLINKONE}> first footnote link line.\n<{FOOTLINKTWO}> second footnote continuation.\n!u 1 https://example.com/body\n!u 2 https://example.com/foot1\n!u 3 https://example.com/foot2",
+    )
+    .expect("writer should accept footnote link and href metadata");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+
+    let page_one = parse_pdf_object_body_v0(&pdf, 3).expect("page 1 object");
+    let annots = parse_pdf_ref_ids_v0(&page_one, "/Annots");
+    assert_eq!(
+        annots.len(),
+        3,
+        "expected one body link annotation and two footnote link annotations"
+    );
+
+    let mut body_rect = None::<[f32; 4]>;
+    let mut foot_one_rect = None::<[f32; 4]>;
+    let mut foot_two_rect = None::<[f32; 4]>;
+    for annot_id in annots {
+        let annotation = parse_pdf_object_body_v0(&pdf, annot_id).expect("annotation body");
+        let rect = parse_pdf_annotation_rect_v0(&annotation).expect("annotation rect");
+        let action_id = parse_pdf_annotation_action_id_v0(&annotation).expect("annotation action");
+        let action = parse_pdf_object_body_v0(&pdf, action_id).expect("annotation action body");
+        match parse_pdf_action_uri_v0(&action).as_deref() {
+            Some("https://example.com/body") => body_rect = Some(rect),
+            Some("https://example.com/foot1") => foot_one_rect = Some(rect),
+            Some("https://example.com/foot2") => foot_two_rect = Some(rect),
+            other => panic!("unexpected annotation uri target: {other:?}"),
+        }
+    }
+
+    let body_rect = body_rect.expect("body link rect");
+    let foot_one_rect = foot_one_rect.expect("footnote link one rect");
+    let foot_two_rect = foot_two_rect.expect("footnote link two rect");
+    let (body_x, body_y) =
+        tm_position_for_segment_substring_v0(&pdf, "BODYLINK").expect("body link position");
+    let (foot_one_x, foot_one_y) =
+        tm_position_for_segment_substring_v0(&pdf, "FOOTLINKONE").expect("footnote link one position");
+    let (foot_two_x, foot_two_y) =
+        tm_position_for_segment_substring_v0(&pdf, "FOOTLINKTWO").expect("footnote link two position");
+
+    assert!(
+        (body_rect[0] - body_x).abs() <= 0.2,
+        "body link annotation x should align with rendered body link text: rect={body_rect:?}, body_x={body_x}"
+    );
+    assert!(
+        (foot_one_rect[0] - foot_one_x).abs() <= 0.2
+            && (foot_two_rect[0] - foot_two_x).abs() <= 0.2,
+        "footnote link annotations should align with rendered footnote link text columns"
+    );
+    assert!(
+        foot_two_x > foot_one_x + 8.0,
+        "wrapped footnote continuation should keep readable hanging indent from first line: foot_one_x={foot_one_x}, foot_two_x={foot_two_x}"
+    );
+    assert!(
+        body_y > foot_one_y && body_y > foot_two_y,
+        "body link should render above footnote link rows: body_y={body_y}, foot_one_y={foot_one_y}, foot_two_y={foot_two_y}"
+    );
+    assert!(
+        foot_one_rect[3] - foot_one_rect[1] <= 9.2
+            && foot_two_rect[3] - foot_two_rect[1] <= 9.2,
+        "footnote annotation hitboxes should remain compact and stable after v18 polish: foot_one_rect={foot_one_rect:?}, foot_two_rect={foot_two_rect:?}"
     );
 }
 
