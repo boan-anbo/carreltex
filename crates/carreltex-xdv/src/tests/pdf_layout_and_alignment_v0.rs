@@ -2276,6 +2276,42 @@ fn pdf_renderer_bibliography_styled_seams_use_indented_profile_v32() {
 }
 
 #[test]
+fn pdf_renderer_live_bibliography_long_prefix_gaps_are_tightened_v42() {
+    let xdv = write_dvi_v2_text_page_v0(
+        b"@S {References}\n\n[1] First bibliography entry with [inline emphasis] and deliberately dense source wording so the opening styled seam remains visually controlled in the preview renderer.\n[12] Second bibliography entry with {bold emphasis} plus additional source wording to keep the mixed-width ordinal column stable while preserving compact wrapped bibliography rhythm.",
+    )
+    .expect("writer should accept live bibliography seam text");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+
+    let inline_prefix_x = tm_x_for_segment_substring_v0(
+        &pdf,
+        "(inline emphasis)",
+        "(First bibliography entry with )",
+    )
+    .expect("bibliography inline prefix x");
+    let inline_x =
+        tm_x_for_segment_substring_v0(&pdf, "(inline emphasis)", "(inline emphasis)")
+            .expect("bibliography inline style x");
+    let bold_prefix_x = tm_x_for_segment_substring_v0(
+        &pdf,
+        "(bold emphasis)",
+        "(Second bibliography entry with )",
+    )
+    .expect("bibliography bold prefix x");
+    let bold_x = tm_x_for_segment_substring_v0(&pdf, "(bold emphasis)", "(bold emphasis)")
+        .expect("bibliography bold style x");
+
+    assert!(
+        inline_x - inline_prefix_x <= 215.0,
+        "bibliography long-prefix italic seam should stay tightened: prefix_x={inline_prefix_x}, style_x={inline_x}"
+    );
+    assert!(
+        bold_x - bold_prefix_x <= 225.0,
+        "bibliography long-prefix bold seam should stay tightened: prefix_x={bold_prefix_x}, style_x={bold_x}"
+    );
+}
+
+#[test]
 fn pdf_renderer_body_to_bibliography_opening_gap_is_tightened_v17() {
     let xdv = write_dvi_v2_text_page_v0(
         b"~ Body before references.\n\n@S {References}\n\n[1] ALPHASTART alpha source text.",
