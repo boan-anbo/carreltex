@@ -998,6 +998,43 @@ fn pdf_renderer_wrapped_body_paragraph_styled_seams_track_scaled_advances_v27() 
 }
 
 #[test]
+fn pdf_renderer_wrapped_body_pre_style_gap_is_tightened_v34() {
+    let xdv = write_dvi_v2_text_page_with_layout_and_wrap_v0(
+        b"PRESTYLEV34 with [WRAPITALICV34] tail alpha alpha alpha alpha WRAPTOKENV34",
+        65_536,
+        786_432,
+        42,
+    )
+    .expect("writer should accept wrapped body v34 text");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+
+    let prefix_x = tm_x_for_segment_substring_v0(
+        &pdf,
+        "(WRAPITALICV34)",
+        "(PRESTYLEV34 with )",
+    )
+    .expect("wrapped body prefix x");
+    let (_, prefix_y) =
+        tm_position_for_segment_substring_v0(&pdf, "PRESTYLEV34").expect("wrapped body prefix y");
+    let italic_x =
+        tm_x_for_segment_substring_v0(&pdf, "(WRAPITALICV34)", "(WRAPITALICV34)")
+            .expect("wrapped body italic x");
+    let (_, wrap_token_y) =
+        tm_position_for_segment_substring_v0(&pdf, "WRAPTOKENV34").expect("wrap token position");
+
+    let expected_gap = segment_width_pt_v0(b"PRESTYLEV34 with ") - (12.0 * 0.12);
+    let epsilon_pt = 0.3f32;
+    assert!(
+        ((italic_x - prefix_x) - expected_gap).abs() <= epsilon_pt,
+        "wrapped body pre-style seam should trim the preceding space-bounded gap: prefix_x={prefix_x}, italic_x={italic_x}, expected_gap={expected_gap}"
+    );
+    assert!(
+        prefix_y > wrap_token_y,
+        "fixture should still wrap after the tightened wrapped-body seam: prefix_y={prefix_y}, wrap_token_y={wrap_token_y}"
+    );
+}
+
+#[test]
 fn pdf_renderer_centers_title_block_lines_within_epsilon_v0() {
     let demo_text = b"Centering Accuracy Title\nAlice Bob\n2026-03-05\n\nBody line.";
     let xdv = write_dvi_v2_text_page_v0(demo_text).expect("writer should accept demo text");
