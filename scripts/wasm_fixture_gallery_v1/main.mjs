@@ -577,6 +577,16 @@ async function loadFixtureCasesV0() {
       fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_minimal_v0.tex',
     },
     {
+      id: 'typeset_demo_table_mixed_probe_v0',
+      mode: 'typeset',
+      fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_table_mixed_probe_v0.tex',
+    },
+    {
+      id: 'typeset_demo_table_overflow_probe_v0',
+      mode: 'typeset',
+      fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_table_overflow_probe_v0.tex',
+    },
+    {
       id: 'typeset_demo_capabilities_v0',
       mode: 'typeset',
       fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_capabilities_v0.tex',
@@ -1301,16 +1311,16 @@ function parseTabularRowsV1(bodyText, expectedColumnCount) {
     .map((row) => row.trim())
     .filter((row) => row.length > 0);
   if (rawRows.length === 0 || rawRows.length > MAX_TABLE_ROWS_PER_ENTRY_V0) {
-    throw new Error(`table_v1 invalid row count ${rawRows.length}`);
+    throw new Error(`table_v2 invalid row count ${rawRows.length}`);
   }
   const rows = [];
   for (const rawRow of rawRows) {
     const cells = rawRow.split('&').map(normalizeTableCellTextV0);
     if (cells.length !== expectedColumnCount) {
-      throw new Error(`table_v1 row column count mismatch: expected ${expectedColumnCount}, got ${cells.length}`);
+      throw new Error(`table_v2 row column count mismatch: expected ${expectedColumnCount}, got ${cells.length}`);
     }
     if (cells.some((cell) => cell.length === 0)) {
-      throw new Error('table_v1 row contains empty cell');
+      throw new Error('table_v2 row contains empty cell');
     }
     rows.push(cells);
   }
@@ -1334,22 +1344,20 @@ function extractTableEntriesFromSourceV1(sourceBytes) {
       alignEnd += 1;
     }
     if (alignEnd >= sourceBytes.length) {
-      throw new Error('table_v1 tabular align spec missing closing }');
+      throw new Error('table_v2 tabular align spec missing closing }');
     }
-    const alignSpec = Buffer.from(sourceBytes.slice(alignStart, alignEnd))
-      .toString('utf8')
-      .replace(/\s+/g, '');
+    const alignSpec = Buffer.from(sourceBytes.slice(alignStart, alignEnd)).toString('utf8');
     if (
       alignSpec.length === 0
       || alignSpec.length > MAX_TABLE_COLS_PER_ENTRY_V0
       || !/^[lcr]+$/.test(alignSpec)
     ) {
-      throw new Error(`table_v1 unsupported align spec '${alignSpec}'`);
+      throw new Error(`table_v2 unsupported align spec '${alignSpec}'`);
     }
     const bodyStart = alignEnd + 1;
     const endIndex = indexOfSubarrayV0(sourceBytes, endMarker, bodyStart);
     if (endIndex < 0) {
-      throw new Error('table_v1 tabular missing end marker');
+      throw new Error('table_v2 tabular missing end marker');
     }
     const bodyText = Buffer.from(sourceBytes.slice(bodyStart, endIndex)).toString('utf8');
     const rows = parseTabularRowsV1(bodyText, alignSpec.length);
@@ -1368,10 +1376,10 @@ function extractTableEntriesFromSourceV1(sourceBytes) {
       row_count: rows.length,
       column_widths_pt: columnWidthsPt,
       rows,
-      source_span: buildSourceSpanV0(sourceBytes, beginIndex, endIndex + endMarker.length, 'table_v1'),
+      source_span: buildSourceSpanV0(sourceBytes, beginIndex, endIndex + endMarker.length, 'table_v2'),
     });
     if (entries.length > MAX_TABLE_ENTRIES_V0) {
-      throw new Error(`table_v1 entries exceed cap ${MAX_TABLE_ENTRIES_V0}`);
+      throw new Error(`table_v2 entries exceed cap ${MAX_TABLE_ENTRIES_V0}`);
     }
     index = endIndex + endMarker.length;
   }
@@ -3366,11 +3374,11 @@ async function emitMathTypedArtifactV0(caseOutDir, fixtureBytes) {
 async function emitTableTypedArtifactV0(caseOutDir, fixtureBytes) {
   const payload = {
     version: TYPED_ARTIFACTS_VERSION_V0,
-    schema: 'table_v1',
+    schema: 'table_v2',
     entries: extractTableEntriesFromSourceV1(fixtureBytes),
   };
   const bytes = Buffer.from(`${JSON.stringify(payload, null, 2)}\n`, 'utf8');
-  const relpath = 'table_v1.json';
+  const relpath = 'table_v2.json';
   const fullPath = path.join(caseOutDir, relpath);
   await writeFile(fullPath, bytes);
   return {
@@ -4368,8 +4376,11 @@ async function runWasmFixtureGalleryV1() {
   }
   await writeFile(path.join(outDir, 'report.json'), `${JSON.stringify(report, null, 2)}\n`);
 
-  if (summaries.some((summary) => summary.status === STATUS_FAIL_V0)) {
-    throw new Error('gallery contains FAIL cases');
+  const unexpectedFail = summaries.find(
+    (summary) => summary.status === STATUS_FAIL_V0 && summary.expected_status !== STATUS_FAIL_V0,
+  );
+  if (unexpectedFail) {
+    throw new Error(`gallery contains unexpected FAIL case: ${unexpectedFail.case_id}`);
   }
 
   console.log(`PASS: fixture gallery report ${path.join(outDir, 'report.json')}`);
