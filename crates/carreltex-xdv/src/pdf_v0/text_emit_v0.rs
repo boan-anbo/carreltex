@@ -9,10 +9,13 @@ fn glyphs_advance_pt_v0(glyphs: &[GlyphPlanV0]) -> f32 {
 enum SegmentEmitProfileV0 {
     Default,
     BodyProseV13,
+    BodyProseInlineMathV15,
 }
 
 const BODY_PROSE_ITALIC_SCALE_PERCENT_V13: u8 = 97;
 const BODY_PROSE_BOLD_SCALE_PERCENT_V13: u8 = 95;
+const BODY_PROSE_INLINE_MATH_ITALIC_SCALE_PERCENT_V15: u8 = 99;
+const BODY_PROSE_INLINE_MATH_BOLD_SCALE_PERCENT_V15: u8 = 97;
 
 fn body_prose_style_scale_percent_v13(segment: &PdfRenderSegmentV0) -> u8 {
     if segment.is_link || segment.superscript {
@@ -35,6 +38,19 @@ fn style_scale_percent_for_profile_v0(
     match profile {
         SegmentEmitProfileV0::Default => 100,
         SegmentEmitProfileV0::BodyProseV13 => body_prose_style_scale_percent_v13(segment),
+        SegmentEmitProfileV0::BodyProseInlineMathV15 => {
+            if segment.is_link || segment.superscript {
+                return 100;
+            }
+            if !segment.bytes.iter().any(|byte| byte.is_ascii_alphabetic()) {
+                return 100;
+            }
+            match segment.style {
+                PdfTextStyleV0::Regular => 100,
+                PdfTextStyleV0::Italic => BODY_PROSE_INLINE_MATH_ITALIC_SCALE_PERCENT_V15,
+                PdfTextStyleV0::Bold => BODY_PROSE_INLINE_MATH_BOLD_SCALE_PERCENT_V15,
+            }
+        }
     }
 }
 
