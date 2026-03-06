@@ -102,9 +102,15 @@ fn collect_link_annotations_for_line_v0(
     let mut run_end_x = line_x_pt;
     let mut run_bytes = Vec::<u8>::new();
 
-    for segment in segments {
+    for (index, segment) in segments.iter().enumerate() {
         let start_x = cursor_x;
-        let end_x = cursor_x + render_advance_pt_for_segment_with_profile_v0(segment, emit_profile);
+        let end_x = cursor_x
+            + contextual_render_advance_pt_for_segment_v30(
+                segments,
+                index,
+                emit_profile,
+                font_size_pt,
+            );
         if segment.is_link {
             if run_start_x.is_none() {
                 run_start_x = Some(start_x);
