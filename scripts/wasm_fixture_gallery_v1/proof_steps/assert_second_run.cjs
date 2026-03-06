@@ -158,8 +158,8 @@ if (!mathLongStatus || mathLongStatus.status !== 'OK') {
   process.exit(1);
 }
 const mathInvalidStatus = statuses.find((entry) => entry.case_id === 'typeset_demo_math_invalid_payload_probe_v0');
-if (!mathInvalidStatus || mathInvalidStatus.status !== 'NI') {
-  console.error('FAIL: expected typeset_demo_math_invalid_payload_probe_v0 status NI');
+if (!mathInvalidStatus || mathInvalidStatus.status !== 'INVALID') {
+  console.error('FAIL: expected typeset_demo_math_invalid_payload_probe_v0 status INVALID');
   process.exit(1);
 }
 const pagerefStatus = statuses.find((entry) => entry.case_id === 'typeset_demo_pageref_probe_v2');
