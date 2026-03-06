@@ -170,26 +170,39 @@ fn pdf_renderer_toc_annotation_destination_order_is_stable_v2() {
 
 #[test]
 fn pdf_renderer_renders_toc_page_numbers_with_mixed_values_v2() {
-    let xdv = write_dvi_v2_text_page_v0(
-        b"Prelude.\n\n!toc\n\n@S {First anchor}\x0c@S {Second anchor}\n\n!toc 1 1 First toc entry\n!toc 1 2 Second toc entry",
-    )
-    .expect("writer should accept toc marker lines");
+    let mut source = Vec::<u8>::new();
+    source.extend_from_slice(b"Prelude.\n\n!toc\n\n@S {First anchor}");
+    for _ in 0..10 {
+        source.extend_from_slice(b"\x0cInterlude.");
+    }
+    source.extend_from_slice(
+        b"\x0c@S {Twelfth anchor}\n\n!toc 1 1 First toc entry\n!toc 1 2 Twelfth toc entry",
+    );
+    let xdv = write_dvi_v2_text_page_v0(&source).expect("writer should accept toc marker lines");
     let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
     let pdf_text = String::from_utf8_lossy(&pdf);
     assert!(
-        pdf_text.contains("(First toc entry) Tj") && pdf_text.contains("(Second toc entry) Tj"),
+        pdf_text.contains("(First toc entry) Tj") && pdf_text.contains("(Twelfth toc entry) Tj"),
         "toc entry titles should render: {pdf_text}"
     );
     assert!(
-        pdf_text.contains("(1) Tj") && pdf_text.contains("(2) Tj"),
+        pdf_text.contains("(1) Tj") && pdf_text.contains("(12) Tj"),
         "toc page-number column should render mixed values: {pdf_text}"
     );
 
     let (one_x, _) = tm_position_for_segment_substring_v0(&pdf, "(1)").expect("page one number x");
-    let (two_x, _) = tm_position_for_segment_substring_v0(&pdf, "(2)").expect("page two number x");
+    let (twelve_x, _) =
+        tm_position_for_segment_substring_v0(&pdf, "(12)").expect("page twelve number x");
+    let one_right = one_x + segment_width_pt_v0(b"1");
+    let twelve_right = twelve_x + segment_width_pt_v0(b"12");
+    let epsilon_pt = 0.1f32;
     assert!(
-        one_x >= 492.0 && two_x >= 492.0,
-        "toc page numbers should be right-column aligned: one_x={one_x}, two_x={two_x}"
+        (one_right - twelve_right).abs() <= epsilon_pt,
+        "toc page-number right edge should stay stable across mixed-width values: one_right={one_right}, twelve_right={twelve_right}"
+    );
+    assert!(
+        twelve_x + epsilon_pt < one_x,
+        "wider page-number values should start further left in the same column: one_x={one_x}, twelve_x={twelve_x}"
     );
 }
 
@@ -375,11 +388,19 @@ fn pdf_renderer_toc_block_renders_between_surrounding_paragraphs_v0() {
     );
     let epsilon_pt = 0.05f32;
     assert!(
+        (toc_title_y - toc_intro_y - 12.0).abs() <= epsilon_pt,
+        "toc title->first-entry gap should stay tightened and deterministic: toc_title_y={toc_title_y}, toc_intro_y={toc_intro_y}"
+    );
+    assert!(
+        (toc_intro_y - toc_detail_y - 13.0).abs() <= epsilon_pt,
+        "toc entry rhythm should stay deterministic after v5 polish: toc_intro_y={toc_intro_y}, toc_detail_y={toc_detail_y}"
+    );
+    assert!(
         (28.0 - epsilon_pt..=42.0 + epsilon_pt).contains(&(before_y - toc_title_y)),
         "paragraph->toc title gap should stay within stable rhythm bounds: before_y={before_y}, toc_title_y={toc_title_y}"
     );
     assert!(
-        (toc_detail_y - after_y - 28.0).abs() <= epsilon_pt,
+        (toc_detail_y - after_y - 27.0).abs() <= epsilon_pt,
         "toc block trailing gap should match paragraph rhythm: toc_detail_y={toc_detail_y}, after_y={after_y}"
     );
     assert!(
