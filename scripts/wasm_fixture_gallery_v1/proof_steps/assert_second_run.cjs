@@ -97,6 +97,11 @@ if (okStatuses.length <= 0) {
   console.error('FAIL: expected at least one OK case in fixture gallery report');
   process.exit(1);
 }
+const niStatuses = statuses.filter((entry) => entry.status === 'NI');
+if (niStatuses.length > 0) {
+  console.error(`FAIL: expected zero NI statuses after capabilities convergence, found: ${niStatuses.map((entry) => entry.case_id).join(',')}`);
+  process.exit(1);
+}
 const documentclassInvalidStatus = statuses.find((entry) => entry.case_id === 'typeset_demo_documentclass_invalid_probe_v0');
 if (!documentclassInvalidStatus || documentclassInvalidStatus.status !== 'INVALID') {
   console.error('FAIL: expected typeset_demo_documentclass_invalid_probe_v0 status INVALID');
@@ -160,6 +165,11 @@ if (!mathLongStatus || mathLongStatus.status !== 'OK') {
 const mathInvalidStatus = statuses.find((entry) => entry.case_id === 'typeset_demo_math_invalid_payload_probe_v0');
 if (!mathInvalidStatus || mathInvalidStatus.status !== 'INVALID') {
   console.error('FAIL: expected typeset_demo_math_invalid_payload_probe_v0 status INVALID');
+  process.exit(1);
+}
+const capabilitiesStatus = statuses.find((entry) => entry.case_id === 'typeset_demo_capabilities_v0');
+if (!capabilitiesStatus || capabilitiesStatus.status !== 'INVALID') {
+  console.error('FAIL: expected typeset_demo_capabilities_v0 status INVALID');
   process.exit(1);
 }
 const mathProbeStatus = statuses.find((entry) => entry.case_id === 'typeset_demo_math_probe_v0');
@@ -578,6 +588,17 @@ if (!rerunHyperrefPackage) {
 }
 if (JSON.stringify(rerunHyperrefPackage.options) !== JSON.stringify(['unicode'])) {
   console.error('FAIL: expected packages_v1 rerun options for hyperref.sty to remain [unicode]');
+  process.exit(1);
+}
+const capabilitiesSummary = JSON.parse(
+  fs.readFileSync(path.join(outDir, 'typeset_demo_capabilities_v0', 'summary.json'), 'utf8'),
+);
+if (capabilitiesSummary?.status !== 'INVALID') {
+  console.error('FAIL: expected typeset_demo_capabilities_v0 summary status INVALID after rerun');
+  process.exit(1);
+}
+if (typeof capabilitiesSummary?.error !== 'string' || !capabilitiesSummary.error.includes('capabilities_seam:')) {
+  console.error('FAIL: expected typeset_demo_capabilities_v0 summary.error to include deterministic capabilities_seam reason after rerun');
   process.exit(1);
 }
 const mathProbePackagesRerun = JSON.parse(

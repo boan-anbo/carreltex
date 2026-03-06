@@ -21,9 +21,9 @@
     },
     {
       "id": "typeset_demo_capabilities_v0",
-      "tags": ["typeset", "capabilities", "negative", "ni"],
-      "expected_status": "NI",
-      "purpose": "Capability-heavy fixture expected to remain not-implemented in minimal lane."
+      "tags": ["typeset", "capabilities", "negative", "invalid"],
+      "expected_status": "INVALID",
+      "purpose": "Capability-heavy canary must fail-closed as deterministic INVALID with explicit unsupported-seam reporting."
     },
     {
       "id": "typeset_demo_toc_probe_v0",
