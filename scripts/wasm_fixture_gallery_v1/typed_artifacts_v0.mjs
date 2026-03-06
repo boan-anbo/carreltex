@@ -111,6 +111,8 @@ const RESOURCE_HINT_TYPE_ALLOWLIST_V0 = new Set([
 const PACKAGE_ARTIFACT_CASE_IDS_V1 = new Set([
   'typeset_demo_hyperref_probe_v0',
   'typeset_demo_hyperref_links_probe_v0',
+  'typeset_demo_math_probe_v0',
+  'typeset_demo_cjk_probe_v0',
   'typeset_demo_package_require_probe_v0',
   'typeset_demo_usepackage_opts_multi_probe_v0',
   'typeset_demo_usepackage_multipackage_probe_v0',

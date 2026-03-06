@@ -51,15 +51,15 @@
     },
     {
       "id": "typeset_demo_cjk_probe_v0",
-      "tags": ["typeset", "cjk", "font", "probe", "ni"],
-      "expected_status": "NI",
-      "purpose": "Probes CJK package/font seam for on-demand package request generation."
+      "tags": ["typeset", "cjk", "font", "probe", "ok"],
+      "expected_status": "OK",
+      "purpose": "Exercises deterministic CJK package/font seam capture with stable package/resource request mapping."
     },
     {
       "id": "typeset_demo_math_probe_v0",
-      "tags": ["typeset", "math", "amsmath", "probe", "ni"],
-      "expected_status": "NI",
-      "purpose": "Probes amsmath package seam for on-demand package request generation."
+      "tags": ["typeset", "math", "amsmath", "probe", "ok"],
+      "expected_status": "OK",
+      "purpose": "Exercises deterministic amsmath package seam capture with stable package/resource request mapping."
     },
     {
       "id": "typeset_demo_math_short_probe_v0",

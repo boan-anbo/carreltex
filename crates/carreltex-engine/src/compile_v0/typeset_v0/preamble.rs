@@ -312,3 +312,19 @@ fn consume_includeonly_declaration_noop_v0(tokens: &[TokenV0], index: usize) -> 
     validate_non_empty_comma_values_v0(&raw_group)?;
     Some(next)
 }
+
+fn consume_setcjkmainfont_declaration_noop_v0(tokens: &[TokenV0], index: usize) -> Option<usize> {
+    if !matches!(
+        tokens.get(index),
+        Some(TokenV0::ControlSeq(name)) if name.as_slice() == SETCJKMAINFONT_CONTROL_V0
+    ) {
+        return None;
+    }
+    let cursor = consume_simple_bracket_non_empty(tokens, index + 1)?;
+    let (group_start, group_end, next) = consume_group_bounds(tokens, cursor)?;
+    let font_value = parse_char_space_group_trimmed_v0(tokens, group_start, group_end)?;
+    if font_value.is_empty() {
+        return None;
+    }
+    Some(next)
+}
