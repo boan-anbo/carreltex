@@ -164,6 +164,38 @@ fn wrap_logical_line_v0(line: &[u8], max_line_glyphs: usize) -> Option<Vec<Vec<u
     Some(wrapped)
 }
 
+const WRAP_BALANCE_REMAINDER_CHARS_MAX_V12: usize = 12;
+const WRAP_BALANCE_MIN_FILL_NUM_V12: u32 = 11;
+const WRAP_BALANCE_MIN_FILL_DEN_V12: u32 = 20;
+
+fn is_wrap_unfriendly_leading_byte_v12(byte: u8) -> bool {
+    matches!(
+        byte,
+        b'.' | b',' | b';' | b':' | b'!' | b'?' | b')' | b']' | b'}'
+    )
+}
+
+fn next_visible_byte_after_v12(line: &[u8], start: usize) -> Option<u8> {
+    let mut cursor = start;
+    while cursor < line.len() {
+        let byte = line[cursor];
+        if byte == b' ' || is_style_marker_byte_v0(byte) {
+            cursor += 1;
+            continue;
+        }
+        return Some(byte);
+    }
+    None
+}
+
+fn remaining_visible_count_v12(line: &[u8], start: usize) -> usize {
+    line[start..]
+        .iter()
+        .copied()
+        .filter(|byte| *byte != b' ' && !is_style_marker_byte_v0(*byte))
+        .count()
+}
+
 fn wrap_logical_line_by_width_v0(
     line: &[u8],
     glyph_advance_sp: i32,
@@ -180,15 +212,16 @@ fn wrap_logical_line_by_width_v0(
     while start < line.len() {
         let mut cursor = start;
         let mut width = 0u32;
-        let mut last_space = None::<usize>;
+        let mut space_candidates = Vec::<(usize, u32)>::new();
         while cursor < line.len() {
-            let advance_sp = u32::try_from(glyph_width_sp_v0(line[cursor], glyph_advance_sp)?).ok()?;
+            let advance_sp =
+                u32::try_from(glyph_width_sp_v0(line[cursor], glyph_advance_sp)?).ok()?;
             if width.checked_add(advance_sp)? > max_line_width_sp {
                 break;
             }
             width = width.checked_add(advance_sp)?;
             if line[cursor] == b' ' {
-                last_space = Some(cursor);
+                space_candidates.push((cursor, width.saturating_sub(advance_sp)));
             }
             cursor += 1;
         }
@@ -205,7 +238,30 @@ fn wrap_logical_line_by_width_v0(
             continue;
         }
 
-        if let Some(space_index) = last_space {
+        if !space_candidates.is_empty() {
+            let mut chosen_space_candidate = space_candidates.len() - 1;
+            while chosen_space_candidate > 0 {
+                let (candidate_space_index, candidate_width_sp) =
+                    space_candidates[chosen_space_candidate];
+                let next_line_start = candidate_space_index + 1;
+                let short_remainder = remaining_visible_count_v12(line, next_line_start)
+                    <= WRAP_BALANCE_REMAINDER_CHARS_MAX_V12;
+                let punctuation_leading_remainder =
+                    next_visible_byte_after_v12(line, next_line_start)
+                        .map(is_wrap_unfriendly_leading_byte_v12)
+                        .unwrap_or(false);
+                let min_fill_sp = max_line_width_sp
+                    .checked_mul(WRAP_BALANCE_MIN_FILL_NUM_V12)?
+                    .checked_div(WRAP_BALANCE_MIN_FILL_DEN_V12)?;
+                if candidate_width_sp >= min_fill_sp
+                    && (short_remainder || punctuation_leading_remainder)
+                {
+                    chosen_space_candidate -= 1;
+                    continue;
+                }
+                break;
+            }
+            let (space_index, _) = space_candidates[chosen_space_candidate];
             if space_index > start {
                 wrapped.push(line[start..space_index].to_vec());
             } else {
@@ -235,7 +291,10 @@ fn build_line_plan_v0(line: &[u8], glyph_advance_sp: i32) -> Option<LinePlanV0> 
             advance_sp,
         });
     }
-    let mut line_plan = LinePlanV0 { glyphs, width_sp: 0 };
+    let mut line_plan = LinePlanV0 {
+        glyphs,
+        width_sp: 0,
+    };
     line_plan.width_sp = recompute_line_width_sp_v0(&line_plan)?;
     Some(line_plan)
 }

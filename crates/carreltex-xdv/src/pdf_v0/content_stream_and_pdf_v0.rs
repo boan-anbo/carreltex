@@ -12,6 +12,45 @@ fn has_front_matter_title_block_v11(title_block_len: usize) -> bool {
     title_block_len >= 3
 }
 
+fn is_centered_heading_candidate_line_v12(
+    lines: &[LinePlanV0],
+    line_index: usize,
+    title_block_len: usize,
+) -> bool {
+    if line_index < title_block_len {
+        return false;
+    }
+    let Some(line) = lines.get(line_index) else {
+        return false;
+    };
+    if line.glyphs.is_empty() || line_index == 0 {
+        return false;
+    }
+    if !lines[line_index - 1].glyphs.is_empty() {
+        return false;
+    }
+    let next_raw_line_is_empty = lines
+        .get(line_index + 1)
+        .map(|next_line| next_line.glyphs.is_empty())
+        .unwrap_or(false);
+    if !next_raw_line_is_empty {
+        return false;
+    }
+    if detect_quote_prefix_advance_pt_v0(&line.glyphs).is_some()
+        || has_center_prefix_v0(&line.glyphs)
+        || has_right_prefix_v0(&line.glyphs)
+        || has_noindent_prefix_v0(&line.glyphs)
+        || detect_heading_prefix_v0(&line.glyphs).is_some()
+        || detect_list_prefix_v0(&line.glyphs).is_some()
+    {
+        return false;
+    }
+    let Some(segments) = parse_styled_segments_v0(&line.glyphs) else {
+        return false;
+    };
+    is_heading_line_segments_v0(&segments)
+}
+
 fn classify_next_flow_kind_v0(
     lines: &[LinePlanV0],
     start_index: usize,
@@ -31,6 +70,9 @@ fn classify_next_flow_kind_v0(
             || has_table_row_prefix_v0(&line.glyphs)
         {
             return Some(BodyFlowKindV0::Table);
+        }
+        if is_centered_heading_candidate_line_v12(lines, line_index, title_block_len) {
+            return Some(BodyFlowKindV0::Other);
         }
         if has_figure_box_marker_prefix_v0(&line.glyphs)
             || has_figure_image_prefix_v0(&line.glyphs)
@@ -113,6 +155,7 @@ struct PageContinuationStateV0 {
     active_inline_alignment: Option<InlineBlockAlignmentV0>,
     previous_line_was_bibliography_heading: bool,
     last_non_empty_flow_kind: Option<BodyFlowKindV0>,
+    last_non_empty_line_advance_pt: Option<f32>,
     style_stack: Vec<PdfTextStyleV0>,
     current_style: PdfTextStyleV0,
     link_active: bool,
@@ -191,6 +234,8 @@ fn build_page_content_stream_v0(
     let mut last_non_empty_flow_kind = initial_state
         .map(|state| state.last_non_empty_flow_kind)
         .unwrap_or(None);
+    let mut last_non_empty_line_advance_pt = initial_state
+        .and_then(|state| state.last_non_empty_line_advance_pt);
     let mut annotations = Vec::<PdfLinkAnnotationV0>::new();
     let mut style_stack = initial_state
         .map(|state| state.style_stack.clone())
@@ -495,7 +540,15 @@ fn build_page_content_stream_v0(
                 last_non_empty_flow_kind,
                 classify_next_flow_kind_v0(lines, line_index + 1, title_block_len),
             ) {
-                if should_tighten_transition_gap_v7(previous_kind, next_kind) {
+                if matches!(
+                    (previous_kind, next_kind),
+                    (BodyFlowKindV0::Paragraph, BodyFlowKindV0::Paragraph)
+                ) {
+                    if let Some(previous_line_advance_pt) = last_non_empty_line_advance_pt {
+                        line_advance_pt =
+                            (PARAGRAPH_BLOCK_GAP_PT_V12 - previous_line_advance_pt).max(0.0);
+                    }
+                } else if should_tighten_transition_gap_v7(previous_kind, next_kind) {
                     line_advance_pt = transition_blank_advance_pt_v7(previous_kind);
                 }
             }
@@ -534,6 +587,12 @@ fn build_page_content_stream_v0(
             } else {
                 BodyFlowKindV0::Paragraph
             };
+            let paragraph_continues_next_line = current_flow_kind == BodyFlowKindV0::Paragraph
+                && !next_raw_line_is_empty
+                && matches!(
+                    classify_next_flow_kind_v0(lines, line_index + 1, title_block_len),
+                    Some(BodyFlowKindV0::Paragraph)
+                );
             let line_width_pt: f32 = render_segments
                 .iter()
                 .map(|segment| segment.advance_pt)
@@ -649,6 +708,8 @@ fn build_page_content_stream_v0(
                 line_advance_pt = LIST_ENTRY_LEADING_PT_V7;
             } else if quote_line {
                 line_advance_pt = QUOTE_ENTRY_LEADING_PT_V7;
+            } else if paragraph_continues_next_line {
+                line_advance_pt = BODY_PARAGRAPH_CONTINUATION_LEADING_PT_V12;
             }
             let mut line_annotations = collect_link_annotations_for_line_v0(
                 &render_segments,
@@ -708,6 +769,7 @@ fn build_page_content_stream_v0(
         previous_line_was_bibliography_heading = bibliography_heading_line;
         if !line_is_empty {
             last_non_empty_flow_kind = Some(current_flow_kind);
+            last_non_empty_line_advance_pt = Some(line_advance_pt);
         }
         y -= line_advance_pt;
         if title_block_len > 0 && line_index + 1 == title_block_len {
@@ -771,6 +833,7 @@ fn build_page_content_stream_v0(
         active_inline_alignment,
         previous_line_was_bibliography_heading,
         last_non_empty_flow_kind,
+        last_non_empty_line_advance_pt,
         style_stack,
         current_style,
         link_active,
