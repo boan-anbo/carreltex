@@ -15,6 +15,10 @@ fn has_front_matter_title_block_v11(title_block_len: usize) -> bool {
     title_block_len >= 3
 }
 
+fn has_tall_front_matter_title_block_v23(title_block_len: usize) -> bool {
+    title_block_len > 3
+}
+
 fn is_centered_heading_candidate_line_v12(
     lines: &[LinePlanV0],
     line_index: usize,
@@ -862,6 +866,9 @@ fn build_page_content_stream_v0(
             } else if paragraph_continues_next_line {
                 line_advance_pt = BODY_PARAGRAPH_CONTINUATION_LEADING_PT_V12;
             }
+            if in_title_block && has_tall_front_matter_title_block_v23(title_block_len) {
+                line_advance_pt = TITLE_BLOCK_LINE_LEADING_PT_V23;
+            }
             let annotation_profile = if bibliography_line {
                 AnnotationRectProfileV0::BibliographyV14
             } else {
@@ -948,7 +955,11 @@ fn build_page_content_stream_v0(
         }
         y -= line_advance_pt;
         if title_block_len > 0 && line_index + 1 == title_block_len {
-            y -= TITLE_EXTRA_GAP_PT_V0;
+            y -= if has_tall_front_matter_title_block_v23(title_block_len) {
+                TITLE_EXTRA_GAP_PT_V23
+            } else {
+                TITLE_EXTRA_GAP_PT_V0
+            };
         }
         line_index += 1;
     }
