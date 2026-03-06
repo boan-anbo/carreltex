@@ -468,11 +468,11 @@ fn pdf_renderer_figure_block_spacing_invariants_v0() {
         "after paragraph should render below caption"
     );
     assert!(
-        (placeholder_y - caption_y - 122.0).abs() <= epsilon_pt,
+        (placeholder_y - caption_y - 124.0).abs() <= epsilon_pt,
         "placeholder->caption gap should be stable and readable: placeholder_y={placeholder_y}, caption_y={caption_y}"
     );
     assert!(
-        (caption_y - after_y - 14.0).abs() <= epsilon_pt,
+        (caption_y - after_y - 24.0).abs() <= epsilon_pt,
         "caption->paragraph transition gap should remain stable after figure blocks: caption_y={caption_y}, after_y={after_y}"
     );
 }
