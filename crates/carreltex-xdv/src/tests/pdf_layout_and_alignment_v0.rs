@@ -769,6 +769,37 @@ fn pdf_renderer_wrapper_punctuation_segment_positions_progress_monotonically_v0(
 }
 
 #[test]
+fn pdf_renderer_body_wrap_balances_lines_and_preserves_styled_punctuation_seams_v12() {
+    let xdv = write_dvi_v2_text_page_with_layout_and_wrap_v0(
+        b"P1START aa [mid],bb cc dd P1WRAP.",
+        65_536,
+        786_432,
+        24,
+    )
+    .expect("writer should accept wrapped styled paragraph");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+    let (start_x, start_y) =
+        tm_position_for_segment_substring_v0(&pdf, "P1START").expect("paragraph start");
+    let (wrap_x, wrap_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "P1WRAP").expect("paragraph wrap line");
+    let epsilon_pt = 0.05f32;
+    assert!(
+        (start_x - 72.0).abs() <= epsilon_pt && (wrap_x - 72.0).abs() <= epsilon_pt,
+        "body paragraph wrapped continuation should stay in body column: start_x={start_x}, wrap_x={wrap_x}"
+    );
+    assert!(
+        (start_y - wrap_y - 13.0).abs() <= epsilon_pt,
+        "wrapped body continuation rhythm should be tightened and stable: start_y={start_y}, wrap_y={wrap_y}"
+    );
+
+    let rendered_pdf_text = String::from_utf8_lossy(&pdf);
+    assert!(
+        !rendered_pdf_text.contains("mid ,") && !rendered_pdf_text.contains(", gamma"),
+        "styled punctuation seams in wrapped body paragraphs should avoid spacing artifacts"
+    );
+}
+
+#[test]
 fn pdf_renderer_centers_title_block_lines_within_epsilon_v0() {
     let demo_text = b"Centering Accuracy Title\nAlice Bob\n2026-03-05\n\nBody line.";
     let xdv = write_dvi_v2_text_page_v0(demo_text).expect("writer should accept demo text");
@@ -989,11 +1020,11 @@ fn pdf_renderer_paragraph_rhythm_and_noindent_invariants_v0() {
         "paragraph after noindent should restore indent: {indented_x}"
     );
     assert!(
-        (first_y - same_para_y - 14.0).abs() <= epsilon_pt,
+        (first_y - same_para_y - 13.0).abs() <= epsilon_pt,
         "line gap mismatch inside paragraph: first_y={first_y}, same_para_y={same_para_y}"
     );
     assert!(
-        (same_para_y - second_para_y - 28.0).abs() <= epsilon_pt,
+        (same_para_y - second_para_y - 27.0).abs() <= epsilon_pt,
         "paragraph break gap mismatch: same_para_y={same_para_y}, second_para_y={second_para_y}"
     );
     assert!(
@@ -1005,7 +1036,7 @@ fn pdf_renderer_paragraph_rhythm_and_noindent_invariants_v0() {
         "heading->noindent gap mismatch: heading_y={heading_y}, after_heading_y={after_heading_y}"
     );
     assert!(
-        (after_heading_y - indented_y - 28.0).abs() <= epsilon_pt,
+        (after_heading_y - indented_y - 27.0).abs() <= epsilon_pt,
         "noindent->indented paragraph gap mismatch: after_heading_y={after_heading_y}, indented_y={indented_y}"
     );
     assert!(
@@ -1037,7 +1068,7 @@ fn pdf_renderer_consecutive_blank_lines_collapse_to_single_rhythm_gap_v1() {
         "second paragraph should keep paragraph indent: {second_x}"
     );
     assert!(
-        (first_y - second_y - 28.0).abs() <= epsilon_pt,
+        (first_y - second_y - 27.0).abs() <= epsilon_pt,
         "consecutive blank lines should collapse to a single paragraph gap: first_y={first_y}, second_y={second_y}"
     );
 }
@@ -1119,8 +1150,40 @@ fn pdf_renderer_paragraph_indent_and_line_gap_invariants_v0() {
         "indented paragraph x mismatch: {second_x}"
     );
     assert!(
-        (first_y - second_y - 28.0).abs() <= 0.02,
+        (first_y - second_y - 27.0).abs() <= 0.02,
         "paragraph y-gap mismatch: first_y={first_y}, second_y={second_y}"
+    );
+}
+
+#[test]
+fn pdf_renderer_body_only_long_page_paragraph_block_rhythm_is_stable_v12() {
+    let xdv = write_dvi_v2_text_page_with_layout_and_wrap_v0(
+        b"\nP1START aa bb cc dd ee ff gg hh ii jj kk ll mm nn P1LAST.\n\nP2START aa bb cc dd ee P2WRAP ff gg hh ii jj kk ll mm nn.",
+        65_536,
+        786_432,
+        20,
+    )
+    .expect("writer should accept wrapped body-only paragraphs");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+
+    let (_, p1_last_y) =
+        tm_position_for_segment_substring_v0(&pdf, "P1LAST").expect("first paragraph tail");
+    let (p2_start_x, p2_start_y) =
+        tm_position_for_segment_substring_v0(&pdf, "P2START").expect("second paragraph start");
+    let (p2_wrap_x, p2_wrap_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "P2WRAP").expect("second paragraph wrap");
+    let epsilon_pt = 0.05f32;
+    assert!(
+        (p1_last_y - p2_start_y - 27.0).abs() <= epsilon_pt,
+        "paragraph-to-paragraph block gap on long body-only pages should stay stable: p1_last_y={p1_last_y}, p2_start_y={p2_start_y}"
+    );
+    assert!(
+        (p2_start_x - 96.0).abs() <= epsilon_pt && (p2_wrap_x - 72.0).abs() <= epsilon_pt,
+        "second paragraph start/wrap columns should remain stable: p2_start_x={p2_start_x}, p2_wrap_x={p2_wrap_x}"
+    );
+    assert!(
+        (p2_start_y - p2_wrap_y - 13.0).abs() <= epsilon_pt,
+        "wrapped continuation rhythm in long body-only pages should stay tightened: p2_start_y={p2_start_y}, p2_wrap_y={p2_wrap_y}"
     );
 }
 
