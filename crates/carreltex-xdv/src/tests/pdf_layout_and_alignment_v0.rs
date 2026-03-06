@@ -850,6 +850,67 @@ fn pdf_renderer_non_paragraph_blocks_do_not_use_body_seam_scaling_v13() {
 }
 
 #[test]
+fn pdf_renderer_body_paragraph_uses_inline_math_seam_scaling_profile_v15() {
+    let demo_text =
+        b"Title\nAuthor\n2026-03-05\n\nBody [ITALICMATHV15] MATH seam and {BOLDMATHV15} MATH seam.";
+    let xdv = write_dvi_v2_text_page_v0(demo_text).expect("writer should accept inline math seam text");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+    let pdf_text = String::from_utf8_lossy(&pdf);
+    let italic_line = pdf_text
+        .lines()
+        .find(|line| line.contains("(ITALICMATHV15) Tj"))
+        .expect("italic inline-math-adjacent segment should render");
+    let bold_line = pdf_text
+        .lines()
+        .find(|line| line.contains("(BOLDMATHV15) Tj"))
+        .expect("bold inline-math-adjacent segment should render");
+    assert!(
+        italic_line.contains("99 Tz"),
+        "inline-math-adjacent italic segment should use v15 seam scaling"
+    );
+    assert!(
+        bold_line.contains("97 Tz"),
+        "inline-math-adjacent bold segment should use v15 seam scaling"
+    );
+}
+
+#[test]
+fn pdf_renderer_wrap_avoids_inline_math_placeholder_at_line_start_v15() {
+    let xdv = write_dvi_v2_text_page_with_layout_and_wrap_v0(
+        b"PSTART alpha beta gamma MATH, delta epsilon zeta eta WRAPTOKEN",
+        65_536,
+        786_432,
+        30,
+    )
+    .expect("writer should accept wrapped inline-math paragraph");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+    let rendered_math_line =
+        rendered_text_for_line_containing_needle_v0(&pdf, "MATH").expect("inline math placeholder should render");
+    let (start_x, start_y) =
+        tm_position_for_segment_substring_v0(&pdf, "PSTART").expect("paragraph start");
+    let (wrap_x, wrap_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "WRAPTOKEN").expect("wrap line");
+    let epsilon_pt = 0.05f32;
+    assert!(
+        (start_x - 72.0).abs() <= epsilon_pt && (wrap_x - 72.0).abs() <= epsilon_pt,
+        "wrapped body paragraph columns should stay stable: start_x={start_x}, wrap_x={wrap_x}"
+    );
+    assert!(
+        start_y > wrap_y,
+        "wrapped inline-math paragraph line should render below paragraph start: start_y={start_y}, wrap_y={wrap_y}"
+    );
+    let line_steps = ((start_y - wrap_y) / 13.0).round();
+    assert!(
+        line_steps >= 1.0 && (start_y - wrap_y - (line_steps * 13.0)).abs() <= epsilon_pt,
+        "wrapped inline-math paragraph rhythm should stay on stable 13pt steps: start_y={start_y}, wrap_y={wrap_y}, line_steps={line_steps}"
+    );
+    assert!(
+        rendered_math_line.contains("MATH,") && !rendered_math_line.contains("MATH ,"),
+        "inline math placeholder should keep punctuation-adjacent seam spacing stable under wrapping: rendered_math_line={rendered_math_line:?}"
+    );
+}
+
+#[test]
 fn pdf_renderer_centers_title_block_lines_within_epsilon_v0() {
     let demo_text = b"Centering Accuracy Title\nAlice Bob\n2026-03-05\n\nBody line.";
     let xdv = write_dvi_v2_text_page_v0(demo_text).expect("writer should accept demo text");
