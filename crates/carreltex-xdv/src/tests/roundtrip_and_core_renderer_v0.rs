@@ -225,9 +225,36 @@ fn pdf_renderer_footnote_block_renders_at_page_bottom_with_small_font_v0() {
         footnote_pos.1
     );
     assert!(
+        body_pos.1 - footnote_pos.1 >= 24.0,
+        "footnote block should preserve readable separation from body content: body_y={}, footnote_y={}",
+        body_pos.1,
+        footnote_pos.1
+    );
+    assert!(
         (72.0..=140.0).contains(&footnote_pos.1),
         "footnote block should stay near page bottom margin: y={}",
         footnote_pos.1
+    );
+}
+
+#[test]
+fn pdf_renderer_footnote_internal_rhythm_is_stable_v1() {
+    let xdv = write_dvi_v2_text_page_v0(
+        b"Body markers^1 and^2.\n\n!f 1 First footnote line.\n!f 2 Second footnote line.",
+    )
+    .expect("writer should accept footnote rhythm markers");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+
+    let (_, first_footnote_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "(1 First footnote line.)")
+            .expect("first footnote line");
+    let (_, second_footnote_y) =
+        tm_position_for_line_containing_text_v0(&pdf, "(2 Second footnote line.)")
+            .expect("second footnote line");
+    let delta = first_footnote_y - second_footnote_y;
+    assert!(
+        (delta - 13.0).abs() <= 0.05,
+        "footnote line rhythm should remain stable at FOOTNOTE_LEADING_PT_V0: delta={delta}"
     );
 }
 
@@ -741,4 +768,3 @@ fn pdf_renderer_multipage_footnotes_and_annots_associate_per_page_v0() {
         "page 2 footnote should render near bottom: y={page_two_footnote_y}"
     );
 }
-
