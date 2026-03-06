@@ -3717,6 +3717,40 @@ fn pdf_renderer_wrapped_centered_very_short_pre_style_gap_is_tightened_v64() {
 }
 
 #[test]
+fn pdf_renderer_wrapped_right_short_pre_style_gap_is_tightened_v65() {
+    let xdv = write_dvi_v2_text_page_with_layout_and_wrap_v0(
+        b"\n| RIGHT core words trail words words WRAPRIGHTSHORTPLAIN tail.",
+        65_536,
+        786_432,
+        30,
+    )
+    .expect("writer should accept wrapped right short text");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+
+    let (_, prefix_y) =
+        tm_position_for_segment_substring_v0(&pdf, "RIGHT").expect("right short prefix y");
+    let (_, wrap_y) = tm_position_for_segment_substring_v0(&pdf, "WRAPRIGHTSHORTPLAIN")
+        .expect("right short wrap y");
+    let rendered = rendered_text_for_line_containing_needle_v0(&pdf, "RIGHT")
+        .expect("right short rendered text");
+    let max_tm_gap = max_tm_gap_pt_for_line_containing_v0(&pdf, "core words")
+        .expect("right short tm gap");
+
+    assert!(
+        rendered == "RIGHT core words trail",
+        "wrapped right short line should preserve stable spacing: {rendered}"
+    );
+    assert!(
+        max_tm_gap <= 106.0,
+        "wrapped right short pre-style seam should stay tightened: tm_gap={max_tm_gap}"
+    );
+    assert!(
+        prefix_y > wrap_y,
+        "right short fixture should still wrap after the tightened seam: prefix_y={prefix_y}, wrap_y={wrap_y}"
+    );
+}
+
+#[test]
 fn pdf_renderer_wrapped_quote_and_list_styled_seams_use_v29_profile() {
     let xdv = write_dvi_v2_text_page_v0(
         b"\n- LISTSTART alpha alpha alpha alpha alpha alpha alpha [LISTITALICV29] beta beta beta beta beta beta LISTWRAPV29.\n\n> QUOTESTART gamma gamma gamma gamma gamma gamma gamma {QUOTEBOLDV29} delta delta delta delta delta QUOTEWRAPV29.",
