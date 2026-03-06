@@ -1228,6 +1228,25 @@ fn typeset_minimal_display_math_emits_centered_placeholder_block() {
 }
 
 #[test]
+fn typeset_minimal_display_math_placeholder_width_category_tracks_payload_length_v2() {
+    let main = b"\\documentclass{article}\\begin{document}\\[x+y\\]\\[x^2 + y^2 + z^2 + a^2 + b^2 + c^2\\]\\[x^2 + y^2 + z^2 + a^2 + b^2 + c^2 + d^2 + e^2 + f^2 + g^2 + h^2 + i^2 + j^2 + k^2 + l^2 + m^2 + n^2 + o^2 + p^2\\]\\end{document}";
+    let body = extract_typeset_body(main);
+    let text = String::from_utf8(body).expect("body should be valid utf8");
+    assert!(
+        text.contains("^ MATH DISPLAY\n\n^ MATH DISPLAY MEDIUM\n\n^ MATH DISPLAY LONG FORM"),
+        "body={text:?}"
+    );
+}
+
+#[test]
+fn typeset_minimal_display_math_accepts_backslash_letter_commands_v2() {
+    let main = b"\\documentclass{article}\\begin{document}\\[\\alpha + x^2\\]\\end{document}";
+    let body = extract_typeset_body(main);
+    let text = String::from_utf8(body).expect("body should be valid utf8");
+    assert!(text.contains("^ MATH DISPLAY"), "body={text:?}");
+}
+
+#[test]
 fn typeset_minimal_display_math_emits_equation_metadata_and_ref_resolution_v1() {
     let main = b"\\documentclass{article}\\begin{document}\\[x+y\\]\\label{eq:first}\\[a+b\\]\\label{eq:second}Refs: \\ref{eq:first}, \\ref{eq:second}.\\end{document}";
     let body = extract_typeset_body(main);
@@ -1269,6 +1288,14 @@ fn typeset_minimal_rejects_unterminated_inline_math() {
 #[test]
 fn typeset_minimal_rejects_unterminated_display_math() {
     let main = b"\\documentclass{article}\\begin{document}A \\[x+y\\end{document}";
+    let result = compile_typeset(main);
+    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert!(result.main_xdv_bytes.is_empty());
+}
+
+#[test]
+fn typeset_minimal_rejects_display_math_with_unsupported_payload_byte_v2() {
+    let main = b"\\documentclass{article}\\begin{document}\\[x&y\\]\\end{document}";
     let result = compile_typeset(main);
     assert_eq!(result.status, CompileStatus::NotImplemented);
     assert!(result.main_xdv_bytes.is_empty());
