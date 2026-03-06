@@ -128,6 +128,12 @@
       "purpose": "Exercises safe includegraphics scale option parsing and deterministic placeholder sizing."
     },
     {
+      "id": "typeset_demo_float_probe_v0",
+      "tags": ["typeset", "float", "figure", "placement", "probe", "ok"],
+      "expected_status": "OK",
+      "purpose": "Exercises deterministic figure placement policy with one top-of-page float and one inline float plus stable float_v0 typed artifacts."
+    },
+    {
       "id": "typeset_demo_graphicspath_probe_v0",
       "tags": ["typeset", "graphics", "graphicspath", "probe", "ni"],
       "expected_status": "NI",

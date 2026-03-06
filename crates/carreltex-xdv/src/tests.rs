@@ -3131,6 +3131,22 @@ fn pdf_renderer_figure_metadata_width_affects_placeholder_alignment_v2() {
 }
 
 #[test]
+fn pdf_renderer_accepts_figure_top_placement_marker_v0() {
+    let xdv = write_dvi_v2_text_page_v0(b"!gbox t\n!gcap Figure 1: Top caption.")
+        .expect("writer should accept figure marker lines");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+    let pdf_text = String::from_utf8_lossy(&pdf);
+    assert!(
+        pdf_text.contains("(Figure 1: Top caption.) Tj"),
+        "caption text should render for top-placement marker: {pdf_text}"
+    );
+    assert!(
+        pdf_text.contains("([ Figure placeholder ]) Tj"),
+        "placeholder text should render for top-placement marker: {pdf_text}"
+    );
+}
+
+#[test]
 fn pdf_renderer_rejects_figure_image_metadata_width_overflow_v2() {
     let xdv = write_dvi_v2_text_page_v0(
         b"!gbox\n!gimg 1 figures/demo.png 500000 120000\n!gcap Figure 1: Caption.",
@@ -3151,6 +3167,17 @@ fn pdf_renderer_rejects_malformed_figure_image_metadata_line_v0() {
     assert!(
         pdf.is_none(),
         "renderer should fail-closed on malformed !gimg metadata"
+    );
+}
+
+#[test]
+fn pdf_renderer_rejects_malformed_figure_box_placement_marker_v0() {
+    let xdv = write_dvi_v2_text_page_v0(b"!gbox h\n!gcap Figure 1: Caption.")
+        .expect("writer should accept figure marker lines");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv);
+    assert!(
+        pdf.is_none(),
+        "renderer should fail-closed on malformed !gbox placement hint"
     );
 }
 

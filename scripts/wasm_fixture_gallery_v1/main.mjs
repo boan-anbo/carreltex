@@ -23,7 +23,7 @@ const STATUS_FAIL_V0 = 'FAIL';
 const STATUS_MISMATCH_V0 = 'MISMATCH';
 const EXPECTED_STATUS_VALUES_V0 = new Set([STATUS_OK_V0, STATUS_NI_V0, STATUS_INVALID_V0, STATUS_FAIL_V0]);
 const DEFAULT_ONDEMAND_FIXEDPOINT_MAX_ITERS_V1 = 3;
-const TYPED_ARTIFACT_KEYS_V0 = ['toc', 'labels', 'refs', 'pageref', 'bib', 'cite', 'bibitems', 'cites', 'hyperref', 'pkgopt', 'packages', 'graphics', 'input', 'math', 'table'];
+const TYPED_ARTIFACT_KEYS_V0 = ['toc', 'labels', 'refs', 'pageref', 'bib', 'cite', 'bibitems', 'cites', 'hyperref', 'pkgopt', 'packages', 'graphics', 'float', 'input', 'math', 'table'];
 const TYPED_ARTIFACTS_VERSION_V0 = 1;
 const MAX_TOC_ENTRIES_V0 = 256;
 const MAX_TOC_TITLE_BYTES_V0 = 256;
@@ -48,6 +48,8 @@ const DEFAULT_GRAPHICS_PLACEHOLDER_WIDTH_PT_V2 = 180.0;
 const DEFAULT_GRAPHICS_PLACEHOLDER_HEIGHT_PT_V2 = 120.0;
 const MAX_GRAPHICS_PLACEHOLDER_WIDTH_PT_V2 = 468.0;
 const MAX_GRAPHICS_PLACEHOLDER_HEIGHT_PT_V2 = 288.0;
+const MAX_FLOAT_ENTRIES_V0 = 256;
+const MAX_FLOAT_CAPTION_SUMMARY_BYTES_V0 = 128;
 const MAX_INPUT_ENTRIES_V1 = 512;
 const MAX_INPUT_INCLUDE_DEPTH_V1 = 32;
 const MAX_MATH_ENTRIES_V0 = 256;
@@ -93,6 +95,7 @@ const TABLE_SPEC_LINE_PREFIX_V2 = '!ts ';
 const TABLE_ROW_LINE_PREFIX_V2 = '!t ';
 const FIGURE_CAPTION_LINE_PREFIX_V2 = '!gcap ';
 const FIGURE_IMAGE_LINE_PREFIX_V2 = '!gimg ';
+const FIGURE_TOP_PLACEMENT_HINT_V2 = 't';
 const DISPLAY_MATH_PLACEHOLDER_SHORT_V2 = 'MATH DISPLAY';
 const DISPLAY_MATH_PLACEHOLDER_MEDIUM_V2 = 'MATH DISPLAY MEDIUM';
 const DISPLAY_MATH_PLACEHOLDER_LONG_V2 = 'MATH DISPLAY LONG FORM';
@@ -715,6 +718,11 @@ async function loadFixtureCasesV0() {
       id: 'typeset_demo_graphics_scale_probe_v0',
       mode: 'typeset',
       fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_graphics_scale_probe_v0.tex',
+    },
+    {
+      id: 'typeset_demo_float_probe_v0',
+      mode: 'typeset',
+      fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_float_probe_v0.tex',
     },
     {
       id: 'typeset_demo_graphicspath_probe_v0',
@@ -1464,6 +1472,21 @@ function lineEqualsAsciiV2(lineBytes, value) {
   return true;
 }
 
+function hasFigureBoxMarkerPrefixV2(lineBytes) {
+  return lineStartsWithAsciiV2(lineBytes, FIGURE_BOX_LINE_V2);
+}
+
+function parseFigurePlacementHintFromFigureBoxLineV0(lineBytes) {
+  if (lineEqualsAsciiV2(lineBytes, FIGURE_BOX_LINE_V2)) {
+    return 'inline';
+  }
+  const topMarker = `${FIGURE_BOX_LINE_V2} ${FIGURE_TOP_PLACEMENT_HINT_V2}`;
+  if (lineEqualsAsciiV2(lineBytes, topMarker)) {
+    return FIGURE_TOP_PLACEMENT_HINT_V2;
+  }
+  return null;
+}
+
 function detectListPrefixLineV2(lineBytes) {
   let leading = 0;
   while (leading < lineBytes.length && lineBytes[leading] === 0x20) {
@@ -1494,7 +1517,7 @@ function isStructuredNonTitleLineV2(lineBytes) {
     || lineStartsWithAsciiV2(lineBytes, '~ ')
     || lineStartsWithAsciiV2(lineBytes, TABLE_SPEC_LINE_PREFIX_V2)
     || lineStartsWithAsciiV2(lineBytes, TABLE_ROW_LINE_PREFIX_V2)
-    || lineEqualsAsciiV2(lineBytes, FIGURE_BOX_LINE_V2)
+    || hasFigureBoxMarkerPrefixV2(lineBytes)
     || lineStartsWithAsciiV2(lineBytes, FIGURE_CAPTION_LINE_PREFIX_V2)
     || lineStartsWithAsciiV2(lineBytes, FIGURE_IMAGE_LINE_PREFIX_V2)
     || lineEqualsAsciiV2(lineBytes, TOC_PLACEHOLDER_MARKER_V2)
@@ -1611,7 +1634,11 @@ function collectNominalAnchorPageNumbersFromBodyPagesV2(bodyPages) {
         continue;
       }
       const lineBytes = lines[lineIndex];
-      const hasAnchor = lineEqualsAsciiV2(lineBytes, FIGURE_BOX_LINE_V2)
+      const figurePlacementHint = parseFigurePlacementHintFromFigureBoxLineV0(lineBytes);
+      if (hasFigureBoxMarkerPrefixV2(lineBytes) && figurePlacementHint === null) {
+        throw new Error(`toc_v2 malformed figure marker line: ${Buffer.from(lineBytes).toString('utf8')}`);
+      }
+      const hasAnchor = figurePlacementHint !== null
         || isDisplayMathPlaceholderLineV2(lineBytes)
         || lineStartsWithAsciiV2(lineBytes, SECTION_HEADING_PREFIX_V2)
         || lineStartsWithAsciiV2(lineBytes, SUBSECTION_HEADING_PREFIX_V2);
@@ -1913,6 +1940,181 @@ function extractTableEntriesFromSourceV1(sourceBytes) {
     index = endIndex + endMarker.length;
   }
   return entries;
+}
+
+function normalizeFloatCaptionSummaryV0(rawCaption) {
+  const normalized = rawCaption.replace(/\s+/g, ' ').trim();
+  const normalizedBytes = Buffer.from(normalized, 'utf8');
+  if (normalizedBytes.length <= MAX_FLOAT_CAPTION_SUMMARY_BYTES_V0) {
+    return normalized;
+  }
+  return `${normalizedBytes.subarray(0, MAX_FLOAT_CAPTION_SUMMARY_BYTES_V0).toString('utf8')}...`;
+}
+
+function parseFigurePlacementHintOptionV0(rawOption) {
+  const normalized = rawOption.replace(/\s+/g, '');
+  if (normalized.length === 0) {
+    throw new Error('float_v0 figure placement option must be non-empty');
+  }
+  if (normalized === FIGURE_TOP_PLACEMENT_HINT_V2) {
+    return FIGURE_TOP_PLACEMENT_HINT_V2;
+  }
+  throw new Error(`float_v0 unsupported figure placement option '${rawOption.trim()}'`);
+}
+
+function extractFloatEntriesFromSourceV0(sourceBytes) {
+  const entries = [];
+  let index = 0;
+
+  while (index < sourceBytes.length) {
+    if (sourceBytes[index] !== 0x5c) {
+      index += 1;
+      continue;
+    }
+    let commandIndex = index + 1;
+    while (commandIndex < sourceBytes.length && isAsciiLetterByteV0(sourceBytes[commandIndex])) {
+      commandIndex += 1;
+    }
+    if (commandIndex === index + 1) {
+      index += 1;
+      continue;
+    }
+    const command = Buffer.from(sourceBytes.slice(index + 1, commandIndex)).toString('ascii');
+    if (command !== 'begin') {
+      index = commandIndex;
+      continue;
+    }
+
+    const envGroup = readBracedGroupV0(sourceBytes, commandIndex);
+    if (!envGroup.ok) {
+      throw new Error('float_v0 malformed \\begin group');
+    }
+    if (envGroup.value.trim() !== 'figure') {
+      index = envGroup.next;
+      continue;
+    }
+
+    const beginIndex = index;
+    let cursor = skipSpacesV0(sourceBytes, envGroup.next);
+    let placementHint = 'inline';
+    const placementGroup = readBracketGroupV0(sourceBytes, cursor);
+    if (placementGroup.ok) {
+      placementHint = parseFigurePlacementHintOptionV0(placementGroup.value);
+      cursor = placementGroup.next;
+    } else if (cursor < sourceBytes.length && sourceBytes[cursor] === 0x5b) {
+      throw new Error('float_v0 malformed figure placement option');
+    }
+
+    let captionSummary = null;
+    let endIndex = -1;
+    while (cursor < sourceBytes.length) {
+      if (sourceBytes[cursor] !== 0x5c) {
+        cursor += 1;
+        continue;
+      }
+      let innerCommandIndex = cursor + 1;
+      while (innerCommandIndex < sourceBytes.length && isAsciiLetterByteV0(sourceBytes[innerCommandIndex])) {
+        innerCommandIndex += 1;
+      }
+      if (innerCommandIndex === cursor + 1) {
+        cursor += 1;
+        continue;
+      }
+      const innerCommand = Buffer.from(sourceBytes.slice(cursor + 1, innerCommandIndex)).toString('ascii');
+      if (innerCommand === 'begin') {
+        throw new Error('float_v0 nested \\begin inside figure is unsupported');
+      }
+      if (innerCommand === 'end') {
+        const endGroup = readBracedGroupV0(sourceBytes, innerCommandIndex);
+        if (!endGroup.ok || endGroup.value.trim() !== 'figure') {
+          throw new Error('float_v0 malformed \\end{figure}');
+        }
+        endIndex = endGroup.next;
+        break;
+      }
+      if (innerCommand === 'caption') {
+        if (captionSummary !== null) {
+          throw new Error('float_v0 duplicate \\caption inside figure');
+        }
+        const captionGroup = readBracedGroupV0(sourceBytes, innerCommandIndex);
+        if (!captionGroup.ok) {
+          throw new Error('float_v0 malformed \\caption group');
+        }
+        const normalizedCaption = normalizeFloatCaptionSummaryV0(captionGroup.value);
+        if (normalizedCaption.length === 0) {
+          throw new Error('float_v0 caption summary must be non-empty');
+        }
+        captionSummary = normalizedCaption;
+        cursor = captionGroup.next;
+        continue;
+      }
+      cursor = innerCommandIndex;
+    }
+
+    if (endIndex < 0) {
+      throw new Error('float_v0 missing \\end{figure}');
+    }
+    if (captionSummary === null) {
+      throw new Error('float_v0 figure requires caption summary');
+    }
+    entries.push({
+      float_id: `flt${entries.length + 1}`,
+      figure_ordinal: entries.length + 1,
+      placement_hint: placementHint,
+      caption_summary: captionSummary,
+      source_span: buildSourceSpanV0(sourceBytes, beginIndex, endIndex, 'float_v0'),
+    });
+    if (entries.length > MAX_FLOAT_ENTRIES_V0) {
+      throw new Error(`float_v0 entries exceed cap ${MAX_FLOAT_ENTRIES_V0}`);
+    }
+    index = endIndex;
+  }
+
+  return entries;
+}
+
+function collectFloatOutputSnapshotV0(xdvBytes) {
+  const pages = parseDviTextPagesForTocV2(xdvBytes);
+  const { bodyPages } = splitBodyAndMetadataLinesV2(pages);
+  if (bodyPages.length <= 0) {
+    throw new Error('float_v0 requires at least one body page');
+  }
+  const figureEntries = [];
+  let nextAnchorId = 1;
+  for (let pageIndex = 0; pageIndex < bodyPages.length; pageIndex += 1) {
+    const lines = bodyPages[pageIndex];
+    const titleBlockLen = pageIndex === 0 ? detectTitleBlockLenV2(lines) : 0;
+    for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
+      if (lineIndex < titleBlockLen) {
+        continue;
+      }
+      const lineBytes = lines[lineIndex];
+      const figurePlacementHint = parseFigurePlacementHintFromFigureBoxLineV0(lineBytes);
+      if (hasFigureBoxMarkerPrefixV2(lineBytes) && figurePlacementHint === null) {
+        throw new Error(`float_v0 malformed figure marker line: ${Buffer.from(lineBytes).toString('utf8')}`);
+      }
+      const hasAnchor = figurePlacementHint !== null
+        || isDisplayMathPlaceholderLineV2(lineBytes)
+        || lineStartsWithAsciiV2(lineBytes, SECTION_HEADING_PREFIX_V2)
+        || lineStartsWithAsciiV2(lineBytes, SUBSECTION_HEADING_PREFIX_V2);
+      if (!hasAnchor) {
+        continue;
+      }
+      const anchorId = nextAnchorId;
+      nextAnchorId += 1;
+      if (figurePlacementHint !== null) {
+        figureEntries.push({
+          anchor_id: anchorId,
+          placement_hint: figurePlacementHint,
+          page_no: pageIndex + 1,
+        });
+      }
+    }
+  }
+  return {
+    entries: figureEntries,
+    page_count: bodyPages.length,
+  };
 }
 
 function splitCommaValuesV0(rawValue) {
@@ -4012,8 +4214,15 @@ async function emitPagerefTypedArtifactV2(caseOutDir, fixtureBytes, mountedFiles
 }
 
 async function emitTocTypedArtifactV2(caseOutDir, fixtureBytes, xdvBytes) {
+  const caseId = path.basename(caseOutDir);
   const sourceEntries = extractTocEntriesFromSourceV0(fixtureBytes);
-  const outputSnapshot = collectTocOutputSnapshotV2(xdvBytes);
+  let outputSnapshot;
+  try {
+    outputSnapshot = collectTocOutputSnapshotV2(xdvBytes);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`toc_v2 case=${caseId} xdv_bytes=${xdvBytes.length}: ${message}`);
+  }
   const outputByAnchorId = new Map();
   for (const entry of outputSnapshot.tocEntries) {
     outputByAnchorId.set(entry.anchor_id, entry);
@@ -4222,6 +4431,50 @@ async function emitGraphicsTypedArtifactV0(caseOutDir, fixtureBytes) {
   };
 }
 
+async function emitFloatTypedArtifactV0(caseOutDir, fixtureBytes, xdvBytes) {
+  const sourceEntries = extractFloatEntriesFromSourceV0(fixtureBytes);
+  const outputSnapshot = collectFloatOutputSnapshotV0(xdvBytes);
+  if (sourceEntries.length !== outputSnapshot.entries.length) {
+    throw new Error(
+      `float_v0 source/output figure count mismatch (${sourceEntries.length} vs ${outputSnapshot.entries.length})`,
+    );
+  }
+  const entries = sourceEntries.map((sourceEntry, index) => {
+    const outputEntry = outputSnapshot.entries[index];
+    if (!outputEntry || !Number.isInteger(outputEntry.anchor_id) || outputEntry.anchor_id <= 0) {
+      throw new Error(`float_v0 invalid output anchor for entry ${index + 1}`);
+    }
+    if (sourceEntry.placement_hint !== outputEntry.placement_hint) {
+      throw new Error(
+        `float_v0 placement mismatch for entry ${index + 1}: ${sourceEntry.placement_hint} vs ${outputEntry.placement_hint}`,
+      );
+    }
+    if (!Number.isInteger(outputEntry.page_no) || outputEntry.page_no <= 0 || outputEntry.page_no > outputSnapshot.page_count) {
+      throw new Error(`float_v0 invalid page_no for entry ${index + 1}: ${outputEntry.page_no}`);
+    }
+    return {
+      ...sourceEntry,
+      anchor_id: outputEntry.anchor_id,
+      page_no: outputEntry.page_no,
+    };
+  });
+  const payload = {
+    version: TYPED_ARTIFACTS_VERSION_V0,
+    schema: 'float_v0',
+    entries,
+  };
+  const bytes = Buffer.from(`${JSON.stringify(payload, null, 2)}\n`, 'utf8');
+  const relpath = 'float_v0.json';
+  const fullPath = path.join(caseOutDir, relpath);
+  await writeFile(fullPath, bytes);
+  return {
+    present: true,
+    items: payload.entries.length,
+    artifact_relpath: relpath,
+    artifact_sha256: sha256HexV0(bytes),
+  };
+}
+
 async function emitMathTypedArtifactV0(caseOutDir, fixtureBytes) {
   const payload = {
     version: TYPED_ARTIFACTS_VERSION_V0,
@@ -4361,6 +4614,9 @@ async function emitTypedArtifactsV0(
     || caseSpec.id === 'typeset_demo_graphics_scale_probe_v0'
   ) {
     typedArtifacts.graphics = await emitGraphicsTypedArtifactV0(caseOutDir, fixtureBytes);
+  }
+  if (caseSpec.id === 'typeset_demo_float_probe_v0') {
+    typedArtifacts.float = await emitFloatTypedArtifactV0(caseOutDir, fixtureBytes, xdvBytes);
   }
   if (caseSpec.mode === 'typeset' && Array.isArray(inputEntries) && inputEntries.length > 0) {
     typedArtifacts.input = await emitInputTypedArtifactV1(caseOutDir, inputEntries);
@@ -4944,15 +5200,24 @@ async function runCaseV0(
     errorMessage = errorMessage ? `${errorMessage}; ${message}` : message;
     summary.status = caseStatus;
   }
-  await emitTypedArtifactsV0(
-    caseSpec,
-    caseOutDir,
-    summary.typed_artifacts,
-    fixtureBytes,
-    inputInclusionGraph.mounted_files,
-    inputInclusionGraph.entries,
-    xdvBytes,
-  );
+  try {
+    await emitTypedArtifactsV0(
+      caseSpec,
+      caseOutDir,
+      summary.typed_artifacts,
+      fixtureBytes,
+      inputInclusionGraph.mounted_files,
+      inputInclusionGraph.entries,
+      xdvBytes,
+    );
+  } catch (error) {
+    caseStatus = STATUS_INVALID_V0;
+    summary.status = caseStatus;
+    summary.typed_artifacts = buildTypedArtifactsPlaceholderV0();
+    const message = error instanceof Error ? error.message : String(error);
+    const typedArtifactsMessage = `typed_artifacts: ${message}`;
+    errorMessage = errorMessage ? `${errorMessage}; ${typedArtifactsMessage}` : typedArtifactsMessage;
+  }
   const typedArtifactRequests = await collectResolverRequestsFromResourceHintsV0(
     caseSpec,
     caseOutDir,
