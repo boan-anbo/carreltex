@@ -3207,6 +3207,40 @@ fn pdf_renderer_wrapped_right_bold_pre_style_gap_is_tightened_v49() {
 }
 
 #[test]
+fn pdf_renderer_wrapped_centered_bold_pre_style_gap_is_tightened_v50() {
+    let xdv = write_dvi_v2_text_page_with_layout_and_wrap_v0(
+        b"\n^ CENTERSTART edge, {core} trail words words words words WRAPCENTER tail.",
+        65_536,
+        786_432,
+        30,
+    )
+    .expect("writer should accept wrapped centered bold text");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+
+    let (_, prefix_y) =
+        tm_position_for_segment_substring_v0(&pdf, "CENTERSTART").expect("centered bold prefix y");
+    let (_, wrap_y) =
+        tm_position_for_segment_substring_v0(&pdf, "WRAPCENTER").expect("centered bold wrap y");
+    let rendered = rendered_text_for_line_containing_needle_v0(&pdf, "CENTERSTART")
+        .expect("centered bold rendered text");
+    let max_tm_gap =
+        max_tm_gap_pt_for_line_containing_v0(&pdf, "core").expect("centered bold tm gap");
+
+    assert!(
+        rendered == "CENTERSTART edge, core",
+        "wrapped centered bold line should preserve stable spacing: {rendered}"
+    );
+    assert!(
+        max_tm_gap <= 126.0,
+        "wrapped centered bold pre-style seam should stay tightened: tm_gap={max_tm_gap}"
+    );
+    assert!(
+        prefix_y > wrap_y,
+        "centered bold fixture should still wrap after the tightened seam: prefix_y={prefix_y}, wrap_y={wrap_y}"
+    );
+}
+
+#[test]
 fn pdf_renderer_wrapped_quote_and_list_styled_seams_use_v29_profile() {
     let xdv = write_dvi_v2_text_page_v0(
         b"\n- LISTSTART alpha alpha alpha alpha alpha alpha alpha [LISTITALICV29] beta beta beta beta beta beta LISTWRAPV29.\n\n> QUOTESTART gamma gamma gamma gamma gamma gamma gamma {QUOTEBOLDV29} delta delta delta delta delta QUOTEWRAPV29.",
