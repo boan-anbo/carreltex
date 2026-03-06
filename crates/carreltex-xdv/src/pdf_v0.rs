@@ -62,7 +62,9 @@ const TOC_TITLE_FONT_SIZE_PT_V0: f32 = 14.0;
 const TOC_ENTRY_INDENT_STEP_PT_V0: f32 = 18.0;
 const SECTION_HEADING_PREFIX_MARKER_V0: &[u8] = b"@S ";
 const SUBSECTION_HEADING_PREFIX_MARKER_V0: &[u8] = b"@s ";
-const DISPLAY_MATH_PLACEHOLDER_V0: &[u8] = b"MATH DISPLAY";
+const DISPLAY_MATH_PLACEHOLDER_SHORT_V0: &[u8] = b"MATH DISPLAY";
+const DISPLAY_MATH_PLACEHOLDER_MEDIUM_V0: &[u8] = b"MATH DISPLAY MEDIUM";
+const DISPLAY_MATH_PLACEHOLDER_LONG_V0: &[u8] = b"MATH DISPLAY LONG FORM";
 const ITALIC_START_MARKER_V0: u8 = b'[';
 const ITALIC_END_MARKER_V0: u8 = b']';
 const BOLD_START_MARKER_V0: u8 = b'{';
@@ -472,11 +474,13 @@ fn has_center_prefix_v0(glyphs: &[GlyphPlanV0]) -> bool {
 }
 
 fn is_display_math_placeholder_line_v0(glyphs: &[GlyphPlanV0]) -> bool {
-    has_center_prefix_v0(glyphs)
-        && glyphs[2..]
-            .iter()
-            .map(|glyph| glyph.byte)
-            .eq(DISPLAY_MATH_PLACEHOLDER_V0.iter().copied())
+    if !has_center_prefix_v0(glyphs) {
+        return false;
+    }
+    let payload = glyphs[2..].iter().map(|glyph| glyph.byte).collect::<Vec<u8>>();
+    payload.as_slice() == DISPLAY_MATH_PLACEHOLDER_SHORT_V0
+        || payload.as_slice() == DISPLAY_MATH_PLACEHOLDER_MEDIUM_V0
+        || payload.as_slice() == DISPLAY_MATH_PLACEHOLDER_LONG_V0
 }
 
 fn has_right_prefix_v0(glyphs: &[GlyphPlanV0]) -> bool {

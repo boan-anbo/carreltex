@@ -50,6 +50,7 @@ const MAX_INPUT_ENTRIES_V1 = 512;
 const MAX_INPUT_INCLUDE_DEPTH_V1 = 32;
 const MAX_MATH_ENTRIES_V0 = 256;
 const MAX_MATH_PAYLOAD_BYTES_V0 = 1024;
+const MAX_MATH_PAYLOAD_PREVIEW_BYTES_V2 = 96;
 const MAX_TABLE_ENTRIES_V0 = 64;
 const MAX_TABLE_ROWS_PER_ENTRY_V0 = 64;
 const MAX_TABLE_COLS_PER_ENTRY_V0 = 16;
@@ -622,6 +623,21 @@ async function loadFixtureCasesV0() {
       fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_math_probe_v0.tex',
     },
     {
+      id: 'typeset_demo_math_short_probe_v0',
+      mode: 'typeset',
+      fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_math_short_probe_v0.tex',
+    },
+    {
+      id: 'typeset_demo_math_long_probe_v0',
+      mode: 'typeset',
+      fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_math_long_probe_v0.tex',
+    },
+    {
+      id: 'typeset_demo_math_invalid_payload_probe_v0',
+      mode: 'typeset',
+      fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_math_invalid_payload_probe_v0.tex',
+    },
+    {
       id: 'typeset_demo_fixedpoint_graphics_probe_v0',
       mode: 'typeset',
       fixtureRelPath: 'scripts/texlive_smoke/fixtures/typeset_demo_fixedpoint_graphics_probe_v0.tex',
@@ -1092,17 +1108,24 @@ function isMathPayloadWhitespaceByteV0(byte) {
   return byte === 0x20 || byte === 0x09 || byte === 0x0a || byte === 0x0d;
 }
 
-function isSafeMathPayloadByteV0(byte) {
-  return byte >= 0x20
-    && byte <= 0x7e
-    && byte !== 0x24
-    && byte !== 0x5c
-    && byte !== 0x5b
-    && byte !== 0x5d
-    && byte !== 0x7b
-    && byte !== 0x7d
-    && byte !== 0x3c
-    && byte !== 0x3e;
+function isAsciiAlphaByteV2(byte) {
+  return (byte >= 0x41 && byte <= 0x5a) || (byte >= 0x61 && byte <= 0x7a);
+}
+
+function isSafeMathV2LiteralByte(byte) {
+  return isAsciiAlphaByteV2(byte)
+    || (byte >= 0x30 && byte <= 0x39)
+    || byte === 0x2b // +
+    || byte === 0x2d // -
+    || byte === 0x2f // /
+    || byte === 0x2a // *
+    || byte === 0x3d // =
+    || byte === 0x28 // (
+    || byte === 0x29 // )
+    || byte === 0x5e // ^
+    || byte === 0x5f // _
+    || byte === 0x7b // {
+    || byte === 0x7d; // }
 }
 
 function pushMathPayloadSpaceV0(payloadBytes) {
@@ -1117,99 +1140,49 @@ function trimMathPayloadTrailingSpaceV0(payloadBytes) {
   }
 }
 
-function addMathEntryV1(entries, kind, payloadBytes, lineIndex, sourceBytes, startByte, endByte) {
+function sanitizeMathPayloadPreviewV2(payloadBytes) {
+  const normalized = Buffer.from(payloadBytes).toString('utf8').replace(/\s+/g, ' ').trim();
+  const normalizedBytes = Buffer.from(normalized, 'utf8');
+  if (normalizedBytes.length <= MAX_MATH_PAYLOAD_PREVIEW_BYTES_V2) {
+    return normalized;
+  }
+  return `${normalizedBytes.subarray(0, MAX_MATH_PAYLOAD_PREVIEW_BYTES_V2).toString('utf8')}...`;
+}
+
+function addMathEntryV2(entries, payloadBytes, sourceBytes, startByte, endByte) {
   trimMathPayloadTrailingSpaceV0(payloadBytes);
   if (payloadBytes.length === 0) {
-    throw new Error('math_v1 payload must be non-empty');
+    throw new Error('math_v2 payload must be non-empty');
   }
   if (payloadBytes.length > MAX_MATH_PAYLOAD_BYTES_V0) {
-    throw new Error(`math_v1 payload exceeds cap ${MAX_MATH_PAYLOAD_BYTES_V0}`);
+    throw new Error(`math_v2 payload exceeds cap ${MAX_MATH_PAYLOAD_BYTES_V0}`);
   }
-  if (!Number.isInteger(lineIndex) || lineIndex <= 0) {
-    throw new Error('math_v1 line_index must be a positive integer');
-  }
-  const payload = Uint8Array.from(payloadBytes);
+  const ordinal = entries.length + 1;
   entries.push({
-    kind,
-    payload_sha256: sha256HexV0(payload),
-    line_index: lineIndex,
-    source_span: buildSourceSpanV0(sourceBytes, startByte, endByte, 'math_v1'),
+    ordinal,
+    payload_preview: sanitizeMathPayloadPreviewV2(payloadBytes),
+    anchor_id: `eq${ordinal}`,
+    source_span: buildSourceSpanV0(sourceBytes, startByte, endByte, 'math_v2'),
   });
   if (entries.length > MAX_MATH_ENTRIES_V0) {
-    throw new Error(`math_v1 entries exceed cap ${MAX_MATH_ENTRIES_V0}`);
+    throw new Error(`math_v2 entries exceed cap ${MAX_MATH_ENTRIES_V0}`);
   }
 }
 
-function extractMathEntriesFromSourceV1(sourceBytes) {
+function extractMathEntriesFromSourceV2(sourceBytes) {
   const entries = [];
   let index = 0;
-  let lineIndex = 1;
   while (index < sourceBytes.length) {
     const byte = sourceBytes[index];
 
-    if (byte === 0x0a) {
-      lineIndex += 1;
-      index += 1;
-      continue;
-    }
-    if (byte === 0x0d) {
-      if (index + 1 < sourceBytes.length && sourceBytes[index + 1] === 0x0a) {
-        index += 1;
-      }
-      lineIndex += 1;
-      index += 1;
-      continue;
-    }
-
-    if (byte === 0x24) {
-      const startByte = index;
-      const startLineIndex = lineIndex;
-      const payloadBytes = [];
-      let cursor = index + 1;
-      let closed = false;
-      while (cursor < sourceBytes.length) {
-        const current = sourceBytes[cursor];
-        if (current === 0x24) {
-          addMathEntryV1(entries, 'inline', payloadBytes, startLineIndex, sourceBytes, startByte, cursor + 1);
-          cursor += 1;
-          index = cursor;
-          closed = true;
-          break;
-        }
-        if (isMathPayloadWhitespaceByteV0(current)) {
-          pushMathPayloadSpaceV0(payloadBytes);
-          if (current === 0x0a) {
-            lineIndex += 1;
-          } else if (current === 0x0d) {
-            if (cursor + 1 < sourceBytes.length && sourceBytes[cursor + 1] === 0x0a) {
-              cursor += 1;
-            }
-            lineIndex += 1;
-          }
-          cursor += 1;
-          continue;
-        }
-        if (!isSafeMathPayloadByteV0(current)) {
-          throw new Error(`math_v1 inline payload has unsupported byte 0x${current.toString(16).padStart(2, '0')}`);
-        }
-        payloadBytes.push(current);
-        cursor += 1;
-      }
-      if (!closed) {
-        throw new Error('math_v1 inline payload missing closing $ delimiter');
-      }
-      continue;
-    }
-
     if (byte === 0x5c && index + 1 < sourceBytes.length && sourceBytes[index + 1] === 0x5b) {
       const startByte = index;
-      const startLineIndex = lineIndex;
       const payloadBytes = [];
       let cursor = index + 2;
       let closed = false;
       while (cursor < sourceBytes.length) {
         if (sourceBytes[cursor] === 0x5c && cursor + 1 < sourceBytes.length && sourceBytes[cursor + 1] === 0x5d) {
-          addMathEntryV1(entries, 'display', payloadBytes, startLineIndex, sourceBytes, startByte, cursor + 2);
+          addMathEntryV2(entries, payloadBytes, sourceBytes, startByte, cursor + 2);
           cursor += 2;
           index = cursor;
           closed = true;
@@ -1218,25 +1191,33 @@ function extractMathEntriesFromSourceV1(sourceBytes) {
         const current = sourceBytes[cursor];
         if (isMathPayloadWhitespaceByteV0(current)) {
           pushMathPayloadSpaceV0(payloadBytes);
-          if (current === 0x0a) {
-            lineIndex += 1;
-          } else if (current === 0x0d) {
-            if (cursor + 1 < sourceBytes.length && sourceBytes[cursor + 1] === 0x0a) {
-              cursor += 1;
-            }
-            lineIndex += 1;
-          }
           cursor += 1;
           continue;
         }
-        if (!isSafeMathPayloadByteV0(current)) {
-          throw new Error(`math_v1 display payload has unsupported byte 0x${current.toString(16).padStart(2, '0')}`);
+        if (current === 0x5c) {
+          const commandStart = cursor + 1;
+          let commandEnd = commandStart;
+          while (commandEnd < sourceBytes.length && isAsciiAlphaByteV2(sourceBytes[commandEnd])) {
+            commandEnd += 1;
+          }
+          if (commandEnd === commandStart) {
+            throw new Error('math_v2 display payload has invalid backslash command');
+          }
+          payloadBytes.push(0x5c);
+          for (let i = commandStart; i < commandEnd; i += 1) {
+            payloadBytes.push(sourceBytes[i]);
+          }
+          cursor = commandEnd;
+          continue;
+        }
+        if (!isSafeMathV2LiteralByte(current)) {
+          throw new Error(`math_v2 display payload has unsupported byte 0x${current.toString(16).padStart(2, '0')}`);
         }
         payloadBytes.push(current);
         cursor += 1;
       }
       if (!closed) {
-        throw new Error('math_v1 display payload missing closing \\] delimiter');
+        throw new Error('math_v2 display payload missing closing \\] delimiter');
       }
       continue;
     }
@@ -3356,11 +3337,11 @@ async function emitGraphicsTypedArtifactV0(caseOutDir, fixtureBytes) {
 async function emitMathTypedArtifactV0(caseOutDir, fixtureBytes) {
   const payload = {
     version: TYPED_ARTIFACTS_VERSION_V0,
-    schema: 'math_v1',
-    entries: extractMathEntriesFromSourceV1(fixtureBytes),
+    schema: 'math_v2',
+    entries: extractMathEntriesFromSourceV2(fixtureBytes),
   };
   const bytes = Buffer.from(`${JSON.stringify(payload, null, 2)}\n`, 'utf8');
-  const relpath = 'math_v1.json';
+  const relpath = 'math_v2.json';
   const fullPath = path.join(caseOutDir, relpath);
   await writeFile(fullPath, bytes);
   return {

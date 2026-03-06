@@ -73,7 +73,7 @@ const hyperrefShaFirst = fs.readFileSync(path.join(`${outDir}_baseline`, 'hyperr
 const pkgoptShaFirst = fs.readFileSync(path.join(`${outDir}_baseline`, 'pkgopt_v0_first.sha256'), 'utf8').trim();
 const packagesShaFirst = fs.readFileSync(path.join(`${outDir}_baseline`, 'packages_v1_first.sha256'), 'utf8').trim();
 const graphicsShaFirst = fs.readFileSync(path.join(`${outDir}_baseline`, 'graphics_v2_first.sha256'), 'utf8').trim();
-const mathShaFirst = fs.readFileSync(path.join(`${outDir}_baseline`, 'math_v1_first.sha256'), 'utf8').trim();
+const mathShaFirst = fs.readFileSync(path.join(`${outDir}_baseline`, 'math_v2_first.sha256'), 'utf8').trim();
 const tableShaFirst = fs.readFileSync(path.join(`${outDir}_baseline`, 'table_v2_first.sha256'), 'utf8').trim();
 
 if (resolvedCount <= 0) {
@@ -143,6 +143,21 @@ if (!tableMixedStatus || tableMixedStatus.status !== 'OK') {
 const tableOverflowStatus = statuses.find((entry) => entry.case_id === 'typeset_demo_table_overflow_probe_v0');
 if (!tableOverflowStatus || tableOverflowStatus.status !== 'FAIL') {
   console.error('FAIL: expected typeset_demo_table_overflow_probe_v0 status FAIL');
+  process.exit(1);
+}
+const mathShortStatus = statuses.find((entry) => entry.case_id === 'typeset_demo_math_short_probe_v0');
+if (!mathShortStatus || mathShortStatus.status !== 'OK') {
+  console.error('FAIL: expected typeset_demo_math_short_probe_v0 status OK');
+  process.exit(1);
+}
+const mathLongStatus = statuses.find((entry) => entry.case_id === 'typeset_demo_math_long_probe_v0');
+if (!mathLongStatus || mathLongStatus.status !== 'OK') {
+  console.error('FAIL: expected typeset_demo_math_long_probe_v0 status OK');
+  process.exit(1);
+}
+const mathInvalidStatus = statuses.find((entry) => entry.case_id === 'typeset_demo_math_invalid_payload_probe_v0');
+if (!mathInvalidStatus || mathInvalidStatus.status !== 'NI') {
+  console.error('FAIL: expected typeset_demo_math_invalid_payload_probe_v0 status NI');
   process.exit(1);
 }
 for (const status of okStatuses) {
@@ -511,14 +526,18 @@ if (!mathArtifact || mathArtifact.present !== true) {
 }
 const mathShaSecond = mathArtifact.artifact_sha256;
 if (mathShaSecond !== mathShaFirst) {
-  console.error('FAIL: math_v1 artifact sha256 must be stable across reruns');
+  console.error('FAIL: math_v2 artifact sha256 must be stable across reruns');
   process.exit(1);
 }
 const mathArtifactSecond = JSON.parse(
-  fs.readFileSync(path.join(outDir, 'typeset_demo_minimal_v0', 'math_v1.json'), 'utf8'),
+  fs.readFileSync(path.join(outDir, 'typeset_demo_minimal_v0', 'math_v2.json'), 'utf8'),
 );
 if (!Array.isArray(mathArtifactSecond?.entries) || mathArtifactSecond.entries.length <= 0) {
-  console.error('FAIL: expected non-empty math_v1.entries after rerun');
+  console.error('FAIL: expected non-empty math_v2.entries after rerun');
+  process.exit(1);
+}
+if (mathArtifactSecond?.schema !== 'math_v2') {
+  console.error('FAIL: expected math_v2 schema after rerun');
   process.exit(1);
 }
 
@@ -609,7 +628,7 @@ console.log(`PASS: hyperref_v0 sha stable ${hyperrefShaSecond}`);
 console.log(`PASS: pkgopt_v0 sha stable ${pkgoptShaSecond}`);
 console.log(`PASS: packages_v1 sha stable ${packagesShaSecond}`);
 console.log(`PASS: graphics_v2 sha stable ${graphicsShaSecond}`);
-console.log(`PASS: math_v1 sha stable ${mathShaSecond}`);
+console.log(`PASS: math_v2 sha stable ${mathShaSecond}`);
 console.log(`PASS: table_v2 sha stable ${tableShaSecond}`);
 console.log('PASS: report typed_artifact_sha256 map present and stable');
 console.log('PASS: report top-level case_artifact_sha256 present');

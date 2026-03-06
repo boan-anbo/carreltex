@@ -62,6 +62,24 @@
       "purpose": "Probes amsmath package seam for on-demand package request generation."
     },
     {
+      "id": "typeset_demo_math_short_probe_v0",
+      "tags": ["typeset", "math", "display", "short", "probe", "ok"],
+      "expected_status": "OK",
+      "purpose": "Exercises short display-math payload parsing and deterministic centered placeholder category."
+    },
+    {
+      "id": "typeset_demo_math_long_probe_v0",
+      "tags": ["typeset", "math", "display", "long", "probe", "ok"],
+      "expected_status": "OK",
+      "purpose": "Exercises long display-math payload parsing so placeholder width category deterministically expands."
+    },
+    {
+      "id": "typeset_demo_math_invalid_payload_probe_v0",
+      "tags": ["typeset", "math", "display", "invalid", "probe", "ni"],
+      "expected_status": "NI",
+      "purpose": "Proves fail-closed rejection for display-math payload bytes outside the strict v2 subset."
+    },
+    {
       "id": "typeset_demo_fixedpoint_graphics_probe_v0",
       "tags": ["typeset", "graphics", "fixedpoint", "probe", "ni"],
       "expected_status": "NI",
