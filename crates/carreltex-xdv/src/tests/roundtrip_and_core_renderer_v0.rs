@@ -813,3 +813,115 @@ fn pdf_renderer_multipage_footnotes_and_annots_associate_per_page_v0() {
         "page 2 footnote should render near bottom: y={page_two_footnote_y}"
     );
 }
+
+#[test]
+fn pdf_renderer_preserves_wrapped_list_and_quote_continuation_indent_across_pages_v8() {
+    let text = b"- LISTSTART alpha alpha alpha alpha alpha alpha alpha alpha alpha alpha alpha alpha LISTWRAPTOKEN\n\n> QUOTESTART beta beta beta beta beta beta beta beta beta beta beta beta QUOTEWRAPTOKEN";
+    let xdv = write_dvi_v2_text_page_with_layout_wrap_and_paging_v0(text, 65_536, 786_432, 32, 1)
+        .expect("writer should accept multipage wrapped list/quote text");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+    let page_count = count_pdf_page_objects_v0(&pdf);
+    assert!(page_count >= 4, "expected multipage output for wrapped blocks");
+
+    let first_stream_id = 3u32 + page_count as u32;
+    let mut list_start = None::<(usize, f32)>;
+    let mut list_wrap = None::<(usize, f32)>;
+    let mut quote_start = None::<(usize, f32)>;
+    let mut quote_wrap = None::<(usize, f32)>;
+    for page_index in 0..page_count {
+        let stream_body = parse_pdf_object_body_v0(&pdf, first_stream_id + page_index as u32)
+            .expect("stream body");
+        if list_start.is_none() {
+            if let Some((x, _)) =
+                tm_position_for_line_containing_text_in_body_v0(&stream_body, "LISTSTART")
+            {
+                list_start = Some((page_index, x));
+            }
+        }
+        if list_wrap.is_none() {
+            if let Some((x, _)) =
+                tm_position_for_line_containing_text_in_body_v0(&stream_body, "LISTWRAPTOKEN")
+            {
+                list_wrap = Some((page_index, x));
+            }
+        }
+        if quote_start.is_none() {
+            if let Some((x, _)) =
+                tm_position_for_line_containing_text_in_body_v0(&stream_body, "QUOTESTART")
+            {
+                quote_start = Some((page_index, x));
+            }
+        }
+        if quote_wrap.is_none() {
+            if let Some((x, _)) =
+                tm_position_for_line_containing_text_in_body_v0(&stream_body, "QUOTEWRAPTOKEN")
+            {
+                quote_wrap = Some((page_index, x));
+            }
+        }
+    }
+
+    let (list_start_page, list_start_x) = list_start.expect("LISTSTART position");
+    let (list_wrap_page, list_wrap_x) = list_wrap.expect("LISTWRAPTOKEN position");
+    let (quote_start_page, quote_start_x) = quote_start.expect("QUOTESTART position");
+    let (quote_wrap_page, quote_wrap_x) = quote_wrap.expect("QUOTEWRAPTOKEN position");
+    let epsilon_pt = 0.2f32;
+    assert!(
+        list_wrap_page > list_start_page,
+        "wrapped list continuation should cross a page boundary: start_page={list_start_page}, wrap_page={list_wrap_page}"
+    );
+    assert!(
+        quote_wrap_page > quote_start_page,
+        "wrapped quote continuation should cross a page boundary: start_page={quote_start_page}, wrap_page={quote_wrap_page}"
+    );
+    assert!(
+        (list_start_x - list_wrap_x).abs() <= epsilon_pt,
+        "list continuation x must remain stable across page boundary: start_x={list_start_x}, wrap_x={list_wrap_x}"
+    );
+    assert!(
+        (quote_start_x - quote_wrap_x).abs() <= epsilon_pt,
+        "quote continuation x must remain stable across page boundary: start_x={quote_start_x}, wrap_x={quote_wrap_x}"
+    );
+    assert!(
+        quote_start_x >= list_start_x + 4.0,
+        "quote indentation should remain deeper than list indentation across pages: list_x={list_start_x}, quote_x={quote_start_x}"
+    );
+}
+
+#[test]
+fn pdf_renderer_keeps_link_annotations_and_footnotes_stable_when_link_wraps_across_pages_v8() {
+    let text = b"- marker^1 <{LINKSTART gamma gamma gamma gamma gamma gamma gamma gamma gamma gamma gamma gamma LINKMID gamma gamma gamma gamma gamma gamma gamma gamma gamma gamma gamma LINKEND}>tail tail marker^2\n\n!f 1 First split footnote.\n!f 2 Second split footnote.\n!u 1 https://example.com/split";
+    let xdv = write_dvi_v2_text_page_with_layout_wrap_and_paging_v0(text, 65_536, 786_432, 64, 1)
+        .expect("writer should accept wrapped multipage link and footnote text");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+    let page_count = count_pdf_page_objects_v0(&pdf);
+    assert!(page_count >= 2, "expected at least two pages for wrapped link");
+
+    let mut uri_annotation_count = 0usize;
+    for page_index in 0..page_count {
+        let page_obj = parse_pdf_object_body_v0(&pdf, 3 + page_index as u32).expect("page object");
+        let annots = parse_pdf_ref_ids_v0(&page_obj, "/Annots");
+        for annot_id in annots {
+            let annotation = parse_pdf_object_body_v0(&pdf, annot_id).expect("annotation body");
+            let action_id =
+                parse_pdf_annotation_action_id_v0(&annotation).expect("annotation action id");
+            let action_body = parse_pdf_object_body_v0(&pdf, action_id).expect("action body");
+            if parse_pdf_action_uri_v0(&action_body).as_deref() == Some("https://example.com/split")
+            {
+                uri_annotation_count += 1;
+                let rect = parse_pdf_annotation_rect_v0(&annotation).expect("annotation rect");
+                assert!(rect[2] > rect[0], "annotation width must be positive: {rect:?}");
+                assert!(rect[3] > rect[1], "annotation height must be positive: {rect:?}");
+                assert!(
+                    rect[0] >= 0.0 && rect[1] >= 0.0 && rect[2] <= 612.0 && rect[3] <= 792.0,
+                    "annotation rect must stay within page bounds: {rect:?}"
+                );
+            }
+        }
+    }
+    assert!(
+        uri_annotation_count >= 2,
+        "wrapped link should keep annotation association across page boundaries"
+    );
+
+}
