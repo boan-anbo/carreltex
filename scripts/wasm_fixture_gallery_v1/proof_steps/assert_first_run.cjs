@@ -964,6 +964,22 @@ for (const [index, entry] of tableArtifactFirst.entries.entries()) {
 assertEntrySourceSpans('typeset_demo_minimal_v0', 'table_v2', tableArtifactFirst.entries);
 fs.writeFileSync(firstRunShaPath('table_v2'), `${tableShaFirst}\n`);
 
+const capabilitiesSummary = JSON.parse(
+  fs.readFileSync(path.join(outDir, 'typeset_demo_capabilities_v0', 'summary.json'), 'utf8'),
+);
+if (capabilitiesSummary?.status !== 'INVALID') {
+  console.error('FAIL: expected typeset_demo_capabilities_v0 status INVALID after first run');
+  process.exit(1);
+}
+if (capabilitiesSummary?.compile_status !== 'NOT_IMPLEMENTED') {
+  console.error('FAIL: expected typeset_demo_capabilities_v0 compile_status NOT_IMPLEMENTED after first run');
+  process.exit(1);
+}
+if (typeof capabilitiesSummary?.error !== 'string' || !capabilitiesSummary.error.includes('capabilities_seam:')) {
+  console.error('FAIL: expected typeset_demo_capabilities_v0 summary.error to include deterministic capabilities_seam reason');
+  process.exit(1);
+}
+
 const report = JSON.parse(fs.readFileSync(path.join(outDir, 'report.json'), 'utf8'));
 if (report?.typed_artifacts_version !== 1) {
   console.error('FAIL: expected report.typed_artifacts_version=1 after first run');

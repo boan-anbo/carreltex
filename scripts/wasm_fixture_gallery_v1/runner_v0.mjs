@@ -22,6 +22,7 @@ const STATUS_INVALID_V0 = 'INVALID';
 const STATUS_FAIL_V0 = 'FAIL';
 const STATUS_MISMATCH_V0 = 'MISMATCH';
 const EXPECTED_STATUS_VALUES_V0 = new Set([STATUS_OK_V0, STATUS_NI_V0, STATUS_INVALID_V0, STATUS_FAIL_V0]);
+const CAPABILITIES_CASE_ID_V0 = 'typeset_demo_capabilities_v0';
 const DEFAULT_ONDEMAND_FIXEDPOINT_MAX_ITERS_V1 = 3;
 const TYPED_ARTIFACT_KEYS_V0 = ['toc', 'labels', 'refs', 'pageref', 'bib', 'cite', 'bibitems', 'cites', 'hyperref', 'pkgopt', 'packages', 'graphics', 'float', 'input', 'math', 'table'];
 const TYPED_ARTIFACTS_VERSION_V0 = 1;
@@ -203,6 +204,28 @@ function mapCaseStatusV0(caseId, reportStatus, compileCode) {
     return STATUS_INVALID_V0;
   }
   return STATUS_FAIL_V0;
+}
+
+function detectUnsupportedCapabilitiesSeamV0(fixtureBytes) {
+  const sourceText = Buffer.from(fixtureBytes).toString('utf8');
+  const seams = [
+    { token: '\\texttt', reason: 'capabilities_seam:unsupported_control_sequence:\\texttt' },
+    { token: '\\textcolor', reason: 'capabilities_seam:unsupported_control_sequence:\\textcolor' },
+    { token: '\\begin{align}', reason: 'capabilities_seam:unsupported_environment:align' },
+    { token: '\\url', reason: 'capabilities_seam:unsupported_control_sequence:\\url' },
+    { token: '\\fbox', reason: 'capabilities_seam:unsupported_control_sequence:\\fbox' },
+    { token: '\\rule', reason: 'capabilities_seam:unsupported_control_sequence:\\rule' },
+  ];
+  let matchedReason = 'capabilities_seam:unknown_not_implemented';
+  let matchedIndex = Number.POSITIVE_INFINITY;
+  for (const seam of seams) {
+    const index = sourceText.indexOf(seam.token);
+    if (index >= 0 && index < matchedIndex) {
+      matchedIndex = index;
+      matchedReason = seam.reason;
+    }
+  }
+  return matchedReason;
 }
 
 function expectedVsActualV0(expectedStatus, actualStatus) {
@@ -692,6 +715,15 @@ async function runCaseV0(
 
     report = helpers.readCompileReportJson();
     caseStatus = mapCaseStatusV0(caseSpec.id, report.status, compileCode);
+    if (
+      caseSpec.id === CAPABILITIES_CASE_ID_V0
+      && report.status === 'NOT_IMPLEMENTED'
+      && caseStatus === STATUS_NI_V0
+    ) {
+      caseStatus = STATUS_INVALID_V0;
+      const seamReason = detectUnsupportedCapabilitiesSeamV0(fixtureBytes);
+      errorMessage = errorMessage ? `${errorMessage}; ${seamReason}` : seamReason;
+    }
   } catch (error) {
     caseStatus = STATUS_FAIL_V0;
     errorMessage = error instanceof Error ? error.message : String(error);
