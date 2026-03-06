@@ -52,11 +52,11 @@ const FIGURE_IMAGE_PREFIX_MARKER_V0: &[u8] = b"!gimg ";
 const FIGURE_CAPTION_PREFIX_MARKER_V0: &[u8] = b"!gcap ";
 const TOC_PLACEHOLDER_MARKER_V0: &[u8] = b"!toc";
 const TOC_ENTRY_LINE_PREFIX_MARKER_V0: &[u8] = b"!toc ";
-const TABLE_CELL_PADDING_PT_V0: f32 = 7.0;
-const TABLE_ROW_LEADING_PT_V0: f32 = 14.0;
+const TABLE_CELL_PADDING_PT_V10: f32 = 6.0;
+const TABLE_ROW_LEADING_PT_V10: f32 = 13.0;
 const TABLE_BORDER_LINE_WIDTH_PT_V0: f32 = 0.5;
-const TABLE_BORDER_TOP_OFFSET_PT_V0: f32 = 5.0;
-const TABLE_BORDER_BOTTOM_OFFSET_PT_V0: f32 = 5.0;
+const TABLE_BORDER_TOP_OFFSET_PT_V10: f32 = 4.0;
+const TABLE_BORDER_BOTTOM_OFFSET_PT_V10: f32 = 4.0;
 const ANNOTATION_RECT_DESCENT_RATIO_V9: f32 = 0.22;
 const ANNOTATION_RECT_ASCENT_RATIO_V9: f32 = 0.78;
 const ANNOTATION_RECT_MIN_HEIGHT_PT_V9: f32 = 8.0;
@@ -117,7 +117,6 @@ enum InlineBlockAlignmentV0 {
     Center,
     Right,
 }
-
 
 // Inline/text segmentation and marker parsing.
 include!("pdf_v0/style_and_segments_v0.rs");

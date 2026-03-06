@@ -44,7 +44,7 @@ fn emit_table_block_v0(
         .iter()
         .copied()
         .fold(0.0f32, |acc, width_pt| {
-            acc + width_pt + (TABLE_CELL_PADDING_PT_V0 * 2.0)
+            acc + width_pt + (TABLE_CELL_PADDING_PT_V10 * 2.0)
         });
     let max_content_width_pt = PAGE_WIDTH_PT_V0 - (2.0 * MARGIN_PT_V0);
     if table_width_pt > max_content_width_pt {
@@ -55,11 +55,11 @@ fn emit_table_block_v0(
     let mut col_cursor_x_pt = MARGIN_PT_V0;
     for col_index in 0..col_count {
         col_left_edges_pt[col_index] = col_cursor_x_pt;
-        col_cursor_x_pt += col_max_width_pt[col_index] + (TABLE_CELL_PADDING_PT_V0 * 2.0);
+        col_cursor_x_pt += col_max_width_pt[col_index] + (TABLE_CELL_PADDING_PT_V10 * 2.0);
     }
     let table_left_x_pt = MARGIN_PT_V0;
     let table_right_x_pt = table_left_x_pt + table_width_pt;
-    let table_top_y_pt = *y + TABLE_BORDER_TOP_OFFSET_PT_V0;
+    let table_top_y_pt = *y + TABLE_BORDER_TOP_OFFSET_PT_V10;
 
     for row in &parsed_rows {
         if *y < min_body_y_pt {
@@ -78,7 +78,7 @@ fn emit_table_block_v0(
                 b'r' => col_content_width_pt - cell_width_pt,
                 _ => return None,
             };
-            let x_pt = col_left_x + TABLE_CELL_PADDING_PT_V0 + align_offset_pt.max(0.0);
+            let x_pt = col_left_x + TABLE_CELL_PADDING_PT_V10 + align_offset_pt.max(0.0);
             emit_render_segments_with_superscript_v0(
                 out,
                 &row[col_index],
@@ -86,13 +86,13 @@ fn emit_table_block_v0(
                 *y,
                 FONT_SIZE_PT_V0,
             );
-            col_left_x += col_content_width_pt + (TABLE_CELL_PADDING_PT_V0 * 2.0);
+            col_left_x += col_content_width_pt + (TABLE_CELL_PADDING_PT_V10 * 2.0);
         }
         out.extend_from_slice(b"\n");
-        *y -= TABLE_ROW_LEADING_PT_V0;
+        *y -= TABLE_ROW_LEADING_PT_V10;
     }
 
-    let table_bottom_y_pt = *y + TABLE_BORDER_BOTTOM_OFFSET_PT_V0;
+    let table_bottom_y_pt = *y + TABLE_BORDER_BOTTOM_OFFSET_PT_V10;
     if table_bottom_y_pt < min_body_y_pt {
         return None;
     }
@@ -114,7 +114,7 @@ fn emit_table_block_v0(
         .as_bytes(),
     );
     for separator_index in 1..parsed_rows.len() {
-        let y_pt = table_top_y_pt - (separator_index as f32 * TABLE_ROW_LEADING_PT_V0);
+        let y_pt = table_top_y_pt - (separator_index as f32 * TABLE_ROW_LEADING_PT_V10);
         out.extend_from_slice(
             format!(
                 "{:.2} {:.2} m {:.2} {:.2} l S\n",
