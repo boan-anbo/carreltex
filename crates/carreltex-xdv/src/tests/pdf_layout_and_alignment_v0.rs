@@ -86,6 +86,10 @@ fn segment_width_pt_v0(segment: &[u8]) -> f32 {
     line.width_sp as f32 / 65_536.0
 }
 
+fn scaled_segment_width_pt_v0(segment: &[u8], scale_percent: u8) -> f32 {
+    segment_width_pt_v0(segment) * (scale_percent as f32 / 100.0)
+}
+
 fn decode_pdf_text_segments_from_line_v0(line: &str) -> Option<String> {
     let mut out = Vec::<u8>::new();
     let bytes = line.as_bytes();
@@ -970,6 +974,7 @@ fn pdf_renderer_wrapped_body_paragraph_styled_seams_track_scaled_advances_v27() 
     );
 }
 
+#[test]
 fn pdf_renderer_centers_title_block_lines_within_epsilon_v0() {
     let demo_text = b"Centering Accuracy Title\nAlice Bob\n2026-03-05\n\nBody line.";
     let xdv = write_dvi_v2_text_page_v0(demo_text).expect("writer should accept demo text");
@@ -2747,10 +2752,10 @@ fn pdf_renderer_center_alignment_keeps_wrapped_continuation_centered_v1() {
     )
     .expect("writer should accept wrapped centered text");
     let layout = parse_dvi_v2_text_page_to_layout_v0(&xdv, 786_432).expect("layout parse");
-    let expected_start_x = expected_center_x_pt_v0(
-        layout_render_width_for_substring_v0(&layout, b"CENTERSTART")
-            .expect("center start width"),
-    );
+    let expected_start_width_pt =
+        segment_width_pt_v0(b"CENTERSTART alpha ") + scaled_segment_width_pt_v0(b"mid", 97);
+    let expected_start_x =
+        (612.0 - expected_start_width_pt) / 2.0;
     let expected_wrap_x = expected_center_x_pt_v0(
         layout_render_width_for_substring_v0(&layout, b"WRAPCENTER").expect("center wrap width"),
     );
@@ -2776,6 +2781,15 @@ fn pdf_renderer_center_alignment_keeps_wrapped_continuation_centered_v1() {
         rendered == "CENTERSTART alpha mid",
         "center wrapped style boundaries should retain stable spacing: {rendered}"
     );
+    let pdf_text = String::from_utf8_lossy(&pdf);
+    let centered_line = pdf_text
+        .lines()
+        .find(|line| line.contains("(mid) Tj"))
+        .expect("center wrapped styled segment should render");
+    assert!(
+        centered_line.contains("97 Tz") && centered_line.contains("(mid) Tj 100 Tz"),
+        "wrapped centered styled segment should use v28 seam compensation"
+    );
 }
 
 #[test]
@@ -2788,10 +2802,9 @@ fn pdf_renderer_right_alignment_keeps_wrapped_continuation_right_v1() {
     )
     .expect("writer should accept wrapped right-aligned text");
     let layout = parse_dvi_v2_text_page_to_layout_v0(&xdv, 786_432).expect("layout parse");
-    let expected_start_x = expected_right_x_pt_v0(
-        layout_render_width_for_substring_v0(&layout, b"RIGHTSTART")
-            .expect("right start width"),
-    );
+    let expected_start_width_pt =
+        segment_width_pt_v0(b"RIGHTSTART edge, ") + scaled_segment_width_pt_v0(b"core", 97);
+    let expected_start_x = 540.0 - expected_start_width_pt;
     let expected_wrap_x = expected_right_x_pt_v0(
         layout_render_width_for_substring_v0(&layout, b"WRAPRIGHT").expect("right wrap width"),
     );
@@ -2816,5 +2829,14 @@ fn pdf_renderer_right_alignment_keeps_wrapped_continuation_right_v1() {
     assert!(
         rendered == "RIGHTSTART edge, core",
         "right wrapped style boundaries should retain stable spacing: {rendered}"
+    );
+    let pdf_text = String::from_utf8_lossy(&pdf);
+    let right_line = pdf_text
+        .lines()
+        .find(|line| line.contains("(core) Tj"))
+        .expect("right wrapped styled segment should render");
+    assert!(
+        right_line.contains("97 Tz") && right_line.contains("(core) Tj 100 Tz"),
+        "wrapped right styled segment should use v28 seam compensation"
     );
 }
