@@ -2638,7 +2638,7 @@ fn pdf_renderer_rejects_malformed_cite_metadata_line_v0() {
 #[test]
 fn pdf_renderer_table_rows_use_stable_column_x_offsets_v0() {
     let xdv = write_dvi_v2_text_page_v0(
-        b"Before.\n\n!t Alpha||Beta||Gamma\n!t Delta||Epsilon||Zeta\n\nAfter.",
+        b"Before.\n\n!ts lcr\n!t Alpha||Beta||Gamma\n!t Delta||Epsilon||Zeta\n\nAfter.",
     )
     .expect("writer should accept table marker lines");
     let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
@@ -2689,7 +2689,7 @@ fn pdf_renderer_table_rows_use_stable_column_x_offsets_v0() {
 #[test]
 fn pdf_renderer_table_cells_stay_within_column_bounds_v1() {
     let xdv = write_dvi_v2_text_page_v0(
-        b"Before.\n\n!t A||WideMiddle||9.9\n!t LongLeft||B||123.45\n\nAfter.",
+        b"Before.\n\n!ts lcr\n!t A||WideMiddle||9.9\n!t LongLeft||B||123.45\n\nAfter.",
     )
     .expect("writer should accept table marker lines");
     let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
@@ -2789,8 +2789,49 @@ fn pdf_renderer_table_cells_stay_within_column_bounds_v1() {
 }
 
 #[test]
+fn pdf_renderer_table_colspec_alignment_respects_lcr_per_column_v2() {
+    let xdv = write_dvi_v2_text_page_v0(
+        b"Before.\n\n!ts rcll\n!t 9||Mid||Tail||End\n!t 10||More||Tail2||Ending\n\nAfter.",
+    )
+    .expect("writer should accept table marker lines");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+
+    let nine_x = *tm_xs_for_segment_text_v0(&pdf, "9").first().expect("9 x");
+    let ten_x = *tm_xs_for_segment_text_v0(&pdf, "10").first().expect("10 x");
+    let nine_right = nine_x + segment_width_pt_v0(b"9");
+    let ten_right = ten_x + segment_width_pt_v0(b"10");
+    assert!(
+        (nine_right - ten_right).abs() <= 0.1,
+        "right-aligned first column should share right edge: {nine_right} vs {ten_right}"
+    );
+
+    let mid_x = *tm_xs_for_segment_text_v0(&pdf, "Mid").first().expect("mid x");
+    let more_x = *tm_xs_for_segment_text_v0(&pdf, "More").first().expect("more x");
+    let mid_center = mid_x + (segment_width_pt_v0(b"Mid") * 0.5);
+    let more_center = more_x + (segment_width_pt_v0(b"More") * 0.5);
+    assert!(
+        (mid_center - more_center).abs() <= 0.2,
+        "center-aligned second column should share center: {mid_center} vs {more_center}"
+    );
+
+    let tail_x = *tm_xs_for_segment_text_v0(&pdf, "Tail").first().expect("tail x");
+    let tail2_x = *tm_xs_for_segment_text_v0(&pdf, "Tail2").first().expect("tail2 x");
+    assert!(
+        (tail_x - tail2_x).abs() <= 0.1,
+        "left-aligned third column should share left edge: {tail_x} vs {tail2_x}"
+    );
+
+    let end_x = *tm_xs_for_segment_text_v0(&pdf, "End").first().expect("end x");
+    let ending_x = *tm_xs_for_segment_text_v0(&pdf, "Ending").first().expect("ending x");
+    assert!(
+        (end_x - ending_x).abs() <= 0.1,
+        "left-aligned fourth column should share left edge: {end_x} vs {ending_x}"
+    );
+}
+
+#[test]
 fn pdf_renderer_table_grid_lines_render_deterministically_v1() {
-    let xdv = write_dvi_v2_text_page_v0(b"Before.\n\n!t A||B||C\n!t D||E||F\n\nAfter.")
+    let xdv = write_dvi_v2_text_page_v0(b"Before.\n\n!ts lcr\n!t A||B||C\n!t D||E||F\n\nAfter.")
         .expect("writer should accept table marker lines");
     let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
     let pdf_text = String::from_utf8_lossy(&pdf);
@@ -2806,11 +2847,70 @@ fn pdf_renderer_table_grid_lines_render_deterministically_v1() {
 }
 
 #[test]
+fn pdf_renderer_table_row_height_is_stable_v2() {
+    let xdv = write_dvi_v2_text_page_v0(b"Before.\n\n!ts lcr\n!t A||B||C\n!t D||E||F\n\nAfter.")
+        .expect("writer should accept table marker lines");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+    let (_, row1_y) = tm_position_for_line_containing_text_v0(&pdf, "(A)")
+        .expect("row 1 y");
+    let (_, row2_y) = tm_position_for_line_containing_text_v0(&pdf, "(D)")
+        .expect("row 2 y");
+    let delta = row1_y - row2_y;
+    assert!(
+        (delta - 14.0).abs() <= 0.2,
+        "table row height should remain stable at LEADING_PT_V0: {delta}"
+    );
+}
+
+#[test]
+fn pdf_renderer_rejects_table_rows_without_spec_line_v2() {
+    let xdv = write_dvi_v2_text_page_v0(b"Before.\n\n!t A||B||C\n!t D||E||F\n\nAfter.")
+        .expect("writer should accept table marker lines");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv);
+    assert!(
+        pdf.is_none(),
+        "renderer should fail-closed when !t rows are missing !ts spec line"
+    );
+}
+
+#[test]
+fn pdf_renderer_rejects_invalid_table_spec_letters_v2() {
+    let xdv = write_dvi_v2_text_page_v0(b"Before.\n\n!ts lxp\n!t A||B||C\n\nAfter.")
+        .expect("writer should accept table marker lines");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv);
+    assert!(
+        pdf.is_none(),
+        "renderer should fail-closed on invalid table spec bytes"
+    );
+}
+
+#[test]
+fn pdf_renderer_rejects_table_row_column_mismatch_v2() {
+    let xdv = write_dvi_v2_text_page_v0(b"Before.\n\n!ts lc\n!t A||B||C\n\nAfter.")
+        .expect("writer should accept table marker lines");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv);
+    assert!(
+        pdf.is_none(),
+        "renderer should fail-closed when table row cell count mismatches !ts col_count"
+    );
+}
+
+#[test]
+fn pdf_renderer_rejects_table_row_with_empty_cell_v2() {
+    let xdv = write_dvi_v2_text_page_v0(b"Before.\n\n!ts lcr\n!t A||||C\n\nAfter.")
+        .expect("writer should accept table marker lines");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv);
+    assert!(
+        pdf.is_none(),
+        "renderer should fail-closed on empty table cell content"
+    );
+}
+
+#[test]
 fn pdf_renderer_rejects_table_width_overflow_v0() {
     let mut row = Vec::<u8>::new();
-    row.extend_from_slice(b"!t ");
+    row.extend_from_slice(b"!ts l\n!t ");
     row.extend_from_slice("W".repeat(400).as_bytes());
-    row.extend_from_slice(b"||Center||Right");
     let xdv = write_dvi_v2_text_page_with_layout_and_wrap_v0(&row, 65_536, 786_432, 5_000)
         .expect("writer should accept table marker line");
     let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv);

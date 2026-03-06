@@ -767,17 +767,36 @@ fn typeset_minimal_tabular_emits_deterministic_row_markers() {
     let body = extract_typeset_body(main);
     let text = String::from_utf8(body).expect("body should be valid utf8");
     assert!(
-        text.contains("!t Left||Center||Right\n!t L2||C2||R2"),
+        text.contains("!ts lcr\n!t Left||Center||Right\n!t L2||C2||R2"),
         "body={text:?}"
     );
 }
 
 #[test]
 fn typeset_minimal_rejects_tabular_unsupported_alignment() {
-    let main = b"\\documentclass{article}\\begin{document}\\begin{tabular}{ll}A & B\\\\\\end{tabular}\\end{document}";
+    let main = b"\\documentclass{article}\\begin{document}\\begin{tabular}{lp}A & B\\\\\\end{tabular}\\end{document}";
     let result = compile_typeset(main);
     assert_eq!(result.status, CompileStatus::NotImplemented);
     assert!(result.main_xdv_bytes.is_empty());
+}
+
+#[test]
+fn typeset_minimal_rejects_tabular_colspec_with_spaces() {
+    let main = b"\\documentclass{article}\\begin{document}\\begin{tabular}{l c r}A & B & C\\\\\\end{tabular}\\end{document}";
+    let result = compile_typeset(main);
+    assert_eq!(result.status, CompileStatus::NotImplemented);
+    assert!(result.main_xdv_bytes.is_empty());
+}
+
+#[test]
+fn typeset_minimal_tabular_accepts_variable_colspec_alignment() {
+    let main = b"\\documentclass{article}\\begin{document}\\begin{tabular}{rcll}9 & Mid & Tail & End\\\\10 & More & Tail2 & End2\\\\\\end{tabular}\\end{document}";
+    let body = extract_typeset_body(main);
+    let text = String::from_utf8(body).expect("body should be valid utf8");
+    assert!(
+        text.contains("!ts rcll\n!t 9||Mid||Tail||End\n!t 10||More||Tail2||End2"),
+        "body={text:?}"
+    );
 }
 
 #[test]
