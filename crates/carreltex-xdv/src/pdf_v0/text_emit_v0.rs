@@ -10,6 +10,7 @@ enum SegmentEmitProfileV0 {
     Default,
     BodyProseV13,
     BodyWrappedProseV27,
+    WrappedAlignedV28,
     FootnoteProseV26,
     BodyProseInlineMathV15,
 }
@@ -47,6 +48,20 @@ fn wrapped_body_prose_style_scale_percent_v27(segment: &PdfRenderSegmentV0) -> u
     }
 }
 
+fn wrapped_aligned_style_scale_percent_v28(segment: &PdfRenderSegmentV0) -> u8 {
+    if segment.superscript {
+        return 100;
+    }
+    if !segment.bytes.iter().any(|byte| byte.is_ascii_alphabetic()) {
+        return 100;
+    }
+    match segment.style {
+        PdfTextStyleV0::Regular => 100,
+        PdfTextStyleV0::Italic => BODY_PROSE_ITALIC_SCALE_PERCENT_V13,
+        PdfTextStyleV0::Bold => BODY_PROSE_BOLD_SCALE_PERCENT_V13,
+    }
+}
+
 fn body_prose_style_scale_percent_v13(segment: &PdfRenderSegmentV0) -> u8 {
     if segment.superscript || segment.is_link {
         return 100;
@@ -71,6 +86,9 @@ fn style_scale_percent_for_profile_v0(
         SegmentEmitProfileV0::BodyWrappedProseV27 => {
             wrapped_body_prose_style_scale_percent_v27(segment)
         }
+        SegmentEmitProfileV0::WrappedAlignedV28 => {
+            wrapped_aligned_style_scale_percent_v28(segment)
+        }
         SegmentEmitProfileV0::FootnoteProseV26 => footnote_prose_style_scale_percent_v26(segment),
         SegmentEmitProfileV0::BodyProseInlineMathV15 => {
             if segment.superscript || segment.is_link {
@@ -94,7 +112,9 @@ fn render_advance_pt_for_segment_with_profile_v0(
 ) -> f32 {
     if !matches!(
         profile,
-        SegmentEmitProfileV0::FootnoteProseV26 | SegmentEmitProfileV0::BodyWrappedProseV27
+        SegmentEmitProfileV0::FootnoteProseV26
+            | SegmentEmitProfileV0::BodyWrappedProseV27
+            | SegmentEmitProfileV0::WrappedAlignedV28
     ) {
         return segment.advance_pt;
     }
