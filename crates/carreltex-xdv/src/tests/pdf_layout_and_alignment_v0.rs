@@ -800,6 +800,56 @@ fn pdf_renderer_body_wrap_balances_lines_and_preserves_styled_punctuation_seams_
 }
 
 #[test]
+fn pdf_renderer_body_paragraph_applies_style_scaling_for_styled_seams_v13() {
+    let demo_text = b"Title\nAuthor\n2026-03-05\n\nBody prose with [ITALICV13] seam and {BOLDV13} seam.";
+    let xdv = write_dvi_v2_text_page_v0(demo_text).expect("writer should accept body prose");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+    let pdf_text = String::from_utf8_lossy(&pdf);
+    let italic_line = pdf_text
+        .lines()
+        .find(|line| line.contains("(ITALICV13) Tj"))
+        .expect("italic body segment should render");
+    let bold_line = pdf_text
+        .lines()
+        .find(|line| line.contains("(BOLDV13) Tj"))
+        .expect("bold body segment should render");
+
+    assert!(
+        italic_line.contains("97 Tz") && italic_line.contains("(ITALICV13) Tj 100 Tz"),
+        "body prose italic segment should use v13 seam-scaling compensation"
+    );
+    assert!(
+        bold_line.contains("95 Tz") && bold_line.contains("(BOLDV13) Tj 100 Tz"),
+        "body prose bold segment should use v13 seam-scaling compensation"
+    );
+}
+
+#[test]
+fn pdf_renderer_non_paragraph_blocks_do_not_use_body_seam_scaling_v13() {
+    let demo_text = b"Title\nAuthor\n2026-03-05\n\n^ Center [ITALICCENTERV13] text.\n\n> Quote {BOLDQUOTEV13} line.";
+    let xdv = write_dvi_v2_text_page_v0(demo_text).expect("writer should accept non-paragraph blocks");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+    let pdf_text = String::from_utf8_lossy(&pdf);
+    let centered_line = pdf_text
+        .lines()
+        .find(|line| line.contains("(ITALICCENTERV13) Tj"))
+        .expect("centered styled segment should render");
+    let quote_line = pdf_text
+        .lines()
+        .find(|line| line.contains("(BOLDQUOTEV13) Tj"))
+        .expect("quote styled segment should render");
+
+    assert!(
+        !centered_line.contains("97 Tz"),
+        "centered non-paragraph line should not use body seam-scaling compensation"
+    );
+    assert!(
+        !quote_line.contains("95 Tz"),
+        "quote non-paragraph line should not use body seam-scaling compensation"
+    );
+}
+
+#[test]
 fn pdf_renderer_centers_title_block_lines_within_epsilon_v0() {
     let demo_text = b"Centering Accuracy Title\nAlice Bob\n2026-03-05\n\nBody line.";
     let xdv = write_dvi_v2_text_page_v0(demo_text).expect("writer should accept demo text");
