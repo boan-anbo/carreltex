@@ -89,7 +89,7 @@ fn emit_table_block_v0(
             col_left_x += col_content_width_pt + (TABLE_CELL_PADDING_PT_V0 * 2.0);
         }
         out.extend_from_slice(b"\n");
-        *y -= LEADING_PT_V0;
+        *y -= TABLE_ROW_LEADING_PT_V0;
     }
 
     let table_bottom_y_pt = *y + TABLE_BORDER_BOTTOM_OFFSET_PT_V0;
@@ -114,7 +114,7 @@ fn emit_table_block_v0(
         .as_bytes(),
     );
     for separator_index in 1..parsed_rows.len() {
-        let y_pt = table_top_y_pt - (separator_index as f32 * LEADING_PT_V0);
+        let y_pt = table_top_y_pt - (separator_index as f32 * TABLE_ROW_LEADING_PT_V0);
         out.extend_from_slice(
             format!(
                 "{:.2} {:.2} m {:.2} {:.2} l S\n",
