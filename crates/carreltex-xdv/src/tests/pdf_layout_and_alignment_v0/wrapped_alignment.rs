@@ -1839,30 +1839,30 @@ fn pdf_renderer_wrapped_right_medium_plain_medium_tier_gap_is_tightened_v133() {
 }
 
 #[test]
-fn pdf_renderer_wrapped_aligned_plain_bundle_short_and_medium_gaps_are_tightened_v727() {
+fn pdf_renderer_wrapped_aligned_plain_bundle_short_and_medium_gaps_are_tightened_v729() {
     let cases = [
         (
             b"\n^ CENTERSTART edge, [core] trail words words words words WRAPCENTER tail.".as_slice(),
             "core",
-            14.15f32,
+            14.10f32,
             "centered short plain bundled tm gap",
         ),
         (
             b"\n| RIGHTSTART edge, [core] trail words words words words WRAPRIGHT tail.".as_slice(),
             "core",
-            12.65f32,
+            12.60f32,
             "right short plain bundled tm gap",
         ),
         (
             b"\n^ CENTER preface [core words] trail words words WRAPCENTERMED tail.".as_slice(),
             "core words",
-            11.65f32,
+            11.60f32,
             "centered medium plain bundled tm gap",
         ),
         (
             b"\n| RIGHT preface [core words] trail words words WRAPRIGHTMED tail.".as_slice(),
             "core words",
-            10.22f32,
+            10.17f32,
             "right medium plain bundled tm gap",
         ),
     ];
@@ -1876,13 +1876,13 @@ fn pdf_renderer_wrapped_aligned_plain_bundle_short_and_medium_gaps_are_tightened
             .expect("bundled wrapped aligned plain tm gap");
         assert!(
             actual_gap <= max_gap_pt,
-            "{label} should stay tightened in the v727 bundle: actual_gap={actual_gap}, max_gap_pt={max_gap_pt}"
+            "{label} should stay tightened in the v729 bundle: actual_gap={actual_gap}, max_gap_pt={max_gap_pt}"
         );
     }
 }
 
 #[test]
-fn pdf_renderer_wrapped_aligned_plain_center_right_medium_continuity_stays_coherent_v727() {
+fn pdf_renderer_wrapped_aligned_plain_center_right_medium_continuity_stays_coherent_v729() {
     let center_xdv = write_dvi_v2_text_page_with_layout_and_wrap_v0(
         b"\n^ preface [core words] trail words words WRAPALIGNPLAINBUNDLE tail.",
         65_536,
@@ -1911,6 +1911,73 @@ fn pdf_renderer_wrapped_aligned_plain_center_right_medium_continuity_stays_coher
     assert!(
         (center_gap - right_gap).abs() <= 0.02,
         "bundled aligned plain medium continuity should stay coherent across centered/right profiles: center_gap={center_gap}, right_gap={right_gap}"
+    );
+}
+
+#[test]
+fn pdf_renderer_wrapped_aligned_plain_acceptance_surface_stays_coherent_v729() {
+    let xdv = write_dvi_v2_text_page_with_layout_and_wrap_v0(
+        b"\n^ CENTERSTART edge, [CSHORTCORE] trail words words words words WRAPCENTERACCEPTSHORT tail.\n\n| RIGHTSTART edge, [RSHORTCORE] trail words words words words WRAPRIGHTACCEPTSHORT tail.\n\n^ CENTER preface [CMEDCORE] trail words words WRAPCENTERACCEPTMED tail.\n\n| RIGHT preface [RMEDCORE] trail words words WRAPRIGHTACCEPTMED tail.",
+        65_536,
+        786_432,
+        30,
+    )
+    .expect("writer should accept grouped wrapped aligned plain surface");
+    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+
+    let short_center_gap = max_tm_gap_pt_for_line_containing_v0(&pdf, "CSHORTCORE")
+        .expect("center short acceptance tm gap");
+    let short_right_gap = max_tm_gap_pt_for_line_containing_v0(&pdf, "RSHORTCORE")
+        .expect("right short acceptance tm gap");
+    let medium_center_gap = max_tm_gap_pt_for_line_containing_v0(&pdf, "CMEDCORE")
+        .expect("center medium acceptance tm gap");
+    let medium_right_gap = max_tm_gap_pt_for_line_containing_v0(&pdf, "RMEDCORE")
+        .expect("right medium acceptance tm gap");
+    let (_, center_short_start_y) =
+        tm_position_for_segment_substring_v0(&pdf, "CENTERSTART").expect("center short start");
+    let (_, center_short_wrap_y) = tm_position_for_segment_substring_v0(&pdf, "WRAPCENTERACCEPTSHORT")
+        .expect("center short wrap");
+    let (_, right_short_start_y) =
+        tm_position_for_segment_substring_v0(&pdf, "RIGHTSTART").expect("right short start");
+    let (_, right_short_wrap_y) = tm_position_for_segment_substring_v0(&pdf, "WRAPRIGHTACCEPTSHORT")
+        .expect("right short wrap");
+    let (_, center_medium_start_y) =
+        tm_position_for_segment_substring_v0(&pdf, "CMEDCORE").expect("center medium start");
+    let (_, center_medium_wrap_y) = tm_position_for_segment_substring_v0(&pdf, "WRAPCENTERACCEPTMED")
+        .expect("center medium wrap");
+    let (_, right_medium_start_y) =
+        tm_position_for_segment_substring_v0(&pdf, "RMEDCORE").expect("right medium start");
+    let (_, right_medium_wrap_y) = tm_position_for_segment_substring_v0(&pdf, "WRAPRIGHTACCEPTMED")
+        .expect("right medium wrap");
+
+    let epsilon_pt = 0.2f32;
+    assert!(
+        short_center_gap <= 14.10
+            && short_right_gap <= 12.60
+            && medium_center_gap <= 11.60
+            && medium_right_gap <= 10.17,
+        "grouped acceptance surface should keep the bundled centered/right seams bounded: short_center_gap={short_center_gap}, short_right_gap={short_right_gap}, medium_center_gap={medium_center_gap}, medium_right_gap={medium_right_gap}"
+    );
+    assert!(
+        center_short_start_y > center_short_wrap_y
+            && center_short_wrap_y > right_short_start_y
+            && right_short_start_y > right_short_wrap_y
+            && right_short_wrap_y > center_medium_start_y
+            && center_medium_start_y > center_medium_wrap_y
+            && center_medium_wrap_y > right_medium_start_y
+            && right_medium_start_y > right_medium_wrap_y,
+        "grouped acceptance surface should preserve centered/right wrapped block ordering: center_short_start_y={center_short_start_y}, center_short_wrap_y={center_short_wrap_y}, right_short_start_y={right_short_start_y}, right_short_wrap_y={right_short_wrap_y}, center_medium_start_y={center_medium_start_y}, center_medium_wrap_y={center_medium_wrap_y}, right_medium_start_y={right_medium_start_y}, right_medium_wrap_y={right_medium_wrap_y}"
+    );
+    assert!(
+        ((center_short_wrap_y - right_short_start_y) - (right_short_wrap_y - center_medium_start_y)).abs()
+            <= epsilon_pt
+            && ((right_short_wrap_y - center_medium_start_y) - (center_medium_wrap_y - right_medium_start_y)).abs()
+                <= epsilon_pt,
+        "grouped acceptance surface should keep adjacent centered/right block seams coherent: center_short_wrap_y={center_short_wrap_y}, right_short_start_y={right_short_start_y}, right_short_wrap_y={right_short_wrap_y}, center_medium_start_y={center_medium_start_y}, center_medium_wrap_y={center_medium_wrap_y}, right_medium_start_y={right_medium_start_y}"
+    );
+    assert!(
+        (medium_center_gap - medium_right_gap).abs() <= 1.6,
+        "grouped acceptance surface should keep medium centered/right seams in the same closure band: medium_center_gap={medium_center_gap}, medium_right_gap={medium_right_gap}"
     );
 }
 
