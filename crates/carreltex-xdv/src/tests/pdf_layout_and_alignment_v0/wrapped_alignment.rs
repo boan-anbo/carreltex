@@ -1839,30 +1839,30 @@ fn pdf_renderer_wrapped_right_medium_plain_medium_tier_gap_is_tightened_v133() {
 }
 
 #[test]
-fn pdf_renderer_wrapped_aligned_plain_bundle_short_and_medium_gaps_are_tightened_v707() {
+fn pdf_renderer_wrapped_aligned_plain_bundle_short_and_medium_gaps_are_tightened_v709() {
     let cases = [
         (
             b"\n^ CENTERSTART edge, [core] trail words words words words WRAPCENTER tail.".as_slice(),
             "core",
-            14.85f32,
+            14.65f32,
             "centered short plain bundled tm gap",
         ),
         (
             b"\n| RIGHTSTART edge, [core] trail words words words words WRAPRIGHT tail.".as_slice(),
             "core",
-            13.35f32,
+            13.15f32,
             "right short plain bundled tm gap",
         ),
         (
             b"\n^ CENTER preface [core words] trail words words WRAPCENTERMED tail.".as_slice(),
             "core words",
-            12.35f32,
+            12.15f32,
             "centered medium plain bundled tm gap",
         ),
         (
             b"\n| RIGHT preface [core words] trail words words WRAPRIGHTMED tail.".as_slice(),
             "core words",
-            10.90f32,
+            10.72f32,
             "right medium plain bundled tm gap",
         ),
     ];
@@ -1876,13 +1876,13 @@ fn pdf_renderer_wrapped_aligned_plain_bundle_short_and_medium_gaps_are_tightened
             .expect("bundled wrapped aligned plain tm gap");
         assert!(
             actual_gap <= max_gap_pt,
-            "{label} should stay tightened in the v707 bundle: actual_gap={actual_gap}, max_gap_pt={max_gap_pt}"
+            "{label} should stay tightened in the v709 bundle: actual_gap={actual_gap}, max_gap_pt={max_gap_pt}"
         );
     }
 }
 
 #[test]
-fn pdf_renderer_wrapped_aligned_plain_center_right_continuity_stays_coherent_v707() {
+fn pdf_renderer_wrapped_aligned_plain_center_right_medium_continuity_stays_coherent_v709() {
     let center_xdv = write_dvi_v2_text_page_with_layout_and_wrap_v0(
         b"\n^ preface [core words] trail words words WRAPALIGNPLAINBUNDLE tail.",
         65_536,
@@ -1905,12 +1905,12 @@ fn pdf_renderer_wrapped_aligned_plain_center_right_continuity_stays_coherent_v70
     let right_gap = max_tm_gap_pt_for_line_containing_v0(&right_pdf, "core words")
         .expect("right continuity tm gap");
     assert!(
-        center_gap <= 9.75 && right_gap <= 9.75,
-        "bundled aligned plain continuity gaps should both stay tightened: center_gap={center_gap}, right_gap={right_gap}"
+        center_gap <= 9.72 && right_gap <= 9.72,
+        "bundled aligned plain medium continuity gaps should both stay tightened: center_gap={center_gap}, right_gap={right_gap}"
     );
     assert!(
         (center_gap - right_gap).abs() <= 0.02,
-        "bundled aligned plain continuity should stay coherent across centered/right profiles: center_gap={center_gap}, right_gap={right_gap}"
+        "bundled aligned plain medium continuity should stay coherent across centered/right profiles: center_gap={center_gap}, right_gap={right_gap}"
     );
 }
 
