@@ -14,8 +14,11 @@ use std::collections::BTreeSet;
 
 // DVI writer/planner and baseline layout behavior.
 include!("tests/writer_planner_v0.rs");
-// PDF layout helpers and alignment/rhythm invariants.
-include!("tests/pdf_layout_and_alignment_v0.rs");
+// Shared PDF/layout test helpers used across renderer test files.
+include!("tests/pdf_test_support_v0.rs");
+// PDF layout helpers and alignment/rhythm invariants, split into concern modules.
+#[path = "tests/pdf_layout_and_alignment_v0/mod.rs"]
+mod pdf_layout_and_alignment_v0;
 // Parse roundtrip and core renderer/link/annotation behavior.
 include!("tests/roundtrip_and_core_renderer_v0.rs");
 // Table and float rendering seams.
