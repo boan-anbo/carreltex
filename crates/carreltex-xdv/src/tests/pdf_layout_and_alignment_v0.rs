@@ -5022,6 +5022,78 @@ fn pdf_renderer_wrapped_right_medium_plain_medium_tier_gap_is_tightened_v133() {
 }
 
 #[test]
+fn pdf_renderer_wrapped_aligned_plain_bundle_short_and_medium_gaps_are_tightened_v702() {
+    let cases = [
+        (
+            b"\n^ CENTER core words trail words words WRAPCENTERSHORTPLAIN tail.".as_slice(),
+            103.0f32,
+            "centered short plain bundled tm gap",
+        ),
+        (
+            b"\n| RIGHT core words trail words words WRAPRIGHTSHORTPLAIN tail.".as_slice(),
+            103.0f32,
+            "right short plain bundled tm gap",
+        ),
+        (
+            b"\n^ CENTER preface core words trail words words WRAPCENTERMEDPLAIN tail.".as_slice(),
+            99.0f32,
+            "centered medium plain bundled tm gap",
+        ),
+        (
+            b"\n| RIGHT preface core words trail words words WRAPRIGHTMEDPLAIN tail.".as_slice(),
+            91.0f32,
+            "right medium plain bundled tm gap",
+        ),
+    ];
+
+    for (input, max_gap_pt, label) in cases {
+        let xdv = write_dvi_v2_text_page_with_layout_and_wrap_v0(input, 65_536, 786_432, 30)
+            .expect("writer should accept bundled wrapped aligned plain text");
+        let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+
+        let actual_gap = max_tm_gap_pt_for_line_containing_v0(&pdf, "core words")
+            .expect("bundled wrapped aligned plain tm gap");
+        assert!(
+            actual_gap <= max_gap_pt,
+            "{label} should stay tightened in the v702 bundle: actual_gap={actual_gap}, max_gap_pt={max_gap_pt}"
+        );
+    }
+}
+
+#[test]
+fn pdf_renderer_wrapped_aligned_plain_center_right_continuity_stays_coherent_v702() {
+    let center_xdv = write_dvi_v2_text_page_with_layout_and_wrap_v0(
+        b"\n^ preface core words trail words words WRAPALIGNPLAINBUNDLE tail.",
+        65_536,
+        786_432,
+        30,
+    )
+    .expect("writer should accept centered continuity text");
+    let right_xdv = write_dvi_v2_text_page_with_layout_and_wrap_v0(
+        b"\n| preface core words trail words words WRAPALIGNPLAINBUNDLE tail.",
+        65_536,
+        786_432,
+        30,
+    )
+    .expect("writer should accept right continuity text");
+    let center_pdf = render_dvi_v2_text_page_to_pdf_v0(&center_xdv).expect("center pdf render");
+    let right_pdf = render_dvi_v2_text_page_to_pdf_v0(&right_xdv).expect("right pdf render");
+
+    let center_gap = max_tm_gap_pt_for_line_containing_v0(&center_pdf, "core words")
+        .expect("center continuity tm gap");
+    let right_gap = max_tm_gap_pt_for_line_containing_v0(&right_pdf, "core words")
+        .expect("right continuity tm gap");
+    assert!(
+        center_gap <= 91.0 && right_gap <= 91.0,
+        "bundled aligned plain continuity gaps should both stay tightened: center_gap={center_gap}, right_gap={right_gap}"
+    );
+    assert!(
+        (center_gap - right_gap).abs() <= 0.5,
+        "bundled aligned plain continuity should stay coherent across centered/right profiles: center_gap={center_gap}, right_gap={right_gap}"
+    );
+}
+
+#[test]
 fn pdf_renderer_wrapped_quote_and_list_styled_seams_use_v29_profile() {
     let xdv = write_dvi_v2_text_page_v0(
         b"\n- LISTSTART alpha alpha alpha alpha alpha alpha alpha [LISTITALICV29] beta beta beta beta beta beta LISTWRAPV29.\n\n> QUOTESTART gamma gamma gamma gamma gamma gamma gamma {QUOTEBOLDV29} delta delta delta delta delta QUOTEWRAPV29.",
