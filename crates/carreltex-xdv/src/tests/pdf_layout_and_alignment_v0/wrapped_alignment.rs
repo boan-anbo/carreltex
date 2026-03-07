@@ -1839,55 +1839,59 @@ fn pdf_renderer_wrapped_right_medium_plain_medium_tier_gap_is_tightened_v133() {
 }
 
 #[test]
-fn pdf_renderer_wrapped_aligned_plain_bundle_short_and_medium_gaps_are_tightened_v702() {
+fn pdf_renderer_wrapped_aligned_plain_bundle_short_and_medium_gaps_are_tightened_v707() {
     let cases = [
         (
-            b"\n^ CENTER core words trail words words WRAPCENTERSHORTPLAIN tail.".as_slice(),
-            103.0f32,
+            b"\n^ CENTERSTART edge, [core] trail words words words words WRAPCENTER tail.".as_slice(),
+            "core",
+            14.85f32,
             "centered short plain bundled tm gap",
         ),
         (
-            b"\n| RIGHT core words trail words words WRAPRIGHTSHORTPLAIN tail.".as_slice(),
-            103.0f32,
+            b"\n| RIGHTSTART edge, [core] trail words words words words WRAPRIGHT tail.".as_slice(),
+            "core",
+            13.35f32,
             "right short plain bundled tm gap",
         ),
         (
-            b"\n^ CENTER preface core words trail words words WRAPCENTERMEDPLAIN tail.".as_slice(),
-            99.0f32,
+            b"\n^ CENTER preface [core words] trail words words WRAPCENTERMED tail.".as_slice(),
+            "core words",
+            12.35f32,
             "centered medium plain bundled tm gap",
         ),
         (
-            b"\n| RIGHT preface core words trail words words WRAPRIGHTMEDPLAIN tail.".as_slice(),
-            91.0f32,
+            b"\n| RIGHT preface [core words] trail words words WRAPRIGHTMED tail.".as_slice(),
+            "core words",
+            10.90f32,
             "right medium plain bundled tm gap",
         ),
     ];
 
-    for (input, max_gap_pt, label) in cases {
+    for (input, needle, max_gap_pt, label) in cases {
         let xdv = write_dvi_v2_text_page_with_layout_and_wrap_v0(input, 65_536, 786_432, 30)
             .expect("writer should accept bundled wrapped aligned plain text");
         let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
 
-        let actual_gap = max_tm_gap_pt_for_line_containing_v0(&pdf, "core words")
+        let actual_gap = max_tm_gap_pt_for_line_containing_v0(&pdf, needle)
             .expect("bundled wrapped aligned plain tm gap");
         assert!(
             actual_gap <= max_gap_pt,
-            "{label} should stay tightened in the v702 bundle: actual_gap={actual_gap}, max_gap_pt={max_gap_pt}"
+            "{label} should stay tightened in the v707 bundle: actual_gap={actual_gap}, max_gap_pt={max_gap_pt}"
         );
     }
 }
 
 #[test]
-fn pdf_renderer_wrapped_aligned_plain_center_right_continuity_stays_coherent_v702() {
+fn pdf_renderer_wrapped_aligned_plain_center_right_continuity_stays_coherent_v707() {
     let center_xdv = write_dvi_v2_text_page_with_layout_and_wrap_v0(
-        b"\n^ preface core words trail words words WRAPALIGNPLAINBUNDLE tail.",
+        b"\n^ preface [core words] trail words words WRAPALIGNPLAINBUNDLE tail.",
         65_536,
         786_432,
         30,
     )
     .expect("writer should accept centered continuity text");
     let right_xdv = write_dvi_v2_text_page_with_layout_and_wrap_v0(
-        b"\n| preface core words trail words words WRAPALIGNPLAINBUNDLE tail.",
+        b"\n| preface [core words] trail words words WRAPALIGNPLAINBUNDLE tail.",
         65_536,
         786_432,
         30,
@@ -1901,11 +1905,11 @@ fn pdf_renderer_wrapped_aligned_plain_center_right_continuity_stays_coherent_v70
     let right_gap = max_tm_gap_pt_for_line_containing_v0(&right_pdf, "core words")
         .expect("right continuity tm gap");
     assert!(
-        center_gap <= 91.0 && right_gap <= 91.0,
+        center_gap <= 9.75 && right_gap <= 9.75,
         "bundled aligned plain continuity gaps should both stay tightened: center_gap={center_gap}, right_gap={right_gap}"
     );
     assert!(
-        (center_gap - right_gap).abs() <= 0.5,
+        (center_gap - right_gap).abs() <= 0.02,
         "bundled aligned plain continuity should stay coherent across centered/right profiles: center_gap={center_gap}, right_gap={right_gap}"
     );
 }
