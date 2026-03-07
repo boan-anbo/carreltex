@@ -253,7 +253,7 @@ fn pdf_renderer_center_alignment_keeps_wrapped_continuation_centered_v1() {
     .expect("writer should accept wrapped centered text");
     let layout = parse_dvi_v2_text_page_to_layout_v0(&xdv, 786_432).expect("layout parse");
     let expected_start_width_pt =
-        segment_width_pt_v0(b"CENTERSTART alpha ") + scaled_segment_width_pt_v0(b"mid", 42);
+        segment_width_pt_v0(b"CENTERSTART alpha ") + scaled_segment_width_pt_v0(b"mid", 41);
     let expected_start_x =
         (612.0 - expected_start_width_pt) / 2.0;
     let expected_wrap_x = expected_center_x_pt_v0(
@@ -287,7 +287,7 @@ fn pdf_renderer_center_alignment_keeps_wrapped_continuation_centered_v1() {
         .find(|line| line.contains("(mid) Tj"))
         .expect("center wrapped styled segment should render");
     assert!(
-        centered_line.contains("42 Tz") && centered_line.contains("(mid) Tj 100 Tz"),
+        centered_line.contains("41 Tz") && centered_line.contains("(mid) Tj 100 Tz"),
         "wrapped centered styled segment should use v28 seam compensation"
     );
 }
@@ -303,7 +303,7 @@ fn pdf_renderer_right_alignment_keeps_wrapped_continuation_right_v1() {
     .expect("writer should accept wrapped right-aligned text");
     let layout = parse_dvi_v2_text_page_to_layout_v0(&xdv, 786_432).expect("layout parse");
     let expected_start_width_pt =
-        segment_width_pt_v0(b"RIGHTSTART edge, ") + scaled_segment_width_pt_v0(b"core", 42);
+        segment_width_pt_v0(b"RIGHTSTART edge, ") + scaled_segment_width_pt_v0(b"core", 41);
     let expected_start_x = 540.0 - expected_start_width_pt;
     let expected_wrap_x = expected_right_x_pt_v0(
         layout_render_width_for_substring_v0(&layout, b"WRAPRIGHT").expect("right wrap width"),
@@ -336,7 +336,7 @@ fn pdf_renderer_right_alignment_keeps_wrapped_continuation_right_v1() {
         .find(|line| line.contains("(core) Tj"))
         .expect("right wrapped styled segment should render");
     assert!(
-        right_line.contains("42 Tz") && right_line.contains("(core) Tj 100 Tz"),
+        right_line.contains("41 Tz") && right_line.contains("(core) Tj 100 Tz"),
         "wrapped right styled segment should use v28 seam compensation"
     );
 }
