@@ -1839,30 +1839,30 @@ fn pdf_renderer_wrapped_right_medium_plain_medium_tier_gap_is_tightened_v133() {
 }
 
 #[test]
-fn pdf_renderer_wrapped_aligned_plain_bundle_short_and_medium_gaps_are_tightened_v723() {
+fn pdf_renderer_wrapped_aligned_plain_bundle_short_and_medium_gaps_are_tightened_v725() {
     let cases = [
         (
             b"\n^ CENTERSTART edge, [core] trail words words words words WRAPCENTER tail.".as_slice(),
             "core",
-            14.25f32,
+            14.20f32,
             "centered short plain bundled tm gap",
         ),
         (
             b"\n| RIGHTSTART edge, [core] trail words words words words WRAPRIGHT tail.".as_slice(),
             "core",
-            12.75f32,
+            12.70f32,
             "right short plain bundled tm gap",
         ),
         (
             b"\n^ CENTER preface [core words] trail words words WRAPCENTERMED tail.".as_slice(),
             "core words",
-            11.75f32,
+            11.70f32,
             "centered medium plain bundled tm gap",
         ),
         (
             b"\n| RIGHT preface [core words] trail words words WRAPRIGHTMED tail.".as_slice(),
             "core words",
-            10.32f32,
+            10.27f32,
             "right medium plain bundled tm gap",
         ),
     ];
@@ -1876,13 +1876,13 @@ fn pdf_renderer_wrapped_aligned_plain_bundle_short_and_medium_gaps_are_tightened
             .expect("bundled wrapped aligned plain tm gap");
         assert!(
             actual_gap <= max_gap_pt,
-            "{label} should stay tightened in the v723 bundle: actual_gap={actual_gap}, max_gap_pt={max_gap_pt}"
+            "{label} should stay tightened in the v725 bundle: actual_gap={actual_gap}, max_gap_pt={max_gap_pt}"
         );
     }
 }
 
 #[test]
-fn pdf_renderer_wrapped_aligned_plain_center_right_medium_continuity_stays_coherent_v723() {
+fn pdf_renderer_wrapped_aligned_plain_center_right_medium_continuity_stays_coherent_v725() {
     let center_xdv = write_dvi_v2_text_page_with_layout_and_wrap_v0(
         b"\n^ preface [core words] trail words words WRAPALIGNPLAINBUNDLE tail.",
         65_536,
