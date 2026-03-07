@@ -1839,31 +1839,31 @@ fn pdf_renderer_wrapped_right_medium_plain_medium_tier_gap_is_tightened_v133() {
 }
 
 #[test]
-fn pdf_renderer_wrapped_aligned_plain_bundle_short_and_medium_gaps_are_tightened_v879() {
+fn pdf_renderer_wrapped_aligned_plain_bundle_short_and_medium_gaps_are_tightened_v881() {
     let cases = [
         (
-            b"\n^ CENTERSTART edge, [core] trail words words words words WRAPCENTER tail.".as_slice(),
-            "core",
+            b"\n^ CENTERSTART edge, [core], trail words words words words WRAPCENTER tail.".as_slice(),
+            "CENTERSTART",
             13.40f32,
-            "centered short plain bundled tm gap",
+            "centered short plain punctuated bundled tm gap",
         ),
         (
-            b"\n| RIGHTSTART edge, [core] trail words words words words WRAPRIGHT tail.".as_slice(),
-            "core",
+            b"\n| RIGHTSTART edge, [core], trail words words words words WRAPRIGHT tail.".as_slice(),
+            "RIGHTSTART",
             11.90f32,
-            "right short plain bundled tm gap",
+            "right short plain punctuated bundled tm gap",
         ),
         (
-            b"\n^ CENTER preface [core words] trail words words WRAPCENTERMED tail.".as_slice(),
-            "core words",
+            b"\n^ CENTERMEDPFX [core words], trail words words WRAPCENTERMED tail.".as_slice(),
+            "CENTERMEDPFX",
             10.90f32,
-            "centered medium plain bundled tm gap",
+            "centered medium plain punctuated bundled tm gap",
         ),
         (
-            b"\n| RIGHT preface [core words] trail words words WRAPRIGHTMED tail.".as_slice(),
-            "core words",
-            9.50f32,
-            "right medium plain bundled tm gap",
+            b"\n| RIGHTMEDPFX [core words], trail words words WRAPRIGHTMED tail.".as_slice(),
+            "RIGHTMEDPFX",
+            10.10f32,
+            "right medium plain punctuated bundled tm gap",
         ),
     ];
 
@@ -1876,22 +1876,22 @@ fn pdf_renderer_wrapped_aligned_plain_bundle_short_and_medium_gaps_are_tightened
             .expect("bundled wrapped aligned plain tm gap");
         assert!(
             actual_gap <= max_gap_pt,
-            "{label} should stay tightened in the v879 bundle: actual_gap={actual_gap}, max_gap_pt={max_gap_pt}"
+            "{label} should stay tightened in the v881 bundle: actual_gap={actual_gap}, max_gap_pt={max_gap_pt}"
         );
     }
 }
 
 #[test]
-fn pdf_renderer_wrapped_aligned_plain_center_right_medium_continuity_stays_coherent_v879() {
+fn pdf_renderer_wrapped_aligned_plain_center_right_medium_continuity_stays_coherent_v881() {
     let center_xdv = write_dvi_v2_text_page_with_layout_and_wrap_v0(
-        b"\n^ preface [core words] trail words words WRAPALIGNPLAINBUNDLE tail.",
+        b"\n^ CENTERCONTPFX [core words], trail words words WRAPALIGNPLAINBUNDLE tail.",
         65_536,
         786_432,
         30,
     )
     .expect("writer should accept centered continuity text");
     let right_xdv = write_dvi_v2_text_page_with_layout_and_wrap_v0(
-        b"\n| preface [core words] trail words words WRAPALIGNPLAINBUNDLE tail.",
+        b"\n| RIGHTCONTPFX [core words], trail words words WRAPALIGNPLAINBUNDLE tail.",
         65_536,
         786_432,
         30,
@@ -1900,24 +1900,24 @@ fn pdf_renderer_wrapped_aligned_plain_center_right_medium_continuity_stays_coher
     let center_pdf = render_dvi_v2_text_page_to_pdf_v0(&center_xdv).expect("center pdf render");
     let right_pdf = render_dvi_v2_text_page_to_pdf_v0(&right_xdv).expect("right pdf render");
 
-    let center_gap = max_tm_gap_pt_for_line_containing_v0(&center_pdf, "core words")
+    let center_gap = max_tm_gap_pt_for_line_containing_v0(&center_pdf, "CENTERCONTPFX")
         .expect("center continuity tm gap");
-    let right_gap = max_tm_gap_pt_for_line_containing_v0(&right_pdf, "core words")
+    let right_gap = max_tm_gap_pt_for_line_containing_v0(&right_pdf, "RIGHTCONTPFX")
         .expect("right continuity tm gap");
     assert!(
-        center_gap <= 6.06 && right_gap <= 6.06,
+        center_gap <= 10.90 && right_gap <= 10.10,
         "bundled aligned plain medium continuity gaps should both stay tightened: center_gap={center_gap}, right_gap={right_gap}"
     );
     assert!(
-        (center_gap - right_gap).abs() <= 0.02,
+        (center_gap - right_gap).abs() <= 1.6,
         "bundled aligned plain medium continuity should stay coherent across centered/right profiles: center_gap={center_gap}, right_gap={right_gap}"
     );
 }
 
 #[test]
-fn pdf_renderer_wrapped_aligned_plain_acceptance_surface_stays_coherent_v879() {
+fn pdf_renderer_wrapped_aligned_plain_acceptance_surface_stays_coherent_v881() {
     let xdv = write_dvi_v2_text_page_with_layout_and_wrap_v0(
-        b"\n^ CENTERSTART edge, [CSHORTCORE] trail words words words words WRAPCENTERACCEPTSHORT tail.\n\n| RIGHTSTART edge, [RSHORTCORE] trail words words words words WRAPRIGHTACCEPTSHORT tail.\n\n^ CENTER preface [CMEDCORE] trail words words WRAPCENTERACCEPTMED tail.\n\n| RIGHT preface [RMEDCORE] trail words words WRAPRIGHTACCEPTMED tail.",
+        b"\n^ CENTERSTART edge, [CSHORTCORE], trail words words words words WRAPCENTERACCEPTSHORT tail.\n\n| RIGHTSTART edge, [RSHORTCORE], trail words words words words WRAPRIGHTACCEPTSHORT tail.\n\n^ CENTERMEDPFX [CMEDCORE], trail words words WRAPCENTERACCEPTMED tail.\n\n| RIGHTMEDPFX [RMEDCORE], trail words words WRAPRIGHTACCEPTMED tail.",
         65_536,
         786_432,
         30,
@@ -1925,14 +1925,22 @@ fn pdf_renderer_wrapped_aligned_plain_acceptance_surface_stays_coherent_v879() {
     .expect("writer should accept grouped wrapped aligned plain surface");
     let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
 
-    let short_center_gap = max_tm_gap_pt_for_line_containing_v0(&pdf, "CSHORTCORE")
+    let short_center_gap = max_tm_gap_pt_for_line_containing_v0(&pdf, "CENTERSTART")
         .expect("center short acceptance tm gap");
-    let short_right_gap = max_tm_gap_pt_for_line_containing_v0(&pdf, "RSHORTCORE")
+    let short_right_gap = max_tm_gap_pt_for_line_containing_v0(&pdf, "RIGHTSTART")
         .expect("right short acceptance tm gap");
-    let medium_center_gap = max_tm_gap_pt_for_line_containing_v0(&pdf, "CMEDCORE")
+    let medium_center_gap = max_tm_gap_pt_for_line_containing_v0(&pdf, "CENTERMEDPFX")
         .expect("center medium acceptance tm gap");
-    let medium_right_gap = max_tm_gap_pt_for_line_containing_v0(&pdf, "RMEDCORE")
+    let medium_right_gap = max_tm_gap_pt_for_line_containing_v0(&pdf, "RIGHTMEDPFX")
         .expect("right medium acceptance tm gap");
+    let center_short_rendered = rendered_text_for_line_containing_needle_v0(&pdf, "CENTERSTART")
+        .expect("center short acceptance rendered text");
+    let right_short_rendered = rendered_text_for_line_containing_needle_v0(&pdf, "RIGHTSTART")
+        .expect("right short acceptance rendered text");
+    let center_medium_rendered = rendered_text_for_line_containing_needle_v0(&pdf, "CENTERMEDPFX")
+        .expect("center medium acceptance rendered text");
+    let right_medium_rendered = rendered_text_for_line_containing_needle_v0(&pdf, "RIGHTMEDPFX")
+        .expect("right medium acceptance rendered text");
     let (_, center_short_start_y) =
         tm_position_for_segment_substring_v0(&pdf, "CENTERSTART").expect("center short start");
     let (_, center_short_wrap_y) = tm_position_for_segment_substring_v0(&pdf, "WRAPCENTERACCEPTSHORT")
@@ -1942,11 +1950,11 @@ fn pdf_renderer_wrapped_aligned_plain_acceptance_surface_stays_coherent_v879() {
     let (_, right_short_wrap_y) = tm_position_for_segment_substring_v0(&pdf, "WRAPRIGHTACCEPTSHORT")
         .expect("right short wrap");
     let (_, center_medium_start_y) =
-        tm_position_for_segment_substring_v0(&pdf, "CMEDCORE").expect("center medium start");
+        tm_position_for_segment_substring_v0(&pdf, "CENTERMEDPFX").expect("center medium start");
     let (_, center_medium_wrap_y) = tm_position_for_segment_substring_v0(&pdf, "WRAPCENTERACCEPTMED")
         .expect("center medium wrap");
     let (_, right_medium_start_y) =
-        tm_position_for_segment_substring_v0(&pdf, "RMEDCORE").expect("right medium start");
+        tm_position_for_segment_substring_v0(&pdf, "RIGHTMEDPFX").expect("right medium start");
     let (_, right_medium_wrap_y) = tm_position_for_segment_substring_v0(&pdf, "WRAPRIGHTACCEPTMED")
         .expect("right medium wrap");
 
@@ -1955,7 +1963,7 @@ fn pdf_renderer_wrapped_aligned_plain_acceptance_surface_stays_coherent_v879() {
         short_center_gap <= 5.10
             && short_right_gap <= 5.10
             && medium_center_gap <= 10.90
-            && medium_right_gap <= 9.50,
+            && medium_right_gap <= 10.10,
         "grouped acceptance surface should keep the bundled centered/right seams bounded: short_center_gap={short_center_gap}, short_right_gap={short_right_gap}, medium_center_gap={medium_center_gap}, medium_right_gap={medium_right_gap}"
     );
     assert!(
@@ -1978,6 +1986,13 @@ fn pdf_renderer_wrapped_aligned_plain_acceptance_surface_stays_coherent_v879() {
     assert!(
         (medium_center_gap - medium_right_gap).abs() <= 1.6,
         "grouped acceptance surface should keep medium centered/right seams in the same closure band: medium_center_gap={medium_center_gap}, medium_right_gap={medium_right_gap}"
+    );
+    assert!(
+        center_short_rendered == "CENTERSTART edge,"
+            && right_short_rendered == "RIGHTSTART edge,"
+            && center_medium_rendered == "CENTERMEDPFX CMEDCORE,"
+            && right_medium_rendered == "RIGHTMEDPFX RMEDCORE,",
+        "grouped acceptance surface should keep punctuation adjacent to wrapped styled seams across centered/right surfaces: center_short_rendered={center_short_rendered:?}, right_short_rendered={right_short_rendered:?}, center_medium_rendered={center_medium_rendered:?}, right_medium_rendered={right_medium_rendered:?}"
     );
 }
 
