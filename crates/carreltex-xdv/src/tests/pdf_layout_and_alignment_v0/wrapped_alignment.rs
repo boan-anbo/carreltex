@@ -680,478 +680,133 @@ fn pdf_renderer_wrapped_right_very_short_italic_pre_style_gap_is_tightened_v67()
 }
 
 #[test]
-fn pdf_renderer_wrapped_right_very_short_italic_low_tier_gap_is_tightened_v68() {
-    let xdv = write_dvi_v2_text_page_with_layout_and_wrap_v0(
-        b"\n| GO [core words] trail words words words WRAPRIGHTVSHORTITALIC tail.",
-        65_536,
-        786_432,
-        30,
-    )
-    .expect("writer should accept wrapped right very-short italic text");
-    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+fn pdf_renderer_wrapped_aligned_grouped_short_and_very_short_style_plain_surfaces_stay_bounded() {
+    let cases = [
+        (
+            b"\n| GO [core words] trail words words words WRAPRIGHTVSHORTITALIC tail.".as_slice(),
+            "GO",
+            "WRAPRIGHTVSHORTITALIC",
+            "GO core words trail words",
+            103.5f32,
+            "right very-short italic grouped seam",
+        ),
+        (
+            b"\n^ GO [core words] trail words words words WRAPCENTERVSHORT tail.".as_slice(),
+            "GO",
+            "WRAPCENTERVSHORT",
+            "GO core words trail words",
+            103.0f32,
+            "centered very-short italic grouped seam",
+        ),
+        (
+            b"\n| GO {core words} trail words words words WRAPRIGHTVSHORTB tail.".as_slice(),
+            "GO",
+            "WRAPRIGHTVSHORTB",
+            "GO core words trail words",
+            102.5f32,
+            "right very-short bold grouped seam",
+        ),
+        (
+            b"\n^ GO {core words} trail words words words WRAPCENTERVSHORTB tail.".as_slice(),
+            "GO",
+            "WRAPCENTERVSHORTB",
+            "GO core words trail words",
+            103.0f32,
+            "centered very-short bold grouped seam",
+        ),
+        (
+            b"\n| GO core words trail words words words WRAPRIGHTVSHORTPLAIN tail.".as_slice(),
+            "GO",
+            "WRAPRIGHTVSHORTPLAIN",
+            "GO core words trail words",
+            102.5f32,
+            "right very-short plain grouped seam",
+        ),
+        (
+            b"\n^ GO core words trail words words words WRAPCENTERVSHORTPLAIN tail.".as_slice(),
+            "GO",
+            "WRAPCENTERVSHORTPLAIN",
+            "GO core words trail words",
+            102.5f32,
+            "centered very-short plain grouped seam",
+        ),
+        (
+            b"\n| RIGHT [core words] trail words words WRAPRIGHTSHORTITALIC tail.".as_slice(),
+            "RIGHT",
+            "WRAPRIGHTSHORTITALIC",
+            "RIGHT core words trail",
+            104.0f32,
+            "right short italic grouped seam",
+        ),
+        (
+            b"\n^ CENTER [core words] trail words words WRAPCENTERSHORTITALIC tail.".as_slice(),
+            "CENTER",
+            "WRAPCENTERSHORTITALIC",
+            "CENTER core words trail",
+            104.0f32,
+            "centered short italic grouped seam",
+        ),
+        (
+            b"\n| RIGHT {core words} trail words words WRAPRIGHTSHORTB tail.".as_slice(),
+            "RIGHT",
+            "WRAPRIGHTSHORTB",
+            "RIGHT core words trail",
+            105.0f32,
+            "right short bold grouped seam",
+        ),
+        (
+            b"\n^ CENTER {core words} trail words words WRAPCENTERSHORT tail.".as_slice(),
+            "CENTER",
+            "WRAPCENTERSHORT",
+            "CENTER core words trail",
+            103.0f32,
+            "centered short bold grouped seam",
+        ),
+        (
+            b"\n| RIGHT core words trail words words WRAPRIGHTSHORTPLAIN tail.".as_slice(),
+            "RIGHT",
+            "WRAPRIGHTSHORTPLAIN",
+            "RIGHT core words trail",
+            104.0f32,
+            "right short plain grouped seam",
+        ),
+        (
+            b"\n^ CENTER core words trail words words WRAPCENTERSHORTPLAIN tail.".as_slice(),
+            "CENTER",
+            "WRAPCENTERSHORTPLAIN",
+            "CENTER core words trail",
+            103.5f32,
+            "centered short plain grouped seam",
+        ),
+    ];
 
-    let actual_gap = max_tm_gap_pt_for_line_containing_v0(&pdf, "core words")
-        .expect("right italic low-tier tm gap");
-    assert!(
-        actual_gap <= 103.5,
-        "wrapped right very-short italic low-tier seam should stay slightly tighter after v68: actual_gap={actual_gap}"
-    );
-}
+    for (input, line_needle, wrap_needle, expected_rendered, max_gap_pt, label) in cases {
+        let xdv = write_dvi_v2_text_page_with_layout_and_wrap_v0(input, 65_536, 786_432, 30)
+            .expect("writer should accept grouped wrapped aligned short surface text");
+        let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
 
-#[test]
-fn pdf_renderer_wrapped_centered_very_short_italic_low_tier_gap_is_tightened_v69() {
-    let xdv = write_dvi_v2_text_page_with_layout_and_wrap_v0(
-        b"\n^ GO [core words] trail words words words WRAPCENTERVSHORT tail.",
-        65_536,
-        786_432,
-        30,
-    )
-    .expect("writer should accept wrapped centered very-short italic text");
-    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
+        let rendered = rendered_text_for_line_containing_needle_v0(&pdf, line_needle)
+            .expect("grouped short/very-short rendered text");
+        let actual_gap = max_tm_gap_pt_for_line_containing_v0(&pdf, "core words")
+            .expect("grouped short/very-short tm gap");
+        let (_, prefix_y) =
+            tm_position_for_segment_substring_v0(&pdf, line_needle).expect("grouped prefix y");
+        let (_, wrap_y) =
+            tm_position_for_segment_substring_v0(&pdf, wrap_needle).expect("grouped wrap y");
 
-    let actual_gap = max_tm_gap_pt_for_line_containing_v0(&pdf, "core words")
-        .expect("centered italic low-tier tm gap");
-    assert!(
-        actual_gap <= 103.5,
-        "wrapped centered very-short italic low-tier seam should stay slightly tighter after v69: actual_gap={actual_gap}"
-    );
-}
-
-#[test]
-fn pdf_renderer_wrapped_centered_very_short_italic_low_tier_gap_is_tightened_v93() {
-    let xdv = write_dvi_v2_text_page_with_layout_and_wrap_v0(
-        b"\n^ GO [core words] trail words words words WRAPCENTERVSHORT tail.",
-        65_536,
-        786_432,
-        30,
-    )
-    .expect("writer should accept wrapped centered very-short italic text");
-    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
-
-    let actual_gap = max_tm_gap_pt_for_line_containing_v0(&pdf, "core words")
-        .expect("centered italic tighter low-tier tm gap");
-    assert!(
-        actual_gap <= 103.0,
-        "wrapped centered very-short italic seam should stay slightly tighter after v93: actual_gap={actual_gap}"
-    );
-}
-
-#[test]
-fn pdf_renderer_wrapped_centered_very_short_bold_low_tier_gap_is_tightened_v70() {
-    let xdv = write_dvi_v2_text_page_with_layout_and_wrap_v0(
-        b"\n^ GO {core words} trail words words words WRAPCENTERVSHORTB tail.",
-        65_536,
-        786_432,
-        30,
-    )
-    .expect("writer should accept wrapped centered very-short bold text");
-    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
-
-    let actual_gap = max_tm_gap_pt_for_line_containing_v0(&pdf, "core words")
-        .expect("centered bold low-tier tm gap");
-    assert!(
-        actual_gap <= 103.5,
-        "wrapped centered very-short bold low-tier seam should stay slightly tighter after v70: actual_gap={actual_gap}"
-    );
-}
-
-#[test]
-fn pdf_renderer_wrapped_centered_very_short_bold_low_tier_gap_is_tightened_v94() {
-    let xdv = write_dvi_v2_text_page_with_layout_and_wrap_v0(
-        b"\n^ GO {core words} trail words words words WRAPCENTERVSHORTB tail.",
-        65_536,
-        786_432,
-        30,
-    )
-    .expect("writer should accept wrapped centered very-short bold text");
-    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
-
-    let actual_gap = max_tm_gap_pt_for_line_containing_v0(&pdf, "core words")
-        .expect("centered bold tighter low-tier tm gap");
-    assert!(
-        actual_gap <= 103.0,
-        "wrapped centered very-short bold seam should stay slightly tighter after v94: actual_gap={actual_gap}"
-    );
-}
-
-#[test]
-fn pdf_renderer_wrapped_right_very_short_bold_low_tier_gap_is_tightened_v71() {
-    let xdv = write_dvi_v2_text_page_with_layout_and_wrap_v0(
-        b"\n| GO {core words} trail words words words WRAPRIGHTVSHORTB tail.",
-        65_536,
-        786_432,
-        30,
-    )
-    .expect("writer should accept wrapped right very-short bold text");
-    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
-
-    let actual_gap = max_tm_gap_pt_for_line_containing_v0(&pdf, "core words")
-        .expect("right bold low-tier tm gap");
-    assert!(
-        actual_gap <= 102.5,
-        "wrapped right very-short bold low-tier seam should stay slightly tighter after v71: actual_gap={actual_gap}"
-    );
-}
-
-#[test]
-fn pdf_renderer_wrapped_right_short_italic_low_tier_gap_is_tightened_v72() {
-    let xdv = write_dvi_v2_text_page_with_layout_and_wrap_v0(
-        b"\n| RIGHT [core words] trail words words WRAPRIGHTSHORTITALIC tail.",
-        65_536,
-        786_432,
-        30,
-    )
-    .expect("writer should accept wrapped right short italic text");
-    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
-
-    let actual_gap = max_tm_gap_pt_for_line_containing_v0(&pdf, "core words")
-        .expect("right short italic low-tier tm gap");
-    assert!(
-        actual_gap <= 104.5,
-        "wrapped right short italic low-tier seam should stay slightly tighter after v72: actual_gap={actual_gap}"
-    );
-}
-
-#[test]
-fn pdf_renderer_wrapped_right_short_italic_low_tier_gap_is_tightened_v97() {
-    let xdv = write_dvi_v2_text_page_with_layout_and_wrap_v0(
-        b"\n| RIGHT [core words] trail words words WRAPRIGHTSHORTITALIC tail.",
-        65_536,
-        786_432,
-        30,
-    )
-    .expect("writer should accept wrapped right short italic text");
-    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
-
-    let actual_gap = max_tm_gap_pt_for_line_containing_v0(&pdf, "core words")
-        .expect("right short italic tighter low-tier tm gap");
-    assert!(
-        actual_gap <= 104.0,
-        "wrapped right short italic seam should stay slightly tighter after v97: actual_gap={actual_gap}"
-    );
-}
-
-#[test]
-fn pdf_renderer_wrapped_centered_short_italic_low_tier_gap_is_tightened_v73() {
-    let xdv = write_dvi_v2_text_page_with_layout_and_wrap_v0(
-        b"\n^ CENTER [core words] trail words words WRAPCENTERSHORTITALIC tail.",
-        65_536,
-        786_432,
-        30,
-    )
-    .expect("writer should accept wrapped centered short italic text");
-    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
-
-    let actual_gap = max_tm_gap_pt_for_line_containing_v0(&pdf, "core words")
-        .expect("centered short italic low-tier tm gap");
-    assert!(
-        actual_gap <= 104.5,
-        "wrapped centered short italic low-tier seam should stay slightly tighter after v73: actual_gap={actual_gap}"
-    );
-}
-
-#[test]
-fn pdf_renderer_wrapped_centered_short_italic_low_tier_gap_is_tightened_v96() {
-    let xdv = write_dvi_v2_text_page_with_layout_and_wrap_v0(
-        b"\n^ CENTER [core words] trail words words WRAPCENTERSHORTITALIC tail.",
-        65_536,
-        786_432,
-        30,
-    )
-    .expect("writer should accept wrapped centered short italic text");
-    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
-
-    let actual_gap = max_tm_gap_pt_for_line_containing_v0(&pdf, "core words")
-        .expect("centered short italic tighter low-tier tm gap");
-    assert!(
-        actual_gap <= 104.0,
-        "wrapped centered short italic seam should stay slightly tighter after v96: actual_gap={actual_gap}"
-    );
-}
-
-#[test]
-fn pdf_renderer_wrapped_right_short_bold_low_tier_gap_is_tightened_v74() {
-    let xdv = write_dvi_v2_text_page_with_layout_and_wrap_v0(
-        b"\n| RIGHT {core words} trail words words WRAPRIGHTSHORTB tail.",
-        65_536,
-        786_432,
-        30,
-    )
-    .expect("writer should accept wrapped right short bold text");
-    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
-
-    let actual_gap = max_tm_gap_pt_for_line_containing_v0(&pdf, "core words")
-        .expect("right short bold low-tier tm gap");
-    assert!(
-        actual_gap <= 105.5,
-        "wrapped right short bold low-tier seam should stay slightly tighter after v74: actual_gap={actual_gap}"
-    );
-}
-
-#[test]
-fn pdf_renderer_wrapped_right_short_bold_low_tier_gap_is_tightened_v98() {
-    let xdv = write_dvi_v2_text_page_with_layout_and_wrap_v0(
-        b"\n| RIGHT {core words} trail words words WRAPRIGHTSHORTB tail.",
-        65_536,
-        786_432,
-        30,
-    )
-    .expect("writer should accept wrapped right short bold text");
-    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
-
-    let actual_gap = max_tm_gap_pt_for_line_containing_v0(&pdf, "core words")
-        .expect("right short bold tighter low-tier tm gap");
-    assert!(
-        actual_gap <= 105.0,
-        "wrapped right short bold seam should stay slightly tighter after v98: actual_gap={actual_gap}"
-    );
-}
-
-#[test]
-fn pdf_renderer_wrapped_centered_short_bold_low_tier_gap_is_tightened_v75() {
-    let xdv = write_dvi_v2_text_page_with_layout_and_wrap_v0(
-        b"\n^ CENTER {core words} trail words words WRAPCENTERSHORT tail.",
-        65_536,
-        786_432,
-        30,
-    )
-    .expect("writer should accept wrapped centered short bold text");
-    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
-
-    let actual_gap = max_tm_gap_pt_for_line_containing_v0(&pdf, "core words")
-        .expect("centered short bold low-tier tm gap");
-    assert!(
-        actual_gap <= 103.5,
-        "wrapped centered short bold low-tier seam should stay slightly tighter after v75: actual_gap={actual_gap}"
-    );
-}
-
-#[test]
-fn pdf_renderer_wrapped_centered_short_bold_low_tier_gap_is_tightened_v95() {
-    let xdv = write_dvi_v2_text_page_with_layout_and_wrap_v0(
-        b"\n^ CENTER {core words} trail words words WRAPCENTERSHORT tail.",
-        65_536,
-        786_432,
-        30,
-    )
-    .expect("writer should accept wrapped centered short bold text");
-    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
-
-    let actual_gap = max_tm_gap_pt_for_line_containing_v0(&pdf, "core words")
-        .expect("centered short bold tighter low-tier tm gap");
-    assert!(
-        actual_gap <= 103.0,
-        "wrapped centered short bold seam should stay slightly tighter after v95: actual_gap={actual_gap}"
-    );
-}
-
-#[test]
-fn pdf_renderer_wrapped_centered_short_plain_low_tier_gap_is_tightened_v76() {
-    let xdv = write_dvi_v2_text_page_with_layout_and_wrap_v0(
-        b"\n^ CENTER core words trail words words WRAPCENTERSHORTPLAIN tail.",
-        65_536,
-        786_432,
-        30,
-    )
-    .expect("writer should accept wrapped centered short plain text");
-    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
-
-    let actual_gap = max_tm_gap_pt_for_line_containing_v0(&pdf, "core words")
-        .expect("centered short plain low-tier tm gap");
-    assert!(
-        actual_gap <= 105.0,
-        "wrapped centered short plain low-tier seam should stay slightly tighter after v76: actual_gap={actual_gap}"
-    );
-}
-
-#[test]
-fn pdf_renderer_wrapped_centered_short_plain_low_tier_gap_is_tightened_v99() {
-    let xdv = write_dvi_v2_text_page_with_layout_and_wrap_v0(
-        b"\n^ CENTER core words trail words words WRAPCENTERSHORTPLAIN tail.",
-        65_536,
-        786_432,
-        30,
-    )
-    .expect("writer should accept wrapped centered short plain text");
-    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
-
-    let actual_gap = max_tm_gap_pt_for_line_containing_v0(&pdf, "core words")
-        .expect("centered short plain tighter low-tier tm gap");
-    assert!(
-        actual_gap <= 104.5,
-        "wrapped centered short plain seam should stay slightly tighter after v99: actual_gap={actual_gap}"
-    );
-}
-
-#[test]
-fn pdf_renderer_wrapped_right_short_plain_low_tier_gap_is_tightened_v77() {
-    let xdv = write_dvi_v2_text_page_with_layout_and_wrap_v0(
-        b"\n| RIGHT core words trail words words WRAPRIGHTSHORTPLAIN tail.",
-        65_536,
-        786_432,
-        30,
-    )
-    .expect("writer should accept wrapped right short plain text");
-    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
-
-    let actual_gap = max_tm_gap_pt_for_line_containing_v0(&pdf, "core words")
-        .expect("right short plain low-tier tm gap");
-    assert!(
-        actual_gap <= 105.0,
-        "wrapped right short plain low-tier seam should stay slightly tighter after v77: actual_gap={actual_gap}"
-    );
-}
-
-#[test]
-fn pdf_renderer_wrapped_right_short_plain_low_tier_gap_is_tightened_v100() {
-    let xdv = write_dvi_v2_text_page_with_layout_and_wrap_v0(
-        b"\n| RIGHT core words trail words words WRAPRIGHTSHORTPLAIN tail.",
-        65_536,
-        786_432,
-        30,
-    )
-    .expect("writer should accept wrapped right short plain text");
-    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
-
-    let actual_gap = max_tm_gap_pt_for_line_containing_v0(&pdf, "core words")
-        .expect("right short plain tighter low-tier tm gap");
-    assert!(
-        actual_gap <= 104.5,
-        "wrapped right short plain seam should stay slightly tighter after v100: actual_gap={actual_gap}"
-    );
-}
-
-#[test]
-fn pdf_renderer_wrapped_centered_very_short_plain_low_tier_gap_is_tightened_v78() {
-    let xdv = write_dvi_v2_text_page_with_layout_and_wrap_v0(
-        b"\n^ GO core words trail words words words WRAPCENTERVSHORTPLAIN tail.",
-        65_536,
-        786_432,
-        30,
-    )
-    .expect("writer should accept wrapped centered very-short plain text");
-    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
-
-    let actual_gap = max_tm_gap_pt_for_line_containing_v0(&pdf, "core words")
-        .expect("centered very-short plain low-tier tm gap");
-    assert!(
-        actual_gap <= 103.0,
-        "wrapped centered very-short plain low-tier seam should stay slightly tighter after v78: actual_gap={actual_gap}"
-    );
-}
-
-#[test]
-fn pdf_renderer_wrapped_centered_very_short_plain_low_tier_gap_is_tightened_v101() {
-    let xdv = write_dvi_v2_text_page_with_layout_and_wrap_v0(
-        b"\n^ GO core words trail words words words WRAPCENTERVSHORTPLAIN tail.",
-        65_536,
-        786_432,
-        30,
-    )
-    .expect("writer should accept wrapped centered very-short plain text");
-    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
-
-    let actual_gap = max_tm_gap_pt_for_line_containing_v0(&pdf, "core words")
-        .expect("centered very-short plain tighter low-tier tm gap");
-    assert!(
-        actual_gap <= 102.5,
-        "wrapped centered very-short plain seam should stay slightly tighter after v101: actual_gap={actual_gap}"
-    );
-}
-
-#[test]
-fn pdf_renderer_wrapped_right_very_short_plain_low_tier_gap_is_tightened_v79() {
-    let xdv = write_dvi_v2_text_page_with_layout_and_wrap_v0(
-        b"\n| GO core words trail words words words WRAPRIGHTVSHORTPLAIN tail.",
-        65_536,
-        786_432,
-        30,
-    )
-    .expect("writer should accept wrapped right very-short plain text");
-    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
-
-    let actual_gap = max_tm_gap_pt_for_line_containing_v0(&pdf, "core words")
-        .expect("right very-short plain low-tier tm gap");
-    assert!(
-        actual_gap <= 103.0,
-        "wrapped right very-short plain low-tier seam should stay slightly tighter after v79: actual_gap={actual_gap}"
-    );
-}
-
-#[test]
-fn pdf_renderer_wrapped_right_very_short_plain_low_tier_gap_is_tightened_v102() {
-    let xdv = write_dvi_v2_text_page_with_layout_and_wrap_v0(
-        b"\n| GO core words trail words words words WRAPRIGHTVSHORTPLAIN tail.",
-        65_536,
-        786_432,
-        30,
-    )
-    .expect("writer should accept wrapped right very-short plain text");
-    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
-
-    let actual_gap = max_tm_gap_pt_for_line_containing_v0(&pdf, "core words")
-        .expect("right very-short plain tighter low-tier tm gap");
-    assert!(
-        actual_gap <= 102.5,
-        "wrapped right very-short plain seam should stay slightly tighter after v102: actual_gap={actual_gap}"
-    );
-}
-
-#[test]
-fn pdf_renderer_wrapped_right_short_plain_medium_tier_gap_is_tightened_v80() {
-    let xdv = write_dvi_v2_text_page_with_layout_and_wrap_v0(
-        b"\n| RIGHT core words trail words words WRAPRIGHTSHORTPLAIN tail.",
-        65_536,
-        786_432,
-        30,
-    )
-    .expect("writer should accept wrapped right short plain text");
-    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
-
-    let actual_gap = max_tm_gap_pt_for_line_containing_v0(&pdf, "core words")
-        .expect("right short plain medium-tier tm gap");
-    assert!(
-        actual_gap <= 104.0,
-        "wrapped right short plain medium-tier seam should stay slightly tighter after v80: actual_gap={actual_gap}"
-    );
-}
-
-#[test]
-fn pdf_renderer_wrapped_centered_short_plain_medium_tier_gap_is_tightened_v81() {
-    let xdv = write_dvi_v2_text_page_with_layout_and_wrap_v0(
-        b"\n^ CENTER core words trail words words WRAPCENTERSHORTPLAIN tail.",
-        65_536,
-        786_432,
-        30,
-    )
-    .expect("writer should accept wrapped centered short plain text");
-    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
-
-    let actual_gap = max_tm_gap_pt_for_line_containing_v0(&pdf, "core words")
-        .expect("centered short plain medium-tier tm gap");
-    assert!(
-        actual_gap <= 104.0,
-        "wrapped centered short plain medium-tier seam should stay slightly tighter after v81: actual_gap={actual_gap}"
-    );
-}
-
-#[test]
-fn pdf_renderer_wrapped_centered_short_plain_medium_tier_gap_is_tightened_v103() {
-    let xdv = write_dvi_v2_text_page_with_layout_and_wrap_v0(
-        b"\n^ CENTER core words trail words words WRAPCENTERSHORTPLAIN tail.",
-        65_536,
-        786_432,
-        30,
-    )
-    .expect("writer should accept wrapped centered short plain text");
-    let pdf = render_dvi_v2_text_page_to_pdf_v0(&xdv).expect("pdf render");
-
-    let actual_gap = max_tm_gap_pt_for_line_containing_v0(&pdf, "core words")
-        .expect("centered short plain tighter medium-tier tm gap");
-    assert!(
-        actual_gap <= 103.5,
-        "wrapped centered short plain seam should stay slightly tighter after v103: actual_gap={actual_gap}"
-    );
+        assert!(
+            rendered == expected_rendered,
+            "{label} should preserve stable spacing on the grouped visible surface: rendered={rendered:?}, expected={expected_rendered:?}"
+        );
+        assert!(
+            actual_gap <= max_gap_pt,
+            "{label} should stay within the grouped closure band: actual_gap={actual_gap}, max_gap_pt={max_gap_pt}"
+        );
+        assert!(
+            prefix_y > wrap_y,
+            "{label} should still wrap after the grouped seam tightening: prefix_y={prefix_y}, wrap_y={wrap_y}"
+        );
+    }
 }
 
 #[test]
