@@ -58,8 +58,8 @@ fn wrapped_aligned_style_scale_percent_v28(segment: &PdfRenderSegmentV0) -> u8 {
     }
     match segment.style {
         PdfTextStyleV0::Regular => 100,
-        PdfTextStyleV0::Italic => 68,
-        PdfTextStyleV0::Bold => 66,
+        PdfTextStyleV0::Italic => 67,
+        PdfTextStyleV0::Bold => 65,
     }
 }
 
